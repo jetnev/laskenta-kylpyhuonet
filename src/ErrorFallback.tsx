@@ -1,30 +1,30 @@
 import { Alert, AlertTitle, AlertDescription } from "./components/ui/alert";
-import { Button } from "./components/ui/button";
+
 
 export const ErrorFallback = ({ 
   error, 
   resetErrorBoundary 
-}: { 
-  error: Error; 
-  resetErrorBoundary: () => void 
-}) => {
-  return (
-    <div className="flex items-center justify-center min-h-screen p-4">
+}) =>
+    <div classNa
+        <AlertTitle>Something wen
+       
+          
+            onClick={resetErrorBoundary}
       <Alert variant="destructive" className="max-w-lg">
         <AlertTitle>Something went wrong</AlertTitle>
         <AlertDescription>
           <pre className="text-xs overflow-auto whitespace-pre-wrap mt-2">
             {error.message}
-          </pre>
-          <Button 
-            onClick={resetErrorBoundary}
-            variant="outline"
-            className="mt-4"
-          >
-            Try again
-          </Button>
-        </AlertDescription>
-      </Alert>
-    </div>
-  );
-};
+
+
+
+
+
+
+
+
+
+
+
+
+
