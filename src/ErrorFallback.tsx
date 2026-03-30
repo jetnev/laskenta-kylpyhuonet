@@ -1,15 +1,15 @@
 import { Alert, AlertTitle, AlertDescription } from "./components/ui/alert";
+import { Button } from "./components/ui/button";
 
-
+export function ErrorFallback({
+  error,
+  resetErrorBoundary,
 }: {
-  resetE
+  error: Error;
+  resetErrorBoundary: () => void;
+}) {
   return (
-    
-          Jotai
-        <AlertDescription classNa
-       
-          
-          </pre>
+    <div className="flex items-center justify-center min-h-screen p-4 bg-background">
       <Alert variant="destructive" className="max-w-2xl">
         <AlertTitle className="text-lg font-semibold mb-2">
           Jotain meni vikaan
@@ -22,14 +22,14 @@ import { Alert, AlertTitle, AlertDescription } from "./components/ui/alert";
             {error.message}
           </pre>
           <Button
-
+            onClick={resetErrorBoundary}
             variant="outline"
-
+            className="mt-2"
           >
-
+            Yritä uudelleen
           </Button>
-
+        </AlertDescription>
       </Alert>
-
+    </div>
   );
-
+}
