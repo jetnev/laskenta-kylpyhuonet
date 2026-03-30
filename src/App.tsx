@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { House, Package, Wrench, ArrowsLeftRight, Folder, FileText, Gear, Upload, ChartBar } from '@phosphor-icons/react';
+import { House, Package, Wrench, ArrowsLeftRight, Folder, FileText, Gear, Upload, ChartBar, ShoppingBag } from '@phosphor-icons/react';
 import Dashboard from './components/pages/Dashboard';
 import ProductsPage from './components/pages/ProductsPage';
 import InstallationGroupsPage from './components/pages/InstallationGroupsPage';
@@ -9,6 +9,7 @@ import TermsPage from './components/pages/TermsPage';
 import SettingsPage from './components/pages/SettingsPage';
 import ImportPage from './components/pages/ImportPage';
 import ReportsPage from './components/pages/ReportsPage';
+import LaattapisteImportPage from './components/pages/LaattapisteImportPage';
 import { cn } from './lib/utils';
 import { Toaster } from './components/ui/sonner';
 
@@ -21,6 +22,7 @@ type Page =
   | 'terms' 
   | 'settings' 
   | 'import' 
+  | 'laattapiste-import'
   | 'reports';
 
 const navigation = [
@@ -32,6 +34,7 @@ const navigation = [
   { id: 'terms' as const, name: 'Ehdot', icon: FileText },
   { id: 'settings' as const, name: 'Asetukset', icon: Gear },
   { id: 'import' as const, name: 'Tuonti', icon: Upload },
+  { id: 'laattapiste-import' as const, name: 'Laattapiste-tuonti', icon: ShoppingBag },
   { id: 'reports' as const, name: 'Raportointi', icon: ChartBar },
 ];
 
@@ -76,6 +79,7 @@ function App() {
         {currentPage === 'terms' && <TermsPage />}
         {currentPage === 'settings' && <SettingsPage />}
         {currentPage === 'import' && <ImportPage />}
+        {currentPage === 'laattapiste-import' && <LaattapisteImportPage />}
         {currentPage === 'reports' && <ReportsPage />}
       </main>
 
