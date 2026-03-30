@@ -111,7 +111,7 @@ export default function QuoteEditor({ quote, onClose }: QuoteEditorProps) {
       purchasePrice: 0,
       salesPrice: 0,
       installationPrice: 0,
-      marginPercent: 30,
+      marginPercent: settings.defaultMarginPercent,
       regionMultiplier: project?.regionCoefficient || 1.0,
     });
   };
@@ -124,7 +124,7 @@ export default function QuoteEditor({ quote, onClose }: QuoteEditorProps) {
       ? groups.find((g) => g.id === product.installationGroupId)
       : undefined;
 
-    const marginPercent = 30;
+    const marginPercent = settings.defaultMarginPercent;
     const salesPrice = product.purchasePrice * (1 + marginPercent / 100);
 
     updateRow(rowId, {
