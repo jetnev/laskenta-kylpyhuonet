@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
-import { Download, Upload, Check, Warning } from '@phosphor-icons/react';
+import { Download, Upload, Check, Warning, FileXls, FileCsv } from '@phosphor-icons/react';
 import { Alert, AlertDescription } from '../ui/alert';
 import {
   Table,
@@ -40,6 +40,7 @@ interface ParsedImportRow {
   installationGroupName: string;
   isValid: boolean;
   errors: string[];
+  warnings: string[];
 }
 
 export default function ImportPage() {
@@ -71,11 +72,13 @@ HAN-004;Pesuallashana Oras Safira;Hanat;kpl;156.00;Perusasennus`;
     const lines = text.trim().split('\n');
     const data: ImportRow[] = [];
     
+    const delimiter = text.includes('\t') ? '\t' : ';';
+    
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
       
-      const parts = line.split(';');
+      const parts = line.split(delimiter);
       if (parts.length >= 6) {
         data.push({
           code: parts[0].trim(),
@@ -93,6 +96,7 @@ HAN-004;Pesuallashana Oras Safira;Hanat;kpl;156.00;Perusasennus`;
 
   const validateAndParseRow = (row: ImportRow): ParsedImportRow => {
     const errors: string[] = [];
+    const warnings: string[] = [];
     let unit: UnitType = 'kpl';
     let purchasePrice = 0;
 
@@ -123,6 +127,14 @@ HAN-004;Pesuallashana Oras Safira;Hanat;kpl;156.00;Perusasennus`;
       errors.push('Tuotekoodi on jo käytössä');
     }
 
+    if (row.installationGroup && !groups.find(g => g.name.toLowerCase() === row.installationGroup.toLowerCase())) {
+      warnings.push('Hintaryhmää ei löydy - tuote lisätään ilman hintaryhmää');
+    }
+
+    if (!row.category) {
+      warnings.push('Kategoria puuttuu');
+    }
+
     return {
       code: row.code,
       name: row.name,
@@ -132,6 +144,7 @@ HAN-004;Pesuallashana Oras Safira;Hanat;kpl;156.00;Perusasennus`;
       installationGroupName: row.installationGroup,
       isValid: errors.length === 0,
       errors,
+      warnings,
     };
   };
 
@@ -228,37 +241,83 @@ HAN-004;Pesuallashana Oras Safira;Hanat;kpl;156.00;Perusasennus`;
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv"
+              accept=".csv,.txt"
               onChange={handleFileSelect}
               className="hidden"
             />
           </div>
         </Card>
 
+        {groups.length > 0 && (
+          <Card className="p-6">
+            <h3 className="mb-3 text-sm font-semibold">Saatavilla olevat hintaryhmät</h3>
+            <div className="flex flex-wrap gap-2">
+              {groups.map(group => (
+                <span key={group.id} className="px-3 py-1 text-xs bg-muted rounded-md font-mono">
+                  {group.name}
+                </span>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Käytä näitä nimiä CSV-tiedoston "hintaryhmä" -sarakkeessa. Jos hintaryhmää ei löydy, tuote lisätään ilman hintaryhmää.
+            </p>
+          </Card>
+        )}
+
         <Alert>
           <AlertDescription>
             <div className="space-y-2">
               <p><strong>Ohjeet:</strong></p>
               <ol className="list-decimal list-inside space-y-1 text-sm">
-                <li>Lataa tuontipohja CSV-muodossa</li>
+                <li>Lataa tuontipohja CSV-muodossa painikkeella yllä</li>
                 <li>Avaa tiedosto Excelissä tai muussa taulukkolaskentaohjelmassa</li>
-                <li>Täytä tuotetiedot. Älä muuta otsikkoriviä!</li>
-                <li>Tallenna tiedosto CSV-muodossa (puolipiste-eroteltu)</li>
-                <li>Lataa tiedosto järjestelmään yllä olevalla painikkeella</li>
+                <li>Täytä tuotetiedot riveittäin. Älä muuta otsikkoriviä!</li>
+                <li>Sallitut yksiköt: kpl, m², jm, m</li>
+                <li>Käytä ostohintana desimaalilukua (esim. 245.50 tai 245,50)</li>
+                <li>Tallenna tiedosto CSV-muodossa (puolipiste tai sarkain erottimena)</li>
+                <li>Lähetä tiedosto järjestelmään "Lähetä täytetty tiedosto" -painikkeella</li>
                 <li>Tarkista esikatselu ja vahvista tuonti</li>
               </ol>
-              <p className="mt-2 text-sm"><strong>Huom:</strong> Tuotteet, joiden tuotekoodi on jo käytössä, ohitetaan.</p>
+              <p className="mt-3 text-sm"><strong>Huom:</strong> Tuotteet, joiden tuotekoodi on jo käytössä, ohitetaan automaattisesti.</p>
             </div>
           </AlertDescription>
         </Alert>
       </div>
 
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Tuonnin esikatselu</DialogTitle>
           </DialogHeader>
-          <div className="overflow-y-auto max-h-96">
+          
+          <div className="grid grid-cols-4 gap-4 py-4 border-y">
+            <div className="text-center">
+              <div className="text-2xl font-semibold text-green-600">
+                {importData.filter(r => r.isValid && r.warnings.length === 0).length}
+              </div>
+              <div className="text-xs text-muted-foreground">Valmis tuotavaksi</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-semibold text-yellow-600">
+                {importData.filter(r => r.isValid && r.warnings.length > 0).length}
+              </div>
+              <div className="text-xs text-muted-foreground">Varoituksia</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-semibold text-destructive">
+                {importData.filter(r => !r.isValid).length}
+              </div>
+              <div className="text-xs text-muted-foreground">Virheellisiä</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-semibold">
+                {importData.length}
+              </div>
+              <div className="text-xs text-muted-foreground">Yhteensä</div>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -268,7 +327,7 @@ HAN-004;Pesuallashana Oras Safira;Hanat;kpl;156.00;Perusasennus`;
                   <TableHead>Kategoria</TableHead>
                   <TableHead>Yks.</TableHead>
                   <TableHead className="text-right">Hinta</TableHead>
-                  <TableHead>Virheet</TableHead>
+                  <TableHead>Huomautukset</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -276,23 +335,36 @@ HAN-004;Pesuallashana Oras Safira;Hanat;kpl;156.00;Perusasennus`;
                   <TableRow key={index}>
                     <TableCell>
                       {row.isValid ? (
-                        <Check className="text-green-600" weight="bold" />
+                        row.warnings.length > 0 ? (
+                          <Warning className="text-yellow-600" weight="fill" />
+                        ) : (
+                          <Check className="text-green-600" weight="bold" />
+                        )
                       ) : (
                         <Warning className="text-destructive" weight="bold" />
                       )}
                     </TableCell>
                     <TableCell className="font-mono text-sm">{row.code}</TableCell>
                     <TableCell>{row.name}</TableCell>
-                    <TableCell>{row.category}</TableCell>
+                    <TableCell className="text-sm">{row.category || '-'}</TableCell>
                     <TableCell>{row.unit}</TableCell>
-                    <TableCell className="text-right font-mono">
+                    <TableCell className="text-right font-mono text-sm">
                       {row.purchasePrice.toFixed(2)} €
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="max-w-xs">
                       {row.errors.length > 0 && (
-                        <span className="text-xs text-destructive">
-                          {row.errors.join(', ')}
-                        </span>
+                        <div className="text-xs text-destructive mb-1">
+                          {row.errors.map((err, i) => (
+                            <div key={i}>• {err}</div>
+                          ))}
+                        </div>
+                      )}
+                      {row.warnings.length > 0 && (
+                        <div className="text-xs text-yellow-700">
+                          {row.warnings.map((warn, i) => (
+                            <div key={i}>• {warn}</div>
+                          ))}
+                        </div>
                       )}
                     </TableCell>
                   </TableRow>
@@ -300,23 +372,23 @@ HAN-004;Pesuallashana Oras Safira;Hanat;kpl;156.00;Perusasennus`;
               </TableBody>
             </Table>
           </div>
-          <div className="flex items-center justify-between pt-4 border-t">
+          
+          <DialogFooter className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              <span className="font-semibold">{importData.filter(r => r.isValid).length}</span> kelvollista / {' '}
-              <span className="font-semibold">{importData.length}</span> yhteensä
+              Kelvolliset rivit tuodaan järjestelmään. Virheelliset rivit ohitetaan.
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowPreview(false)}>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowPreview(false)} disabled={isProcessing}>
                 Peruuta
               </Button>
               <Button 
                 onClick={handleConfirmImport} 
                 disabled={isProcessing || importData.filter(r => r.isValid).length === 0}
               >
-                {isProcessing ? 'Tuodaan...' : 'Vahvista tuonti'}
+                {isProcessing ? 'Tuodaan...' : `Tuo ${importData.filter(r => r.isValid).length} tuotetta`}
               </Button>
-            </DialogFooter>
-          </div>
+            </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
