@@ -3,6 +3,9 @@ import {
   useProjects,
   useQuotes,
   useQuoteRows,
+  useProducts,
+  useInstallationGroups,
+  useCustomers,
 } from '../../hooks/use-data';
 import { calculateQuote, formatCurrency, formatNumber } from '../../lib/calculations';
 import { ArrowRight } from '@phosphor-icons/react';
@@ -12,6 +15,9 @@ export default function Dashboard() {
   const { projects } = useProjects();
   const { quotes } = useQuotes();
   const { getRowsForQuote } = useQuoteRows();
+  const { products } = useProducts();
+  const { groups } = useInstallationGroups();
+  const { customers } = useCustomers();
 
   const draftCount = quotes.filter((q) => q.status === 'draft').length;
   const sentCount = quotes.filter((q) => q.status === 'sent').length;
@@ -105,15 +111,15 @@ export default function Dashboard() {
           <div className="space-y-3">
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Tuotteita rekisterissä</span>
-              <span className="text-sm font-medium">—</span>
+              <span className="text-sm font-medium">{products.length}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Hintaryhmiä</span>
-              <span className="text-sm font-medium">—</span>
+              <span className="text-sm font-medium">{groups.length}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Asiakkaita</span>
-              <span className="text-sm font-medium">—</span>
+              <span className="text-sm font-medium">{customers.length}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Luonnos-tarjouksia</span>
