@@ -124,7 +124,7 @@ export default function QuoteEditor({ quote, onClose }: QuoteEditorProps) {
       ? groups.find((g) => g.id === product.installationGroupId)
       : undefined;
 
-    const marginPercent = 30;
+    const marginPercent = settings.defaultMarginPercent;
     const salesPrice = product.purchasePrice * (1 + marginPercent / 100);
 
     updateRow(rowId, {

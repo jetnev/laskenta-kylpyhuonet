@@ -150,7 +150,7 @@ export default function ProjectsPageFull() {
     const newQuote = addQuote({
       projectId,
       title: `Tarjous ${revisionNumber}`,
-      revisionNumber: 1,
+      revisionNumber,
       status: 'draft',
       vatPercent: settings.defaultVatPercent,
     });

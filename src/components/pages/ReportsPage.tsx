@@ -31,6 +31,7 @@ export default function ReportsPage() {
 
   let totalSales = 0;
   let totalMargin = 0;
+  let totalPurchaseCost = 0;
 
   quotes.forEach((quote) => {
     if (quote.status === 'accepted') {
@@ -38,10 +39,11 @@ export default function ReportsPage() {
       const calc = calculateQuote(quote, rows);
       totalSales += calc.total;
       totalMargin += calc.totalMargin;
+      totalPurchaseCost += calc.totalPurchaseCost;
     }
   });
 
-  const avgMarginPercent = totalSales > 0 ? (totalMargin / (totalSales - totalMargin)) * 100 : 0;
+  const avgMarginPercent = totalPurchaseCost > 0 ? (totalMargin / totalPurchaseCost) * 100 : 0;
 
   const productCounts = new Map<string, { code: string; name: string; count: number; unit: string }>();
 
