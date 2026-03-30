@@ -1,9 +1,9 @@
 import { Alert, AlertTitle, AlertDescription } from "./components/ui/alert";
 import { Button } from "./components/ui/button";
 
-export default function ErrorFallback({
-  error,
-  resetErrorBoundary,
+}: {
+  resetE
+  return (
 }: {
   error: Error;
   resetErrorBoundary: () => void;
@@ -20,12 +20,11 @@ export default function ErrorFallback({
           </p>
           <pre className="text-xs overflow-auto whitespace-pre-wrap mt-2 p-2 bg-muted rounded">
             {error.message}
-          </pre>
+
           <Button onClick={resetErrorBoundary} className="mt-2">
-            Yritä uudelleen
+
           </Button>
-        </AlertDescription>
+
       </Alert>
-    </div>
+
   );
-}
