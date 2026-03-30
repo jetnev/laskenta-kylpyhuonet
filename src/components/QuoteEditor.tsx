@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { Plus, Trash, ArrowsDownUp, Warning } from '@phosphor-icons/react';
+import { useState, useEffect } from 'react';
+import { Plus, Trash, Warning, FilePdf, FileXls, Copy, FloppyDisk } from '@phosphor-icons/react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card } from './ui/card';
+import { Textarea } from './ui/textarea';
 import {
   Select,
   SelectContent,
@@ -22,6 +23,14 @@ import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from './ui/dialog';
+import {
   useProducts,
   useInstallationGroups,
   useQuoteRows,
@@ -29,8 +38,9 @@ import {
   useProjects,
   useCustomers,
   useQuoteTerms,
+  useSettings,
 } from '../hooks/use-data';
-import { Quote, QuoteRowMode, UnitType, QuoteRow } from '../lib/types';
+import { Quote, QuoteRowMode, QuoteRow } from '../lib/types';
 import {
   calculateQuoteRow,
   calculateQuote,
@@ -39,6 +49,7 @@ import {
   canSendQuote,
 } from '../lib/calculations';
 import { toast } from 'sonner';
+import { exportQuoteToPDF, exportQuoteToCustomerExcel, exportQuoteToInternalExcel } from '../lib/export';
 
 interface QuoteEditorProps {
   quote: Quote;
@@ -55,17 +66,38 @@ export default function QuoteEditor({ quote, onClose }: QuoteEditorProps) {
   const { products } = useProducts();
   const { groups } = useInstallationGroups();
   const { rows, addRow, updateRow, deleteRow, getRowsForQuote } = useQuoteRows();
-  const { updateQuote, updateQuoteStatus, hasNewerRevision } = useQuotes();
+  const { updateQuote, updateQuoteStatus, hasNewerRevision, addQuote } = useQuotes();
   const { getProject } = useProjects();
   const { getCustomer } = useCustomers();
-  const { terms } = useQuoteTerms();
+  const { terms, getDefaultTerms } = useQuoteTerms();
+  const { settings } = useSettings();
 
   const quoteRows = getRowsForQuote(quote.id);
   const project = getProject(quote.projectId);
   const customer = project ? getCustomer(project.customerId) : undefined;
   const calculation = calculateQuote(quote, quoteRows);
+  const quoteTerms = quote.termsId ? terms.find(t => t.id === quote.termsId) : undefined;
   
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [showValidationDialog, setShowValidationDialog] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [localNotes, setLocalNotes] = useState(quote.notes || '');
+  const [localTitle, setLocalTitle] = useState(quote.title);
+
+  useEffect(() => {
+    const autoSaveTimer = setTimeout(() => {
+      if (quote.status === 'draft') {
+        if (localNotes !== quote.notes) {
+          updateQuote(quote.id, { notes: localNotes });
+        }
+        if (localTitle !== quote.title) {
+          updateQuote(quote.id, { title: localTitle });
+        }
+      }
+    }, 1000);
+
+    return () => clearTimeout(autoSaveTimer);
+  }, [localNotes, localTitle, quote.id, quote.notes, quote.title, quote.status, updateQuote]);
 
   const handleAddRow = () => {
     const sortOrder = quoteRows.length;
@@ -122,6 +154,22 @@ export default function QuoteEditor({ quote, onClose }: QuoteEditorProps) {
     updateRow(rowId, updates);
   };
 
+  const handleValidateAndShowDialog = () => {
+    const validation = canSendQuote(
+      quote,
+      quoteRows,
+      customer,
+      project,
+      hasNewerRevision(quote)
+    );
+
+    if (!validation.isValid || validation.warnings.length > 0) {
+      setShowValidationDialog(true);
+    } else {
+      handleSendQuote();
+    }
+  };
+
   const handleSendQuote = () => {
     const validation = canSendQuote(
       quote,
@@ -146,18 +194,128 @@ export default function QuoteEditor({ quote, onClose }: QuoteEditorProps) {
 
     updateQuoteStatus(quote.id, 'sent');
     toast.success('Tarjous lähetetty');
+    setShowValidationDialog(false);
   };
+
+  const handleCreateRevision = () => {
+    if (!project || !customer) {
+      toast.error('Projekti tai asiakas puuttuu');
+      return;
+    }
+
+    const newRevisionNumber = quote.revisionNumber + 1;
+    const newQuote = addQuote({
+      projectId: quote.projectId,
+      title: quote.title,
+      revisionNumber: newRevisionNumber,
+      parentQuoteId: quote.parentQuoteId || quote.id,
+      status: 'draft',
+      vatPercent: quote.vatPercent,
+      notes: quote.notes,
+      termsId: quote.termsId,
+    });
+
+    quoteRows.forEach((row, index) => {
+      addRow({
+        quoteId: newQuote.id,
+        sortOrder: index,
+        mode: row.mode,
+        productId: row.productId,
+        productName: row.productName,
+        productCode: row.productCode,
+        quantity: row.quantity,
+        unit: row.unit,
+        purchasePrice: row.purchasePrice,
+        salesPrice: row.salesPrice,
+        installationPrice: row.installationPrice,
+        marginPercent: row.marginPercent,
+        overridePrice: row.overridePrice,
+        regionMultiplier: row.regionMultiplier,
+        notes: row.notes,
+      });
+    });
+
+    toast.success(`Revisio ${newRevisionNumber} luotu`);
+    onClose();
+  };
+
+  const handleExportPDF = () => {
+    if (!customer || !project) {
+      toast.error('Asiakas tai projekti puuttuu');
+      return;
+    }
+
+    try {
+      exportQuoteToPDF(quote, quoteRows, customer, project, quoteTerms, settings);
+      toast.success('PDF avattu uuteen ikkunaan');
+    } catch (error) {
+      toast.error('PDF:n luonti epäonnistui');
+      console.error(error);
+    }
+  };
+
+  const handleExportCustomerExcel = () => {
+    if (!customer || !project) {
+      toast.error('Asiakas tai projekti puuttuu');
+      return;
+    }
+
+    try {
+      exportQuoteToCustomerExcel(quote, quoteRows, customer, project, quoteTerms, settings);
+      toast.success('Asiakas-Excel ladattu');
+    } catch (error) {
+      toast.error('Excelin luonti epäonnistui');
+      console.error(error);
+    }
+  };
+
+  const handleExportInternalExcel = () => {
+    if (!customer || !project) {
+      toast.error('Asiakas tai projekti puuttuu');
+      return;
+    }
+
+    try {
+      exportQuoteToInternalExcel(quote, quoteRows, customer, project, settings);
+      toast.success('Sisäinen Excel ladattu');
+    } catch (error) {
+      toast.error('Excelin luonti epäonnistui');
+      console.error(error);
+    }
+  };
+
+  const validation = canSendQuote(
+    quote,
+    quoteRows,
+    customer,
+    project,
+    hasNewerRevision(quote)
+  );
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">{quote.title}</h2>
+        <div className="flex-1">
+          {quote.status === 'draft' ? (
+            <Input
+              value={localTitle}
+              onChange={(e) => setLocalTitle(e.target.value)}
+              className="text-2xl font-semibold border-0 p-0 h-auto focus-visible:ring-0"
+            />
+          ) : (
+            <h2 className="text-2xl font-semibold">{quote.title}</h2>
+          )}
           <p className="text-sm text-muted-foreground">
             Revisio {quote.revisionNumber} • {customer?.name} • {project?.site}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {quote.status === 'draft' && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <FloppyDisk className="h-3 w-3" />
+              <span>Automaattitallennus</span>
+            </div>
+          )}
           <Badge
             variant={
               quote.status === 'draft'
@@ -185,6 +343,41 @@ export default function QuoteEditor({ quote, onClose }: QuoteEditorProps) {
           </AlertDescription>
         </Alert>
       )}
+
+      <Card className="p-6">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="quote-notes">Tarjoushuomautukset</Label>
+            <Textarea
+              id="quote-notes"
+              value={localNotes}
+              onChange={(e) => setLocalNotes(e.target.value)}
+              placeholder="Lisää huomautuksia tarjoukseen..."
+              rows={3}
+              disabled={quote.status !== 'draft'}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="quote-terms">Sopimusehdot</Label>
+            <Select
+              value={quote.termsId || ''}
+              onValueChange={(value) => updateQuote(quote.id, { termsId: value })}
+              disabled={quote.status !== 'draft'}
+            >
+              <SelectTrigger id="quote-terms">
+                <SelectValue placeholder="Valitse ehdot" />
+              </SelectTrigger>
+              <SelectContent>
+                {terms.map((term) => (
+                  <SelectItem key={term.id} value={term.id}>
+                    {term.name} {term.isDefault && '(oletus)'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </Card>
 
       <Card className="p-6">
         <div className="mb-4 flex items-center justify-between">
@@ -342,11 +535,96 @@ export default function QuoteEditor({ quote, onClose }: QuoteEditorProps) {
           Sulje
         </Button>
         <div className="flex gap-2">
+          {quote.status !== 'draft' && !hasNewerRevision(quote) && (
+            <Button variant="outline" onClick={handleCreateRevision} className="gap-2">
+              <Copy />
+              Luo revisio
+            </Button>
+          )}
+          
+          <Dialog open={showExportMenu} onOpenChange={setShowExportMenu}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <FilePdf />
+                Vie
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Vie tarjous</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <Button onClick={handleExportPDF} variant="outline" className="w-full gap-2 justify-start">
+                  <FilePdf />
+                  Vie PDF (asiakas)
+                </Button>
+                <Button onClick={handleExportCustomerExcel} variant="outline" className="w-full gap-2 justify-start">
+                  <FileXls />
+                  Vie Excel (asiakas)
+                </Button>
+                <Button onClick={handleExportInternalExcel} variant="outline" className="w-full gap-2 justify-start">
+                  <FileXls />
+                  Vie Excel (sisäinen)
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           {quote.status === 'draft' && !hasNewerRevision(quote) && (
-            <Button onClick={handleSendQuote}>Lähetä tarjous</Button>
+            <Button onClick={handleValidateAndShowDialog}>Lähetä tarjous</Button>
           )}
         </div>
       </div>
+
+      <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Tarkista tarjous ennen lähetystä</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {validation.errors.length > 0 && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  <div className="font-semibold mb-2">Virheet (estävät lähetyksen):</div>
+                  <ul className="list-disc list-inside space-y-1">
+                    {validation.errors.map((error, index) => (
+                      <li key={index}>{error.message}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {validation.warnings.length > 0 && (
+              <Alert>
+                <Warning className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="font-semibold mb-2">Varoitukset:</div>
+                  <ul className="list-disc list-inside space-y-1">
+                    {validation.warnings.map((warning, index) => (
+                      <li key={index}>{warning.message}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {validation.isValid && validation.warnings.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Tarjous on valmis lähetettäväksi. Vahvista lähettäminen alla olevasta painikkeesta.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowValidationDialog(false)}>
+              Peruuta
+            </Button>
+            <Button onClick={handleSendQuote} disabled={!validation.isValid}>
+              Lähetä
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
