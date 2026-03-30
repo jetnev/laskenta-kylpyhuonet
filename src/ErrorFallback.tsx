@@ -1,9 +1,9 @@
 import { Alert, AlertTitle, AlertDescription } from "./components/ui/alert";
-import { Button } from "./components/ui/button";
 
-export function ErrorFallback({
-  error,
-  resetErrorBoundary,
+
+}: {
+  resetE
+  return (
 }: {
   error: Error;
   resetErrorBoundary: () => void;
