@@ -244,7 +244,7 @@ export default function QuoteEditor({ quote, onClose }: QuoteEditorProps) {
                       <TableCell>
                         {isEditing ? (
                           <Select
-                            value={row.productId || ''}
+                            value={row.productId || undefined}
                             onValueChange={(value) => handleProductSelect(row.id, value)}
                           >
                             <SelectTrigger>

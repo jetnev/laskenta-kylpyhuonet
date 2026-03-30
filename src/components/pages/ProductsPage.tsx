@@ -223,16 +223,16 @@ export default function ProductsPage() {
               <div className="space-y-2">
                 <Label htmlFor="installationGroup">Hintaryhmä</Label>
                 <Select
-                  value={formData.installationGroupId}
+                  value={formData.installationGroupId || undefined}
                   onValueChange={(value) =>
-                    setFormData({ ...formData, installationGroupId: value })
+                    setFormData({ ...formData, installationGroupId: value === 'none' ? '' : value })
                   }
                 >
                   <SelectTrigger id="installationGroup">
                     <SelectValue placeholder="Ei valittu" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Ei valittu</SelectItem>
+                    <SelectItem value="none">Ei valittu</SelectItem>
                     {groups.map((group) => (
                       <SelectItem key={group.id} value={group.id}>
                         {group.name}
