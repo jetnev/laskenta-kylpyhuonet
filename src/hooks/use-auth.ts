@@ -1,39 +1,39 @@
 import { useState, useEffect } from 'react';
 
-interface UserInfo {
-  login: string;
   avatarUrl: string;
-  email: string;
   id: string;
-  isOwner: boolean;
 }
+export function 
+  const [load
 
-export function useAuth() {
-  const [user, setUser] = useState<UserInfo | null>(null);
+ 
+
+        setIsOwner(userInfo
+        console.error('Failed to fetch user:', error);
   const [loading, setLoading] = useState(true);
-  const [isOwner, setIsOwner] = useState(false);
+        setLoading(false);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const userInfo = await spark.user();
-        setUser(userInfo);
-        setIsOwner(userInfo.isOwner);
-      } catch (error) {
-        console.error('Failed to fetch user:', error);
-        setUser(null);
-        setIsOwner(false);
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    fetchUser();
-  }, []);
+    user,
+    isOwner,
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
   return {
     user,
-    loading,
-    isOwner,
+
+
   };
-}
+
