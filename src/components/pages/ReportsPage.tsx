@@ -4,7 +4,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { TrendUp, TrendDown, FileText, Folder, CheckCircle, XCircle, Clock, Package, ChartBar, CalendarBlank } from '@phosphor-icons/react';
+import { Button } from '../ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Calendar } from '../ui/calendar';
+import { TrendUp, TrendDown, FileText, Folder, CheckCircle, XCircle, Clock, Package, ChartBar, CalendarBlank, FilePdf, FileXls, Download, Users } from '@phosphor-icons/react';
 import { useProjects } from '../../hooks/use-data';
 import { useQuotes } from '../../hooks/use-data';
 import { useQuoteRows } from '../../hooks/use-data';
@@ -13,11 +16,18 @@ import { useCustomers } from '../../hooks/use-data';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { fi } from 'date-fns/locale';
+import { toast } from 'sonner';
+import { cn } from '../../lib/utils';
 
-type TimeRange = '1m' | '3m' | '6m' | '12m' | 'all';
+type TimeRange = '1m' | '3m' | '6m' | '12m' | 'all' | 'custom';
+type DateRange = {
+  from: Date | undefined;
+  to: Date | undefined;
+};
 
 export default function ReportsPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>('3m');
+  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
   const { projects } = useProjects();
   const { quotes } = useQuotes();
   const { rows } = useQuoteRows();
@@ -25,20 +35,29 @@ export default function ReportsPage() {
   const { customers } = useCustomers();
 
   const filteredQuotes = useMemo(() => {
+    if (timeRange === 'custom' && dateRange.from && dateRange.to) {
+      return quotes.filter(q => {
+        const date = new Date(q.createdAt);
+        return date >= dateRange.from! && date <= dateRange.to!;
+      });
+    }
+    
     if (timeRange === 'all') return quotes;
     
     const now = new Date();
-    const monthsAgo = {
-      '1m': 1,
-      '3m': 3,
-      '6m': 6,
-      '12m': 12,
-    }[timeRange] || 3;
+    let monthsAgo = 3;
+    
+    switch (timeRange) {
+      case '1m': monthsAgo = 1; break;
+      case '3m': monthsAgo = 3; break;
+      case '6m': monthsAgo = 6; break;
+      case '12m': monthsAgo = 12; break;
+    }
     
     const startDate = subMonths(now, monthsAgo);
     
     return quotes.filter(q => new Date(q.createdAt) >= startDate);
-  }, [quotes, timeRange]);
+  }, [quotes, timeRange, dateRange]);
 
   const kpiData = useMemo(() => {
     const totalProjects = projects.length;
@@ -156,6 +175,73 @@ export default function ReportsPage() {
       .slice(0, 15);
   }, [filteredQuotes, rows]);
 
+  const customerAnalysis = useMemo(() => {
+    const customerStats: { 
+      [key: string]: { 
+        name: string; 
+        projectCount: number; 
+        quoteCount: number; 
+        totalValue: number; 
+        acceptedValue: number; 
+        acceptedCount: number;
+        sentCount: number;
+      } 
+    } = {};
+    
+    projects.forEach(project => {
+      if (!project.customerId) return;
+      
+      const customer = customers.find(c => c.id === project.customerId);
+      if (!customer) return;
+      
+      if (!customerStats[project.customerId]) {
+        customerStats[project.customerId] = {
+          name: customer.name,
+          projectCount: 0,
+          quoteCount: 0,
+          totalValue: 0,
+          acceptedValue: 0,
+          acceptedCount: 0,
+          sentCount: 0,
+        };
+      }
+      
+      customerStats[project.customerId].projectCount += 1;
+      
+      const projectQuotes = filteredQuotes.filter(q => q.projectId === project.id);
+      customerStats[project.customerId].quoteCount += projectQuotes.length;
+      
+      projectQuotes.forEach(quote => {
+        const quoteRows = rows.filter(r => r.quoteId === quote.id);
+        let quoteValue = 0;
+        
+        quoteRows.forEach(row => {
+          const salesPrice = row.overridePrice !== undefined ? row.overridePrice : row.salesPrice;
+          const installPrice = row.mode === 'installation' || row.mode === 'product_installation' ? row.installationPrice : 0;
+          quoteValue += (salesPrice + installPrice) * row.quantity * row.regionMultiplier;
+        });
+        
+        customerStats[project.customerId].totalValue += quoteValue;
+        
+        if (quote.status === 'accepted') {
+          customerStats[project.customerId].acceptedValue += quoteValue;
+          customerStats[project.customerId].acceptedCount += 1;
+        }
+        
+        if (quote.status === 'sent') {
+          customerStats[project.customerId].sentCount += 1;
+        }
+      });
+    });
+
+    return Object.values(customerStats)
+      .sort((a, b) => b.totalValue - a.totalValue)
+      .map(stat => ({
+        ...stat,
+        acceptanceRate: stat.sentCount > 0 ? (stat.acceptedCount / stat.sentCount) * 100 : 0,
+      }));
+  }, [projects, customers, filteredQuotes, rows]);
+
   const recentProjects = useMemo(() => {
     return [...projects]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -185,6 +271,46 @@ export default function ReportsPage() {
     }).format(value);
   };
 
+  const exportToPDF = () => {
+    toast.info('PDF-vienti tulossa pian', {
+      description: 'Tämä ominaisuus on kehitteillä',
+    });
+  };
+
+  const exportToExcel = () => {
+    const data = [
+      ['Raportti', 'Laskenta Tarjouslaskenta'],
+      ['Luontipäivä', format(new Date(), 'dd.MM.yyyy HH:mm', { locale: fi })],
+      ['Aikaväli', timeRange === 'custom' 
+        ? `${format(dateRange.from!, 'dd.MM.yyyy')} - ${format(dateRange.to!, 'dd.MM.yyyy')}`
+        : timeRange === 'all' ? 'Kaikki' : `Viimeiset ${timeRange}`
+      ],
+      [],
+      ['Avainluvut'],
+      ['Projektit yhteensä', kpiData.totalProjects],
+      ['Tarjoukset yhteensä', kpiData.totalQuotes],
+      ['Hyväksymisaste', `${kpiData.acceptanceRate.toFixed(1)}%`],
+      ['Kokonaisarvo', formatCurrency(kpiData.totalValue)],
+      ['Kate', formatCurrency(kpiData.totalMargin)],
+      ['Kate-%', `${kpiData.marginPercent.toFixed(1)}%`],
+      [],
+      ['Top tuotteet'],
+      ['#', 'Koodi', 'Tuote', 'Määrä', 'Esiintymät', 'Arvo'],
+      ...topProducts.map((p, i) => [i + 1, p.code, p.name, p.quantity.toFixed(2), p.count, formatCurrency(p.value)]),
+    ];
+
+    const csv = data.map(row => row.join('\t')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `raportti_${format(new Date(), 'yyyy-MM-dd_HHmm')}.csv`;
+    link.click();
+    
+    toast.success('Raportti viety onnistuneesti', {
+      description: 'CSV-tiedosto ladattu',
+    });
+  };
+
   return (
     <div className="p-8 space-y-6">
       <div className="flex items-center justify-between">
@@ -193,18 +319,61 @@ export default function ReportsPage() {
           <p className="text-muted-foreground mt-1">Liiketoiminnan analytiikka ja tilastot</p>
         </div>
         
-        <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="1m">Viimeinen kuukausi</SelectItem>
-            <SelectItem value="3m">Viimeiset 3 kk</SelectItem>
-            <SelectItem value="6m">Viimeiset 6 kk</SelectItem>
-            <SelectItem value="12m">Viimeinen vuosi</SelectItem>
-            <SelectItem value="all">Kaikki</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex gap-3">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className={cn(timeRange === 'custom' && 'border-primary')}>
+                <CalendarBlank className="mr-2 h-4 w-4" />
+                {timeRange === 'custom' && dateRange.from && dateRange.to 
+                  ? `${format(dateRange.from, 'dd.MM.')} - ${format(dateRange.to, 'dd.MM.yyyy')}`
+                  : 'Aikaväli'
+                }
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="range"
+                selected={{ from: dateRange.from, to: dateRange.to }}
+                onSelect={(range) => {
+                  if (range?.from && range?.to) {
+                    setDateRange({ from: range.from, to: range.to });
+                    setTimeRange('custom');
+                  }
+                }}
+                numberOfMonths={2}
+              />
+            </PopoverContent>
+          </Popover>
+          
+          <Select value={timeRange} onValueChange={(v) => {
+            setTimeRange(v as TimeRange);
+            if (v !== 'custom') {
+              setDateRange({ from: undefined, to: undefined });
+            }
+          }}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1m">Viimeinen kuukausi</SelectItem>
+              <SelectItem value="3m">Viimeiset 3 kk</SelectItem>
+              <SelectItem value="6m">Viimeiset 6 kk</SelectItem>
+              <SelectItem value="12m">Viimeinen vuosi</SelectItem>
+              <SelectItem value="all">Kaikki</SelectItem>
+              <SelectItem value="custom">Mukautettu...</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Button variant="outline" onClick={exportToExcel}>
+            <FileXls className="mr-2 h-4 w-4" />
+            Excel
+          </Button>
+          
+          <Button variant="outline" onClick={exportToPDF}>
+            <FilePdf className="mr-2 h-4 w-4" />
+            PDF
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -265,6 +434,7 @@ export default function ReportsPage() {
         <TabsList>
           <TabsTrigger value="overview">Yleiskatsaus</TabsTrigger>
           <TabsTrigger value="products">Tuotteet</TabsTrigger>
+          <TabsTrigger value="customers">Asiakkaat</TabsTrigger>
           <TabsTrigger value="projects">Projektit</TabsTrigger>
         </TabsList>
 
@@ -459,6 +629,54 @@ export default function ReportsPage() {
               ) : (
                 <div className="py-12 text-center text-muted-foreground">
                   Ei tuotedata saatavilla
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="customers" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Asiakasanalyysi</CardTitle>
+              <CardDescription>Asiakkaiden projektit ja tarjousten arvot</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {customerAnalysis.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Asiakas</TableHead>
+                      <TableHead className="text-right">Projektit</TableHead>
+                      <TableHead className="text-right">Tarjoukset</TableHead>
+                      <TableHead className="text-right">Kokonaisarvo</TableHead>
+                      <TableHead className="text-right">Hyväksytty arvo</TableHead>
+                      <TableHead className="text-right">Hyväksymisaste</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {customerAnalysis.map((customer, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">{customer.name}</TableCell>
+                        <TableCell className="text-right">{customer.projectCount}</TableCell>
+                        <TableCell className="text-right">{customer.quoteCount}</TableCell>
+                        <TableCell className="text-right font-mono">{formatCurrency(customer.totalValue)}</TableCell>
+                        <TableCell className="text-right font-mono font-medium text-green-600">
+                          {formatCurrency(customer.acceptedValue)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant={customer.acceptanceRate >= 50 ? "default" : "secondary"}>
+                            {customer.acceptanceRate.toFixed(0)}%
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="py-12 text-center text-muted-foreground">
+                  <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                  Ei asiakasdata saatavilla
                 </div>
               )}
             </CardContent>
