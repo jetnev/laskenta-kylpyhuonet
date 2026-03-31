@@ -3,6 +3,7 @@ import { Card } from '../ui/card';
 import { useProducts, useProjects, useQuotes, useCustomers } from '../../hooks/use-data';
 import { calculateQuote } from '../../lib/calculations';
 import { useQuoteRows } from '../../hooks/use-data';
+import DeadlineNotifications from '../DeadlineNotifications';
 
 export default function Dashboard() {
   const { products } = useProducts();
@@ -97,6 +98,8 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground mt-2">Voitettu tarjous</p>
         </Card>
       </div>
+
+      <DeadlineNotifications />
 
       <Card className="p-6">
         <h3 className="text-lg font-medium mb-4">Viimeisimmät projektit</h3>
