@@ -41,7 +41,7 @@ import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 export default function ProductsPage() {
   const { products, addProduct, updateProduct, deleteProduct } = useProducts();
   const { groups } = useInstallationGroups();
-  const { isOwner } = useAuth();
+  const { canEdit, canDelete } = useAuth();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [groupFilter, setGroupFilter] = useState<string>('');
@@ -86,8 +86,8 @@ export default function ProductsPage() {
   });
 
   const handleOpenDialog = (product?: Product) => {
-    if (!isOwner) {
-      toast.error('Vain omistaja voi muokata tuotteita');
+    if (!canEdit) {
+      toast.error('Sinulla ei ole muokkausoikeuksia');
       return;
     }
 
@@ -116,8 +116,8 @@ export default function ProductsPage() {
   };
 
   const handleSave = () => {
-    if (!isOwner) {
-      toast.error('Vain omistaja voi tallentaa muutoksia');
+    if (!canEdit) {
+      toast.error('Sinulla ei ole muokkausoikeuksia');
       return;
     }
 
@@ -147,8 +147,8 @@ export default function ProductsPage() {
   };
 
   const handleDelete = (id: string) => {
-    if (!isOwner) {
-      toast.error('Vain omistaja voi poistaa tuotteita');
+    if (!canDelete) {
+      toast.error('Sinulla ei ole poisto-oikeuksia');
       return;
     }
 
@@ -159,8 +159,8 @@ export default function ProductsPage() {
   };
 
   const handleCopyProduct = (product: Product) => {
-    if (!isOwner) {
-      toast.error('Vain omistaja voi kopioida tuotteita');
+    if (!canEdit) {
+      toast.error('Sinulla ei ole muokkausoikeuksia');
       return;
     }
 
@@ -178,8 +178,8 @@ export default function ProductsPage() {
   };
 
   const handleBulkDelete = () => {
-    if (!isOwner) {
-      toast.error('Vain omistaja voi poistaa tuotteita');
+    if (!canDelete) {
+      toast.error('Sinulla ei ole poisto-oikeuksia');
       return;
     }
 
@@ -196,8 +196,8 @@ export default function ProductsPage() {
   };
 
   const handleBulkAction = () => {
-    if (!isOwner) {
-      toast.error('Vain omistaja voi suorittaa joukkotoimintoja');
+    if (!canEdit) {
+      toast.error('Sinulla ei ole muokkausoikeuksia');
       return;
     }
 
@@ -301,7 +301,7 @@ export default function ProductsPage() {
             <span className="hidden sm:inline">Vie Excel</span>
             <span className="sm:hidden">Vie</span>
           </Button>
-          {isOwner ? (
+          {canEdit ? (
             <Button onClick={() => handleOpenDialog()} className="gap-2">
               <Plus weight="bold" />
               Lisää tuote
@@ -315,7 +315,7 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {!isOwner && <ReadOnlyAlert />}
+      {!canEdit && <ReadOnlyAlert />}
 
       <ResponsiveDialog
         open={dialogOpen}
@@ -408,7 +408,7 @@ export default function ProductsPage() {
         </div>
       </ResponsiveDialog>
 
-      {selectedProducts.size > 0 && isOwner && (
+      {selectedProducts.size > 0 && canEdit && (
         <Card className="p-4 bg-accent/20 border-accent">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -565,7 +565,7 @@ export default function ProductsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  {isOwner && (
+                  {canEdit && (
                     <TableHead className="w-12">
                       <Checkbox
                         checked={selectedProducts.size === filteredProducts.length}
@@ -579,7 +579,7 @@ export default function ProductsPage() {
                   <TableHead>Yksikkö</TableHead>
                   <TableHead className="text-right">Ostohinta</TableHead>
                   <TableHead>Hintaryhmä</TableHead>
-                  {isOwner && <TableHead className="w-32"></TableHead>}
+                  {canEdit && <TableHead className="w-32"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -589,7 +589,7 @@ export default function ProductsPage() {
                     : null;
                   return (
                     <TableRow key={product.id}>
-                      {isOwner && (
+                      {canEdit && (
                         <TableCell>
                           <Checkbox
                             checked={selectedProducts.has(product.id)}
@@ -605,7 +605,7 @@ export default function ProductsPage() {
                         {formatCurrency(product.purchasePrice)}
                       </TableCell>
                       <TableCell>{group?.name || '-'}</TableCell>
-                      {isOwner && (
+                      {canEdit && (
                         <TableCell>
                           <div className="flex gap-2">
                             <Button

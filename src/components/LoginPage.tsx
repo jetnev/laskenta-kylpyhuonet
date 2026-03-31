@@ -1,41 +1,7 @@
-import { useState } from 'react';
-import { SignIn, Key, Envelope } from '@phosphor-icons/react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
+import { SignIn, GithubLogo } from '@phosphor-icons/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { toast } from 'sonner';
 
-interface LoginPageProps {
-  onLogin: (email: string, password: string) => boolean;
-}
-
-export default function LoginPage({ onLogin }: LoginPageProps) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!email || !password) {
-      toast.error('Täytä kaikki kentät');
-      return;
-    }
-
-    setIsLoading(true);
-    
-    setTimeout(() => {
-      const success = onLogin(email, password);
-      
-      if (!success) {
-        toast.error('Virheellinen sähköposti tai salasana');
-      }
-      
-      setIsLoading(false);
-    }, 500);
-  };
-
+export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/20 to-accent/10 p-4 sm:p-6">
       <div 
@@ -59,68 +25,48 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         </CardHeader>
         
         <CardContent className="px-4 sm:px-6">
-          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium">
-                Sähköpostiosoite
-              </Label>
-              <div className="relative">
-                <Envelope className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="nimi@yritys.fi"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-9 sm:pl-10 h-11 sm:h-12 text-base"
-                  disabled={isLoading}
-                  autoComplete="email"
-                />
+          <div className="space-y-6">
+            <div className="bg-muted/50 rounded-lg p-4 border border-border/50">
+              <div className="flex items-start gap-3">
+                <GithubLogo className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" weight="fill" />
+                <div className="space-y-2">
+                  <h3 className="font-medium text-sm">GitHub-tunnistautuminen</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Tämä sovellus käyttää Spark-pohjaista tunnistautumista. 
+                    Kirjaudu sisään GitHub-tilillä, jonka omistaa tämän sovelluksen ylläpitäjä.
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium">
-                Salasana
-              </Label>
-              <div className="relative">
-                <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-9 sm:pl-10 h-11 sm:h-12 text-base"
-                  disabled={isLoading}
-                  autoComplete="current-password"
-                />
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">Käyttöoikeudet</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              
+              <div className="space-y-2 text-xs text-muted-foreground">
+                <div className="flex items-start gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                  <span><strong className="text-foreground">Omistaja:</strong> Täydet oikeudet kaikkiin toimintoihin</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-accent mt-1.5 flex-shrink-0" />
+                  <span><strong className="text-foreground">Muokkaaja:</strong> Voi luoda ja muokata dataa</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground mt-1.5 flex-shrink-0" />
+                  <span><strong className="text-foreground">Lukija:</strong> Voi tarkastella tietoja</span>
+                </div>
               </div>
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full h-11 sm:h-12 text-base font-medium shadow-md hover:shadow-lg transition-all"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin mr-2" />
-                  Kirjaudutaan...
-                </>
-              ) : (
-                <>
-                  <SignIn className="w-5 h-5 mr-2" weight="bold" />
-                  Kirjaudu sisään
-                </>
-              )}
-            </Button>
-          </form>
-
-          <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-border">
-            <p className="text-xs text-center text-muted-foreground">
-              Käyttääksesi sovellusta tarvitset valtuutetun käyttäjätilin
-            </p>
+            <div className="pt-2 border-t border-border">
+              <p className="text-xs text-center text-muted-foreground">
+                Tarvitset valtuutetun GitHub-käyttäjätilin sovelluksen käyttöön
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

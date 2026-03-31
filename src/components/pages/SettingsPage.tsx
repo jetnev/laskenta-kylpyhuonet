@@ -4,10 +4,10 @@ import { Input } from '../ui/input';
 import { Card } from '../ui/card';
 import { Label } from '../ui/label';
 import { useSettings } from '../../hooks/use-data';
-import { useAuth } from '../../hooks/use-auth';
+import { useAuth, UserRole } from '../../hooks/use-auth';
 import { useKV } from '@github/spark/hooks';
 import { toast } from 'sonner';
-import { Trash, Plus, User as UserIcon } from '@phosphor-icons/react';
+import { User as UserIcon, Info } from '@phosphor-icons/react';
 import {
   Table,
   TableBody,
@@ -16,18 +16,27 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { ResponsiveDialog } from '../ResponsiveDialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
+import { Badge } from '../ui/badge';
+import { Alert, AlertDescription } from '../ui/alert';
 
-interface LocalUser {
-  email: string;
-  password: string;
-  createdAt: string;
+interface AppUserRole {
+  userId: string;
+  role: UserRole;
+  grantedBy: string;
+  grantedAt: string;
 }
 
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings();
-  const { isOwner } = useAuth();
-  const [users, setUsers] = useKV<LocalUser[]>("app-users", []);
+  const { canManageUsers, user: currentUser } = useAuth();
+  const [userRoles, setUserRoles] = useKV<AppUserRole[]>("user-roles", []);
   
   const [formData, setFormData] = useState({
     companyName: settings.companyName,
@@ -38,44 +47,58 @@ export default function SettingsPage() {
     defaultMarginPercent: settings.defaultMarginPercent,
   });
 
-  const [newUser, setNewUser] = useState({ email: '', password: '' });
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-
   const handleSave = () => {
     updateSettings(formData);
     toast.success('Asetukset tallennettu');
   };
 
-  const handleAddUser = () => {
-    if (!newUser.email || !newUser.password) {
-      toast.error('Täytä kaikki kentät');
-      return;
-    }
-
-    if (!users) return;
-
-    if (users.some(u => u.email === newUser.email)) {
-      toast.error('Käyttäjä on jo olemassa');
-      return;
-    }
-
-    setUsers((currentUsers) => [
-      ...(currentUsers || []),
-      {
-        email: newUser.email,
-        password: newUser.password,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
-
-    toast.success('Käyttäjä lisätty');
-    setNewUser({ email: '', password: '' });
-    setIsAddDialogOpen(false);
+  const handleRoleChange = (userId: string, newRole: UserRole) => {
+    if (!currentUser) return;
+    
+    setUserRoles((current) => {
+      const existing = current?.find(r => r.userId === userId);
+      if (existing) {
+        return (current || []).map(r => 
+          r.userId === userId 
+            ? { ...r, role: newRole, grantedBy: currentUser.id, grantedAt: new Date().toISOString() }
+            : r
+        );
+      } else {
+        return [
+          ...(current || []),
+          {
+            userId,
+            role: newRole,
+            grantedBy: currentUser.id,
+            grantedAt: new Date().toISOString(),
+          }
+        ];
+      }
+    });
+    
+    toast.success('Käyttäjärooli päivitetty');
   };
 
-  const handleDeleteUser = (email: string) => {
-    setUsers((currentUsers) => (currentUsers || []).filter(u => u.email !== email));
-    toast.success('Käyttäjä poistettu');
+  const getRoleBadgeVariant = (role: UserRole) => {
+    switch (role) {
+      case 'owner':
+        return 'secondary';
+      case 'editor':
+        return 'default';
+      case 'viewer':
+        return 'outline';
+    }
+  };
+
+  const getRoleLabel = (role: UserRole) => {
+    switch (role) {
+      case 'owner':
+        return 'Omistaja';
+      case 'editor':
+        return 'Muokkaaja';
+      case 'viewer':
+        return 'Lukija';
+    }
   };
 
   return (
@@ -154,96 +177,75 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      {isOwner && (
+      {canManageUsers && (
         <Card className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium">Käyttäjien hallinta</h3>
-            <Button size="sm" onClick={() => setIsAddDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Lisää käyttäjä
-            </Button>
-          </div>
-
-          <ResponsiveDialog
-            open={isAddDialogOpen}
-            onOpenChange={setIsAddDialogOpen}
-            title="Lisää uusi käyttäjä"
-            maxWidth="md"
-            footer={
-              <>
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="flex-1 sm:flex-initial">
-                  Peruuta
-                </Button>
-                <Button onClick={handleAddUser} className="flex-1 sm:flex-initial">
-                  Lisää käyttäjä
-                </Button>
-              </>
-            }
-          >
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Luo uusi käyttäjätunnus sovellukseen.
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-medium">Käyttäjäroolit</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Hallinnoi sovelluksen käyttäjien oikeuksia
               </p>
-              <div className="space-y-2">
-                <Label htmlFor="new-email">Sähköpostiosoite</Label>
-                <Input
-                  id="new-email"
-                  type="email"
-                  placeholder="kayttaja@yritys.fi"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-password">Salasana</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                />
-              </div>
             </div>
-          </ResponsiveDialog>
 
-          {users && users.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Sähköposti</TableHead>
-                  <TableHead>Luotu</TableHead>
-                  <TableHead className="w-[100px]">Toiminnot</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.email}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <UserIcon className="w-4 h-4 text-muted-foreground" />
-                        {user.email}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {new Date(user.createdAt).toLocaleDateString('fi-FI')}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteUser(user.email)}
-                      >
-                        <Trash className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </TableCell>
+            <Alert>
+              <Info className="w-4 h-4" />
+              <AlertDescription>
+                Roolit määritetään GitHub-käyttäjille. Sovelluksen omistaja saa automaattisesti owner-roolin.
+                Muille käyttäjille voit määrittää roolin Editor (muokkausoikeudet) tai Viewer (lukuoikeus).
+              </AlertDescription>
+            </Alert>
+
+            {userRoles && userRoles.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Käyttäjä ID</TableHead>
+                    <TableHead>Rooli</TableHead>
+                    <TableHead>Myönnetty</TableHead>
+                    <TableHead className="w-[200px]">Toiminnot</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <p className="text-muted-foreground text-sm">Ei käyttäjiä. Lisää ensimmäinen käyttäjä yllä olevasta painikkeesta.</p>
-          )}
+                </TableHeader>
+                <TableBody>
+                  {userRoles.map((userRole) => (
+                    <TableRow key={userRole.userId}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <UserIcon className="w-4 h-4 text-muted-foreground" />
+                          <span className="font-mono text-sm">{userRole.userId}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getRoleBadgeVariant(userRole.role)}>
+                          {getRoleLabel(userRole.role)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {new Date(userRole.grantedAt).toLocaleDateString('fi-FI')}
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={userRole.role}
+                          onValueChange={(value) => handleRoleChange(userRole.userId, value as UserRole)}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="editor">Muokkaaja</SelectItem>
+                            <SelectItem value="viewer">Lukija</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                Ei määritettyjä rooleja. Roolit lisätään automaattisesti kun käyttäjä kirjautuu ensimmäisen kerran.
+              </p>
+            )}
+          </div>
         </Card>
       )}
 

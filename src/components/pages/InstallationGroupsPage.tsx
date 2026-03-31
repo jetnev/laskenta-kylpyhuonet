@@ -22,7 +22,7 @@ import { ResponsiveDialog } from '../ResponsiveDialog';
 
 export default function InstallationGroupsPage() {
   const { groups, addGroup, updateGroup, deleteGroup } = useInstallationGroups();
-  const { isOwner } = useAuth();
+  const { canEdit, canDelete } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<InstallationGroup | null>(null);
 

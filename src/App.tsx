@@ -41,7 +41,7 @@ const navigation = [
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, loading, isOwner, login, logout } = useAuth();
+  const { user, loading, role, canManageUsers } = useAuth();
   const isMobile = useIsMobile();
 
   if (loading) {
@@ -58,11 +58,24 @@ function App() {
   if (!user) {
     return (
       <>
-        <LoginPage onLogin={login} />
+        <LoginPage />
         <Toaster />
       </>
     );
   }
+
+  const getRoleBadge = () => {
+    switch (role) {
+      case 'owner':
+        return { label: 'Omistaja', variant: 'secondary' as const };
+      case 'editor':
+        return { label: 'Muokkaaja', variant: 'default' as const };
+      case 'viewer':
+        return { label: 'Lukija', variant: 'outline' as const };
+    }
+  };
+
+  const roleBadge = getRoleBadge();
 
   const handleNavigate = (page: Page) => {
     setCurrentPage(page);
@@ -129,22 +142,9 @@ function App() {
             </Avatar>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{user.login}</p>
-              {isOwner ? (
-                <Badge variant="secondary" className="text-xs mt-1">Omistaja</Badge>
-              ) : (
-                <Badge variant="outline" className="text-xs mt-1">Lukuoikeus</Badge>
-              )}
+              <Badge variant={roleBadge.variant} className="text-xs mt-1">{roleBadge.label}</Badge>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={logout}
-            className="w-full min-h-[44px]"
-          >
-            <SignOut className="w-4 h-4 mr-2" />
-            Kirjaudu ulos
-          </Button>
         </div>
       </aside>
 

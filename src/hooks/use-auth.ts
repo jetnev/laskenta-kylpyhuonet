@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useKV } from '@github/spark/hooks';
 
+export type UserRole = 'owner' | 'editor' | 'viewer';
+
 interface UserInfo {
   login: string;
   id: string;
@@ -9,83 +11,53 @@ interface UserInfo {
   isOwner: boolean;
 }
 
-interface LocalUser {
-  email: string;
-  password: string;
-  createdAt: string;
+interface AppUserRole {
+  userId: string;
+  role: UserRole;
+  grantedBy: string;
+  grantedAt: string;
 }
 
 export function useAuth() {
   const [user, setUser] = useState<UserInfo | null>(null);
-  const [isOwner, setIsOwner] = useState(false);
+  const [role, setRole] = useState<UserRole>('viewer');
   const [loading, setLoading] = useState(true);
-  const [users] = useKV<LocalUser[]>("app-users", []);
+  const [userRoles] = useKV<AppUserRole[]>("user-roles", []);
 
   useEffect(() => {
     async function fetchUser() {
       try {
-        const sessionEmail = sessionStorage.getItem('laskenta-user-email');
-        
-        if (sessionEmail && users) {
-          const localUser = users.find(u => u.email === sessionEmail);
-          if (localUser) {
-            setUser({
-              login: localUser.email.split('@')[0],
-              id: localUser.email,
-              email: localUser.email,
-              avatarUrl: '',
-              isOwner: true,
-            });
-            setIsOwner(true);
-            setLoading(false);
-            return;
-          }
-        }
-
         const userInfo = await spark.user();
         setUser(userInfo);
-        setIsOwner(userInfo.isOwner);
+
+        if (userInfo.isOwner) {
+          setRole('owner');
+        } else {
+          const userRoleEntry = userRoles?.find(r => r.userId === userInfo.id);
+          setRole(userRoleEntry?.role || 'viewer');
+        }
       } catch (error) {
         console.error('Failed to fetch user:', error);
         setUser(null);
-        setIsOwner(false);
+        setRole('viewer');
       } finally {
         setLoading(false);
       }
     }
 
     fetchUser();
-  }, [users]);
+  }, [userRoles]);
 
-  const login = (email: string, password: string): boolean => {
-    if (!users) return false;
-    const foundUser = users.find(u => u.email === email && u.password === password);
-    if (foundUser) {
-      sessionStorage.setItem('laskenta-user-email', email);
-      setUser({
-        login: email.split('@')[0],
-        id: email,
-        email: email,
-        avatarUrl: '',
-        isOwner: true,
-      });
-      setIsOwner(true);
-      return true;
-    }
-    return false;
-  };
-
-  const logout = () => {
-    sessionStorage.removeItem('laskenta-user-email');
-    setUser(null);
-    setIsOwner(false);
-  };
+  const canEdit = role === 'owner' || role === 'editor';
+  const canDelete = role === 'owner' || role === 'editor';
+  const canManageUsers = role === 'owner';
 
   return {
     user,
-    isOwner,
+    role,
+    canEdit,
+    canDelete,
+    canManageUsers,
     loading,
-    login,
-    logout,
   };
 }
