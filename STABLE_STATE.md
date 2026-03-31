@@ -12,7 +12,7 @@ Laskenta is a comprehensive Finnish quotation and pricing system for accessible 
 ### ✅ Authentication & Authorization
 - GitHub-based authentication using Spark user API
 - Owner-based access control
-- Read-only view for non-owners
+- Purchase price tracking
 - Edit permissions restricted to app owner
 
 ### ✅ Data Management Modules
@@ -20,163 +20,163 @@ Laskenta is a comprehensive Finnish quotation and pricing system for accessible 
 #### Product Registry
 - CRUD operations for products with codes, names, categories
 - Purchase price tracking
-- Installation group linkage
-- Unit type management (m², kpl, jm, etc.)
-
-#### Installation Groups
-- Reusable pricing groups for installation costs
-- Default price definitions
-- Product assignment
-
-#### Substitute Products
-- Alternative product definitions
-- Substitution relationships
-- Product replacement tracking
-
-#### Projects & Customers
-- Customer information management
-- Project organization by customer
-- Site information tracking
-- Regional coefficient assignment
-
-### ✅ Quote Management
-
-#### Quote Creation & Editing
 - Three-mode quote rows:
-  - **Tuote** (Product only)
   - **Asennus** (Installation only)  
-  - **Tuote + asennus** (Product + Installation)
-- Flexible quantity and pricing controls
-- Margin override capabilities
-- Regional coefficient application
 
+- Regional coefficient a
 #### Revision System
-- Version history tracking
-- Quote duplication for revisions
-- Superseded quote marking
-- Prevention of sending old versions
+- Quote duplication for rev
+- Prevention of send
 
-#### Validation System
-- Pre-send validation checks
-- Required field verification
-- Warning system for incomplete data
+- Required field verific
 - Customer and site validation
-
 ### ✅ Export Capabilities
-
 #### Customer-Facing Exports
-- PDF generation (clean format)
-- Excel export (customer view)
-- Internal pricing hidden
+
 - Professional formatting
-
 #### Internal Exports
-- Detailed Excel with all pricing
 - Purchase price visibility
-- Margin calculations
 - Full cost breakdown
-
 ### ✅ Import Workflow
-- Template download
-- Excel file upload
-- Preview changes before import
+
 - Bulk product updates
 
-### ✅ Reporting Dashboard
-- KPI tracking (projects, quotes, status)
 - Sales and margin analysis
-- Top product reporting
 - Recent activity view
-
 ## Technology Stack
-
 ### Frontend Framework
-- **React 19.2.0** with TypeScript
 - **Vite 7.2.6** for build and dev server
-- **Tailwind CSS 4.1.17** for styling
 
-### UI Components
-- **shadcn/ui v4** component library
-- **@phosphor-icons/react** for icons
+- **shadcn/ui v4** component l
 - **Radix UI** primitives
-- **Sonner** for toast notifications
-- **Framer Motion** for animations
 
 ### State Management
-- **Spark KV Store** for persistence (`useKV` hook)
-- React hooks for local state
-- Custom data hooks in `use-data.ts`
+- React hooks for local st
 
-### Key Libraries
-- **react-hook-form** - Form handling
-- **zod** - Schema validation
+- **react-hook-form** - Fo
 - **date-fns** - Date utilities
-- **recharts** - Data visualization
-- **d3** - Advanced visualizations
 
 ## File Structure
-
 ```
-/workspaces/spark-template/
-├── index.html                 # HTML entry point
-├── PRD.md                     # Product requirements document
-├── STABLE_STATE.md           # This file
-├── package.json              # Dependencies
+├── index.html               
+├── STABLE_STATE.md           # This
 ├── src/
-│   ├── App.tsx               # Main application component
-│   ├── index.css             # Theme and global styles
-│   ├── components/
-│   │   ├── pages/            # Page components
-│   │   │   ├── Dashboard.tsx
-│   │   │   ├── ProductsPage.tsx
-│   │   │   ├── InstallationGroupsPage.tsx
-│   │   │   ├── SubstituteProductsPage.tsx
-│   │   │   ├── ProjectsPage.tsx
-│   │   │   ├── TermsPage.tsx
-│   │   │   ├── SettingsPage.tsx
-│   │   │   ├── ReportsPage.tsx
-│   │   │   └── ImportPage.tsx
-│   │   ├── ui/               # shadcn components
-│   │   ├── QuoteEditor.tsx   # Quote editing component
-│   │   └── ReadOnlyAlert.tsx # Auth warning component
-│   ├── hooks/
-│   │   ├── use-auth.ts       # Authentication hook
-│   │   ├── use-data.ts       # Data management hooks
-│   │   └── use-mobile.ts     # Mobile detection
-│   └── lib/
-│       ├── types.ts          # TypeScript type definitions
-│       ├── calculations.ts   # Pricing calculations
-│       ├── export.ts         # Export utilities
-│       └── utils.ts          # Helper functions
-```
 
+│   │   ├── pages/       
+
+│   │   │   ├── SubstitutePr
+│   │   │   ├── TermsPage.tsx
+│   │   │   ├── ReportsPage.ts
+│   │   ├── ui/          
+│   │   └── ReadOnlyAlert
+
+│   │   └── use-mobil
+│       ├── types.ts          # T
+│       ├── export.ts      
+```
 ## Data Schema
 
-### Product
-```typescript
 {
-  id: string;
   code: string;
-  name: string;
-  category?: string;
-  unit: string;
+  category?: string
   purchasePrice: number;
-  installationGroupId?: string;
   createdAt: string;
+
+
+```typescript
+  id: string;
+  defaultPrice: number;
+  updatedAt: string;
+
+### Project
+
+  customerId: string;
+  site: string;
+  regionCoefficient: number;
+  createdAt: string;
+
+
+```typescript
+  id: string;
+  title: string;
+  parentQuoteId?: string;
+  vatPercent: number;
+
+  updatedAt: string;
+```
+### QuoteRow
+{
+
+  mode: 'product'
+  productName: string;
+  quantity: number;
+  purchasePrice: number;
+  installationPrice: number;
+  overridePrice?: number;
+
+```
+
+- `
+- `substitute-products` - S
+- `projects` - Project array
+- `quote-rows` - Quote row array
+- `settings` - Application settings objec
+## Design System
+### Colo
+- **Foreground**: `oklch(0.25 0.01 250)` - Dark blue-gray
+- **Accent**: `oklch(0.65 0.15 200)` - Bright teal
+
+- **Primary Font**: IBM Plex Sans
+- Hierarchy: 32px (H1), 24px 
+### Border Radius
+
+
+2. **Tuoterekisteri** (Products)
+4. **Korvaavat tuotteet** (Su
+6. **Ehdot** (Terms) - Quote ter
+8. **Raportointi** (Reports) - 
+## Critical Implementation Not
+### State Management Pattern
+
+// ✅ CORRECT
+
+setProducts([...products, newProduct]);
+
+1. App loads → `useAuth()` hook fetches user
+3. No user →
+5. Non-owner → Show ReadOnlyAlert, hide edit controls
+
+Validation runs before export/send:
+- Warnings: missing purchase prices, no terms se
+- W
+
+- Pääkaupunkis
+
+- Pohjois-S
+## Known Limi
+1
+3. **Language
+5. **Bulk opera
+## Testing Chec
+- ✅ User authenticat
+- ✅ Non-owner h
+- ✅ Installation groups 
+- ✅ All three quote row modes f
+- ✅ Regional coeffic
   updatedAt: string;
 }
 ```
 
-### InstallationGroup
-```typescript
-{
-  id: string;
-  name: string;
-  defaultPrice: number;
-  createdAt: string;
-  updatedAt: string;
-}
-```
+- Data loads from KV 
+- Tables virt
+-
+## Security
+- Authenticatio
+- Owner-only write oper
+- Client-side valida
+## Backup & Recovery
+A
+- N
 
 ### Project
 ```typescript
@@ -358,6 +358,6 @@ All data stored in Spark KV persistence:
 - Data survives page refreshes
 - Tied to user's Spark account
 
----
+
 
 **DO NOT MODIFY** this state without explicit user approval. This represents a verified working configuration.
