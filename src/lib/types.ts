@@ -37,7 +37,9 @@ export interface InstallationGroup {
 
 export interface SubstituteProduct {
   id: string;
-  originalProductId: string;
+  originalProductId?: string;
+  manualOriginalCode?: string;
+  manualOriginalName?: string;
   substituteProductId: string;
   createdAt: string;
 }
