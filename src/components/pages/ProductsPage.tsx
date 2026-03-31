@@ -222,102 +222,10 @@ export default function ProductsPage() {
             <span className="sm:hidden">Vie</span>
           </Button>
           {isOwner ? (
-            <>
-              <Button onClick={() => handleOpenDialog()} className="gap-2">
-                <Plus weight="bold" />
-                Lisää tuote
-              </Button>
-              <ResponsiveDialog
-                open={dialogOpen}
-                onOpenChange={setDialogOpen}
-                title={editingProduct ? 'Muokkaa tuotetta' : 'Uusi tuote'}
-                maxWidth="md"
-                footer={
-                  <>
-                    <Button variant="outline" onClick={() => setDialogOpen(false)} className="flex-1 sm:flex-initial">
-                      Peruuta
-                    </Button>
-                    <Button onClick={handleSave} className="flex-1 sm:flex-initial">Tallenna</Button>
-                  </>
-                }
-              >
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="code">Tuotekoodi *</Label>
-                    <Input
-                      id="code"
-                      value={formData.code}
-                      onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                      placeholder="esim. LAA-001"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Tuotenimi *</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="esim. Keraaminen laatta 30x30cm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="category">Kategoria</Label>
-                    <Input
-                      id="category"
-                      value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      placeholder="esim. Laatat"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="unit">Yksikkö</Label>
-                      <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
-                        <SelectTrigger id="unit">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="kpl">kpl</SelectItem>
-                          <SelectItem value="m2">m²</SelectItem>
-                          <SelectItem value="m">m</SelectItem>
-                          <SelectItem value="kg">kg</SelectItem>
-                          <SelectItem value="l">l</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="price">Ostohinta (€)</Label>
-                      <Input
-                        id="price"
-                        type="number"
-                        step="0.01"
-                        value={formData.purchasePrice}
-                        onChange={(e) => setFormData({ ...formData, purchasePrice: parseFloat(e.target.value) || 0 })}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="group">Hintaryhmä</Label>
-                    <Select
-                      value={formData.installationGroupId}
-                      onValueChange={(value) => setFormData({ ...formData, installationGroupId: value })}
-                    >
-                      <SelectTrigger id="group">
-                        <SelectValue placeholder="Ei hintaryhmää" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Ei hintaryhmää</SelectItem>
-                        {groups.map((group) => (
-                          <SelectItem key={group.id} value={group.id}>
-                            {group.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </ResponsiveDialog>
-            </>
+            <Button onClick={() => handleOpenDialog()} className="gap-2">
+              <Plus weight="bold" />
+              Lisää tuote
+            </Button>
           ) : (
             <Button disabled className="gap-2">
               <Lock weight="bold" />
@@ -328,6 +236,97 @@ export default function ProductsPage() {
       </div>
 
       {!isOwner && <ReadOnlyAlert />}
+
+      <ResponsiveDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title={editingProduct ? 'Muokkaa tuotetta' : 'Uusi tuote'}
+        maxWidth="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} className="flex-1 sm:flex-initial">
+              Peruuta
+            </Button>
+            <Button onClick={handleSave} className="flex-1 sm:flex-initial">Tallenna</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="code">Tuotekoodi *</Label>
+            <Input
+              id="code"
+              value={formData.code}
+              onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+              placeholder="esim. LAA-001"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="name">Tuotenimi *</Label>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="esim. Keraaminen laatta 30x30cm"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="category">Kategoria</Label>
+            <Input
+              id="category"
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              placeholder="esim. Laatat"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="unit">Yksikkö</Label>
+              <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
+                <SelectTrigger id="unit">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kpl">kpl</SelectItem>
+                  <SelectItem value="m2">m²</SelectItem>
+                  <SelectItem value="m">m</SelectItem>
+                  <SelectItem value="kg">kg</SelectItem>
+                  <SelectItem value="l">l</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="price">Ostohinta (€)</Label>
+              <Input
+                id="price"
+                type="number"
+                step="0.01"
+                value={formData.purchasePrice}
+                onChange={(e) => setFormData({ ...formData, purchasePrice: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="group">Hintaryhmä</Label>
+            <Select
+              value={formData.installationGroupId}
+              onValueChange={(value) => setFormData({ ...formData, installationGroupId: value })}
+            >
+              <SelectTrigger id="group">
+                <SelectValue placeholder="Ei hintaryhmää" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Ei hintaryhmää</SelectItem>
+                {groups.map((group) => (
+                  <SelectItem key={group.id} value={group.id}>
+                    {group.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </ResponsiveDialog>
 
       {selectedProducts.size > 0 && isOwner && (
         <Card className="p-4 bg-accent/20 border-accent">
