@@ -6,13 +6,17 @@ type Props = {
 };
 
 export default function ErrorFallback({ error, resetErrorBoundary }: Props) {
-    <div c
+  return (
+    <div className="flex min-h-screen items-center justify-center p-6">
+      <div className="max-w-md space-y-4 text-center">
         <h1 className="text-2xl font-semibold text-foreground">
+          Something went wrong
         </h1>
-          {error.message}
-        <Button onClick={rese
-        </But
+        <p className="text-muted-foreground">{error.message}</p>
+        <Button onClick={resetErrorBoundary}>Try again</Button>
+      </div>
     </div>
+  );
 }
 
 
