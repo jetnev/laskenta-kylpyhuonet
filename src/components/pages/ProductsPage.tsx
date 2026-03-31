@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, MagnifyingGlass, Trash, PencilSimple, Lock, X, FunnelSimple, FileXls, Wrench, Tag, CurrencyEur, Copy } from '@phosphor-icons/react';
+import { Plus, MagnifyingGlass, Trash, PencilSimple, Lock, X, FunnelSimple, FileXls, Wrench, Tag, CurrencyEur, Copy, Flask } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card } from '../ui/card';
@@ -37,11 +37,12 @@ import { exportProductsToExcel, ExcelColumn } from '../../lib/export';
 import { Badge } from '../ui/badge';
 import { ResponsiveDialog } from '../ResponsiveDialog';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
+import { testProducts, testInstallationGroups } from '../../lib/test-data';
 
 export default function ProductsPage() {
   const { products, addProduct, updateProduct, deleteProduct } = useProducts();
-  const { groups } = useInstallationGroups();
-  const { canEdit, canDelete } = useAuth();
+  const { groups, addGroup } = useInstallationGroups();
+  const { canEdit, canDelete, role } = useAuth();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [groupFilter, setGroupFilter] = useState<string>('');
@@ -288,6 +289,44 @@ export default function ProductsPage() {
 
   const activeFiltersCount = [categoryFilter, groupFilter, search].filter(Boolean).length;
 
+  const handleLoadTestData = () => {
+    if (products.length > 0) {
+      if (!confirm('Tuoterekisterissä on jo tuotteita. Haluatko lisätä testidatan olemassa olevien tuotteiden päälle?')) {
+        return;
+      }
+    }
+
+    testInstallationGroups.forEach(g => addGroup(g));
+    
+    const groupsMap: Record<string, string> = {};
+    groups.forEach(g => {
+      groupsMap[g.name] = g.id;
+    });
+
+    const getGroupIdForCategory = (category?: string) => {
+      if (!category) return undefined;
+      if (category === 'Laatat') {
+        return groups.find(g => g.name.includes('Laatoitus'))?.id;
+      } else if (category === 'Kalusteet') {
+        return groups.find(g => g.name.includes('Kalusteen'))?.id;
+      } else if (category === 'Suihkutilat') {
+        return groups.find(g => g.name.includes('Suihkuseinän'))?.id;
+      } else if (category === 'Vesikalusteet') {
+        return groups.find(g => g.name.includes('Hanojen'))?.id;
+      }
+      return undefined;
+    };
+
+    testProducts.forEach(p => {
+      addProduct({
+        ...p,
+        installationGroupId: getGroupIdForCategory(p.category),
+      });
+    });
+
+    toast.success(`Lisätty ${testProducts.length} testuotetta ja ${testInstallationGroups.length} hintaryhmää!`);
+  };
+
   return (
     <div className="p-4 sm:p-8 space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -296,6 +335,13 @@ export default function ProductsPage() {
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">Hallinnoi tuotteita ja hintoja</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {role === 'owner' && products.length === 0 && (
+            <Button variant="secondary" onClick={handleLoadTestData} className="gap-2 flex-1 sm:flex-initial">
+              <Flask weight="bold" />
+              <span className="hidden sm:inline">Lataa testidata</span>
+              <span className="sm:hidden">Testi</span>
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setShowExportDialog(true)} className="gap-2 flex-1 sm:flex-initial">
             <FileXls weight="bold" />
             <span className="hidden sm:inline">Vie Excel</span>
