@@ -89,6 +89,13 @@ This is a full-stack business management system with multiple interconnected ent
 - **Progression**: Download template → Fill in Excel → Upload file → Preview shows changes → User confirms → Products import → Success message shows counts
 - **Success criteria**: Import safely adds/updates products with clear preview and no accidental overwrites
 
+### Deadline Tracking and Notifications
+- **Functionality**: Track quote-specific milestones (deadlines, delivery dates, start dates, completion dates) with automatic notifications when approaching
+- **Purpose**: Ensure critical project dates aren't missed and enable proactive project management
+- **Trigger**: User adds schedule milestones to quotes; system checks deadlines hourly
+- **Progression**: Edit quote → Add schedule section → Define milestones with dates and types → Save → System monitors approaching dates → Shows notifications on dashboard → Alerts user at configured intervals (7, 3, 1 days before)
+- **Success criteria**: Users receive timely notifications for upcoming deadlines, can view all upcoming milestones in one place, and can configure notification preferences
+
 ### Reporting Dashboard
 - **Functionality**: Display KPIs (project count, quote count, status summary), sales/margin analysis, top 15 products, and recent projects
 - **Purpose**: Provide management visibility into quotation activity and business performance
