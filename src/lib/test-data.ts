@@ -1,20 +1,20 @@
 import { Product, InstallationGroup } from './types';
 
-export const testProducts: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [
-  {
     code: 'LAA-001',
-    name: 'Keraaminen lattialaatta 30x30cm',
-    category: 'Laatat',
+   
+    purchasePrice: 2
+  {
+    name: 'Keraaminen s
     unit: 'm2',
     purchasePrice: 25.50,
-  },
   {
+   
     code: 'LAA-002',
     name: 'Keraaminen seinälaatta 25x40cm',
     category: 'Laatat',
     unit: 'm2',
     purchasePrice: 32.00,
-  },
+  {
   {
     code: 'LAA-003',
     name: 'Mosaiikkilaatta 30x30cm',
@@ -30,102 +30,102 @@ export const testProducts: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [
     purchasePrice: 185.00,
   },
   {
-    code: 'KAL-002',
-    name: 'Peilikaappi 80cm',
-    category: 'Kalusteet',
-    unit: 'kpl',
-    purchasePrice: 245.00,
-  },
+    purchasePrice: 1
   {
-    code: 'KAL-003',
-    name: 'Allaskaappi 60cm',
-    category: 'Kalusteet',
+    name: 'Pesuallas 60cm'
     unit: 'kpl',
-    purchasePrice: 295.00,
   },
+    
+   
+    purchasePrice: 8
   {
-    code: 'SUH-001',
-    name: 'Suihkuseinä 80cm kirkas',
-    category: 'Suihkutilat',
+    name: 'Suihkuhana term
     unit: 'kpl',
-    purchasePrice: 320.00,
   },
+    
+   
+    purchasePrice: 1
   {
-    code: 'SUH-002',
-    name: 'Suihkuseinä 90cm kirkas',
-    category: 'Suihkutilat',
-    unit: 'kpl',
-    purchasePrice: 365.00,
-  },
-  {
-    code: 'SUH-003',
-    name: 'Suihkuallas 90x90cm',
-    category: 'Suihkutilat',
-    unit: 'kpl',
-    purchasePrice: 175.00,
-  },
-  {
-    code: 'VES-001',
-    name: 'Pesuallas 60cm',
-    category: 'Vesikalusteet',
-    unit: 'kpl',
-    purchasePrice: 125.00,
-  },
-  {
-    code: 'VES-002',
-    name: 'Pesuallashana kromattu',
-    category: 'Vesikalusteet',
-    unit: 'kpl',
-    purchasePrice: 89.00,
-  },
-  {
-    code: 'VES-003',
-    name: 'Suihkuhana termostaatti',
-    category: 'Vesikalusteet',
-    unit: 'kpl',
-    purchasePrice: 165.00,
-  },
-  {
-    code: 'TAR-001',
-    name: 'Laataston laasti',
-    category: 'Tarvikkeet',
+    name: 'Saumausmassa valk
     unit: 'pkt',
-    purchasePrice: 15.50,
   },
-  {
-    code: 'TAR-002',
-    name: 'Saumausmassa valkoinen',
-    category: 'Tarvikkeet',
-    unit: 'pkt',
-    purchasePrice: 12.00,
-  },
-  {
-    code: 'TAR-003',
-    name: 'Vedeneristyskalvo',
-    category: 'Tarvikkeet',
-    unit: 'm2',
-    purchasePrice: 8.50,
-  },
+    
+   
+    purchasePrice: 8
 ];
+export const testInstallatio
+    name: 'Laato
+  },
+    
+  }
+    name: 'Kalusteen
+  },
+    name: 'Suihkuseinän asen
+  },
+    name: 'Hanojen asennus
+  },
 
-export const testInstallationGroups: Omit<InstallationGroup, 'id' | 'createdAt' | 'updatedAt'>[] = [
-  {
-    name: 'Laatoitus lattia',
-    defaultPrice: 35.00,
-  },
-  {
-    name: 'Laatoitus seinä',
-    defaultPrice: 40.00,
-  },
-  {
-    name: 'Kalusteen asennus',
-    defaultPrice: 85.00,
-  },
-  {
-    name: 'Suihkuseinän asennus',
-    defaultPrice: 125.00,
-  },
-  {
+  return `
+(async () => {
+  const testGroups = ${JSON.st
+  // Lisää hinta
+  const newGroups = testGr
+    
+   
+  await spark.kv.set
+  
+  const existingProducts = awa
+  
+    if (productCategory =
+    
+   
+    } else if (produ
+      return group?.id;
+      const group = groups.fin
+    }
+  };
+  co
+   
+    createdAt: new D
+  }));
+  await spark.kv.set('produ
+  console.log('T
+`.trim();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     name: 'Hanojen asennus',
     defaultPrice: 95.00,
   },
