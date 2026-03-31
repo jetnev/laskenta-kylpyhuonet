@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, MagnifyingGlass, Trash, PencilSimple } from '@phosphor-icons/react';
+import { Plus, MagnifyingGlass, Trash, PencilSimple, Lock } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card } from '../ui/card';
@@ -28,13 +28,16 @@ import {
 } from '../ui/select';
 import { Label } from '../ui/label';
 import { useProducts, useInstallationGroups } from '../../hooks/use-data';
+import { useAuth } from '../../hooks/use-auth';
 import { Product } from '../../lib/types';
 import { toast } from 'sonner';
 import { formatCurrency } from '../../lib/calculations';
+import { ReadOnlyAlert } from '../ReadOnlyAlert';
 
 export default function ProductsPage() {
   const { products, addProduct, updateProduct, deleteProduct } = useProducts();
   const { groups } = useInstallationGroups();
+  const { isOwner } = useAuth();
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -54,6 +57,11 @@ export default function ProductsPage() {
   );
 
   const handleOpenDialog = (product?: Product) => {
+    if (!isOwner) {
+      toast.error('Vain omistaja voi muokata tuotteita');
+      return;
+    }
+
     if (product) {
       setEditingProduct(product);
       setFormData({
@@ -77,6 +85,11 @@ export default function ProductsPage() {
   };
 
   const handleSave = () => {
+    if (!isOwner) {
+      toast.error('Vain omistaja voi tallentaa muutoksia');
+      return;
+    }
+
     if (!formData.name || !formData.code) {
       toast.error('Täytä kaikki pakolliset kentät');
       return;
@@ -102,6 +115,11 @@ export default function ProductsPage() {
   };
 
   const handleDelete = (id: string) => {
+    if (!isOwner) {
+      toast.error('Vain omistaja voi poistaa tuotteita');
+      return;
+    }
+
     if (confirm('Haluatko varmasti poistaa tämän tuotteen?')) {
       deleteProduct(id);
       toast.success('Tuote poistettu');
@@ -115,92 +133,101 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-semibold">Tuoterekisteri</h1>
           <p className="text-muted-foreground mt-1">Hallinnoi tuotteita ja hintoja</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog()} className="gap-2">
-              <Plus weight="bold" />
-              Lisää tuote
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingProduct ? 'Muokkaa tuotetta' : 'Uusi tuote'}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="code">Tuotekoodi *</Label>
-                <Input
-                  id="code"
-                  value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                  placeholder="esim. LAA-001"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="name">Tuotenimi *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="esim. Keraaminen laatta 30x30cm"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+        {isOwner ? (
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => handleOpenDialog()} className="gap-2">
+                <Plus weight="bold" />
+                Lisää tuote
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{editingProduct ? 'Muokkaa tuotetta' : 'Uusi tuote'}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="unit">Yksikkö</Label>
-                  <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
-                    <SelectTrigger id="unit">
-                      <SelectValue />
+                  <Label htmlFor="code">Tuotekoodi *</Label>
+                  <Input
+                    id="code"
+                    value={formData.code}
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                    placeholder="esim. LAA-001"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="name">Tuotenimi *</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="esim. Keraaminen laatta 30x30cm"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="unit">Yksikkö</Label>
+                    <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
+                      <SelectTrigger id="unit">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="kpl">kpl</SelectItem>
+                        <SelectItem value="m2">m²</SelectItem>
+                        <SelectItem value="m">m</SelectItem>
+                        <SelectItem value="kg">kg</SelectItem>
+                        <SelectItem value="l">l</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="price">Ostohinta (€)</Label>
+                    <Input
+                      id="price"
+                      type="number"
+                      step="0.01"
+                      value={formData.purchasePrice}
+                      onChange={(e) => setFormData({ ...formData, purchasePrice: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="group">Hintaryhmä</Label>
+                  <Select
+                    value={formData.installationGroupId}
+                    onValueChange={(value) => setFormData({ ...formData, installationGroupId: value })}
+                  >
+                    <SelectTrigger id="group">
+                      <SelectValue placeholder="Ei hintaryhmää" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="kpl">kpl</SelectItem>
-                      <SelectItem value="m2">m²</SelectItem>
-                      <SelectItem value="m">m</SelectItem>
-                      <SelectItem value="kg">kg</SelectItem>
-                      <SelectItem value="l">l</SelectItem>
+                      <SelectItem value="">Ei hintaryhmää</SelectItem>
+                      {groups.map((group) => (
+                        <SelectItem key={group.id} value={group.id}>
+                          {group.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="price">Ostohinta (€)</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    step="0.01"
-                    value={formData.purchasePrice}
-                    onChange={(e) => setFormData({ ...formData, purchasePrice: parseFloat(e.target.value) || 0 })}
-                  />
-                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="group">Hintaryhmä</Label>
-                <Select
-                  value={formData.installationGroupId}
-                  onValueChange={(value) => setFormData({ ...formData, installationGroupId: value })}
-                >
-                  <SelectTrigger id="group">
-                    <SelectValue placeholder="Ei hintaryhmää" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Ei hintaryhmää</SelectItem>
-                    {groups.map((group) => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                Peruuta
-              </Button>
-              <Button onClick={handleSave}>Tallenna</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                  Peruuta
+                </Button>
+                <Button onClick={handleSave}>Tallenna</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : (
+          <Button disabled className="gap-2">
+            <Lock weight="bold" />
+            Lukuoikeus
+          </Button>
+        )}
       </div>
+
+      {!isOwner && <ReadOnlyAlert />}
 
       <Card className="p-6">
         <div className="mb-4">
@@ -229,7 +256,7 @@ export default function ProductsPage() {
                   <TableHead>Yksikkö</TableHead>
                   <TableHead className="text-right">Ostohinta</TableHead>
                   <TableHead>Hintaryhmä</TableHead>
-                  <TableHead className="w-24"></TableHead>
+                  {isOwner && <TableHead className="w-24"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -246,26 +273,28 @@ export default function ProductsPage() {
                         {formatCurrency(product.purchasePrice)}
                       </TableCell>
                       <TableCell>{group?.name || '-'}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenDialog(product)}
-                            className="h-8 w-8"
-                          >
-                            <PencilSimple />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(product.id)}
-                            className="h-8 w-8"
-                          >
-                            <Trash className="text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      {isOwner && (
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenDialog(product)}
+                              className="h-8 w-8"
+                            >
+                              <PencilSimple />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(product.id)}
+                              className="h-8 w-8"
+                            >
+                              <Trash className="text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}

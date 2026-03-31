@@ -12,10 +12,17 @@ This is a full-stack business management system with multiple interconnected ent
 
 ## Essential Features
 
+### Authentication and Authorization
+- **Functionality**: Use GitHub authentication via Spark user API to control access to modification operations
+- **Purpose**: Ensure only authorized users (app owner) can add, edit, or delete data
+- **Trigger**: User opens application or attempts modification operation
+- **Progression**: App loads → Check user authentication → If owner, show edit controls → If not owner or not authenticated, show read-only view → Block all modifications
+- **Success criteria**: Unauthorized users can view data but cannot create, edit, or delete any records
+
 ### Product Registry Management
-- **Functionality**: CRUD operations for products with code, name, category, unit type, purchase price, and installation group linkage
+- **Functionality**: CRUD operations for products with code, name, category, unit type, purchase price, and installation group linkage (owner only)
 - **Purpose**: Central source of truth for all quotable bathroom products and their baseline pricing
-- **Trigger**: User navigates to Tuoterekisteri and clicks "Lisää tuote" or selects existing product
+- **Trigger**: Authenticated owner navigates to Tuoterekisteri and clicks "Lisää tuote" or selects existing product
 - **Progression**: Click add → Fill form (code, name, category, unit, price, installation group) → Save → Product appears in searchable registry → Available for quote rows
 - **Success criteria**: Products save correctly, appear in search, and populate quote rows with correct default values
 
