@@ -40,7 +40,7 @@ import {
   useQuoteTerms,
   useSettings,
 } from '../hooks/use-data';
-import { Quote, QuoteRowMode, QuoteRow } from '../lib/types';
+import { Quote, QuoteRowMode, QuoteRow, ScheduleMilestone } from '../lib/types';
 import {
   calculateQuoteRow,
   calculateQuote,
@@ -50,6 +50,7 @@ import {
 } from '../lib/calculations';
 import { toast } from 'sonner';
 import { exportQuoteToPDF, exportQuoteToCustomerExcel, exportQuoteToInternalExcel } from '../lib/export';
+import ScheduleSection from './ScheduleSection';
 
 interface QuoteEditorProps {
   projectId: string;
@@ -103,13 +104,11 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [localNotes, setLocalNotes] = useState('');
   const [localTitle, setLocalTitle] = useState('Uusi tarjous');
-  const [localSchedule, setLocalSchedule] = useState('');
 
   useEffect(() => {
     if (quote) {
       setLocalNotes(quote.notes || '');
       setLocalTitle(quote.title);
-      setLocalSchedule(quote.schedule || '');
     }
   }, [quote?.id]);
 
@@ -124,14 +123,11 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
         if (localTitle !== quote.title) {
           updateQuote(quote.id, { title: localTitle });
         }
-        if (localSchedule !== quote.schedule) {
-          updateQuote(quote.id, { schedule: localSchedule });
-        }
       }
     }, 1000);
 
     return () => clearTimeout(autoSaveTimer);
-  }, [localNotes, localTitle, localSchedule, quote?.id, quote?.notes, quote?.title, quote?.schedule, quote?.status]);
+  }, [localNotes, localTitle, quote?.id, quote?.notes, quote?.title, quote?.status]);
 
   if (!quote || !project || !customer) {
     return (
@@ -256,6 +252,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       vatPercent: quote.vatPercent,
       notes: quote.notes,
       schedule: quote.schedule,
+      scheduleMilestones: quote.scheduleMilestones,
       termsId: quote.termsId,
     });
 
@@ -380,29 +377,16 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
             )}
 
             <Card className="p-6 bg-muted/30">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="quote-notes">Tarjoushuomautukset</Label>
-                  <Textarea
-                    id="quote-notes"
-                    value={localNotes}
-                    onChange={(e) => setLocalNotes(e.target.value)}
-                    placeholder="Lisää huomautuksia tarjoukseen..."
-                    rows={3}
-                    disabled={quote.status !== 'draft'}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="quote-schedule">Aikataulu</Label>
-                  <Textarea
-                    id="quote-schedule"
-                    value={localSchedule}
-                    onChange={(e) => setLocalSchedule(e.target.value)}
-                    placeholder="Esim. Aloitus vko 42..."
-                    rows={3}
-                    disabled={quote.status !== 'draft'}
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="quote-notes">Tarjoushuomautukset</Label>
+                <Textarea
+                  id="quote-notes"
+                  value={localNotes}
+                  onChange={(e) => setLocalNotes(e.target.value)}
+                  placeholder="Lisää huomautuksia tarjoukseen..."
+                  rows={3}
+                  disabled={quote.status !== 'draft'}
+                />
               </div>
               <div className="mt-4">
                 <Label htmlFor="quote-terms">Sopimusehdot</Label>
@@ -423,6 +407,14 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   </SelectContent>
                 </Select>
               </div>
+            </Card>
+
+            <Card className="p-6 bg-muted/30">
+              <ScheduleSection
+                milestones={quote.scheduleMilestones || []}
+                onChange={(milestones) => updateQuote(quote.id, { scheduleMilestones: milestones })}
+                disabled={quote.status !== 'draft'}
+              />
             </Card>
 
             <Card className="p-6">

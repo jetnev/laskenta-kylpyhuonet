@@ -74,6 +74,14 @@ export interface Project {
   updatedAt: string;
 }
 
+export interface ScheduleMilestone {
+  id: string;
+  title: string;
+  description?: string;
+  targetDate?: string;
+  type: 'deadline' | 'delivery' | 'start' | 'completion' | 'other';
+}
+
 export interface Quote {
   id: string;
   projectId: string;
@@ -84,6 +92,7 @@ export interface Quote {
   vatPercent: number;
   notes?: string;
   schedule?: string;
+  scheduleMilestones?: ScheduleMilestone[];
   termsId?: string;
   createdAt: string;
   updatedAt: string;
