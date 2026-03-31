@@ -103,11 +103,13 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [localNotes, setLocalNotes] = useState('');
   const [localTitle, setLocalTitle] = useState('Uusi tarjous');
+  const [localSchedule, setLocalSchedule] = useState('');
 
   useEffect(() => {
     if (quote) {
       setLocalNotes(quote.notes || '');
       setLocalTitle(quote.title);
+      setLocalSchedule(quote.schedule || '');
     }
   }, [quote?.id]);
 
@@ -122,11 +124,14 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
         if (localTitle !== quote.title) {
           updateQuote(quote.id, { title: localTitle });
         }
+        if (localSchedule !== quote.schedule) {
+          updateQuote(quote.id, { schedule: localSchedule });
+        }
       }
     }, 1000);
 
     return () => clearTimeout(autoSaveTimer);
-  }, [localNotes, localTitle, quote?.id, quote?.notes, quote?.title, quote?.status]);
+  }, [localNotes, localTitle, localSchedule, quote?.id, quote?.notes, quote?.title, quote?.schedule, quote?.status]);
 
   if (!quote || !project || !customer) {
     return (
@@ -250,6 +255,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       status: 'draft',
       vatPercent: quote.vatPercent,
       notes: quote.notes,
+      schedule: quote.schedule,
       termsId: quote.termsId,
     });
 
@@ -387,24 +393,35 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="quote-terms">Sopimusehdot</Label>
-                  <Select
-                    value={quote.termsId || ''}
-                    onValueChange={(value) => updateQuote(quote.id, { termsId: value })}
+                  <Label htmlFor="quote-schedule">Aikataulu</Label>
+                  <Textarea
+                    id="quote-schedule"
+                    value={localSchedule}
+                    onChange={(e) => setLocalSchedule(e.target.value)}
+                    placeholder="Esim. Aloitus vko 42..."
+                    rows={3}
                     disabled={quote.status !== 'draft'}
-                  >
-                    <SelectTrigger id="quote-terms">
-                      <SelectValue placeholder="Valitse ehdot" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {terms.map((term) => (
-                        <SelectItem key={term.id} value={term.id}>
-                          {term.name} {term.isDefault && '(oletus)'}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
+              </div>
+              <div className="mt-4">
+                <Label htmlFor="quote-terms">Sopimusehdot</Label>
+                <Select
+                  value={quote.termsId || ''}
+                  onValueChange={(value) => updateQuote(quote.id, { termsId: value })}
+                  disabled={quote.status !== 'draft'}
+                >
+                  <SelectTrigger id="quote-terms">
+                    <SelectValue placeholder="Valitse ehdot" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {terms.map((term) => (
+                      <SelectItem key={term.id} value={term.id}>
+                        {term.name} {term.isDefault && '(oletus)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </Card>
 

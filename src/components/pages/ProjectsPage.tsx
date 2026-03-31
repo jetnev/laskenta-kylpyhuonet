@@ -33,7 +33,11 @@ export default function ProjectsPage() {
     name: '',
     site: '',
     regionCoefficient: 1.0,
+    customOptions: [] as { id: string; label: string; value: string }[],
   });
+  
+  const [newOptionLabel, setNewOptionLabel] = useState('');
+  const [newOptionValue, setNewOptionValue] = useState('');
   
   const [customerForm, setCustomerForm] = useState({
     name: '',
@@ -75,7 +79,9 @@ export default function ProjectsPage() {
     
     setShowProjectDialog(false);
     setEditingProject(null);
-    setProjectForm({ customerId: '', name: '', site: '', regionCoefficient: 1.0 });
+    setProjectForm({ customerId: '', name: '', site: '', regionCoefficient: 1.0, customOptions: [] });
+    setNewOptionLabel('');
+    setNewOptionValue('');
   };
 
   const handleSaveCustomer = () => {
@@ -104,6 +110,7 @@ export default function ProjectsPage() {
       name: project.name,
       site: project.site,
       regionCoefficient: project.regionCoefficient,
+      customOptions: project.customOptions || [],
     });
     setShowProjectDialog(true);
   };
@@ -230,7 +237,9 @@ export default function ProjectsPage() {
                   size="sm"
                   onClick={() => {
                     setEditingProject(null);
-                    setProjectForm({ customerId: '', name: '', site: '', regionCoefficient: 1.0 });
+                    setProjectForm({ customerId: '', name: '', site: '', regionCoefficient: 1.0, customOptions: [] });
+                    setNewOptionLabel('');
+                    setNewOptionValue('');
                   }}
                 >
                   <Plus className="h-4 w-4" />

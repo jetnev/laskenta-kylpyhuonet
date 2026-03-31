@@ -3,43 +3,43 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 const termsContent = [
   {
     number: 1,
-    text: 'Asennun on tarjolla urakkana tarjouksen sisältämille varusteille. Asennustarpoja ei ole voinnassa lisämättä ilman varustetoimitusta.'
+    text: 'Asennus on tarjolla urakkana tarjouksen sisältämille varusteille. Asennustöitä ei ole mahdollista lisätä ilman varustetoimitusta.'
   },
   {
     number: 2,
-    text: 'Muiden kuin tarjouksessa eriteltyjen varustetoimitusten tai töiden lisääminen (liisä-/muutostyöt).'
+    text: 'Muiden kuin tarjouksessa eriteltyjen varustetoimitusten tai töiden lisääminen (lisä-/muutostyöt) laskutetaan erikseen.'
   },
   {
     number: 3,
-    text: 'Kokonaisinta sisältää: työnjohto, dokumentoint, tüstteiden johtamisen keroitessa, ahleiden poistamsen työimaan jatekasayksen, asennukset, kiinnityksenkohdet, tiivistykset, perustuslvouken (tastaputnet, H-tivkan muu), maalikalut ja päivähdat.'
+    text: 'Kokonaishinta sisältää: työnjohdon, dokumentoinnin, tarvitteiden kuljetuksen, vanhojen kalusteiden poistamisen työmaalta jätelavalle, asennukset, kiinnitystyöt, tiivistykset, peruslaudan (tasapuutyö, H-teline tms.), mallikalut ja työvälineet.'
   },
   {
     number: 4,
-    text: 'Perustusrautuset sisältyvät kokonaishintaan edellytten, että kohleessa on käydettävissä haja ja sirtoretti ovat esinetniah.'
+    text: 'Perustyökalut sisältyvät kokonaishintaan edellyttäen, että kohteessa on käytettävissä vesi ja sähkövirta asennusaikana.'
   },
   {
     number: 5,
-    text: 'Mahdolliset huoneet sisältyvät rinteen sovittaun laajatuessa.'
+    text: 'Mahdolliset vuokrat sisältyvät erikseen sovittuun kokonaishintaan.'
   },
   {
     number: 6,
-    text: 'Hinta sisältää: normimukina asenrusteluiätte. Tinaraitekonkaodituukaa vaativat reel. lisahik 4 00 E/nalko (alv 0%).'
+    text: 'Hinta sisältää normaalimukaiset asennustyöt. Erikoisasennukset tai muut vaativat työt lisähinta 55,00 €/h (alv 0%).'
   },
   {
     number: 7,
-    text: 'Tilaga vaatae asennusukäijän suoruutuista: kaninnuudiesta sekä rakenteiden sisältäisiä vahvokkeita.'
+    text: 'Tilaus vaatii asennuskohteen sopivuuden varmistamisen: kantavuuden sekä rakenteiden sisältämät vahvikkeet.'
   },
   {
     number: 8,
-    text: 'Asennukskahdein ehteiden kuco sitta tazsin vämii ennen alskulua. Mahdelliset urakkaun kyckinnenttomat allaat ja WC-tinumat atomalluna olkuteen.'
+    text: 'Asennuskohteen edellytetään olevan siisti, valmis ja tyhjä ennen asennusta. Mahdolliset urakkaan kuulumattomat altaat ja WC-istuimet asetetaan sivuun kohteeseen.'
   },
   {
     number: 9,
-    text: 'Tiloihin esikelon kulja ja lisä ybjemenly ritiäkerantis ennen asennuksia: tarvillesssa lekjeniya itaätyötä.'
+    text: 'Tiloihin edellytetään kulku ja sähköjännite riittävästi ennen asennuksia. Tarvittaessa ylimääräistä työtä laskutetaan erikseen.'
   },
   {
     number: 10,
-    text: 'Eritteet täytvat tlaastata pitjutusta svielä rilikmestai ei viamitti: tuntiiyö, mv. 4 hk/ppiv.'
+    text: 'Erikoistyöt täytyy ilmoittaa etukäteen, muuten niitä ei voida tehdä. Tuntityö 55,00 €/h (alv 0%), min. 4 h/päivä.'
   },
   {
     number: 11,
@@ -47,7 +47,7 @@ const termsContent = [
   },
   {
     number: 12,
-    text: 'Tarjouksen voskiaikkhnat pryvyvät muutomelarhalla risytuntuta tsiesurureta rissata. Laskutus tapahtuu totetuneiden määrän mukaan terputuksen akzäpotiteista joätäien.'
+    text: 'Tarjouksen voimassaoloaika on 30 päivää. Hinnat perustuvat tarjouksen tekohetken hintoihin. Laskutus tapahtuu toteutuneiden määrien mukaan tarjouksen määristä poiketen.'
   }
 ];
 
@@ -64,17 +64,13 @@ export default function TermsPage() {
           <CardTitle className="text-lg font-semibold">ASENNUSTEN EHDOT</CardTitle>
         </CardHeader>
         <CardContent className="p-6">
-          <div className="space-y-4">
-            <p className="font-medium mb-4">Aikataulun: Aikatauesti alkäisen noin vko 42</p>
-            
-            <div className="space-y-3">
-              {termsContent.map((term) => (
-                <div key={term.number} className="flex gap-3">
-                  <span className="font-medium text-foreground flex-shrink-0">{term.number}.</span>
-                  <p className="text-foreground leading-relaxed">{term.text}</p>
-                </div>
-              ))}
-            </div>
+          <div className="space-y-3">
+            {termsContent.map((term) => (
+              <div key={term.number} className="flex gap-3">
+                <span className="font-medium text-foreground flex-shrink-0">{term.number}.</span>
+                <p className="text-foreground leading-relaxed">{term.text}</p>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>

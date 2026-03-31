@@ -55,6 +55,12 @@ export interface Customer {
   updatedAt: string;
 }
 
+export interface CustomOption {
+  id: string;
+  label: string;
+  value: string;
+}
+
 export interface Project {
   id: string;
   customerId: string;
@@ -63,6 +69,7 @@ export interface Project {
   region?: string;
   regionCoefficient: number;
   notes?: string;
+  customOptions?: CustomOption[];
   createdAt: string;
   updatedAt: string;
 }
@@ -76,6 +83,7 @@ export interface Quote {
   status: QuoteStatus;
   vatPercent: number;
   notes?: string;
+  schedule?: string;
   termsId?: string;
   createdAt: string;
   updatedAt: string;
