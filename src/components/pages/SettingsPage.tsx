@@ -16,14 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '../ui/dialog';
+import { ResponsiveDialog } from '../ResponsiveDialog';
 
 interface LocalUser {
   email: string;
@@ -165,53 +158,54 @@ export default function SettingsPage() {
         <Card className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-medium">Käyttäjien hallinta</h3>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
+            <Button size="sm" onClick={() => setIsAddDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Lisää käyttäjä
+            </Button>
+          </div>
+
+          <ResponsiveDialog
+            open={isAddDialogOpen}
+            onOpenChange={setIsAddDialogOpen}
+            title="Lisää uusi käyttäjä"
+            maxWidth="md"
+            footer={
+              <>
+                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="flex-1 sm:flex-initial">
+                  Peruuta
+                </Button>
+                <Button onClick={handleAddUser} className="flex-1 sm:flex-initial">
                   Lisää käyttäjä
                 </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Lisää uusi käyttäjä</DialogTitle>
-                  <DialogDescription>
-                    Luo uusi käyttäjätunnus sovellukseen.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="new-email">Sähköpostiosoite</Label>
-                    <Input
-                      id="new-email"
-                      type="email"
-                      placeholder="kayttaja@yritys.fi"
-                      value={newUser.email}
-                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password">Salasana</Label>
-                    <Input
-                      id="new-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={newUser.password}
-                      onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                      Peruuta
-                    </Button>
-                    <Button onClick={handleAddUser}>
-                      Lisää käyttäjä
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
+              </>
+            }
+          >
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Luo uusi käyttäjätunnus sovellukseen.
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="new-email">Sähköpostiosoite</Label>
+                <Input
+                  id="new-email"
+                  type="email"
+                  placeholder="kayttaja@yritys.fi"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-password">Salasana</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                />
+              </div>
+            </div>
+          </ResponsiveDialog>
 
           {users && users.length > 0 ? (
             <Table>

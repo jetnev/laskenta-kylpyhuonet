@@ -11,14 +11,6 @@ import {
   TableRow,
 } from '../ui/table';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogTrigger,
-} from '../ui/dialog';
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -32,6 +24,7 @@ import { useSubstituteProducts, useProducts } from '../../hooks/use-data';
 import { useAuth } from '../../hooks/use-auth';
 import { toast } from 'sonner';
 import { ReadOnlyAlert } from '../ReadOnlyAlert';
+import { ResponsiveDialog } from '../ResponsiveDialog';
 
 export default function SubstituteProductsPage() {
   const { substitutes, addSubstitute, deleteSubstitute } = useSubstituteProducts();
@@ -108,101 +101,17 @@ export default function SubstituteProductsPage() {
   };
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-8 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold">Korvaavat tuotteet</h1>
-          <p className="text-muted-foreground mt-1">Määritä tuotteiden korvattavuus</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold">Korvaavat tuotteet</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">Määritä tuotteiden korvattavuus</p>
         </div>
         {isOwner ? (
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={handleOpenDialog} className="gap-2">
-                <Plus weight="bold" />
-                Lisää korvaava tuote
-              </Button>
-            </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Uusi korvaava tuote</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-3">
-                <Label>Alkuperäinen tuote</Label>
-                <RadioGroup value={originalType} onValueChange={(value: 'existing' | 'manual') => setOriginalType(value)}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="existing" id="existing" />
-                    <Label htmlFor="existing" className="font-normal cursor-pointer">Valitse tuoterekisteristä</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="manual" id="manual" />
-                    <Label htmlFor="manual" className="font-normal cursor-pointer">Lisää manuaalisesti</Label>
-                  </div>
-                </RadioGroup>
-                
-                {originalType === 'existing' ? (
-                  <Select
-                    value={formData.originalProductId}
-                    onValueChange={(value) => setFormData({ ...formData, originalProductId: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Valitse tuote" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.code} - {product.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <div className="space-y-2">
-                    <Input
-                      id="manual-code"
-                      placeholder="Tuotekoodi"
-                      value={formData.manualOriginalCode}
-                      onChange={(e) => setFormData({ ...formData, manualOriginalCode: e.target.value })}
-                    />
-                    <Input
-                      id="manual-name"
-                      placeholder="Tuotteen nimi"
-                      value={formData.manualOriginalName}
-                      onChange={(e) => setFormData({ ...formData, manualOriginalName: e.target.value })}
-                    />
-                  </div>
-                )}
-              </div>
-              <div className="flex justify-center">
-                <ArrowsLeftRight className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="substitute">Korvaava tuote</Label>
-                <Select
-                  value={formData.substituteProductId}
-                  onValueChange={(value) => setFormData({ ...formData, substituteProductId: value })}
-                >
-                  <SelectTrigger id="substitute">
-                    <SelectValue placeholder="Valitse tuote" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {products.map((product) => (
-                      <SelectItem key={product.id} value={product.id}>
-                        {product.code} - {product.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                Peruuta
-              </Button>
-              <Button onClick={handleSave}>Tallenna</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          <Button onClick={handleOpenDialog} className="gap-2">
+            <Plus weight="bold" />
+            Lisää korvaava tuote
+          </Button>
         ) : (
           <Button disabled className="gap-2">
             <Lock weight="bold" />
@@ -210,6 +119,91 @@ export default function SubstituteProductsPage() {
           </Button>
         )}
       </div>
+
+      <ResponsiveDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title="Uusi korvaava tuote"
+        maxWidth="lg"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} className="flex-1 sm:flex-initial">
+              Peruuta
+            </Button>
+            <Button onClick={handleSave} className="flex-1 sm:flex-initial">Tallenna</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="space-y-3">
+            <Label>Alkuperäinen tuote</Label>
+            <RadioGroup value={originalType} onValueChange={(value: 'existing' | 'manual') => setOriginalType(value)}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="existing" id="existing" />
+                <Label htmlFor="existing" className="font-normal cursor-pointer">Valitse tuoterekisteristä</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="manual" id="manual" />
+                <Label htmlFor="manual" className="font-normal cursor-pointer">Lisää manuaalisesti</Label>
+              </div>
+            </RadioGroup>
+            
+            {originalType === 'existing' ? (
+              <Select
+                value={formData.originalProductId}
+                onValueChange={(value) => setFormData({ ...formData, originalProductId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Valitse tuote" />
+                </SelectTrigger>
+                <SelectContent>
+                  {products.map((product) => (
+                    <SelectItem key={product.id} value={product.id}>
+                      {product.code} - {product.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="space-y-2">
+                <Input
+                  id="manual-code"
+                  placeholder="Tuotekoodi"
+                  value={formData.manualOriginalCode}
+                  onChange={(e) => setFormData({ ...formData, manualOriginalCode: e.target.value })}
+                />
+                <Input
+                  id="manual-name"
+                  placeholder="Tuotteen nimi"
+                  value={formData.manualOriginalName}
+                  onChange={(e) => setFormData({ ...formData, manualOriginalName: e.target.value })}
+                />
+              </div>
+            )}
+          </div>
+          <div className="flex justify-center">
+            <ArrowsLeftRight className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="substitute">Korvaava tuote</Label>
+            <Select
+              value={formData.substituteProductId}
+              onValueChange={(value) => setFormData({ ...formData, substituteProductId: value })}
+            >
+              <SelectTrigger id="substitute">
+                <SelectValue placeholder="Valitse tuote" />
+              </SelectTrigger>
+              <SelectContent>
+                {products.map((product) => (
+                  <SelectItem key={product.id} value={product.id}>
+                    {product.code} - {product.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </ResponsiveDialog>
 
       {!isOwner && <ReadOnlyAlert />}
 
