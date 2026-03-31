@@ -73,34 +73,20 @@ export function useInstallationGroups() {
     setGroups(current => (current || []).filter(g => g.id !== id));
   };
   
-  const getGroup = (id: string) => {
-    return (groups || []).find(g => g.id === id);
-  };
-  
-  return { groups: groups || [], addGroup, updateGroup, deleteGroup, getGroup };
+  return { groups: groups || [], addGroup, updateGroup, deleteGroup };
 }
 
 export function useSubstituteProducts() {
   const [substitutes, setSubstitutes] = useKV<SubstituteProduct[]>('substitute-products', []);
   
-  const addSubstitute = (substitute: Omit<SubstituteProduct, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const now = new Date().toISOString();
+  const addSubstitute = (substitute: Omit<SubstituteProduct, 'id' | 'createdAt'>) => {
     const newSubstitute: SubstituteProduct = {
       ...substitute,
       id: crypto.randomUUID(),
-      createdAt: now,
-      updatedAt: now,
+      createdAt: new Date().toISOString(),
     };
     setSubstitutes(current => [...(current || []), newSubstitute]);
     return newSubstitute;
-  };
-  
-  const updateSubstitute = (id: string, updates: Partial<SubstituteProduct>) => {
-    setSubstitutes(current =>
-      (current || []).map(s =>
-        s.id === id ? { ...s, ...updates, updatedAt: new Date().toISOString() } : s
-      )
-    );
   };
   
   const deleteSubstitute = (id: string) => {
@@ -108,16 +94,10 @@ export function useSubstituteProducts() {
   };
   
   const getSubstitutesForProduct = (productId: string) => {
-    return (substitutes || []).filter(s => s.primaryProductId === productId);
+    return (substitutes || []).filter(s => s.originalProductId === productId);
   };
   
-  return { 
-    substitutes: substitutes || [], 
-    addSubstitute, 
-    updateSubstitute, 
-    deleteSubstitute, 
-    getSubstitutesForProduct 
-  };
+  return { substitutes: substitutes || [], addSubstitute, deleteSubstitute, getSubstitutesForProduct };
 }
 
 export function useCustomers() {
@@ -185,7 +165,11 @@ export function useProjects() {
     return (projects || []).find(p => p.id === id);
   };
   
-  return { projects: projects || [], addProject, updateProject, deleteProject, getProject };
+  const getProjectsForCustomer = (customerId: string) => {
+    return (projects || []).filter(p => p.customerId === customerId);
+  };
+  
+  return { projects: projects || [], addProject, updateProject, deleteProject, getProject, getProjectsForCustomer };
 }
 
 export function useQuotes() {
@@ -212,11 +196,7 @@ export function useQuotes() {
   };
   
   const updateQuoteStatus = (id: string, status: QuoteStatus) => {
-    const updates: Partial<Quote> = { status };
-    if (status === 'sent') {
-      updates.sentAt = new Date().toISOString();
-    }
-    updateQuote(id, updates);
+    updateQuote(id, { status });
   };
   
   const deleteQuote = (id: string) => {
@@ -232,26 +212,22 @@ export function useQuotes() {
   };
   
   const hasNewerRevision = (quote: Quote) => {
-    const allQuotes = quotes || [];
-    if (!quote.parentQuoteId) {
-      const children = allQuotes.filter(q => q.parentQuoteId === quote.id);
-      return children.length > 0;
-    }
-    const siblings = allQuotes.filter(
-      q => q.parentQuoteId === quote.parentQuoteId || q.id === quote.parentQuoteId
+    const parentId = quote.parentQuoteId || quote.id;
+    return (quotes || []).some(
+      q => (q.parentQuoteId === parentId || q.id === parentId) &&
+           q.revisionNumber > quote.revisionNumber
     );
-    return siblings.some(q => q.revisionNumber > quote.revisionNumber);
   };
   
-  return {
-    quotes: quotes || [],
-    addQuote,
-    updateQuote,
+  return { 
+    quotes: quotes || [], 
+    addQuote, 
+    updateQuote, 
     updateQuoteStatus,
-    deleteQuote,
-    getQuote,
+    deleteQuote, 
+    getQuote, 
     getQuotesForProject,
-    hasNewerRevision,
+    hasNewerRevision
   };
 }
 
@@ -268,7 +244,9 @@ export function useQuoteRows() {
   };
   
   const updateRow = (id: string, updates: Partial<QuoteRow>) => {
-    setRows(current => (current || []).map(r => (r.id === id ? { ...r, ...updates } : r)));
+    setRows(current =>
+      (current || []).map(r => r.id === id ? { ...r, ...updates } : r)
+    );
   };
   
   const deleteRow = (id: string) => {
@@ -279,52 +257,47 @@ export function useQuoteRows() {
     return (rows || []).filter(r => r.quoteId === quoteId).sort((a, b) => a.sortOrder - b.sortOrder);
   };
   
-  const reorderRows = (quoteId: string, rowIds: string[]) => {
-    setRows(current =>
-      (current || []).map(r => {
-        if (r.quoteId !== quoteId) return r;
-        const newOrder = rowIds.indexOf(r.id);
-        return newOrder >= 0 ? { ...r, sortOrder: newOrder } : r;
-      })
-    );
-  };
-  
-  const deleteRowsForQuote = (quoteId: string) => {
-    setRows(current => (current || []).filter(r => r.quoteId !== quoteId));
-  };
-  
-  return {
-    rows: rows || [],
-    addRow,
-    updateRow,
-    deleteRow,
-    getRowsForQuote,
-    reorderRows,
-    deleteRowsForQuote,
-  };
+  return { rows: rows || [], addRow, updateRow, deleteRow, getRowsForQuote };
 }
 
 export function useQuoteTerms() {
   const [terms, setTerms] = useKV<QuoteTerms[]>('quote-terms', []);
   
-  const addTerms = (term: Omit<QuoteTerms, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addTerms = (termsData: Omit<QuoteTerms, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();
-    const newTerm: QuoteTerms = {
-      ...term,
+    const newTerms: QuoteTerms = {
+      ...termsData,
       id: crypto.randomUUID(),
       createdAt: now,
       updatedAt: now,
     };
-    setTerms(current => [...(current || []), newTerm]);
-    return newTerm;
+    
+    if (newTerms.isDefault) {
+      setTerms(current => 
+        (current || []).map(t => ({ ...t, isDefault: false }))
+      );
+    }
+    
+    setTerms(current => [...(current || []), newTerms]);
+    return newTerms;
   };
   
   const updateTerms = (id: string, updates: Partial<QuoteTerms>) => {
-    setTerms(current =>
-      (current || []).map(t =>
-        t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t
-      )
-    );
+    if (updates.isDefault) {
+      setTerms(current =>
+        (current || []).map(t => ({
+          ...t,
+          isDefault: t.id === id,
+          ...(t.id === id ? { ...updates, updatedAt: new Date().toISOString() } : {}),
+        }))
+      );
+    } else {
+      setTerms(current =>
+        (current || []).map(t =>
+          t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t
+        )
+      );
+    }
   };
   
   const deleteTerms = (id: string) => {
@@ -339,32 +312,20 @@ export function useQuoteTerms() {
 }
 
 export function useSettings() {
-  const [settings, setSettings] = useKV<Settings>('settings', {
-    defaultVatPercent: 0,
-    defaultMarginPercent: 30,
-    defaultRegionCoefficient: 1.0,
+  const defaultSettings: Settings = {
     companyName: 'Yritys Oy',
-  });
+    companyAddress: '',
+    companyPhone: '',
+    companyEmail: '',
+    defaultVatPercent: 25.5,
+    defaultMarginPercent: 30,
+  };
+  
+  const [settings, setSettings] = useKV<Settings>('settings', defaultSettings);
   
   const updateSettings = (updates: Partial<Settings>) => {
-    setSettings(current => {
-      const base = current || {
-        defaultVatPercent: 0,
-        defaultMarginPercent: 30,
-        defaultRegionCoefficient: 1.0,
-        companyName: 'Yritys Oy',
-      };
-      return { ...base, ...updates };
-    });
+    setSettings(current => ({ ...(current || defaultSettings), ...updates }));
   };
   
-  return { 
-    settings: settings || {
-      defaultVatPercent: 0,
-      defaultMarginPercent: 30,
-      defaultRegionCoefficient: 1.0,
-      companyName: 'Yritys Oy',
-    }, 
-    updateSettings 
-  };
+  return { settings: settings || defaultSettings, updateSettings };
 }

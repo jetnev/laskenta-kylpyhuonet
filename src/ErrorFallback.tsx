@@ -18,19 +18,3 @@ export default function ErrorFallback({ error, resetErrorBoundary }: Props) {
     </div>
   );
 }
-
-
-
-
-
-
-
-  );
-}
-
-
-
-
-
-
-

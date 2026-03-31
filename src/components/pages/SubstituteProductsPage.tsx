@@ -1,16 +1,7 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash } from '@phosphor-icons/react';
+import { Plus, Trash, ArrowsLeftRight } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Textarea } from '../ui/textarea';
 import { Card } from '../ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '../ui/dialog';
 import {
   Table,
   TableBody,
@@ -20,6 +11,14 @@ import {
   TableRow,
 } from '../ui/table';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogTrigger,
+} from '../ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -28,114 +27,76 @@ import {
 } from '../ui/select';
 import { Label } from '../ui/label';
 import { useSubstituteProducts, useProducts } from '../../hooks/use-data';
-import { SubstituteProduct } from '../../lib/types';
 import { toast } from 'sonner';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../ui/alert-dialog';
 
 export default function SubstituteProductsPage() {
-  const { substitutes, addSubstitute, updateSubstitute, deleteSubstitute } = useSubstituteProducts();
-  const { products, getProduct } = useProducts();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingSubstitute, setEditingSubstitute] = useState<SubstituteProduct | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const { substitutes, addSubstitute, deleteSubstitute } = useSubstituteProducts();
+  const { products } = useProducts();
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const [formData, setFormData] = useState({
-    primaryProductId: '',
+    originalProductId: '',
     substituteProductId: '',
-    justification: '',
-    dimensionNotes: '',
   });
 
-  const handleOpenDialog = (substitute?: SubstituteProduct) => {
-    if (substitute) {
-      setEditingSubstitute(substitute);
-      setFormData({
-        primaryProductId: substitute.primaryProductId,
-        substituteProductId: substitute.substituteProductId,
-        justification: substitute.justification,
-        dimensionNotes: substitute.dimensionNotes || '',
-      });
-    } else {
-      setEditingSubstitute(null);
-      setFormData({
-        primaryProductId: '',
-        substituteProductId: '',
-        justification: '',
-        dimensionNotes: '',
-      });
-    }
-    setIsDialogOpen(true);
+  const handleOpenDialog = () => {
+    setFormData({
+      originalProductId: '',
+      substituteProductId: '',
+    });
+    setDialogOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (formData.primaryProductId === formData.substituteProductId) {
-      toast.error('Tuote ei voi korvata itseään');
+  const handleSave = () => {
+    if (!formData.originalProductId || !formData.substituteProductId) {
+      toast.error('Valitse molemmat tuotteet');
       return;
     }
 
-    const substituteData = {
-      primaryProductId: formData.primaryProductId,
-      substituteProductId: formData.substituteProductId,
-      justification: formData.justification,
-      dimensionNotes: formData.dimensionNotes || undefined,
-    };
-
-    if (editingSubstitute) {
-      updateSubstitute(editingSubstitute.id, substituteData);
-      toast.success('Korvaava tuote päivitetty');
-    } else {
-      addSubstitute(substituteData);
-      toast.success('Korvaava tuote lisätty');
+    if (formData.originalProductId === formData.substituteProductId) {
+      toast.error('Tuotteet eivät voi olla sama');
+      return;
     }
 
-    setIsDialogOpen(false);
+    addSubstitute(formData);
+    toast.success('Korvaava tuote lisätty');
+    setDialogOpen(false);
   };
 
   const handleDelete = (id: string) => {
-    deleteSubstitute(id);
-    toast.success('Korvaava tuote poistettu');
-    setDeleteConfirmId(null);
+    if (confirm('Haluatko varmasti poistaa tämän korvaavan tuotteen?')) {
+      deleteSubstitute(id);
+      toast.success('Korvaava tuote poistettu');
+    }
   };
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-3xl font-semibold">Korvaavat tuotteet</h1>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+    <div className="p-8 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold">Korvaavat tuotteet</h1>
+          <p className="text-muted-foreground mt-1">Määritä tuotteiden korvattavuus</p>
+        </div>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog()} className="gap-2">
+            <Button onClick={handleOpenDialog} className="gap-2">
               <Plus weight="bold" />
               Lisää korvaava tuote
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>
-                {editingSubstitute ? 'Muokkaa korvaavaa tuotetta' : 'Uusi korvaava tuote'}
-              </DialogTitle>
+              <DialogTitle>Uusi korvaava tuote</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="primary">Päätuote *</Label>
+                <Label htmlFor="original">Alkuperäinen tuote</Label>
                 <Select
-                  value={formData.primaryProductId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, primaryProductId: value })
-                  }
+                  value={formData.originalProductId}
+                  onValueChange={(value) => setFormData({ ...formData, originalProductId: value })}
                 >
-                  <SelectTrigger id="primary">
-                    <SelectValue placeholder="Valitse päätuote" />
+                  <SelectTrigger id="original">
+                    <SelectValue placeholder="Valitse tuote" />
                   </SelectTrigger>
                   <SelectContent>
                     {products.map((product) => (
@@ -146,16 +107,17 @@ export default function SubstituteProductsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex justify-center">
+                <ArrowsLeftRight className="h-6 w-6 text-muted-foreground" />
+              </div>
               <div className="space-y-2">
-                <Label htmlFor="substitute">Korvaava tuote *</Label>
+                <Label htmlFor="substitute">Korvaava tuote</Label>
                 <Select
                   value={formData.substituteProductId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, substituteProductId: value })
-                  }
+                  onValueChange={(value) => setFormData({ ...formData, substituteProductId: value })}
                 >
                   <SelectTrigger id="substitute">
-                    <SelectValue placeholder="Valitse korvaava tuote" />
+                    <SelectValue placeholder="Valitse tuote" />
                   </SelectTrigger>
                   <SelectContent>
                     {products.map((product) => (
@@ -166,44 +128,13 @@ export default function SubstituteProductsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="justification">Perustelu *</Label>
-                <Textarea
-                  id="justification"
-                  value={formData.justification}
-                  onChange={(e) =>
-                    setFormData({ ...formData, justification: e.target.value })
-                  }
-                  required
-                  placeholder="Miksi tämä tuote korvaa alkuperäisen?"
-                  rows={3}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dimensionNotes">Mittatiedot</Label>
-                <Textarea
-                  id="dimensionNotes"
-                  value={formData.dimensionNotes}
-                  onChange={(e) =>
-                    setFormData({ ...formData, dimensionNotes: e.target.value })
-                  }
-                  placeholder="Esim. mitoitus tai asennushuomiot..."
-                  rows={2}
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
-                >
-                  Peruuta
-                </Button>
-                <Button type="submit">
-                  {editingSubstitute ? 'Päivitä' : 'Lisää'}
-                </Button>
-              </div>
-            </form>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                Peruuta
+              </Button>
+              <Button onClick={handleSave}>Tallenna</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
@@ -211,103 +142,50 @@ export default function SubstituteProductsPage() {
       <Card className="p-6">
         {substitutes.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">
-            Ei korvaavia tuotteita. Lisää ensimmäinen korvaava tuote yllä olevasta painikkeesta.
+            Ei korvaavia tuotteita. Lisää ensimmäinen yllä olevasta painikkeesta.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Päätuote</TableHead>
-                  <TableHead>Korvaava tuote</TableHead>
-                  <TableHead>Perustelu</TableHead>
-                  <TableHead>Mittatiedot</TableHead>
-                  <TableHead className="w-24"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {substitutes.map((substitute) => {
-                  const primary = getProduct(substitute.primaryProductId);
-                  const substituteProd = getProduct(substitute.substituteProductId);
-                  return (
-                    <TableRow key={substitute.id}>
-                      <TableCell>
-                        {primary ? (
-                          <div>
-                            <div className="font-mono text-sm">{primary.code}</div>
-                            <div className="text-sm">{primary.name}</div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {substituteProd ? (
-                          <div>
-                            <div className="font-mono text-sm">{substituteProd.code}</div>
-                            <div className="text-sm">{substituteProd.name}</div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-xs">
-                        <p className="line-clamp-2 text-sm text-muted-foreground">
-                          {substitute.justification}
-                        </p>
-                      </TableCell>
-                      <TableCell className="max-w-xs text-sm text-muted-foreground">
-                        {substitute.dimensionNotes || '—'}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenDialog(substitute)}
-                          >
-                            <Pencil />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteConfirmId(substitute.id)}
-                          >
-                            <Trash className="text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Alkuperäinen tuote</TableHead>
+                <TableHead></TableHead>
+                <TableHead>Korvaava tuote</TableHead>
+                <TableHead className="w-24"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {substitutes.map((sub) => {
+                const original = products.find((p) => p.id === sub.originalProductId);
+                const substitute = products.find((p) => p.id === sub.substituteProductId);
+                return (
+                  <TableRow key={sub.id}>
+                    <TableCell className="font-medium">
+                      {original ? `${original.code} - ${original.name}` : 'Tuntematon'}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <ArrowsLeftRight className="h-5 w-5 mx-auto text-muted-foreground" />
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {substitute ? `${substitute.code} - ${substitute.name}` : 'Tuntematon'}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(sub.id)}
+                        className="h-8 w-8"
+                      >
+                        <Trash className="text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         )}
       </Card>
-
-      <AlertDialog
-        open={deleteConfirmId !== null}
-        onOpenChange={(open) => !open && setDeleteConfirmId(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Vahvista poisto</AlertDialogTitle>
-            <AlertDialogDescription>
-              Haluatko varmasti poistaa tämän korvaavan tuotteen? Tätä toimintoa ei voi peruuttaa.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Peruuta</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Poista
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
