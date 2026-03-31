@@ -54,24 +54,24 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-foreground">Etusivu</h1>
-        <p className="text-muted-foreground mt-1">Tarjouslaskennan yhteenveto</p>
+        <h1 className="text-2xl sm:text-3xl font-semibold text-foreground">Etusivu</h1>
+        <p className="text-muted-foreground mt-1 text-sm sm:text-base">Tarjouslaskennan yhteenveto</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
-            <Card key={stat.title} className="p-6">
-              <div className="flex items-center gap-4">
-                <div className={`p-3 rounded-lg ${stat.bgColor}`}>
-                  <Icon className={`h-6 w-6 ${stat.color}`} weight="fill" />
+            <Card key={stat.title} className="p-4 sm:p-6">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className={`p-2 sm:p-3 rounded-lg ${stat.bgColor} flex-shrink-0`}>
+                  <Icon className={`h-5 w-5 sm:h-6 sm:w-6 ${stat.color}`} weight="fill" />
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">{stat.title}</p>
-                  <p className="text-2xl font-semibold">{stat.value}</p>
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm text-muted-foreground">{stat.title}</p>
+                  <p className="text-xl sm:text-2xl font-semibold truncate">{stat.value}</p>
                 </div>
               </div>
             </Card>
@@ -79,52 +79,52 @@ export default function Dashboard() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="p-6">
-          <h3 className="text-lg font-medium mb-4">Luonnokset</h3>
-          <div className="text-4xl font-semibold text-primary">{draftQuotes.length}</div>
-          <p className="text-sm text-muted-foreground mt-2">Keskeneräistä tarjousta</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
+        <Card className="p-4 sm:p-6">
+          <h3 className="text-base sm:text-lg font-medium mb-3 sm:mb-4">Luonnokset</h3>
+          <div className="text-3xl sm:text-4xl font-semibold text-primary">{draftQuotes.length}</div>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-2">Keskeneräistä tarjousta</p>
         </Card>
 
-        <Card className="p-6">
-          <h3 className="text-lg font-medium mb-4">Lähetetyt</h3>
-          <div className="text-4xl font-semibold text-accent">{sentQuotes.length}</div>
-          <p className="text-sm text-muted-foreground mt-2">Odottaa vastausta</p>
+        <Card className="p-4 sm:p-6">
+          <h3 className="text-base sm:text-lg font-medium mb-3 sm:mb-4">Lähetetyt</h3>
+          <div className="text-3xl sm:text-4xl font-semibold text-accent">{sentQuotes.length}</div>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-2">Odottaa vastausta</p>
         </Card>
 
-        <Card className="p-6">
-          <h3 className="text-lg font-medium mb-4">Hyväksytyt</h3>
-          <div className="text-4xl font-semibold text-green-600">{acceptedQuotes.length}</div>
-          <p className="text-sm text-muted-foreground mt-2">Voitettu tarjous</p>
+        <Card className="p-4 sm:p-6">
+          <h3 className="text-base sm:text-lg font-medium mb-3 sm:mb-4">Hyväksytyt</h3>
+          <div className="text-3xl sm:text-4xl font-semibold text-green-600">{acceptedQuotes.length}</div>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-2">Voitettu tarjous</p>
         </Card>
       </div>
 
       <DeadlineNotifications />
 
-      <Card className="p-6">
-        <h3 className="text-lg font-medium mb-4">Viimeisimmät projektit</h3>
+      <Card className="p-4 sm:p-6">
+        <h3 className="text-base sm:text-lg font-medium mb-3 sm:mb-4">Viimeisimmät projektit</h3>
         {projects.length === 0 ? (
-          <p className="text-center py-8 text-muted-foreground">
+          <p className="text-center py-8 text-muted-foreground text-sm sm:text-base">
             Ei projekteja. Luo ensimmäinen projekti Projektit-sivulta.
           </p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {projects.slice(0, 5).map((project) => {
               const customer = customers.find(c => c.id === project.customerId);
               const projectQuotes = quotes.filter(q => q.projectId === project.id);
               return (
                 <div
                   key={project.id}
-                  className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors gap-2 sm:gap-0"
                 >
-                  <div>
-                    <p className="font-medium">{project.name}</p>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm sm:text-base truncate">{project.name}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">
                       {customer?.name} • {project.site}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium">{projectQuotes.length} tarjousta</p>
+                  <div className="sm:text-right flex-shrink-0">
+                    <p className="text-xs sm:text-sm font-medium">{projectQuotes.length} tarjousta</p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(project.createdAt).toLocaleDateString('fi-FI')}
                     </p>

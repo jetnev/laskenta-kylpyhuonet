@@ -97,36 +97,36 @@ export default function DeadlineNotifications() {
   }
 
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <Card className="p-4 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
         <div className="flex items-center gap-3">
           {settings.enabled ? (
-            <Bell className="h-6 w-6 text-primary" weight="fill" />
+            <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-primary flex-shrink-0" weight="fill" />
           ) : (
-            <BellSlash className="h-6 w-6 text-muted-foreground" />
+            <BellSlash className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground flex-shrink-0" />
           )}
-          <div>
-            <h2 className="text-xl font-semibold">Määräaikailmoitukset</h2>
-            <p className="text-sm text-muted-foreground">
+          <div className="min-w-0">
+            <h2 className="text-lg sm:text-xl font-semibold truncate">Määräaikailmoitukset</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">
               Seuraa lähestyviä määräaikoja ja toimituksia
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <Dialog open={showSettings} onOpenChange={setShowSettings}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
+              <Button variant="outline" size="sm" className="gap-2 min-h-[44px]">
                 <Gear className="h-4 w-4" />
-                Asetukset
+                <span className="hidden sm:inline">Asetukset</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md mx-4 sm:mx-auto">
               <DialogHeader>
                 <DialogTitle>Ilmoitusasetukset</DialogTitle>
               </DialogHeader>
-              <div className="space-y-6 py-4">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="enabled" className="flex-1">
+              <div className="space-y-4 sm:space-y-6 py-4 max-h-[60vh] overflow-y-auto">
+                <div className="flex items-center justify-between gap-4">
+                  <Label htmlFor="enabled" className="flex-1 text-sm">
                     Ilmoitukset käytössä
                   </Label>
                   <Switch
@@ -137,14 +137,14 @@ export default function DeadlineNotifications() {
                 </div>
 
                 <div className="space-y-3">
-                  <Label>Ilmoita etukäteen (päiviä)</Label>
+                  <Label className="text-sm">Ilmoita etukäteen (päiviä)</Label>
                   <div className="flex flex-wrap gap-2">
                     {(settings.notifyDaysBefore || []).map(day => (
-                      <Badge key={day} variant="secondary" className="gap-2">
+                      <Badge key={day} variant="secondary" className="gap-2 text-xs">
                         {day} päivää
                         <button
                           onClick={() => handleRemoveDay(day)}
-                          className="hover:text-destructive"
+                          className="hover:text-destructive min-h-[44px] min-w-[44px] flex items-center justify-center -mr-2"
                         >
                           ×
                         </button>
@@ -158,17 +158,17 @@ export default function DeadlineNotifications() {
                       value={customDays}
                       onChange={(e) => setCustomDays(e.target.value)}
                       placeholder="Lisää päivät"
-                      className="flex-1"
+                      className="flex-1 text-base h-11"
                     />
-                    <Button onClick={handleAddCustomDay} variant="outline" size="sm">
+                    <Button onClick={handleAddCustomDay} variant="outline" size="sm" className="min-h-[44px]">
                       Lisää
                     </Button>
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="emailEnabled">Sähköposti-ilmoitukset</Label>
+                  <div className="flex items-center justify-between gap-4">
+                    <Label htmlFor="emailEnabled" className="text-sm">Sähköposti-ilmoitukset</Label>
                     <Switch
                       id="emailEnabled"
                       checked={settings.emailEnabled}
@@ -177,14 +177,14 @@ export default function DeadlineNotifications() {
                   </div>
                   {settings.emailEnabled && (
                     <div>
-                      <Label htmlFor="email">Sähköpostiosoite</Label>
+                      <Label htmlFor="email" className="text-sm">Sähköpostiosoite</Label>
                       <Input
                         id="email"
                         type="email"
                         value={tempEmail}
                         onChange={(e) => setTempEmail(e.target.value)}
                         placeholder="email@example.com"
-                        className="mt-1"
+                        className="mt-1 text-base h-11"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         Huom: Sähköpostin lähetys on demo-ominaisuus
@@ -194,7 +194,7 @@ export default function DeadlineNotifications() {
                 </div>
               </div>
               <DialogFooter>
-                <Button onClick={handleSaveSettings}>Tallenna</Button>
+                <Button onClick={handleSaveSettings} className="min-h-[44px] w-full sm:w-auto">Tallenna</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -203,31 +203,31 @@ export default function DeadlineNotifications() {
 
       {!settings.enabled && (
         <Alert className="mb-4">
-          <Warning className="h-4 w-4" />
-          <AlertDescription>
+          <Warning className="h-4 w-4 flex-shrink-0" />
+          <AlertDescription className="text-sm">
             Ilmoitukset eivät ole käytössä. Ota käyttöön asetuksista.
           </AlertDescription>
         </Alert>
       )}
 
       {upcomingDeadlines.length === 0 ? (
-        <div className="text-center py-12">
-          <CalendarBlank className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-          <p className="text-muted-foreground">
+        <div className="text-center py-8 sm:py-12">
+          <CalendarBlank className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground px-4">
             Ei lähestyviä määräaikoja seuraavan 30 päivän aikana
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          <h3 className="font-medium text-sm text-muted-foreground mb-3">
+        <div className="space-y-2 sm:space-y-3">
+          <h3 className="font-medium text-xs sm:text-sm text-muted-foreground mb-3">
             Lähestyvät määräajat ({upcomingDeadlines.length})
           </h3>
           {upcomingDeadlines.map((deadline: DeadlineNotification) => (
-            <Card key={deadline.id} className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge variant={getBadgeVariant(deadline.daysUntil)}>
+            <Card key={deadline.id} className="p-3 sm:p-4">
+              <div className="flex items-start justify-between gap-3 sm:gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <Badge variant={getBadgeVariant(deadline.daysUntil)} className="text-xs">
                       <Clock className="h-3 w-3 mr-1" />
                       {getDaysText(deadline.daysUntil)}
                     </Badge>
@@ -235,8 +235,8 @@ export default function DeadlineNotifications() {
                       {MILESTONE_TYPE_LABELS[deadline.milestoneName] || deadline.milestoneName}
                     </span>
                   </div>
-                  <h4 className="font-medium">{deadline.projectName}</h4>
-                  <p className="text-sm text-muted-foreground">{deadline.customerName}</p>
+                  <h4 className="font-medium text-sm sm:text-base truncate">{deadline.projectName}</h4>
+                  <p className="text-xs sm:text-sm text-muted-foreground truncate">{deadline.customerName}</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Tavoitepäivä: {formatDate(deadline.targetDate)}
                   </p>
@@ -246,7 +246,7 @@ export default function DeadlineNotifications() {
                     variant="ghost"
                     size="sm"
                     onClick={() => sendEmailNotification(deadline)}
-                    className="gap-2"
+                    className="gap-2 flex-shrink-0 min-h-[44px] min-w-[44px]"
                   >
                     <EnvelopeSimple className="h-4 w-4" />
                   </Button>
@@ -258,33 +258,34 @@ export default function DeadlineNotifications() {
       )}
 
       {notifiedDeadlines && notifiedDeadlines.length > 0 && (
-        <div className="mt-6 pt-6 border-t">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-medium text-sm text-muted-foreground">
+        <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t">
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <h3 className="font-medium text-xs sm:text-sm text-muted-foreground">
               Ilmoitushistoria ({notifiedDeadlines.length})
             </h3>
             <Button
               variant="ghost"
               size="sm"
               onClick={clearNotificationHistory}
-              className="gap-2"
+              className="gap-2 min-h-[44px]"
             >
               <Trash className="h-4 w-4" />
-              Tyhjennä
+              <span className="hidden sm:inline">Tyhjennä</span>
             </Button>
           </div>
           <div className="space-y-2 max-h-60 overflow-y-auto">
             {notifiedDeadlines.slice(0, 10).map((notification: DeadlineNotification) => (
               <div
                 key={notification.id}
-                className="text-sm p-2 rounded-md bg-muted/50 flex items-center justify-between"
+                className="text-sm p-2 sm:p-3 rounded-md bg-muted/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2"
               >
-                <div className="flex-1">
-                  <span className="font-medium">{notification.projectName}</span>
-                  <span className="text-muted-foreground mx-2">•</span>
-                  <span className="text-muted-foreground">{notification.milestoneName}</span>
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-xs sm:text-sm truncate block">{notification.projectName}</span>
+                  <span className="text-muted-foreground text-xs truncate block sm:inline">
+                    {notification.milestoneName}
+                  </span>
                 </div>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground flex-shrink-0">
                   {new Date(notification.notifiedAt).toLocaleDateString('fi-FI')}
                 </span>
               </div>
