@@ -485,32 +485,51 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                             </TableCell>
                             <TableCell>
                               {isEditing && quote.status === 'draft' ? (
-                                <Select
-                                  value={row.productId || ''}
-                                  onValueChange={(value) => {
-                                    handleProductSelect(row.id, value);
-                                    setEditingRowId(null);
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Valitse tuote" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {products.map((product) => (
-                                      <SelectItem key={product.id} value={product.id}>
-                                        {product.code} - {product.name}
+                                <div className="space-y-2">
+                                  <Select
+                                    value={row.productId || 'manual'}
+                                    onValueChange={(value) => {
+                                      if (value === 'manual') {
+                                        return;
+                                      }
+                                      handleProductSelect(row.id, value);
+                                      setEditingRowId(null);
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder="Valitse tuote rekisteristä" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="manual">
+                                        <span className="italic text-muted-foreground">Kirjoita manuaalisesti alle</span>
                                       </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                      {products.map((product) => (
+                                        <SelectItem key={product.id} value={product.id}>
+                                          {product.code} - {product.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Input
+                                    placeholder="Tai kirjoita tuotenimi tähän..."
+                                    value={row.productName}
+                                    onChange={(e) => {
+                                      handleRowChange(row.id, 'productName', e.target.value);
+                                      handleRowChange(row.id, 'productId', undefined);
+                                    }}
+                                    onBlur={() => setEditingRowId(null)}
+                                    autoFocus
+                                    className="h-8"
+                                  />
+                                </div>
                               ) : (
                                 <button
                                   onClick={() => quote.status === 'draft' && setEditingRowId(row.id)}
-                                  className="text-left hover:underline disabled:no-underline disabled:cursor-default"
+                                  className="text-left hover:underline disabled:no-underline disabled:cursor-default w-full"
                                   disabled={quote.status !== 'draft'}
                                 >
                                   {row.productCode ? `${row.productCode} - ` : ''}
-                                  {row.productName || 'Valitse tuote'}
+                                  {row.productName || 'Valitse tai kirjoita tuote'}
                                 </button>
                               )}
                             </TableCell>
