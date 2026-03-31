@@ -28,6 +28,15 @@ export function useAuth() {
     async function fetchUser() {
       try {
         const userInfo = await spark.user();
+        
+        if (!userInfo || typeof userInfo.isOwner === 'undefined') {
+          console.error('User info incomplete:', userInfo);
+          setUser(null);
+          setRole('viewer');
+          setLoading(false);
+          return;
+        }
+        
         setUser(userInfo);
 
         if (userInfo.isOwner) {

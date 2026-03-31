@@ -22,7 +22,7 @@ import { ResponsiveDialog } from '../ResponsiveDialog';
 
 export default function InstallationGroupsPage() {
   const { groups, addGroup, updateGroup, deleteGroup } = useInstallationGroups();
-  const { canEdit, canDelete } = useAuth();
+  const { canEdit, canDelete, canManageUsers } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<InstallationGroup | null>(null);
 
@@ -32,7 +32,7 @@ export default function InstallationGroupsPage() {
   });
 
   const handleOpenDialog = (group?: InstallationGroup) => {
-    if (!isOwner) {
+    if (!canManageUsers) {
       toast.error('Vain omistaja voi muokata hintaryhmiä');
       return;
     }
@@ -54,7 +54,7 @@ export default function InstallationGroupsPage() {
   };
 
   const handleSave = () => {
-    if (!isOwner) {
+    if (!canManageUsers) {
       toast.error('Vain omistaja voi tallentaa muutoksia');
       return;
     }
@@ -76,7 +76,7 @@ export default function InstallationGroupsPage() {
   };
 
   const handleDelete = (id: string) => {
-    if (!isOwner) {
+    if (!canManageUsers) {
       toast.error('Vain omistaja voi poistaa hintaryhmiä');
       return;
     }
@@ -94,7 +94,7 @@ export default function InstallationGroupsPage() {
           <h1 className="text-2xl sm:text-3xl font-semibold">Hintaryhmät</h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">Asennushinnoittelun ryhmät</p>
         </div>
-        {isOwner ? (
+        {canManageUsers ? (
           <>
             <Button onClick={() => handleOpenDialog()} className="gap-2">
               <Plus weight="bold" />
@@ -145,7 +145,7 @@ export default function InstallationGroupsPage() {
         )}
       </div>
 
-      {!isOwner && <ReadOnlyAlert />}
+      {!canManageUsers && <ReadOnlyAlert />}
 
       <Card className="p-6">
         {groups.length === 0 ? (
@@ -158,7 +158,7 @@ export default function InstallationGroupsPage() {
               <TableRow>
                 <TableHead>Nimi</TableHead>
                 <TableHead className="text-right">Oletushinta</TableHead>
-                {isOwner && <TableHead className="w-24"></TableHead>}
+                {canManageUsers && <TableHead className="w-24"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -168,7 +168,7 @@ export default function InstallationGroupsPage() {
                   <TableCell className="text-right font-mono">
                     {formatCurrency(group.defaultPrice)}
                   </TableCell>
-                  {isOwner && (
+                  {canManageUsers && (
                     <TableCell>
                       <div className="flex gap-2">
                         <Button
