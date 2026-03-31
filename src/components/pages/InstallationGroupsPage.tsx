@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash, PencilSimple } from '@phosphor-icons/react';
+import { Plus, Trash, PencilSimple, Lock } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card } from '../ui/card';
@@ -21,12 +21,15 @@ import {
 } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { useInstallationGroups } from '../../hooks/use-data';
+import { useAuth } from '../../hooks/use-auth';
 import { InstallationGroup } from '../../lib/types';
 import { toast } from 'sonner';
 import { formatCurrency } from '../../lib/calculations';
+import { ReadOnlyAlert } from '../ReadOnlyAlert';
 
 export default function InstallationGroupsPage() {
   const { groups, addGroup, updateGroup, deleteGroup } = useInstallationGroups();
+  const { isOwner } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<InstallationGroup | null>(null);
 
@@ -36,6 +39,11 @@ export default function InstallationGroupsPage() {
   });
 
   const handleOpenDialog = (group?: InstallationGroup) => {
+    if (!isOwner) {
+      toast.error('Vain omistaja voi muokata hintaryhmiä');
+      return;
+    }
+
     if (group) {
       setEditingGroup(group);
       setFormData({
@@ -53,6 +61,11 @@ export default function InstallationGroupsPage() {
   };
 
   const handleSave = () => {
+    if (!isOwner) {
+      toast.error('Vain omistaja voi tallentaa muutoksia');
+      return;
+    }
+
     if (!formData.name) {
       toast.error('Anna hintaryhmän nimi');
       return;
@@ -70,6 +83,11 @@ export default function InstallationGroupsPage() {
   };
 
   const handleDelete = (id: string) => {
+    if (!isOwner) {
+      toast.error('Vain omistaja voi poistaa hintaryhmiä');
+      return;
+    }
+
     if (confirm('Haluatko varmasti poistaa tämän hintaryhmän?')) {
       deleteGroup(id);
       toast.success('Hintaryhmä poistettu');
@@ -83,13 +101,14 @@ export default function InstallationGroupsPage() {
           <h1 className="text-3xl font-semibold">Hintaryhmät</h1>
           <p className="text-muted-foreground mt-1">Asennushinnoittelun ryhmät</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog()} className="gap-2">
-              <Plus weight="bold" />
-              Lisää hintaryhmä
-            </Button>
-          </DialogTrigger>
+        {isOwner ? (
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => handleOpenDialog()} className="gap-2">
+                <Plus weight="bold" />
+                Lisää hintaryhmä
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{editingGroup ? 'Muokkaa hintaryhmää' : 'Uusi hintaryhmä'}</DialogTitle>
@@ -123,7 +142,15 @@ export default function InstallationGroupsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        ) : (
+          <Button disabled className="gap-2">
+            <Lock weight="bold" />
+            Lukuoikeus
+          </Button>
+        )}
       </div>
+
+      {!isOwner && <ReadOnlyAlert />}
 
       <Card className="p-6">
         {groups.length === 0 ? (
@@ -136,7 +163,7 @@ export default function InstallationGroupsPage() {
               <TableRow>
                 <TableHead>Nimi</TableHead>
                 <TableHead className="text-right">Oletushinta</TableHead>
-                <TableHead className="w-24"></TableHead>
+                {isOwner && <TableHead className="w-24"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -146,26 +173,28 @@ export default function InstallationGroupsPage() {
                   <TableCell className="text-right font-mono">
                     {formatCurrency(group.defaultPrice)}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenDialog(group)}
-                        className="h-8 w-8"
-                      >
-                        <PencilSimple />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(group.id)}
-                        className="h-8 w-8"
-                      >
-                        <Trash className="text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
+                  {isOwner && (
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenDialog(group)}
+                          className="h-8 w-8"
+                        >
+                          <PencilSimple />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(group.id)}
+                          className="h-8 w-8"
+                        >
+                          <Trash className="text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

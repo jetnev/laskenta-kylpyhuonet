@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash, ArrowsLeftRight } from '@phosphor-icons/react';
+import { Plus, Trash, ArrowsLeftRight, Lock } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import {
@@ -27,11 +27,14 @@ import {
 } from '../ui/select';
 import { Label } from '../ui/label';
 import { useSubstituteProducts, useProducts } from '../../hooks/use-data';
+import { useAuth } from '../../hooks/use-auth';
 import { toast } from 'sonner';
+import { ReadOnlyAlert } from '../ReadOnlyAlert';
 
 export default function SubstituteProductsPage() {
   const { substitutes, addSubstitute, deleteSubstitute } = useSubstituteProducts();
   const { products } = useProducts();
+  const { isOwner } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -40,6 +43,11 @@ export default function SubstituteProductsPage() {
   });
 
   const handleOpenDialog = () => {
+    if (!isOwner) {
+      toast.error('Vain omistaja voi lisätä korvaavia tuotteita');
+      return;
+    }
+
     setFormData({
       originalProductId: '',
       substituteProductId: '',
@@ -48,6 +56,11 @@ export default function SubstituteProductsPage() {
   };
 
   const handleSave = () => {
+    if (!isOwner) {
+      toast.error('Vain omistaja voi tallentaa muutoksia');
+      return;
+    }
+
     if (!formData.originalProductId || !formData.substituteProductId) {
       toast.error('Valitse molemmat tuotteet');
       return;
@@ -64,6 +77,11 @@ export default function SubstituteProductsPage() {
   };
 
   const handleDelete = (id: string) => {
+    if (!isOwner) {
+      toast.error('Vain omistaja voi poistaa korvaavia tuotteita');
+      return;
+    }
+
     if (confirm('Haluatko varmasti poistaa tämän korvaavan tuotteen?')) {
       deleteSubstitute(id);
       toast.success('Korvaava tuote poistettu');
@@ -77,13 +95,14 @@ export default function SubstituteProductsPage() {
           <h1 className="text-3xl font-semibold">Korvaavat tuotteet</h1>
           <p className="text-muted-foreground mt-1">Määritä tuotteiden korvattavuus</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleOpenDialog} className="gap-2">
-              <Plus weight="bold" />
-              Lisää korvaava tuote
-            </Button>
-          </DialogTrigger>
+        {isOwner ? (
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={handleOpenDialog} className="gap-2">
+                <Plus weight="bold" />
+                Lisää korvaava tuote
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Uusi korvaava tuote</DialogTitle>
@@ -137,7 +156,15 @@ export default function SubstituteProductsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        ) : (
+          <Button disabled className="gap-2">
+            <Lock weight="bold" />
+            Lukuoikeus
+          </Button>
+        )}
       </div>
+
+      {!isOwner && <ReadOnlyAlert />}
 
       <Card className="p-6">
         {substitutes.length === 0 ? (
@@ -151,7 +178,7 @@ export default function SubstituteProductsPage() {
                 <TableHead>Alkuperäinen tuote</TableHead>
                 <TableHead></TableHead>
                 <TableHead>Korvaava tuote</TableHead>
-                <TableHead className="w-24"></TableHead>
+                {isOwner && <TableHead className="w-24"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -169,16 +196,18 @@ export default function SubstituteProductsPage() {
                     <TableCell className="font-medium">
                       {substitute ? `${substitute.code} - ${substitute.name}` : 'Tuntematon'}
                     </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(sub.id)}
-                        className="h-8 w-8"
-                      >
-                        <Trash className="text-destructive" />
-                      </Button>
-                    </TableCell>
+                    {isOwner && (
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(sub.id)}
+                          className="h-8 w-8"
+                        >
+                          <Trash className="text-destructive" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
