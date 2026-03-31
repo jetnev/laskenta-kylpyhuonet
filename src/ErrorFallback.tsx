@@ -16,9 +16,9 @@ export default function ErrorFallback({ error, resetErrorBoundary }: Props) {
           {error.message}
         </p>
         <Button onClick={resetErrorBoundary}>
+          Yritä uudelleen
         </Button>
-    </div>
-}
+      </div>
     </div>
   );
 }
