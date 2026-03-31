@@ -1,20 +1,20 @@
 import { Product, InstallationGroup } from './types';
 
-    code: 'LAA-001',
-   
-    purchasePrice: 2
+export const testProducts: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
-    name: 'Keraaminen s
+    code: 'LAA-001',
+    name: 'Keraaminen lattialaatta 30x30cm',
+    category: 'Laatat',
     unit: 'm2',
     purchasePrice: 25.50,
+  },
   {
-   
     code: 'LAA-002',
     name: 'Keraaminen seinälaatta 25x40cm',
     category: 'Laatat',
     unit: 'm2',
     purchasePrice: 32.00,
-  {
+  },
   {
     code: 'LAA-003',
     name: 'Mosaiikkilaatta 30x30cm',
@@ -30,102 +30,49 @@ import { Product, InstallationGroup } from './types';
     purchasePrice: 185.00,
   },
   {
-    purchasePrice: 1
-  {
-    name: 'Pesuallas 60cm'
+    code: 'KAL-002',
+    name: 'Pesuallas 60cm',
+    category: 'Kalusteet',
     unit: 'kpl',
+    purchasePrice: 125.00,
   },
-    
-   
-    purchasePrice: 8
   {
-    name: 'Suihkuhana term
+    code: 'VES-001',
+    name: 'Suihkuhana termostaattinen',
+    category: 'Vesikalusteet',
     unit: 'kpl',
+    purchasePrice: 89.00,
   },
-    
-   
-    purchasePrice: 1
   {
-    name: 'Saumausmassa valk
+    code: 'MAT-001',
+    name: 'Saumausmassa valkoinen',
+    category: 'Materiaalit',
     unit: 'pkt',
+    purchasePrice: 12.50,
   },
-    
-   
-    purchasePrice: 8
+  {
+    code: 'SUI-001',
+    name: 'Suihkuseinä 80x200cm',
+    category: 'Suihkutilat',
+    unit: 'kpl',
+    purchasePrice: 385.00,
+  },
 ];
-export const testInstallatio
-    name: 'Laato
+
+export const testInstallationGroups: Omit<InstallationGroup, 'id' | 'createdAt' | 'updatedAt'>[] = [
+  {
+    name: 'Laatoitus',
+    defaultPrice: 45.00,
   },
-    
-  }
-    name: 'Kalusteen
+  {
+    name: 'Kalusteen asennus',
+    defaultPrice: 75.00,
   },
-    name: 'Suihkuseinän asen
+  {
+    name: 'Suihkuseinän asennus',
+    defaultPrice: 125.00,
   },
-    name: 'Hanojen asennus
-  },
-
-  return `
-(async () => {
-  const testGroups = ${JSON.st
-  // Lisää hinta
-  const newGroups = testGr
-    
-   
-  await spark.kv.set
-  
-  const existingProducts = awa
-  
-    if (productCategory =
-    
-   
-    } else if (produ
-      return group?.id;
-      const group = groups.fin
-    }
-  };
-  co
-   
-    createdAt: new D
-  }));
-  await spark.kv.set('produ
-  console.log('T
-`.trim();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  {
     name: 'Hanojen asennus',
     defaultPrice: 95.00,
   },
