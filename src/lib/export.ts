@@ -1,4 +1,4 @@
-import { Quote, QuoteRow, Customer, Project, QuoteTerms, Settings } from './types';
+import { Quote, QuoteRow, Customer, Project, QuoteTerms, Settings, Product, InstallationGroup } from './types';
 import { calculateQuote, calculateQuoteRow, formatCurrency } from './calculations';
 
 export function exportQuoteToPDF(
@@ -139,5 +139,45 @@ export function exportQuoteToInternalExcel(
   const link = document.createElement('a');
   link.href = url;
   link.download = `tarjous-sisainen-${quote.id}.csv`;
+  link.click();
+}
+
+export interface ExcelColumn {
+  field: keyof Product | 'installationGroup';
+  label: string;
+  enabled: boolean;
+}
+
+export function exportProductsToExcel(
+  products: Product[],
+  groups: InstallationGroup[],
+  columns: ExcelColumn[]
+) {
+  const enabledColumns = columns.filter(c => c.enabled);
+  
+  let csv = enabledColumns.map(c => `"${c.label}"`).join(',') + '\n';
+  
+  products.forEach(product => {
+    const row = enabledColumns.map(col => {
+      if (col.field === 'installationGroup') {
+        const group = product.installationGroupId 
+          ? groups.find(g => g.id === product.installationGroupId)
+          : null;
+        return `"${group?.name || ''}"`;
+      }
+      const value = product[col.field as keyof Product];
+      if (typeof value === 'number') {
+        return value;
+      }
+      return `"${value || ''}"`;
+    });
+    csv += row.join(',') + '\n';
+  });
+  
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `tuoterekisteri-${new Date().toISOString().split('T')[0]}.csv`;
   link.click();
 }

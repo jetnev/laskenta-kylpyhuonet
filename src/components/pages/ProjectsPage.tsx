@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash, FileText, Building, Users } from '@phosphor-icons/react';
+import { Plus, Pencil, Trash, FileText, Building, Users, MagnifyingGlass, X } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
+import { Checkbox } from '../ui/checkbox';
 import { useProjects, useCustomers, useQuotes } from '../../hooks/use-data';
 import { toast } from 'sonner';
 import { Project, Customer } from '../../lib/types';
@@ -15,7 +15,7 @@ import QuoteEditor from '../QuoteEditor';
 export default function ProjectsPage() {
   const { projects, addProject, updateProject, deleteProject } = useProjects();
   const { customers, addCustomer, updateCustomer, deleteCustomer, getCustomer } = useCustomers();
-  const { quotes, getQuotesForProject } = useQuotes();
+  const { quotes, getQuotesForProject, deleteQuote } = useQuotes();
   
   const [showProjectDialog, setShowProjectDialog] = useState(false);
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
@@ -24,6 +24,9 @@ export default function ProjectsPage() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
+  const [selectedQuotes, setSelectedQuotes] = useState<Set<string>>(new Set());
+  const [searchProjects, setSearchProjects] = useState('');
+  const [searchCustomers, setSearchCustomers] = useState('');
   
   const [projectForm, setProjectForm] = useState({
     customerId: '',
@@ -39,6 +42,22 @@ export default function ProjectsPage() {
     phone: '',
     address: '',
   });
+
+  const filteredProjects = projects.filter(p => {
+    const customer = getCustomer(p.customerId);
+    const searchLower = searchProjects.toLowerCase();
+    return (
+      p.name.toLowerCase().includes(searchLower) ||
+      p.site.toLowerCase().includes(searchLower) ||
+      (customer && customer.name.toLowerCase().includes(searchLower))
+    );
+  });
+
+  const filteredCustomers = customers.filter(c =>
+    c.name.toLowerCase().includes(searchCustomers.toLowerCase()) ||
+    (c.contactPerson && c.contactPerson.toLowerCase().includes(searchCustomers.toLowerCase())) ||
+    (c.email && c.email.toLowerCase().includes(searchCustomers.toLowerCase()))
+  );
 
   const handleSaveProject = () => {
     if (!projectForm.customerId || !projectForm.name || !projectForm.site) {
@@ -133,6 +152,43 @@ export default function ProjectsPage() {
     setShowQuoteEditor(true);
   };
 
+  const handleDeleteQuote = (quoteId: string) => {
+    if (confirm('Haluatko varmasti poistaa tarjouksen?')) {
+      deleteQuote(quoteId);
+      setSelectedQuotes(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(quoteId);
+        return newSet;
+      });
+      toast.success('Tarjous poistettu');
+    }
+  };
+
+  const handleBulkDeleteQuotes = () => {
+    if (selectedQuotes.size === 0) {
+      toast.error('Valitse poistettavat tarjoukset');
+      return;
+    }
+
+    if (confirm(`Haluatko varmasti poistaa ${selectedQuotes.size} tarjousta?`)) {
+      selectedQuotes.forEach(id => deleteQuote(id));
+      setSelectedQuotes(new Set());
+      toast.success(`${selectedQuotes.size} tarjousta poistettu`);
+    }
+  };
+
+  const toggleQuoteSelection = (quoteId: string) => {
+    setSelectedQuotes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(quoteId)) {
+        newSet.delete(quoteId);
+      } else {
+        newSet.add(quoteId);
+      }
+      return newSet;
+    });
+  };
+
   return (
     <div className="p-8 space-y-6">
       <div className="flex items-center justify-between">
@@ -141,6 +197,25 @@ export default function ProjectsPage() {
           <p className="text-muted-foreground mt-1">Hallinnoi projekteja, asiakkaita ja tarjouksia</p>
         </div>
       </div>
+
+      {selectedQuotes.size > 0 && (
+        <Card className="p-4 bg-accent/20 border-accent">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Badge variant="secondary" className="px-3 py-1">
+                {selectedQuotes.size} tarjous{selectedQuotes.size !== 1 ? 'ta' : ''} valittu
+              </Badge>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedQuotes(new Set())}>
+                <X /> Tyhjennä valinta
+              </Button>
+            </div>
+            <Button variant="destructive" size="sm" onClick={handleBulkDeleteQuotes} className="gap-2">
+              <Trash weight="bold" />
+              Poista valitut
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-6">
@@ -217,14 +292,26 @@ export default function ProjectsPage() {
             </Dialog>
           </div>
 
-          {projects.length === 0 ? (
+          <div className="mb-4">
+            <div className="relative">
+              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchProjects}
+                onChange={(e) => setSearchProjects(e.target.value)}
+                placeholder="Hae projekteja..."
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          {filteredProjects.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Building className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>Ei projekteja</p>
+              <p>{projects.length === 0 ? 'Ei projekteja' : 'Ei hakutuloksia'}</p>
             </div>
           ) : (
             <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {projects.map(project => {
+              {filteredProjects.map(project => {
                 const customer = getCustomer(project.customerId);
                 const projectQuotes = getQuotesForProject(project.id);
                 
@@ -273,14 +360,22 @@ export default function ProjectsPage() {
                         {projectQuotes.map(quote => (
                           <div
                             key={quote.id}
-                            className="flex items-center justify-between bg-muted/50 rounded px-3 py-2 text-sm cursor-pointer hover:bg-muted"
-                            onClick={() => handleEditQuote(project.id, quote.id)}
+                            className="flex items-center gap-2 bg-muted/50 rounded px-3 py-2 text-sm"
                           >
-                            <div className="flex items-center gap-2">
-                              <span>{quote.title}</span>
-                              <Badge variant="outline" className="text-xs">
-                                v{quote.revisionNumber}
-                              </Badge>
+                            <Checkbox
+                              checked={selectedQuotes.has(quote.id)}
+                              onCheckedChange={() => toggleQuoteSelection(quote.id)}
+                            />
+                            <div
+                              className="flex-1 cursor-pointer hover:underline"
+                              onClick={() => handleEditQuote(project.id, quote.id)}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span>{quote.title}</span>
+                                <Badge variant="outline" className="text-xs">
+                                  v{quote.revisionNumber}
+                                </Badge>
+                              </div>
                             </div>
                             <Badge variant={
                               quote.status === 'draft' ? 'secondary' :
@@ -293,6 +388,14 @@ export default function ProjectsPage() {
                                quote.status === 'accepted' ? 'Hyväksytty' :
                                'Hylätty'}
                             </Badge>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteQuote(quote.id)}
+                              className="h-6 w-6 p-0"
+                            >
+                              <Trash className="h-3 w-3" />
+                            </Button>
                           </div>
                         ))}
                       </div>
@@ -382,14 +485,26 @@ export default function ProjectsPage() {
             </Dialog>
           </div>
 
-          {customers.length === 0 ? (
+          <div className="mb-4">
+            <div className="relative">
+              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchCustomers}
+                onChange={(e) => setSearchCustomers(e.target.value)}
+                placeholder="Hae asiakkaita..."
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          {filteredCustomers.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>Ei asiakkaita</p>
+              <p>{customers.length === 0 ? 'Ei asiakkaita' : 'Ei hakutuloksia'}</p>
             </div>
           ) : (
             <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {customers.map(customer => {
+              {filteredCustomers.map(customer => {
                 const customerProjects = projects.filter(p => p.customerId === customer.id);
                 
                 return (

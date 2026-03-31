@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, MagnifyingGlass, Trash, PencilSimple, Lock } from '@phosphor-icons/react';
+import { Plus, MagnifyingGlass, Trash, PencilSimple, Lock, X, FunnelSimple, FileXls } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card } from '../ui/card';
@@ -27,34 +27,58 @@ import {
   SelectValue,
 } from '../ui/select';
 import { Label } from '../ui/label';
+import { Checkbox } from '../ui/checkbox';
 import { useProducts, useInstallationGroups } from '../../hooks/use-data';
 import { useAuth } from '../../hooks/use-auth';
 import { Product } from '../../lib/types';
 import { toast } from 'sonner';
 import { formatCurrency } from '../../lib/calculations';
 import { ReadOnlyAlert } from '../ReadOnlyAlert';
+import { exportProductsToExcel, ExcelColumn } from '../../lib/export';
+import { Badge } from '../ui/badge';
 
 export default function ProductsPage() {
   const { products, addProduct, updateProduct, deleteProduct } = useProducts();
   const { groups } = useInstallationGroups();
   const { isOwner } = useAuth();
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [groupFilter, setGroupFilter] = useState<string>('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [showFilterDialog, setShowFilterDialog] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   const [formData, setFormData] = useState({
     code: '',
     name: '',
+    category: '',
     unit: 'kpl',
     purchasePrice: 0,
     installationGroupId: '',
   });
 
-  const filteredProducts = products.filter(
-    (p) =>
+  const [exportColumns, setExportColumns] = useState<ExcelColumn[]>([
+    { field: 'code', label: 'Tuotekoodi', enabled: true },
+    { field: 'name', label: 'Tuotenimi', enabled: true },
+    { field: 'category', label: 'Kategoria', enabled: true },
+    { field: 'unit', label: 'Yksikkö', enabled: true },
+    { field: 'purchasePrice', label: 'Ostohinta', enabled: true },
+    { field: 'installationGroup', label: 'Hintaryhmä', enabled: true },
+  ]);
+
+  const uniqueCategories = Array.from(new Set(products.filter(p => p.category).map(p => p.category!)));
+
+  const filteredProducts = products.filter((p) => {
+    const matchesSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.code.toLowerCase().includes(search.toLowerCase())
-  );
+      p.code.toLowerCase().includes(search.toLowerCase()) ||
+      (p.category && p.category.toLowerCase().includes(search.toLowerCase()));
+    const matchesCategory = !categoryFilter || p.category === categoryFilter;
+    const matchesGroup = !groupFilter || p.installationGroupId === groupFilter;
+    return matchesSearch && matchesCategory && matchesGroup;
+  });
 
   const handleOpenDialog = (product?: Product) => {
     if (!isOwner) {
@@ -67,6 +91,7 @@ export default function ProductsPage() {
       setFormData({
         code: product.code,
         name: product.name,
+        category: product.category || '',
         unit: product.unit,
         purchasePrice: product.purchasePrice,
         installationGroupId: product.installationGroupId || '',
@@ -76,6 +101,7 @@ export default function ProductsPage() {
       setFormData({
         code: '',
         name: '',
+        category: '',
         unit: 'kpl',
         purchasePrice: 0,
         installationGroupId: '',
@@ -98,6 +124,7 @@ export default function ProductsPage() {
     const productData = {
       code: formData.code,
       name: formData.name,
+      category: formData.category || undefined,
       unit: formData.unit,
       purchasePrice: formData.purchasePrice,
       installationGroupId: formData.installationGroupId || undefined,
@@ -126,6 +153,61 @@ export default function ProductsPage() {
     }
   };
 
+  const handleBulkDelete = () => {
+    if (!isOwner) {
+      toast.error('Vain omistaja voi poistaa tuotteita');
+      return;
+    }
+
+    if (selectedProducts.size === 0) {
+      toast.error('Valitse poistettavat tuotteet');
+      return;
+    }
+
+    if (confirm(`Haluatko varmasti poistaa ${selectedProducts.size} tuotetta?`)) {
+      selectedProducts.forEach(id => deleteProduct(id));
+      setSelectedProducts(new Set());
+      toast.success(`${selectedProducts.size} tuotetta poistettu`);
+    }
+  };
+
+  const toggleProductSelection = (id: string) => {
+    const newSelection = new Set(selectedProducts);
+    if (newSelection.has(id)) {
+      newSelection.delete(id);
+    } else {
+      newSelection.add(id);
+    }
+    setSelectedProducts(newSelection);
+  };
+
+  const toggleAllProducts = () => {
+    if (selectedProducts.size === filteredProducts.length) {
+      setSelectedProducts(new Set());
+    } else {
+      setSelectedProducts(new Set(filteredProducts.map(p => p.id)));
+    }
+  };
+
+  const handleExport = () => {
+    const selectedColumns = exportColumns.filter(c => c.enabled);
+    if (selectedColumns.length === 0) {
+      toast.error('Valitse vähintään yksi sarake');
+      return;
+    }
+    exportProductsToExcel(filteredProducts, groups, exportColumns);
+    toast.success('Tuotteet viety Excel-tiedostoon');
+    setShowExportDialog(false);
+  };
+
+  const clearFilters = () => {
+    setCategoryFilter('');
+    setGroupFilter('');
+    setSearch('');
+  };
+
+  const activeFiltersCount = [categoryFilter, groupFilter, search].filter(Boolean).length;
+
   return (
     <div className="p-8 space-y-6">
       <div className="flex items-center justify-between">
@@ -133,113 +215,221 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-semibold">Tuoterekisteri</h1>
           <p className="text-muted-foreground mt-1">Hallinnoi tuotteita ja hintoja</p>
         </div>
-        {isOwner ? (
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => handleOpenDialog()} className="gap-2">
-                <Plus weight="bold" />
-                Lisää tuote
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{editingProduct ? 'Muokkaa tuotetta' : 'Uusi tuote'}</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="code">Tuotekoodi *</Label>
-                  <Input
-                    id="code"
-                    value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                    placeholder="esim. LAA-001"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="name">Tuotenimi *</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="esim. Keraaminen laatta 30x30cm"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowExportDialog(true)} className="gap-2">
+            <FileXls weight="bold" />
+            Vie Excel
+          </Button>
+          {isOwner ? (
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={() => handleOpenDialog()} className="gap-2">
+                  <Plus weight="bold" />
+                  Lisää tuote
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{editingProduct ? 'Muokkaa tuotetta' : 'Uusi tuote'}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="unit">Yksikkö</Label>
-                    <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
-                      <SelectTrigger id="unit">
-                        <SelectValue />
+                    <Label htmlFor="code">Tuotekoodi *</Label>
+                    <Input
+                      id="code"
+                      value={formData.code}
+                      onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                      placeholder="esim. LAA-001"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Tuotenimi *</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="esim. Keraaminen laatta 30x30cm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Kategoria</Label>
+                    <Input
+                      id="category"
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      placeholder="esim. Laatat"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="unit">Yksikkö</Label>
+                      <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
+                        <SelectTrigger id="unit">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="kpl">kpl</SelectItem>
+                          <SelectItem value="m2">m²</SelectItem>
+                          <SelectItem value="m">m</SelectItem>
+                          <SelectItem value="kg">kg</SelectItem>
+                          <SelectItem value="l">l</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Ostohinta (€)</Label>
+                      <Input
+                        id="price"
+                        type="number"
+                        step="0.01"
+                        value={formData.purchasePrice}
+                        onChange={(e) => setFormData({ ...formData, purchasePrice: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="group">Hintaryhmä</Label>
+                    <Select
+                      value={formData.installationGroupId}
+                      onValueChange={(value) => setFormData({ ...formData, installationGroupId: value })}
+                    >
+                      <SelectTrigger id="group">
+                        <SelectValue placeholder="Ei hintaryhmää" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="kpl">kpl</SelectItem>
-                        <SelectItem value="m2">m²</SelectItem>
-                        <SelectItem value="m">m</SelectItem>
-                        <SelectItem value="kg">kg</SelectItem>
-                        <SelectItem value="l">l</SelectItem>
+                        <SelectItem value="">Ei hintaryhmää</SelectItem>
+                        {groups.map((group) => (
+                          <SelectItem key={group.id} value={group.id}>
+                            {group.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="price">Ostohinta (€)</Label>
-                    <Input
-                      id="price"
-                      type="number"
-                      step="0.01"
-                      value={formData.purchasePrice}
-                      onChange={(e) => setFormData({ ...formData, purchasePrice: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="group">Hintaryhmä</Label>
-                  <Select
-                    value={formData.installationGroupId}
-                    onValueChange={(value) => setFormData({ ...formData, installationGroupId: value })}
-                  >
-                    <SelectTrigger id="group">
-                      <SelectValue placeholder="Ei hintaryhmää" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Ei hintaryhmää</SelectItem>
-                      {groups.map((group) => (
-                        <SelectItem key={group.id} value={group.id}>
-                          {group.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                  Peruuta
-                </Button>
-                <Button onClick={handleSave}>Tallenna</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        ) : (
-          <Button disabled className="gap-2">
-            <Lock weight="bold" />
-            Lukuoikeus
-          </Button>
-        )}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                    Peruuta
+                  </Button>
+                  <Button onClick={handleSave}>Tallenna</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ) : (
+            <Button disabled className="gap-2">
+              <Lock weight="bold" />
+              Lukuoikeus
+            </Button>
+          )}
+        </div>
       </div>
 
       {!isOwner && <ReadOnlyAlert />}
 
-      <Card className="p-6">
-        <div className="mb-4">
-          <div className="relative">
-            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Hae tuotteita..."
-              className="pl-10"
-            />
+      {selectedProducts.size > 0 && isOwner && (
+        <Card className="p-4 bg-accent/20 border-accent">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Badge variant="secondary" className="px-3 py-1">
+                {selectedProducts.size} valittu
+              </Badge>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedProducts(new Set())}>
+                <X /> Tyhjennä valinta
+              </Button>
+            </div>
+            <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="gap-2">
+              <Trash weight="bold" />
+              Poista valitut
+            </Button>
           </div>
+        </Card>
+      )}
+
+      <Card className="p-6">
+        <div className="mb-4 space-y-3">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Hae tuotteita..."
+                className="pl-10"
+              />
+            </div>
+            <Dialog open={showFilterDialog} onOpenChange={setShowFilterDialog}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <FunnelSimple weight="bold" />
+                  Suodata
+                  {activeFiltersCount > 0 && (
+                    <Badge variant="secondary">{activeFiltersCount}</Badge>
+                  )}
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Suodata tuotteita</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="filter-category">Kategoria</Label>
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger id="filter-category">
+                        <SelectValue placeholder="Kaikki kategoriat" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Kaikki kategoriat</SelectItem>
+                        {uniqueCategories.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="filter-group">Hintaryhmä</Label>
+                    <Select value={groupFilter} onValueChange={setGroupFilter}>
+                      <SelectTrigger id="filter-group">
+                        <SelectValue placeholder="Kaikki hintaryhmät" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Kaikki hintaryhmät</SelectItem>
+                        {groups.map((group) => (
+                          <SelectItem key={group.id} value={group.id}>
+                            {group.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={clearFilters}>
+                    Tyhjennä suodattimet
+                  </Button>
+                  <Button onClick={() => setShowFilterDialog(false)}>Sulje</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+          {activeFiltersCount > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              {categoryFilter && (
+                <Badge variant="secondary" className="gap-1">
+                  Kategoria: {categoryFilter}
+                  <X className="h-3 w-3 cursor-pointer" onClick={() => setCategoryFilter('')} />
+                </Badge>
+              )}
+              {groupFilter && (
+                <Badge variant="secondary" className="gap-1">
+                  Ryhmä: {groups.find(g => g.id === groupFilter)?.name}
+                  <X className="h-3 w-3 cursor-pointer" onClick={() => setGroupFilter('')} />
+                </Badge>
+              )}
+            </div>
+          )}
         </div>
 
         {filteredProducts.length === 0 ? (
@@ -251,8 +441,17 @@ export default function ProductsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  {isOwner && (
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedProducts.size === filteredProducts.length}
+                        onCheckedChange={toggleAllProducts}
+                      />
+                    </TableHead>
+                  )}
                   <TableHead>Tuotekoodi</TableHead>
                   <TableHead>Nimi</TableHead>
+                  <TableHead>Kategoria</TableHead>
                   <TableHead>Yksikkö</TableHead>
                   <TableHead className="text-right">Ostohinta</TableHead>
                   <TableHead>Hintaryhmä</TableHead>
@@ -266,8 +465,17 @@ export default function ProductsPage() {
                     : null;
                   return (
                     <TableRow key={product.id}>
+                      {isOwner && (
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedProducts.has(product.id)}
+                            onCheckedChange={() => toggleProductSelection(product.id)}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell className="font-mono">{product.code}</TableCell>
                       <TableCell className="font-medium">{product.name}</TableCell>
+                      <TableCell>{product.category || '-'}</TableCell>
                       <TableCell>{product.unit}</TableCell>
                       <TableCell className="text-right font-mono">
                         {formatCurrency(product.purchasePrice)}
@@ -303,6 +511,49 @@ export default function ProductsPage() {
           </div>
         )}
       </Card>
+
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Vie tuotteet Excel-tiedostoon</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Valitse vietävät sarakkeet:
+            </p>
+            <div className="space-y-2">
+              {exportColumns.map((col, index) => (
+                <div key={col.field} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`export-${col.field}`}
+                    checked={col.enabled}
+                    onCheckedChange={(checked) => {
+                      const newColumns = [...exportColumns];
+                      newColumns[index].enabled = !!checked;
+                      setExportColumns(newColumns);
+                    }}
+                  />
+                  <Label htmlFor={`export-${col.field}`} className="cursor-pointer">
+                    {col.label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Viedään {filteredProducts.length} tuotetta
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+              Peruuta
+            </Button>
+            <Button onClick={handleExport} className="gap-2">
+              <FileXls weight="bold" />
+              Vie Excel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
