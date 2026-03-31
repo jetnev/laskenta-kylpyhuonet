@@ -14,7 +14,7 @@ import {
   DialogFooter,
 } from './ui/dialog';
 import { useDeadlineNotifications, DeadlineNotification } from '../hooks/use-deadline-notifications';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Alert, AlertDescription } from './ui/alert';
 import { toast } from 'sonner';
 
@@ -37,8 +37,14 @@ export default function DeadlineNotifications() {
   } = useDeadlineNotifications();
 
   const [showSettings, setShowSettings] = useState(false);
-  const [tempEmail, setTempEmail] = useState(settings?.emailAddress || '');
+  const [tempEmail, setTempEmail] = useState('');
   const [customDays, setCustomDays] = useState('');
+
+  useEffect(() => {
+    if (settings?.emailAddress) {
+      setTempEmail(settings.emailAddress);
+    }
+  }, [settings?.emailAddress]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -59,7 +65,16 @@ export default function DeadlineNotifications() {
 
   const handleSaveSettings = () => {
     if (settings) {
-      updateSettings({ emailAddress: tempEmail });
+      const emailToSave = tempEmail.trim();
+      if (settings.emailEnabled && !emailToSave) {
+        toast.error('Sähköpostiosoite vaaditaan');
+        return;
+      }
+      if (emailToSave && !emailToSave.includes('@')) {
+        toast.error('Anna kelvollinen sähköpostiosoite');
+        return;
+      }
+      updateSettings({ emailAddress: emailToSave });
       toast.success('Asetukset tallennettu');
       setShowSettings(false);
     }
@@ -166,31 +181,39 @@ export default function DeadlineNotifications() {
                   </div>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-3 p-3 rounded-lg bg-muted/30 border border-border">
                   <div className="flex items-center justify-between gap-4">
-                    <Label htmlFor="emailEnabled" className="text-sm">Sähköposti-ilmoitukset</Label>
+                    <div>
+                      <Label htmlFor="emailEnabled" className="text-sm font-medium">Sähköposti-ilmoitukset</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">Demo-ominaisuus</p>
+                    </div>
                     <Switch
                       id="emailEnabled"
                       checked={settings.emailEnabled}
                       onCheckedChange={(checked) => updateSettings({ emailEnabled: checked })}
                     />
                   </div>
-                  {settings.emailEnabled && (
-                    <div>
-                      <Label htmlFor="email" className="text-sm">Sähköpostiosoite</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={tempEmail}
-                        onChange={(e) => setTempEmail(e.target.value)}
-                        placeholder="email@example.com"
-                        className="mt-1 text-base h-11"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Huom: Sähköpostin lähetys on demo-ominaisuus
-                      </p>
-                    </div>
-                  )}
+                  <div>
+                    <Label htmlFor="email" className="text-sm">Sähköpostiosoite</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={tempEmail}
+                      onChange={(e) => setTempEmail(e.target.value)}
+                      placeholder="oma.nimi@example.com"
+                      className="mt-1.5 text-base h-11"
+                      disabled={!settings.emailEnabled}
+                    />
+                    <Alert className="mt-2 py-2">
+                      <EnvelopeSimple className="h-4 w-4 flex-shrink-0" />
+                      <AlertDescription className="text-xs">
+                        {settings.emailEnabled 
+                          ? 'Anna sähköpostiosoite saadaksesi AI-luodut demo-ilmoitukset lähestyvistä määräajoista.'
+                          : 'Ota sähköposti-ilmoitukset käyttöön saadaksesi AI-luodut demo-ilmoitukset.'
+                        }
+                      </AlertDescription>
+                    </Alert>
+                  </div>
                 </div>
               </div>
               <DialogFooter>
