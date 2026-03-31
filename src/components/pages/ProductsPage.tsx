@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, MagnifyingGlass, Trash, PencilSimple, Lock, X, FunnelSimple, FileXls, Wrench, Tag, CurrencyEur } from '@phosphor-icons/react';
+import { Plus, MagnifyingGlass, Trash, PencilSimple, Lock, X, FunnelSimple, FileXls, Wrench, Tag, CurrencyEur, Copy } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card } from '../ui/card';
@@ -51,13 +51,9 @@ export default function ProductsPage() {
   const [showFilterDialog, setShowFilterDialog] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showBulkActionsDialog, setShowBulkActionsDialog] = useState(false);
-  const [bulkActionType, setBulkActionType] = useState<'category' | 'group' | 'price'>('category');
-  const [bulkActionData, setBulkActionData] = useState({
-    category: '',
-    groupId: '',
-    priceType: 'set' as 'set' | 'increase' | 'decrease',
-    priceValue: 0,
-  });
+  const [bulkAction, setBulkAction] = useState<'category' | 'group' | 'copy'>('category');
+  const [bulkCategory, setBulkCategory] = useState('');
+  const [bulkGroup, setBulkGroup] = useState('');
 
   const [formData, setFormData] = useState({
     code: '',
@@ -162,6 +158,25 @@ export default function ProductsPage() {
     }
   };
 
+  const handleCopyProduct = (product: Product) => {
+    if (!isOwner) {
+      toast.error('Vain omistaja voi kopioida tuotteita');
+      return;
+    }
+
+    const newProduct = {
+      code: `${product.code}-KOPIO`,
+      name: `${product.name} (kopio)`,
+      category: product.category,
+      unit: product.unit,
+      purchasePrice: product.purchasePrice,
+      installationGroupId: product.installationGroupId,
+    };
+
+    addProduct(newProduct);
+    toast.success('Tuote kopioitu');
+  };
+
   const handleBulkDelete = () => {
     if (!isOwner) {
       toast.error('Vain omistaja voi poistaa tuotteita');
@@ -182,7 +197,7 @@ export default function ProductsPage() {
 
   const handleBulkAction = () => {
     if (!isOwner) {
-      toast.error('Vain omistaja voi tehdä joukkotoimintoja');
+      toast.error('Vain omistaja voi suorittaa joukkotoimintoja');
       return;
     }
 
@@ -191,50 +206,48 @@ export default function ProductsPage() {
       return;
     }
 
-    let count = 0;
-    selectedProducts.forEach(id => {
-      const product = products.find(p => p.id === id);
-      if (!product) return;
-
-      let updates: Partial<Product> = {};
-
-      if (bulkActionType === 'category') {
-        if (!bulkActionData.category) {
-          toast.error('Anna kategoria');
-          return;
-        }
-        updates.category = bulkActionData.category;
-      } else if (bulkActionType === 'group') {
-        updates.installationGroupId = bulkActionData.groupId || undefined;
-      } else if (bulkActionType === 'price') {
-        if (bulkActionData.priceType === 'set') {
-          updates.purchasePrice = bulkActionData.priceValue;
-        } else if (bulkActionData.priceType === 'increase') {
-          updates.purchasePrice = product.purchasePrice + bulkActionData.priceValue;
-        } else if (bulkActionData.priceType === 'decrease') {
-          updates.purchasePrice = Math.max(0, product.purchasePrice - bulkActionData.priceValue);
-        }
+    if (bulkAction === 'category') {
+      if (!bulkCategory) {
+        toast.error('Valitse kategoria');
+        return;
       }
-
-      updateProduct(id, updates);
-      count++;
-    });
-
-    setSelectedProducts(new Set());
-    setShowBulkActionsDialog(false);
-    setBulkActionData({
-      category: '',
-      groupId: '',
-      priceType: 'set',
-      priceValue: 0,
-    });
-
-    if (bulkActionType === 'category') {
-      toast.success(`${count} tuotteen kategoria päivitetty`);
-    } else if (bulkActionType === 'group') {
-      toast.success(`${count} tuotteen hintaryhmä päivitetty`);
-    } else if (bulkActionType === 'price') {
-      toast.success(`${count} tuotteen hinta päivitetty`);
+      selectedProducts.forEach(id => {
+        const product = products.find(p => p.id === id);
+        if (product) {
+          updateProduct(id, { ...product, category: bulkCategory });
+        }
+      });
+      toast.success(`${selectedProducts.size} tuotteen kategoria päivitetty`);
+      setSelectedProducts(new Set());
+      setShowBulkActionsDialog(false);
+    } else if (bulkAction === 'group') {
+      selectedProducts.forEach(id => {
+        const product = products.find(p => p.id === id);
+        if (product) {
+          updateProduct(id, { ...product, installationGroupId: bulkGroup || undefined });
+        }
+      });
+      toast.success(`${selectedProducts.size} tuotteen hintaryhmä päivitetty`);
+      setSelectedProducts(new Set());
+      setShowBulkActionsDialog(false);
+    } else if (bulkAction === 'copy') {
+      selectedProducts.forEach(id => {
+        const product = products.find(p => p.id === id);
+        if (product) {
+          const newProduct = {
+            code: `${product.code}-KOPIO`,
+            name: `${product.name} (kopio)`,
+            category: product.category,
+            unit: product.unit,
+            purchasePrice: product.purchasePrice,
+            installationGroupId: product.installationGroupId,
+          };
+          addProduct(newProduct);
+        }
+      });
+      toast.success(`${selectedProducts.size} tuotetta kopioitu`);
+      setSelectedProducts(new Set());
+      setShowBulkActionsDialog(false);
     }
   };
 
@@ -397,8 +410,8 @@ export default function ProductsPage() {
 
       {selectedProducts.size > 0 && isOwner && (
         <Card className="p-4 bg-accent/20 border-accent">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3">
               <Badge variant="secondary" className="px-3 py-1">
                 {selectedProducts.size} valittu
               </Badge>
@@ -406,24 +419,46 @@ export default function ProductsPage() {
                 <X /> Tyhjennä valinta
               </Button>
             </div>
-            <div className="flex gap-2 w-full sm:w-auto">
+            <div className="flex gap-2 flex-wrap">
               <Button 
-                variant="outline" 
+                variant="secondary" 
                 size="sm" 
-                onClick={() => setShowBulkActionsDialog(true)} 
-                className="gap-2 flex-1 sm:flex-initial"
+                onClick={() => {
+                  setBulkAction('category');
+                  setShowBulkActionsDialog(true);
+                }} 
+                className="gap-2"
               >
-                <Wrench weight="bold" />
-                Joukkotoiminnot
+                <Tag weight="bold" />
+                Vaihda kategoria
               </Button>
               <Button 
-                variant="destructive" 
+                variant="secondary" 
                 size="sm" 
-                onClick={handleBulkDelete} 
-                className="gap-2 flex-1 sm:flex-initial"
+                onClick={() => {
+                  setBulkAction('group');
+                  setShowBulkActionsDialog(true);
+                }} 
+                className="gap-2"
               >
+                <Wrench weight="bold" />
+                Vaihda hintaryhmä
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={() => {
+                  setBulkAction('copy');
+                  setShowBulkActionsDialog(true);
+                }} 
+                className="gap-2"
+              >
+                <Copy weight="bold" />
+                Kopioi valitut
+              </Button>
+              <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="gap-2">
                 <Trash weight="bold" />
-                Poista
+                Poista valitut
               </Button>
             </div>
           </div>
@@ -544,7 +579,7 @@ export default function ProductsPage() {
                   <TableHead>Yksikkö</TableHead>
                   <TableHead className="text-right">Ostohinta</TableHead>
                   <TableHead>Hintaryhmä</TableHead>
-                  {isOwner && <TableHead className="w-24"></TableHead>}
+                  {isOwner && <TableHead className="w-32"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -576,8 +611,18 @@ export default function ProductsPage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              onClick={() => handleCopyProduct(product)}
+                              className="h-8 w-8"
+                              title="Kopioi tuote"
+                            >
+                              <Copy />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => handleOpenDialog(product)}
                               className="h-8 w-8"
+                              title="Muokkaa tuotetta"
                             >
                               <PencilSimple />
                             </Button>
@@ -586,6 +631,7 @@ export default function ProductsPage() {
                               size="icon"
                               onClick={() => handleDelete(product.id)}
                               className="h-8 w-8"
+                              title="Poista tuote"
                             >
                               <Trash className="text-destructive" />
                             </Button>
@@ -600,138 +646,6 @@ export default function ProductsPage() {
           </div>
         )}
       </Card>
-
-      <ResponsiveDialog
-        open={showBulkActionsDialog}
-        onOpenChange={setShowBulkActionsDialog}
-        title="Joukkotoiminnot"
-        maxWidth="md"
-        footer={
-          <>
-            <Button 
-              variant="outline" 
-              onClick={() => setShowBulkActionsDialog(false)} 
-              className="flex-1 sm:flex-initial"
-            >
-              Peruuta
-            </Button>
-            <Button onClick={handleBulkAction} className="flex-1 sm:flex-initial">
-              Toteuta
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Valittu {selectedProducts.size} tuotetta
-          </p>
-          
-          <div className="space-y-2">
-            <Label>Toiminto</Label>
-            <RadioGroup value={bulkActionType} onValueChange={(value) => setBulkActionType(value as any)}>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="category" id="action-category" />
-                <Label htmlFor="action-category" className="cursor-pointer flex items-center gap-2">
-                  <Tag className="h-4 w-4" />
-                  Vaihda kategoria
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="group" id="action-group" />
-                <Label htmlFor="action-group" className="cursor-pointer flex items-center gap-2">
-                  <Wrench className="h-4 w-4" />
-                  Vaihda hintaryhmä
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="price" id="action-price" />
-                <Label htmlFor="action-price" className="cursor-pointer flex items-center gap-2">
-                  <CurrencyEur className="h-4 w-4" />
-                  Päivitä ostohinta
-                </Label>
-              </div>
-            </RadioGroup>
-          </div>
-
-          {bulkActionType === 'category' && (
-            <div className="space-y-2">
-              <Label htmlFor="bulk-category">Uusi kategoria</Label>
-              <Input
-                id="bulk-category"
-                value={bulkActionData.category}
-                onChange={(e) => setBulkActionData({ ...bulkActionData, category: e.target.value })}
-                placeholder="esim. Laatat"
-              />
-            </div>
-          )}
-
-          {bulkActionType === 'group' && (
-            <div className="space-y-2">
-              <Label htmlFor="bulk-group">Uusi hintaryhmä</Label>
-              <Select
-                value={bulkActionData.groupId}
-                onValueChange={(value) => setBulkActionData({ ...bulkActionData, groupId: value })}
-              >
-                <SelectTrigger id="bulk-group">
-                  <SelectValue placeholder="Valitse hintaryhmä" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Ei hintaryhmää</SelectItem>
-                  {groups.map((group) => (
-                    <SelectItem key={group.id} value={group.id}>
-                      {group.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {bulkActionType === 'price' && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Hinnan muutostyyppi</Label>
-                <RadioGroup 
-                  value={bulkActionData.priceType} 
-                  onValueChange={(value) => setBulkActionData({ ...bulkActionData, priceType: value as any })}
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="set" id="price-set" />
-                    <Label htmlFor="price-set" className="cursor-pointer">
-                      Aseta uusi hinta
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="increase" id="price-increase" />
-                    <Label htmlFor="price-increase" className="cursor-pointer">
-                      Nosta hintaa
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="decrease" id="price-decrease" />
-                    <Label htmlFor="price-decrease" className="cursor-pointer">
-                      Laske hintaa
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bulk-price">
-                  {bulkActionData.priceType === 'set' ? 'Uusi hinta (€)' : 'Muutos (€)'}
-                </Label>
-                <Input
-                  id="bulk-price"
-                  type="number"
-                  step="0.01"
-                  value={bulkActionData.priceValue}
-                  onChange={(e) => setBulkActionData({ ...bulkActionData, priceValue: parseFloat(e.target.value) || 0 })}
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      </ResponsiveDialog>
 
       <ResponsiveDialog
         open={showExportDialog}
@@ -775,6 +689,93 @@ export default function ProductsPage() {
           <p className="text-sm text-muted-foreground">
             Viedään {filteredProducts.length} tuotetta
           </p>
+        </div>
+      </ResponsiveDialog>
+
+      <ResponsiveDialog
+        open={showBulkActionsDialog}
+        onOpenChange={setShowBulkActionsDialog}
+        title="Joukkotoiminto"
+        maxWidth="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowBulkActionsDialog(false)} className="flex-1 sm:flex-initial">
+              Peruuta
+            </Button>
+            <Button onClick={handleBulkAction} className="flex-1 sm:flex-initial">
+              Suorita
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {selectedProducts.size} tuotetta valittuna
+          </p>
+          
+          <div className="space-y-2">
+            <Label>Toiminto</Label>
+            <RadioGroup value={bulkAction} onValueChange={(value) => setBulkAction(value as 'category' | 'group' | 'copy')}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="category" id="bulk-category" />
+                <Label htmlFor="bulk-category" className="cursor-pointer font-normal">
+                  Vaihda kategoria
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="group" id="bulk-group" />
+                <Label htmlFor="bulk-group" className="cursor-pointer font-normal">
+                  Vaihda hintaryhmä
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="copy" id="bulk-copy" />
+                <Label htmlFor="bulk-copy" className="cursor-pointer font-normal">
+                  Kopioi tuotteet
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          {bulkAction === 'category' && (
+            <div className="space-y-2">
+              <Label htmlFor="bulk-category-select">Uusi kategoria</Label>
+              <Input
+                id="bulk-category-select"
+                value={bulkCategory}
+                onChange={(e) => setBulkCategory(e.target.value)}
+                placeholder="Syötä kategoria"
+              />
+            </div>
+          )}
+
+          {bulkAction === 'group' && (
+            <div className="space-y-2">
+              <Label htmlFor="bulk-group-select">Uusi hintaryhmä</Label>
+              <Select value={bulkGroup} onValueChange={setBulkGroup}>
+                <SelectTrigger id="bulk-group-select">
+                  <SelectValue placeholder="Valitse hintaryhmä" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Ei hintaryhmää</SelectItem>
+                  {groups.map((group) => (
+                    <SelectItem key={group.id} value={group.id}>
+                      {group.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {bulkAction === 'copy' && (
+            <div className="space-y-2">
+              <p className="text-sm">
+                Kopiot luodaan nimellä "<span className="font-mono">[Alkuperäinen nimi] (kopio)</span>" ja 
+                tuotekoodilla "<span className="font-mono">[Alkuperäinen koodi]-KOPIO</span>".
+              </p>
+            </div>
+          )}
         </div>
       </ResponsiveDialog>
     </div>
