@@ -668,6 +668,3 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     </div>
   );
 }
-    </div>
-  );
-}
