@@ -197,11 +197,11 @@ export default function ProjectsPage() {
   };
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-8 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold">Projektit ja Asiakkaat</h1>
-          <p className="text-muted-foreground mt-1">Hallinnoi projekteja, asiakkaita ja tarjouksia</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold">Projektit ja Asiakkaat</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">Hallinnoi projekteja, asiakkaita ja tarjouksia</p>
         </div>
       </div>
 

@@ -11,14 +11,6 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogTrigger,
-} from '../ui/dialog';
 import { Label } from '../ui/label';
 import { useInstallationGroups } from '../../hooks/use-data';
 import { useAuth } from '../../hooks/use-auth';
@@ -26,6 +18,7 @@ import { InstallationGroup } from '../../lib/types';
 import { toast } from 'sonner';
 import { formatCurrency } from '../../lib/calculations';
 import { ReadOnlyAlert } from '../ReadOnlyAlert';
+import { ResponsiveDialog } from '../ResponsiveDialog';
 
 export default function InstallationGroupsPage() {
   const { groups, addGroup, updateGroup, deleteGroup } = useInstallationGroups();
@@ -95,53 +88,55 @@ export default function InstallationGroupsPage() {
   };
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-8 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold">Hintaryhmät</h1>
-          <p className="text-muted-foreground mt-1">Asennushinnoittelun ryhmät</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold">Hintaryhmät</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">Asennushinnoittelun ryhmät</p>
         </div>
         {isOwner ? (
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => handleOpenDialog()} className="gap-2">
-                <Plus weight="bold" />
-                Lisää hintaryhmä
-              </Button>
-            </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingGroup ? 'Muokkaa hintaryhmää' : 'Uusi hintaryhmä'}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nimi *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="esim. Laatan asennus"
-                />
+          <>
+            <Button onClick={() => handleOpenDialog()} className="gap-2">
+              <Plus weight="bold" />
+              Lisää hintaryhmä
+            </Button>
+            <ResponsiveDialog
+              open={dialogOpen}
+              onOpenChange={setDialogOpen}
+              title={editingGroup ? 'Muokkaa hintaryhmää' : 'Uusi hintaryhmä'}
+              maxWidth="sm"
+              footer={
+                <>
+                  <Button variant="outline" onClick={() => setDialogOpen(false)} className="flex-1 sm:flex-initial">
+                    Peruuta
+                  </Button>
+                  <Button onClick={handleSave} className="flex-1 sm:flex-initial">Tallenna</Button>
+                </>
+              }
+            >
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nimi *</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="esim. Laatan asennus"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="price">Oletushinta (€/yks)</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    step="0.01"
+                    value={formData.defaultPrice}
+                    onChange={(e) => setFormData({ ...formData, defaultPrice: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="price">Oletushinta (€/yks)</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  step="0.01"
-                  value={formData.defaultPrice}
-                  onChange={(e) => setFormData({ ...formData, defaultPrice: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                Peruuta
-              </Button>
-              <Button onClick={handleSave}>Tallenna</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </ResponsiveDialog>
+          </>
         ) : (
           <Button disabled className="gap-2">
             <Lock weight="bold" />

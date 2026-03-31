@@ -17,7 +17,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogTrigger,
 } from '../ui/dialog';
 import {
   Select,
@@ -36,6 +35,7 @@ import { formatCurrency } from '../../lib/calculations';
 import { ReadOnlyAlert } from '../ReadOnlyAlert';
 import { exportProductsToExcel, ExcelColumn } from '../../lib/export';
 import { Badge } from '../ui/badge';
+import { ResponsiveDialog } from '../ResponsiveDialog';
 
 export default function ProductsPage() {
   const { products, addProduct, updateProduct, deleteProduct } = useProducts();
@@ -209,29 +209,38 @@ export default function ProductsPage() {
   const activeFiltersCount = [categoryFilter, groupFilter, search].filter(Boolean).length;
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-8 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold">Tuoterekisteri</h1>
-          <p className="text-muted-foreground mt-1">Hallinnoi tuotteita ja hintoja</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold">Tuoterekisteri</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">Hallinnoi tuotteita ja hintoja</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowExportDialog(true)} className="gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => setShowExportDialog(true)} className="gap-2 flex-1 sm:flex-initial">
             <FileXls weight="bold" />
-            Vie Excel
+            <span className="hidden sm:inline">Vie Excel</span>
+            <span className="sm:hidden">Vie</span>
           </Button>
           {isOwner ? (
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={() => handleOpenDialog()} className="gap-2">
-                  <Plus weight="bold" />
-                  Lisää tuote
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{editingProduct ? 'Muokkaa tuotetta' : 'Uusi tuote'}</DialogTitle>
-                </DialogHeader>
+            <>
+              <Button onClick={() => handleOpenDialog()} className="gap-2">
+                <Plus weight="bold" />
+                Lisää tuote
+              </Button>
+              <ResponsiveDialog
+                open={dialogOpen}
+                onOpenChange={setDialogOpen}
+                title={editingProduct ? 'Muokkaa tuotetta' : 'Uusi tuote'}
+                maxWidth="md"
+                footer={
+                  <>
+                    <Button variant="outline" onClick={() => setDialogOpen(false)} className="flex-1 sm:flex-initial">
+                      Peruuta
+                    </Button>
+                    <Button onClick={handleSave} className="flex-1 sm:flex-initial">Tallenna</Button>
+                  </>
+                }
+              >
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="code">Tuotekoodi *</Label>
@@ -260,7 +269,7 @@ export default function ProductsPage() {
                       placeholder="esim. Laatat"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="unit">Yksikkö</Label>
                       <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
@@ -307,14 +316,8 @@ export default function ProductsPage() {
                     </Select>
                   </div>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                    Peruuta
-                  </Button>
-                  <Button onClick={handleSave}>Tallenna</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+              </ResponsiveDialog>
+            </>
           ) : (
             <Button disabled className="gap-2">
               <Lock weight="bold" />
@@ -357,62 +360,66 @@ export default function ProductsPage() {
                 className="pl-10"
               />
             </div>
-            <Dialog open={showFilterDialog} onOpenChange={setShowFilterDialog}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2">
-                  <FunnelSimple weight="bold" />
-                  Suodata
-                  {activeFiltersCount > 0 && (
-                    <Badge variant="secondary">{activeFiltersCount}</Badge>
-                  )}
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Suodata tuotteita</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="filter-category">Kategoria</Label>
-                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                      <SelectTrigger id="filter-category">
-                        <SelectValue placeholder="Kaikki kategoriat" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Kaikki kategoriat</SelectItem>
-                        {uniqueCategories.map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {cat}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="filter-group">Hintaryhmä</Label>
-                    <Select value={groupFilter} onValueChange={setGroupFilter}>
-                      <SelectTrigger id="filter-group">
-                        <SelectValue placeholder="Kaikki hintaryhmät" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Kaikki hintaryhmät</SelectItem>
-                        {groups.map((group) => (
-                          <SelectItem key={group.id} value={group.id}>
-                            {group.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={clearFilters}>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => setShowFilterDialog(true)}
+            >
+              <FunnelSimple weight="bold" />
+              Suodata
+              {activeFiltersCount > 0 && (
+                <Badge variant="secondary">{activeFiltersCount}</Badge>
+              )}
+            </Button>
+            <ResponsiveDialog
+              open={showFilterDialog}
+              onOpenChange={setShowFilterDialog}
+              title="Suodata tuotteita"
+              maxWidth="sm"
+              footer={
+                <>
+                  <Button variant="outline" onClick={clearFilters} className="flex-1 sm:flex-initial">
                     Tyhjennä suodattimet
                   </Button>
-                  <Button onClick={() => setShowFilterDialog(false)}>Sulje</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                  <Button onClick={() => setShowFilterDialog(false)} className="flex-1 sm:flex-initial">Sulje</Button>
+                </>
+              }
+            >
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="filter-category">Kategoria</Label>
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger id="filter-category">
+                      <SelectValue placeholder="Kaikki kategoriat" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Kaikki kategoriat</SelectItem>
+                      {uniqueCategories.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="filter-group">Hintaryhmä</Label>
+                  <Select value={groupFilter} onValueChange={setGroupFilter}>
+                    <SelectTrigger id="filter-group">
+                      <SelectValue placeholder="Kaikki hintaryhmät" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Kaikki hintaryhmät</SelectItem>
+                      {groups.map((group) => (
+                        <SelectItem key={group.id} value={group.id}>
+                          {group.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </ResponsiveDialog>
           </div>
           {activeFiltersCount > 0 && (
             <div className="flex gap-2 flex-wrap">
@@ -512,48 +519,50 @@ export default function ProductsPage() {
         )}
       </Card>
 
-      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Vie tuotteet Excel-tiedostoon</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Valitse vietävät sarakkeet:
-            </p>
-            <div className="space-y-2">
-              {exportColumns.map((col, index) => (
-                <div key={col.field} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`export-${col.field}`}
-                    checked={col.enabled}
-                    onCheckedChange={(checked) => {
-                      const newColumns = [...exportColumns];
-                      newColumns[index].enabled = !!checked;
-                      setExportColumns(newColumns);
-                    }}
-                  />
-                  <Label htmlFor={`export-${col.field}`} className="cursor-pointer">
-                    {col.label}
-                  </Label>
-                </div>
-              ))}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Viedään {filteredProducts.length} tuotetta
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+      <ResponsiveDialog
+        open={showExportDialog}
+        onOpenChange={setShowExportDialog}
+        title="Vie tuotteet Excel-tiedostoon"
+        maxWidth="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowExportDialog(false)} className="flex-1 sm:flex-initial">
               Peruuta
             </Button>
-            <Button onClick={handleExport} className="gap-2">
+            <Button onClick={handleExport} className="flex-1 sm:flex-initial gap-2">
               <FileXls weight="bold" />
               Vie Excel
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Valitse vietävät sarakkeet:
+          </p>
+          <div className="space-y-2">
+            {exportColumns.map((col, index) => (
+              <div key={col.field} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`export-${col.field}`}
+                  checked={col.enabled}
+                  onCheckedChange={(checked) => {
+                    const newColumns = [...exportColumns];
+                    newColumns[index].enabled = !!checked;
+                    setExportColumns(newColumns);
+                  }}
+                />
+                <Label htmlFor={`export-${col.field}`} className="cursor-pointer">
+                  {col.label}
+                </Label>
+              </div>
+            ))}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Viedään {filteredProducts.length} tuotetta
+          </p>
+        </div>
+      </ResponsiveDialog>
     </div>
   );
 }
