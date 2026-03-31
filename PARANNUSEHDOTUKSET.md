@@ -1,21 +1,21 @@
 # Laskenta - Parannusehdotukset
 
-Päivitetty: ${new Date().toISOString().split('T')[0]}
+## 🎯 Kriittiset Parannukset (Prioriteetti 1)
 
 ## 🎯 Kriittiset Parannukset (Prioriteetti 1)
 
-### 1. Autentikointi ja Roolihallinta
-**Ongelma**: Nykyinen autentikointi on puutteellinen ja ei tue useita käyttäjiä kunnolla.
-
-**Ratkaisu**:
-- Poista paikallinen sähköposti/salasana-kirjautuminen kokonaan
-- Hyödynnä vain Spark/GitHub-autentikointia
-- Lisää kunnollinen roolipohjainen käyttöoikeushallinta:
-  - **Owner**: Täydet oikeudet (tiedon hallinta, käyttäjien hallinta)
+- Lisää kunnollinen roolipohjainen kä
   - **Editor**: Voi muokata dataa, ei voi hallita käyttäjiä
-  - **Viewer**: Vain lukuoikeudet
-- Päivitä UI näyttämään vain sallitut toiminnot kullekin roolille
-- Poista kaikki selväkieliset salasanat KV-tallennuksesta
+
+
+
+
+**Ongelma**: Eri näkymät (tarjouseditori, dashboard, rap
+**Ratkaisu**:
+  - **Editor**: Voi muokata dataa, ei voi hallita käyttäjiä
+  - `calculateQuoteTotals()` - ta
+  - `calculateRowRevenue()` - rivin tuotto
+- Dokumentoi tarkasti:
 
 **Vaikutus**: Parantaa merkittävästi tietoturvaa ja mahdollistaa turvallisen monen käyttäjän käytön.
 
@@ -36,7 +36,7 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
   - Mitä `salesPrice` tarkoittaa
   - Mitä `installationPrice` tarkoittaa
   - Koskeeko `regionMultiplier` vain asennusta vai koko riviä
-  - Miten `overridePrice` toimii
+
   - Miten kate lasketaan
 - Käytä samaa logiikkaa kaikkialla (editori, dashboard, raportit)
 
@@ -47,22 +47,22 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
 ### 3. Cascade Delete ja Datan Eheys
 **Ongelma**: Tarjouksen tai projektin poistaminen voi jättää "orporivejä" tietokantaan.
 
-**Ratkaisu**:
+
 - Lisää ketjutetut poistofunktiot `use-data.ts`:ään:
   - `deleteQuoteCascade(quoteId)` - poistaa tarjouksen JA kaikki sen rivit
   - `deleteProjectCascade(projectId)` - poistaa projektin, sen tarjoukset JA tarjousrivit
 - Lisää varmistusdialogia ennen isoja poistoja
-- Lisää korjaustyökalu vanhalle datalle:
+**Ratkaisu**:
   - `repairOrphanedQuoteRows()` - siivoaa rivit ilman tarjousta
   - `repairOrphanedQuotes()` - siivoaa tarjoukset ilman projektia
 
 **Vaikutus**: Estää datan korruptoitumisen ja pitää tietokannan eheänä.
 
+  -
+
+
+
 ---
-
-## 🔧 Tärkeät Parannukset (Prioriteetti 2)
-
-### 4. Oikeat Vientiformaatit
 **Ongelma**: "Vie PDF" ja "Vie Excel" -painikkeet eivät aina tuota oikeita tiedostomuotoja.
 
 **Ratkaisu**:
@@ -82,7 +82,7 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
 **Ratkaisu**:
 - Lisää "Tuonti" navigaatioon näkyvästi
 - Paranna esikatselunäkymää näyttämään:
-  - Vihreällä: uudet rivit
+- Näytä valintojen määrä j
   - Keltaisella: päivitettävät rivit
   - Punaisella: virheelliset rivit
 - Estä tuonti jos kriittisiä virheitä
@@ -92,7 +92,7 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
   - Z riviä ohitettu virheiden vuoksi
 - Lisää mahdollisuus ladata virheelliset rivit Excel-tiedostona korjausta varten
 
-**Vaikutus**: Turvallisempi ja luotettavampi massatuonti.
+- Avaa heti muokkausnäkymä
 
 ---
 
@@ -100,24 +100,24 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
 **Ongelma**: Tarjouksille ei ole kunnollista määräajanseurantaa.
 
 **Ratkaisu**:
-- Lisää tarjouksille kentät:
+  - Status (luonnos, lähetet
   - `validUntil` - tarjouksen voimassaoloaika
-  - `estimatedDelivery` - arvioitu toimitusaika
+  - Hintaväli
   - `deadlines[]` - projektiin liittyvät määräajat
 - Lisää dashboard-näkymään "Lähestyvät määräajat" -kortti
 - Lisää ilmoitusjärjestelmä:
   - Näytä badge navigaatiossa jos määräajoja lähestyy
   - Näytä varoitus tarjouseditorissa jos tarjous on vanhentumassa
-- Lisää suodattimet projektilistaukseen määräaikojen mukaan
+- Näytä mallit omassa listassaan
 
 **Vaikutus**: Parempi projektienhallinta ja vähemmän myöhästyneitä tarjouksia.
 
 ---
 
-### 7. Joukkotoiminnot
+---
 **Ongelma**: Useiden tuotteiden muokkaus kerralla on työlästä.
 
-**Ratkaisu**:
+- Filtteröint
 - Lisää valintaruudut taulukoihin (tuotteet, hintaryhmät, projektit)
 - Lisää joukkotoimintopainikkeet:
   - "Vaihda kategoria" - monelle tuotteelle kerralla
@@ -136,9 +136,9 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
 ### 8. Tuotteiden Kopiointi
 **Ratkaisu**:
 - Lisää "Kopioi tuote" -painike tuotteen muokkausnäkymään
-- Kopioi kaikki tiedot uudelle tuotteelle
+---
 - Lisää "(kopio)" nimen perään
-- Luo uusi koodi automaattisesti
+**Ratkaisu**:
 - Avaa heti muokkausnäkymä
 
 **Vaikutus**: Helpottaa samankaltaisten tuotteiden luontia.
@@ -146,7 +146,7 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
 ---
 
 ### 9. Tarjousten Hakutoiminto
-**Ratkaisu**:
+### 14. Kieli
 - Lisää hakukenttä projektilistaukseen
 - Etsi projektien, asiakkaiden ja tarjousten nimistä
 - Näytä hakutulokset reaaliajassa
@@ -154,9 +154,9 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
   - Status (luonnos, lähetetty, hyväksytty)
   - Alue
   - Päivämääräväli
-  - Hintaväli
+---
 
-**Vaikutus**: Nopea vanhojen tarjousten löytäminen.
+**Ratkaisu**:
 
 ---
 
@@ -164,25 +164,25 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
 **Ratkaisu**:
 - Lisää mahdollisuus tallentaa tarjous malliksi
 - Näytä mallit omassa listassaan
-- "Luo tarjous mallista" -painike
+
 - Mallit voivat sisältää:
   - Vakiorivit (esim. perus kylpyhuonepaketti)
   - Vakioehdot
-  - Oletuskate
+- Lisää integr
 
 **Vaikutus**: Nopeampi vakiotarjousten luonti.
 
----
+- P
 
-### 11. Aktiviteettiloki (Audit Trail)
+  - `overridePrice` toiminta
 **Ratkaisu**:
-- Tallenna muutoshistoria:
+
   - Kuka teki muutoksen
-  - Milloin
+---
   - Mitä muutettiin
-  - Vanhat ja uudet arvot
+**Ratkaisu**:
 - Näytä loki:
-  - Projektin yhteydessä
+- Kirjoita käyttöohje:
   - Tarjouksen yhteydessä
   - Asetukset-sivulla (globaali loki)
 - Filtteröinti käyttäjän ja päivämäärän mukaan
@@ -194,9 +194,9 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
 ### 12. Dashboard-parannukset
 **Ratkaisu**:
 - Lisää interaktiiviset kaaviot:
-  - Kate-% kehitys ajan suhteen
+- Tyhjissä listauksissa näytä v
   - Tarjousten conversion rate (lähetetty → hyväksytty)
-  - Top 15 asiakkaat liikevaihdolla mitattuna
+- Linkki dokumentaatioon tai tutoriaaliin
 - Lisää suodattimet:
   - Aikaväli (tämä kuukausi, viime kuukausi, Q1, Q2...)
   - Alue
@@ -208,21 +208,21 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
 ---
 
 ### 13. Mobiilioptimointien Viimeistely
-**Ratkaisu**:
+
 - Varmista että kaikki dialogit toimivat mobiilissa
 - Lisää "swipe to delete" -toiminto rivien poistoon mobiilissa
 - Paranna taulukoiden vieritystä pienillä näytöillä
 - Optimoi tarjouseditori tabletille:
   - Split-view: tuotelista vasemmalla, tarjous oikealla
-  - Drag & drop tuotteiden lisäämiseen
 
-**Vaikutus**: Parempi käyttökokemus mobiililaitteilla.
 
 ---
 
+
+
 ### 14. Kieliversiot
 **Ratkaisu**:
-- Lisää tuki ruotsin kielelle
+### Vaihe 2 - Tärkeät Parannu
 - Lisää tuki englannin kielelle
 - Asiakkaan kielivalinta vaikuttaa:
   - Tarjousten vientikieleen
@@ -232,31 +232,31 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
 
 **Vaikutus**: Kansainvälisten asiakkaiden palvelu helpottuu.
 
----
+14.
 
 ### 15. Offline-tuki
 **Ratkaisu**:
 - Käytä Service Workeriä
 - Tallenna data selaimen välimuistiin
-- Salli:
+1. **Lis
   - Tarjousten katselun offline-tilassa
   - Luonnosten muokkauksen offline-tilassa
   - Synkronointi kun yhteys palautuu
-- Näytä selkeä indikaattori offline-tilasta
+Yhteensä noin 1 viikko työtä, mutta merkitt
 
 **Vaikutus**: Sovellus toimii myös huonolla yhteydellä tai rakennustyömaalla.
 
----
+- K
 
-## 🧪 Testaus ja Laatu (Prioriteetti 4)
+- Ota käyttäjäpalaute huomioon ja itero
 
-### 16. Automaattiset Testit
+
 **Ratkaisu**:
-- Lisää yksikkötestit laskentalogiikalle
+
 - Lisää integraatiotestit CRUD-toiminnoille
 - Lisää validointitestit tuonnille
 - Lisää E2E-testit kriittisille user flowille:
-  - Projektin ja tarjouksen luonti
+
   - Rivien lisäys ja laskenta
   - Tarjouksen vienti
 - Pakolliset testit:
@@ -264,34 +264,34 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
   - `calculateQuoteTotals`
   - `overridePrice` toiminta
   - `regionMultiplier` soveltaminen
-  - Cascade delete -toiminnot
+
 
 **Vaikutus**: Varmistaa että uudet muutokset eivät riko olemassaolevia toimintoja.
 
----
+
 
 ### 17. Dokumentaation Päivitys
 **Ratkaisu**:
-- Päivitä README vastaamaan todellista tilaa
+
 - Poista vanhat "stable/locked" -väitteet jos ne eivät pidä paikkaansa
-- Kirjoita käyttöohje:
+
   - Ensimmäinen kirjautuminen
-  - Tuotteiden tuonti
+
   - Ensimmäisen tarjouksen luonti
-  - Vientiformaattien käyttö
+
 - Lisää arkkitehtuurikuvaus:
-  - Komponenttirakenne
+
   - Tietomalli
   - Laskentalogiikka
 
-**Vaikutus**: Uudet käyttäjät pääsevät helpommin alkuun.
+
 
 ---
 
 ## 🎨 UX/UI -Parannukset
 
 ### 18. Paremmat Empty States
-**Ratkaisu**:
+
 - Tyhjissä listauksissa näytä visuaalinen ikoni
 - Selkeä call-to-action: "Lisää ensimmäinen tuotteesi"
 - Lyhyt ohje mitä kyseinen osio tekee
@@ -299,18 +299,18 @@ Päivitetty: ${new Date().toISOString().split('T')[0]}
 
 **Vaikutus**: Intuitiivisempi kokemus uusille käyttäjille.
 
----
+
 
 ### 19. Keyboard Shortcuts
 **Ratkaisu**:
-- `Ctrl/Cmd + K` - Haku
-- `Ctrl/Cmd + N` - Uusi (projekti/tuote kontekstista riippuen)
-- `Ctrl/Cmd + S` - Tallenna
-- `Ctrl/Cmd + E` - Vie
-- `Esc` - Sulje dialogi
-- `Tab` - Seuraava kenttä
-- `Shift + Tab` - Edellinen kenttä
-- Näytä lista shortcuteista `?` -napista
+
+
+
+
+
+
+
+
 
 **Vaikutus**: Nopeampi käyttö power-usereille.
 
