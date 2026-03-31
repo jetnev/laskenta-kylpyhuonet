@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { House, Package, Wrench, ArrowsLeftRight, Folder, FileText, Gear, ChartBar, User, Lock } from '@phosphor-icons/react';
+import { House, Package, Wrench, ArrowsLeftRight, Folder, FileText, Gear, ChartBar, User, SignOut } from '@phosphor-icons/react';
 import Dashboard from './components/pages/Dashboard';
 import ProductsPage from './components/pages/ProductsPage';
 import InstallationGroupsPage from './components/pages/InstallationGroupsPage';
@@ -8,12 +8,13 @@ import ProjectsPage from './components/pages/ProjectsPage';
 import TermsPage from './components/pages/TermsPage';
 import SettingsPage from './components/pages/SettingsPage';
 import ReportsPage from './components/pages/ReportsPage';
+import LoginPage from './components/LoginPage';
 import { cn } from './lib/utils';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './hooks/use-auth';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from './components/ui/avatar';
 import { Badge } from './components/ui/badge';
+import { Button } from './components/ui/button';
 
 type Page = 
   | 'dashboard' 
@@ -38,7 +39,7 @@ const navigation = [
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
-  const { user, loading, isOwner } = useAuth();
+  const { user, loading, isOwner, login, logout } = useAuth();
 
   if (loading) {
     return (
@@ -53,20 +54,10 @@ function App() {
 
   if (!user) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background p-6">
-        <Card className="max-w-md w-full">
-          <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
-              <Lock className="w-6 h-6 text-muted-foreground" />
-            </div>
-            <CardTitle>Kirjautuminen vaaditaan</CardTitle>
-            <CardDescription>
-              Sinun tulee kirjautua sisään GitHub-tilillä käyttääksesi tätä sovellusta.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+      <>
+        <LoginPage onLogin={login} />
         <Toaster />
-      </div>
+      </>
     );
   }
 
@@ -98,7 +89,7 @@ function App() {
           })}
         </nav>
         <div className="border-t border-border p-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 mb-3">
             <Avatar className="w-8 h-8">
               <AvatarImage src={user.avatarUrl} alt={user.login} />
               <AvatarFallback>
@@ -114,6 +105,15 @@ function App() {
               )}
             </div>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={logout}
+            className="w-full"
+          >
+            <SignOut className="w-4 h-4 mr-2" />
+            Kirjaudu ulos
+          </Button>
         </div>
       </aside>
 
