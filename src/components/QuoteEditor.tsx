@@ -78,8 +78,10 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   useEffect(() => {
     if (quoteId) {
       const existingQuote = getQuote(quoteId);
-      setQuote(existingQuote || null);
-    } else {
+      if (existingQuote) {
+        setQuote(existingQuote);
+      }
+    } else if (!quote) {
       const defaultTerms = getDefaultTerms();
       const newQuote = addQuote({
         projectId,
@@ -91,7 +93,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       });
       setQuote(newQuote);
     }
-  }, [quoteId, projectId]);
+  }, [quoteId, projectId, getQuote, quote, getDefaultTerms, addQuote, settings.defaultVatPercent]);
 
   const project = getProject(projectId);
   const customer = project ? getCustomer(project.customerId) : undefined;
