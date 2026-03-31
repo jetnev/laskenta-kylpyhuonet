@@ -1,19 +1,19 @@
 import { useState, useEffect } from 'react';
 
 interface UserInfo {
+  login: string;
   avatarUrl: string;
+  email: string;
+  id: string;
+  isOwner: boolean;
 }
-export functi
-  const [loading, s
 
- 
+export function useAuth() {
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-      } catch (err) {
-        setUser(null);
-        setLoading(false);
-    }
-
-
+  useEffect(() => {
     async function loadUser() {
       try {
         const userInfo = await spark.user();
@@ -30,10 +30,9 @@ export functi
   }, []);
 
   return {
-
+    user,
     loading,
-
+    error,
     isOwner: user?.isOwner ?? false,
-
   };
-
+}

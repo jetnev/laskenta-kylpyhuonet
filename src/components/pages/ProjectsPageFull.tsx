@@ -71,7 +71,7 @@ export default function ProjectsPageFull() {
         customerId: project.customerId,
         name: project.name,
         site: project.site,
-        region: project.region,
+        region: project.region || '',
         notes: project.notes || '',
       });
     } else {
@@ -161,9 +161,10 @@ export default function ProjectsPageFull() {
   const selectedQuote = selectedQuoteId ? quotes.find((q) => q.id === selectedQuoteId) : null;
 
   if (selectedQuote) {
+    const project = projects.find((p) => p.id === selectedQuote.projectId);
     return (
       <div className="p-8">
-        <QuoteEditor quote={selectedQuote} onClose={() => setSelectedQuoteId(null)} />
+        <QuoteEditor projectId={selectedQuote.projectId} quoteId={selectedQuote.id} onClose={() => setSelectedQuoteId(null)} />
       </div>
     );
   }

@@ -1,10 +1,25 @@
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected';
 export type QuoteRowMode = 'product' | 'installation' | 'product_installation';
+export type UnitType = 'm2' | 'm²' | 'm' | 'jm' | 'kpl' | 'pkt' | 'ltv' | 'erä';
+
+export interface RegionData {
+  name: string;
+  coefficient: number;
+}
+
+export const DEFAULT_REGIONS: RegionData[] = [
+  { name: 'Pääkaupunkiseutu', coefficient: 1.15 },
+  { name: 'Etelä-Suomi', coefficient: 1.05 },
+  { name: 'Länsi-Suomi', coefficient: 1.0 },
+  { name: 'Itä-Suomi', coefficient: 0.95 },
+  { name: 'Pohjois-Suomi', coefficient: 0.9 },
+];
 
 export interface Product {
   id: string;
   code: string;
   name: string;
+  category?: string;
   unit: string;
   purchasePrice: number;
   installationGroupId?: string;
@@ -43,7 +58,9 @@ export interface Project {
   customerId: string;
   name: string;
   site: string;
+  region?: string;
   regionCoefficient: number;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 }
