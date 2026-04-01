@@ -2,34 +2,27 @@ import { Product, InstallationGroup } from './types';
 
 export const testProducts: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
-    purchasePrice: 2
-  {
-    name: 'Keraaminen s
+    code: 'LAA-001',
+    name: 'Keraaminen lattialaatta 30x30cm',
+    category: 'Laatat',
     unit: 'm2',
+    purchasePrice: 28.50,
   },
-    
-   
+  {
     code: 'LAA-002',
     name: 'Keraaminen seinälaatta 25x40cm',
     category: 'Laatat',
     unit: 'm2',
     purchasePrice: 32.00,
   },
-   
+  {
     code: 'KAL-001',
-    name: 'Suihkuhana termostaatilla',
-    category: 'Vesikalusteet',
+    name: 'Kylpyhuonekaluste 80cm',
+    category: 'Kalusteet',
     unit: 'kpl',
-    purchasePrice: 245.00,
-  {
-  {
-    purchasePrice: 1
-];
-export const testInstallatio
-    name: 'Laato
+    purchasePrice: 385.00,
   },
-    
-  }
+  {
     code: 'KAL-002',
     name: 'Pesuallas 60cm',
     category: 'Kalusteet',
@@ -62,62 +55,7 @@ export const testInstallationGroups: Omit<InstallationGroup, 'id' | 'createdAt' 
     defaultPrice: 75.00,
   },
   {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    name: 'LVI-asennus',
+    defaultPrice: 65.00,
+  },
+];
