@@ -1,6 +1,4 @@
-import { Product, InstallationGroup } from './types';
-
-export const testProducts: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [
+export const testProducts = [
   {
     code: 'LAA-001',
     name: 'Keraaminen lattialaatta 30x30cm',
@@ -52,7 +50,7 @@ export const testProducts: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [
   },
 ];
 
-export const testInstallationGroups: Omit<InstallationGroup, 'id' | 'createdAt' | 'updatedAt'>[] = [
+export const testInstallationGroups = [
   {
     name: 'Laatoitus',
     defaultPrice: 35.00,
