@@ -2,33 +2,33 @@ import { Product, InstallationGroup } from './types';
 
 export const testProducts: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
-    code: 'LAA-001',
+    purchasePrice: 2
     name: 'Keraaminen lattialaatta 30x30cm',
     category: 'Laatat',
     unit: 'm2',
     purchasePrice: 25.50,
   },
-  {
+   
     code: 'LAA-002',
     name: 'Keraaminen seinälaatta 25x40cm',
     category: 'Laatat',
     unit: 'm2',
     purchasePrice: 32.00,
-  },
+    
+   
+    purchasePrice: 1
   {
-    code: 'LAA-003',
-    name: 'Mosaiikkilaatta 30x30cm',
-    category: 'Laatat',
-    unit: 'm2',
-    purchasePrice: 45.00,
+    name: 'Suihkuhana t
+    unit: 'kpl'
   },
+    
+   
+    purchasePrice: 1
   {
-    code: 'KAL-001',
-    name: 'Peilikaappi 60cm',
-    category: 'Kalusteet',
+    name: 'Suihkuseinä 80x
     unit: 'kpl',
-    purchasePrice: 185.00,
   },
+
   {
     code: 'KAL-002',
     name: 'Pesuallas 60cm',
@@ -36,14 +36,14 @@ export const testProducts: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [
     unit: 'kpl',
     purchasePrice: 125.00,
   },
-  {
+   
     code: 'VES-001',
-    name: 'Suihkuhana termostaattinen',
+    name: 'Suihkuhana termostaatilla',
     category: 'Vesikalusteet',
     unit: 'kpl',
-    purchasePrice: 89.00,
+    purchasePrice: 245.00,
   },
-  {
+(as
     code: 'MAT-001',
     name: 'Saumausmassa valkoinen',
     category: 'Materiaalit',
@@ -51,7 +51,7 @@ export const testProducts: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [
     purchasePrice: 12.50,
   },
   {
-    code: 'SUI-001',
+    code: 'SUH-001',
     name: 'Suihkuseinä 80x200cm',
     category: 'Suihkutilat',
     unit: 'kpl',
@@ -62,21 +62,21 @@ export const testProducts: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [
 export const testInstallationGroups: Omit<InstallationGroup, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
     name: 'Laatoitus',
-    defaultPrice: 45.00,
+    defaultPrice: 35.00,
   },
   {
     name: 'Kalusteen asennus',
-    defaultPrice: 75.00,
+
   },
-  {
+
     name: 'Suihkuseinän asennus',
-    defaultPrice: 125.00,
+
   },
-  {
+
     name: 'Hanojen asennus',
     defaultPrice: 95.00,
   },
-];
+
 
 export function createTestDataScript() {
   return `
@@ -84,7 +84,7 @@ export function createTestDataScript() {
 (async () => {
   const testProducts = ${JSON.stringify(testProducts, null, 2)};
   const testGroups = ${JSON.stringify(testInstallationGroups, null, 2)};
-  
+
   // Lisää hintaryhmät
   const existingGroups = await spark.kv.get('installation-groups') || [];
   const newGroups = testGroups.map(g => ({
@@ -92,7 +92,7 @@ export function createTestDataScript() {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-  }));
+
   await spark.kv.set('installation-groups', [...existingGroups, ...newGroups]);
   console.log('Lisätty', newGroups.length, 'hintaryhmää');
   
@@ -103,10 +103,10 @@ export function createTestDataScript() {
   const getGroupId = (productCategory) => {
     if (productCategory === 'Laatat') {
       const group = groups.find(g => g.name.includes('Laatoitus'));
-      return group?.id;
+
     } else if (productCategory === 'Kalusteet') {
       const group = groups.find(g => g.name.includes('Kalusteen'));
-      return group?.id;
+
     } else if (productCategory === 'Suihkutilat') {
       const group = groups.find(g => g.name.includes('Suihkuseinän'));
       return group?.id;
@@ -116,18 +116,18 @@ export function createTestDataScript() {
     }
     return undefined;
   };
-  
+
   const newProducts = testProducts.map(p => ({
     ...p,
     id: crypto.randomUUID(),
-    installationGroupId: getGroupId(p.category),
+
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }));
-  
+
   await spark.kv.set('products', [...existingProducts, ...newProducts]);
   console.log('Lisätty', newProducts.length, 'tuotetta');
   console.log('Testidatan luonti valmis! Päivitä sivu nähdäksesi muutokset.');
 })();
 `.trim();
-}
+
