@@ -2,53 +2,25 @@ import { Product, InstallationGroup } from './types';
 
 export const testProducts: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
-    purchasePrice: 2
+    code: 'LAA-001',
     name: 'Keraaminen lattialaatta 30x30cm',
     category: 'Laatat',
     unit: 'm2',
     purchasePrice: 25.50,
   },
-   
+  {
     code: 'LAA-002',
     name: 'Keraaminen seinälaatta 25x40cm',
     category: 'Laatat',
     unit: 'm2',
     purchasePrice: 32.00,
-    
-   
-    purchasePrice: 1
-  {
-    name: 'Suihkuhana t
-    unit: 'kpl'
   },
-    
-   
-    purchasePrice: 1
   {
-    name: 'Suihkuseinä 80x
-    unit: 'kpl',
-  },
-
-  {
-    code: 'KAL-002',
-    name: 'Pesuallas 60cm',
-    category: 'Kalusteet',
-    unit: 'kpl',
-    purchasePrice: 125.00,
-  },
-   
-    code: 'VES-001',
+    code: 'KAL-001',
     name: 'Suihkuhana termostaatilla',
     category: 'Vesikalusteet',
     unit: 'kpl',
     purchasePrice: 245.00,
-  },
-(as
-    code: 'MAT-001',
-    name: 'Saumausmassa valkoinen',
-    category: 'Materiaalit',
-    unit: 'pkt',
-    purchasePrice: 12.50,
   },
   {
     code: 'SUH-001',
@@ -56,6 +28,27 @@ export const testProducts: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [
     category: 'Suihkutilat',
     unit: 'kpl',
     purchasePrice: 385.00,
+  },
+  {
+    code: 'KAL-002',
+    name: 'Pesuallas 60cm',
+    category: 'Kalusteet',
+    unit: 'kpl',
+    purchasePrice: 125.00,
+  },
+  {
+    code: 'VES-001',
+    name: 'Suihkuhana termostaatilla',
+    category: 'Vesikalusteet',
+    unit: 'kpl',
+    purchasePrice: 245.00,
+  },
+  {
+    code: 'MAT-001',
+    name: 'Saumausmassa valkoinen',
+    category: 'Materiaalit',
+    unit: 'pkt',
+    purchasePrice: 12.50,
   },
 ];
 
@@ -66,17 +59,17 @@ export const testInstallationGroups: Omit<InstallationGroup, 'id' | 'createdAt' 
   },
   {
     name: 'Kalusteen asennus',
-
+    defaultPrice: 85.00,
   },
-
+  {
     name: 'Suihkuseinän asennus',
-
+    defaultPrice: 150.00,
   },
-
+  {
     name: 'Hanojen asennus',
     defaultPrice: 95.00,
   },
-
+];
 
 export function createTestDataScript() {
   return `
@@ -92,7 +85,7 @@ export function createTestDataScript() {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-
+  }));
   await spark.kv.set('installation-groups', [...existingGroups, ...newGroups]);
   console.log('Lisätty', newGroups.length, 'hintaryhmää');
   
@@ -103,10 +96,10 @@ export function createTestDataScript() {
   const getGroupId = (productCategory) => {
     if (productCategory === 'Laatat') {
       const group = groups.find(g => g.name.includes('Laatoitus'));
-
+      return group?.id;
     } else if (productCategory === 'Kalusteet') {
       const group = groups.find(g => g.name.includes('Kalusteen'));
-
+      return group?.id;
     } else if (productCategory === 'Suihkutilat') {
       const group = groups.find(g => g.name.includes('Suihkuseinän'));
       return group?.id;
@@ -120,7 +113,7 @@ export function createTestDataScript() {
   const newProducts = testProducts.map(p => ({
     ...p,
     id: crypto.randomUUID(),
-
+    installationGroupId: getGroupId(p.category),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }));
@@ -130,4 +123,4 @@ export function createTestDataScript() {
   console.log('Testidatan luonti valmis! Päivitä sivu nähdäksesi muutokset.');
 })();
 `.trim();
-
+}
