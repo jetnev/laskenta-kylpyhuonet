@@ -30,6 +30,7 @@ export interface Product {
 export interface InstallationGroup {
   id: string;
   name: string;
+  category?: string;
   defaultPrice: number;
   createdAt: string;
   updatedAt: string;
