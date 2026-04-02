@@ -26,7 +26,18 @@ interface DesktopRestartResponse {
   restarting: boolean;
 }
 
+function hasDesktopHost() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+}
+
 async function requestDesktopUpdate(pathname: string, method: 'GET' | 'POST'): Promise<DesktopUpdateSnapshot> {
+  if (!isDesktopRuntime()) {
+    throw new Error('Päivitysten tarkistus toimii vain desktop-exe:ssä.');
+  }
   const response = await fetch(pathname, { method });
   const payload = (await response.json().catch(() => null)) as DesktopUpdateSnapshot | null;
   if (!response.ok) {
@@ -39,7 +50,7 @@ async function requestDesktopUpdate(pathname: string, method: 'GET' | 'POST'): P
 }
 
 export function isDesktopRuntime() {
-  return !import.meta.env.DEV;
+  return !import.meta.env.DEV && hasDesktopHost();
 }
 
 export function checkForDesktopUpdates() {
@@ -51,6 +62,9 @@ export function getDesktopUpdateStatus() {
 }
 
 export async function restartDesktopForUpdate() {
+  if (!isDesktopRuntime()) {
+    throw new Error('Päivitysten asennus toimii vain desktop-exe:ssä.');
+  }
   const response = await fetch('/_desktop/update/restart', { method: 'POST' });
   const payload = (await response.json().catch(() => null)) as DesktopRestartResponse | { error?: string } | null;
   if (!response.ok) {
