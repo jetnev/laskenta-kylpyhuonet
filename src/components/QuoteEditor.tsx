@@ -653,6 +653,24 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   <Label htmlFor="discount-value">Alennuksen arvo</Label>
                   <Input id="discount-value" type="number" min="0" step="0.01" value={quote.discountValue} onChange={(event) => updateQuote(quote.id, { discountValue: parseFloat(event.target.value) || 0 })} disabled={!isEditable || quote.discountType === 'none'} />
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border bg-muted/20 p-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <h3 className="text-base font-semibold">Korjausrakentamisen lisäkulut</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Erota työmaan lisäkulut omaksi kokonaisuudekseen. Näin kilometrit, jätemaksut, suojaus ja muut kustannukset eivät huku rivihinnoittelun sekaan.
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-background px-4 py-3 text-sm">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Lisäkulut yhteensä</div>
+                  <div className="mt-1 text-lg font-semibold">{formatCurrency(calculation.extraChargesTotal)}</div>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="project-costs">Muut projektikulut</Label>
                   <Input id="project-costs" type="number" min="0" step="0.01" value={quote.projectCosts} onChange={(event) => updateQuote(quote.id, { projectCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
@@ -677,6 +695,9 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   <Label>Ajokulu yhteensä</Label>
                   <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(travelCosts)}</div>
                 </div>
+              </div>
+
+              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="disposal-costs">Kaatopaikka- ja jätemaksut</Label>
                   <Input id="disposal-costs" type="number" min="0" step="0.01" value={quote.disposalCosts ?? 0} onChange={(event) => updateQuote(quote.id, { disposalCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
