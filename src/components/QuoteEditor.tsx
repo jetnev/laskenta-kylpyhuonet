@@ -504,11 +504,11 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
         </Button>
         <Button variant="outline" onClick={() => exportQuoteToCustomerExcel(quote, quoteRows, customer, project, quoteTerms, settings)}>
           <FileXls className="h-4 w-4" />
-          Asiakas-CSV
+          Asiakas-Excel
         </Button>
         <Button variant="outline" onClick={() => exportQuoteToInternalExcel(quote, quoteRows, customer, project, quoteTerms, settings)}>
           <FileXls className="h-4 w-4" />
-          Sisäinen CSV
+          Sisäinen Excel
         </Button>
         {quote.status === 'sent' && (
           <>
