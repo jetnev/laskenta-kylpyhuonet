@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowCounterClockwise, IdentificationCard, Key, SignIn, UserPlus } from '@phosphor-icons/react';
+import { ArrowCounterClockwise, ArrowLeft, CheckCircle, Key, SignIn, UserPlus } from '@phosphor-icons/react';
+import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -9,7 +10,11 @@ import { useAuth } from '../hooks/use-auth';
 
 type AuthView = 'login' | 'register' | 'forgot' | 'reset';
 
-export default function LoginPage() {
+interface LoginPageProps {
+  onNavigateHome: () => void;
+}
+
+export default function LoginPage({ onNavigateHome }: LoginPageProps) {
   const {
     login,
     register,
@@ -43,26 +48,30 @@ export default function LoginPage() {
     switch (view) {
       case 'register':
         return {
-          title: 'Luo käyttäjätili',
-          description: 'Ensimmäinen käyttäjä saa automaattisesti admin-oikeudet.',
+          title: 'Käyttäjätilin luonti',
+          description: 'Luo uusi käyttäjätili organisaation käyttöön.',
+          actionLabel: 'Luo käyttäjätili',
           icon: UserPlus,
         };
       case 'forgot':
         return {
-          title: 'Salasanan palautus',
-          description: 'Tilaa salasanan palautuslinkki sähköpostiosoitteella.',
+          title: 'Palauta salasana',
+          description: 'Tilaa salasanan palautuslinkki sähköpostiosoitteeseesi.',
+          actionLabel: 'Lähetä palautuslinkki',
           icon: ArrowCounterClockwise,
         };
       case 'reset':
         return {
           title: 'Aseta uusi salasana',
-          description: 'Avaa palautuslinkki sähköpostista ja aseta uusi salasana tässä näkymässä.',
+          description: 'Avaa sähköpostiin lähetetty linkki ja vaihda salasana tässä näkymässä.',
+          actionLabel: 'Tallenna uusi salasana',
           icon: Key,
         };
       default:
         return {
           title: 'Kirjaudu sisään',
-          description: 'Sovelluksen sisäiset näkymät ovat suojattuja kirjautumisen taakse.',
+          description: 'Kirjaudu sisään hallitaksesi tarjouksia, tuotteita ja projekteja yhdessä järjestelmässä.',
+          actionLabel: 'Kirjaudu sisään',
           icon: SignIn,
         };
     }
@@ -83,51 +92,65 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.14),transparent_24%),linear-gradient(180deg,rgba(15,23,42,0.03),transparent_40%)] flex items-center justify-center p-4">
-      <Card className="w-full max-w-5xl overflow-hidden border-border/70 shadow-2xl">
-        <div className="grid lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="bg-slate-950 text-white p-8 lg:p-12 space-y-8">
-            <div className="space-y-4">
-              <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15">
-                <IdentificationCard className="h-7 w-7" weight="bold" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight">Tarjouslaskenta</h1>
-                <p className="mt-3 max-w-lg text-sm text-white/70">
-                  Hallitse tuoterekisteriä, projektikohtaisia tarjouksia ja koko tarjousprosessia yhdestä työkalusta.
-                </p>
-              </div>
-            </div>
+    <div className="min-h-screen bg-[#f5f7fb] text-slate-950">
+      <div className="absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.10),transparent_44%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.06),transparent_30%)] pointer-events-none" />
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl bg-white/6 p-4 ring-1 ring-white/10">
-                <p className="text-sm font-medium">Suojatut sisäsivut</p>
-                <p className="mt-2 text-sm text-white/70">Kaikki tuotetiedot, projektit ja tarjoukset avautuvat vasta kirjautumisen jälkeen.</p>
-              </div>
-              <div className="rounded-2xl bg-white/6 p-4 ring-1 ring-white/10">
-                <p className="text-sm font-medium">Roolipohjainen hallinta</p>
-                <p className="mt-2 text-sm text-white/70">Admin hallitsee käyttäjiä ja yhteisiä tietoja. Normaali käyttäjä käsittelee omat projektinsa ja tarjouksensa.</p>
-              </div>
-            </div>
+      <header className="relative z-10 border-b border-slate-200/80 bg-white/82 backdrop-blur-xl">
+        <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-6">
+          <button className="text-left" onClick={onNavigateHome} type="button">
+            <div className="text-lg font-semibold tracking-tight text-slate-950">Tarjouslaskenta</div>
+          </button>
+          <Button variant="ghost" onClick={onNavigateHome}>
+            <ArrowLeft className="h-4 w-4" />
+            Takaisin etusivulle
+          </Button>
+        </div>
+      </header>
 
-            <div className="rounded-2xl bg-white/6 p-5 ring-1 ring-white/10">
-              <p className="text-sm font-medium">Salasanan palautus tässä ympäristössä</p>
-              <p className="mt-2 text-sm text-white/70">
-                Palautus toimii sähköpostiin lähetettävän linkin kautta. Tuotannossa voit myöhemmin vaihtaa Supabasen oman SMTP:n yrityksen sähköpostiin.
-              </p>
-            </div>
+      <main className="relative z-10 mx-auto grid max-w-6xl gap-12 px-6 py-12 lg:grid-cols-[0.95fr_0.8fr] lg:items-start lg:py-20">
+        <motion.section
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className="max-w-xl pt-2"
+        >
+          <div className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Tarjouslaskenta</div>
+          <h1 className="mt-5 text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">
+            Tervetuloa takaisin
+          </h1>
+          <p className="mt-5 text-lg leading-8 text-slate-600">
+            Kirjaudu sisään hallitaksesi tarjouksia, tuotteita ja projekteja yhdessä järjestelmässä.
+          </p>
+
+          <div className="mt-10 space-y-4">
+            {[
+              'Yrityskäyttöön suunniteltu',
+              'Selkeä käyttöoikeusmalli',
+              'Keskitetty tarjous- ja tuotetieto',
+            ].map((item) => (
+              <div key={item} className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white/82 px-4 py-4 shadow-[0_18px_45px_-34px_rgba(15,23,42,0.3)]">
+                <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" weight="fill" />
+                <div className="text-sm text-slate-700">{item}</div>
+              </div>
+            ))}
           </div>
+        </motion.section>
 
-          <div className="p-6 sm:p-8 lg:p-10">
-            <CardHeader className="px-0 pt-0">
-              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        <motion.section
+          initial={{ opacity: 0, y: 22 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: 'easeOut', delay: 0.08 }}
+        >
+          <Card className="overflow-hidden rounded-[28px] border-slate-200/90 bg-white shadow-[0_32px_80px_-42px_rgba(15,23,42,0.45)]">
+            <CardHeader className="border-b border-slate-200/90 px-7 py-6">
+              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/8 text-primary">
                 <HeadingIcon className="h-6 w-6" weight="bold" />
               </div>
-              <CardTitle>{heading.title}</CardTitle>
-              <CardDescription>{heading.description}</CardDescription>
+              <CardTitle className="text-2xl tracking-[-0.03em]">{heading.title}</CardTitle>
+              <CardDescription className="text-sm text-slate-600">{heading.description}</CardDescription>
             </CardHeader>
 
-            <CardContent className="px-0 space-y-5">
+            <CardContent className="space-y-6 px-7 py-7">
               {(backendConfigError || error) && (
                 <Alert variant="destructive">
                   <AlertDescription>{backendConfigError || error}</AlertDescription>
@@ -136,9 +159,7 @@ export default function LoginPage() {
 
               {infoMessage && (
                 <Alert>
-                  <AlertDescription>
-                    {infoMessage}
-                  </AlertDescription>
+                  <AlertDescription>{infoMessage}</AlertDescription>
                 </Alert>
               )}
 
@@ -170,15 +191,15 @@ export default function LoginPage() {
                       onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
                     />
                   </div>
-                  <Button className="w-full" disabled={submitting} type="submit">
-                    Kirjaudu sisään
+                  <Button className="h-11 w-full" disabled={submitting} type="submit">
+                    {heading.actionLabel}
                   </Button>
-                  <div className="flex flex-col gap-2 text-sm sm:flex-row sm:justify-between">
-                    <button className="text-primary hover:underline text-left" onClick={() => { setError(null); setView('forgot'); }} type="button">
+                  <div className="flex items-center justify-between gap-4 text-sm">
+                    <button className="text-primary hover:underline" onClick={() => { setError(null); setView('forgot'); }} type="button">
                       Unohtuiko salasana?
                     </button>
-                    <button className="text-primary hover:underline text-left" onClick={() => { setError(null); setView('register'); }} type="button">
-                      Luo uusi käyttäjätili
+                    <button className="text-slate-500 transition hover:text-slate-950" onClick={() => { setError(null); setView('register'); }} type="button">
+                      Tarvitsetko käyttöoikeuden?
                     </button>
                   </div>
                 </form>
@@ -240,10 +261,10 @@ export default function LoginPage() {
                       onChange={(event) => setRegisterForm((current) => ({ ...current, confirmPassword: event.target.value }))}
                     />
                   </div>
-                  <Button className="w-full" disabled={submitting} type="submit">
-                    Luo käyttäjätili
+                  <Button className="h-11 w-full" disabled={submitting} type="submit">
+                    {heading.actionLabel}
                   </Button>
-                  <button className="text-primary hover:underline text-sm" onClick={() => { setError(null); setView('login'); }} type="button">
+                  <button className="text-sm text-primary hover:underline" onClick={() => { setError(null); setView('login'); }} type="button">
                     Takaisin kirjautumiseen
                   </button>
                 </form>
@@ -256,7 +277,7 @@ export default function LoginPage() {
                     event.preventDefault();
                     void runAction(async () => {
                       await requestPasswordReset(forgotEmail);
-                      setInfoMessage('Palautuslinkki lähetettiin sähköpostiin. Avaa viesti ja palaa sovellukseen linkin kautta vaihtamaan salasana.');
+                      setInfoMessage('Palautuslinkki lähetettiin sähköpostiin. Avaa viesti ja palaa linkin kautta vaihtamaan salasana.');
                       setView('login');
                     });
                   }}
@@ -270,10 +291,10 @@ export default function LoginPage() {
                       onChange={(event) => setForgotEmail(event.target.value)}
                     />
                   </div>
-                  <Button className="w-full" disabled={submitting} type="submit">
-                    Lähetä palautuskoodi
+                  <Button className="h-11 w-full" disabled={submitting} type="submit">
+                    {heading.actionLabel}
                   </Button>
-                  <button className="text-primary hover:underline text-sm" onClick={() => { setError(null); setView('login'); }} type="button">
+                  <button className="text-sm text-primary hover:underline" onClick={() => { setError(null); setView('login'); }} type="button">
                     Takaisin kirjautumiseen
                   </button>
                 </form>
@@ -299,7 +320,7 @@ export default function LoginPage() {
                   {!requiresPasswordReset && (
                     <Alert>
                       <AlertDescription>
-                        Avaa ensin sähköpostiin lähetetty palautuslinkki. Sen jälkeen tämä näkymä sallii uuden salasanan asettamisen.
+                        Avaa ensin sähköpostiin lähetetty palautuslinkki. Sen jälkeen voit asettaa uuden salasanan tässä näkymässä.
                       </AlertDescription>
                     </Alert>
                   )}
@@ -321,18 +342,18 @@ export default function LoginPage() {
                       onChange={(event) => setResetForm((current) => ({ ...current, confirmPassword: event.target.value }))}
                     />
                   </div>
-                  <Button className="w-full" disabled={submitting || !requiresPasswordReset} type="submit">
-                    Tallenna uusi salasana
+                  <Button className="h-11 w-full" disabled={submitting || !requiresPasswordReset} type="submit">
+                    {heading.actionLabel}
                   </Button>
-                  <button className="text-primary hover:underline text-sm" onClick={() => { setError(null); setView('login'); }} type="button">
+                  <button className="text-sm text-primary hover:underline" onClick={() => { setError(null); setView('login'); }} type="button">
                     Takaisin kirjautumiseen
                   </button>
                 </form>
               )}
             </CardContent>
-          </div>
-        </div>
-      </Card>
+          </Card>
+        </motion.section>
+      </main>
     </div>
   );
 }

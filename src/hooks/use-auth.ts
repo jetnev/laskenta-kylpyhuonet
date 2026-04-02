@@ -81,6 +81,17 @@ function getInitials(displayName: string) {
   return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('');
 }
 
+function getAuthRedirectUrl() {
+  const configuredUrl = import.meta.env.VITE_SUPABASE_REDIRECT_URL?.trim();
+  const targetUrl = new URL(configuredUrl || window.location.origin, window.location.origin);
+
+  if (!targetUrl.pathname || targetUrl.pathname === '/') {
+    targetUrl.pathname = '/login';
+  }
+
+  return targetUrl.toString();
+}
+
 function toDisplayName(user: User, fallbackDisplayName?: string) {
   const rawName = typeof user.user_metadata?.display_name === 'string' ? user.user_metadata.display_name : fallbackDisplayName;
   if (rawName?.trim()) {
@@ -318,6 +329,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: normalizedEmail,
       password,
       options: {
+        emailRedirectTo: getAuthRedirectUrl(),
         data: {
           display_name: trimmedName,
         },
@@ -382,7 +394,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const client = requireSupabase();
     const { error } = await client.auth.resetPasswordForEmail(normalizedEmail, {
-      redirectTo: import.meta.env.VITE_SUPABASE_REDIRECT_URL?.trim() || window.location.origin,
+      redirectTo: getAuthRedirectUrl(),
     });
 
     if (error) {

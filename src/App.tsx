@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowsLeftRight,
   ArrowsClockwise,
@@ -27,6 +27,7 @@ import TermsPage from './components/pages/TermsPage';
 import SettingsPage from './components/pages/SettingsPage';
 import ReportsPage from './components/pages/ReportsPage';
 import LoginPage from './components/LoginPage';
+import LandingPage from './components/LandingPage';
 import AccountPage from './components/pages/AccountPage';
 import UsersPage from './components/pages/UsersPage';
 import { cn } from './lib/utils';
@@ -52,16 +53,68 @@ type Page =
   | 'settings'
   | 'account';
 
+type AppRoute = 'landing' | 'login' | 'app';
+
+function normalizePathname(pathname: string) {
+  if (!pathname || pathname === '/') {
+    return '/';
+  }
+
+  return pathname.replace(/\/+$/, '') || '/';
+}
+
+function resolveAppRoute(pathname: string): AppRoute {
+  const normalizedPath = normalizePathname(pathname);
+
+  if (normalizedPath === '/login') {
+    return 'login';
+  }
+
+  if (normalizedPath === '/app') {
+    return 'app';
+  }
+
+  return 'landing';
+}
+
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
+  const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => resolveAppRoute(window.location.pathname));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [checkingForUpdates, setCheckingForUpdates] = useState(false);
   const [restartingForUpdate, setRestartingForUpdate] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateSnapshot | null>(null);
-  const { user, loading, role, canManageUsers, canManageSharedData, logout } = useAuth();
+  const { user, loading, role, canManageUsers, canManageSharedData, logout, requiresPasswordReset } = useAuth();
   const isMobile = useIsMobile();
   const showDesktopUpdateActions = isDesktopRuntime();
+
+  const navigateTo = useCallback(
+    (
+      pathname: '/' | '/login' | '/app',
+      options?: { replace?: boolean; preserveHash?: boolean; preserveSearch?: boolean }
+    ) => {
+      const nextUrl = new URL(window.location.href);
+      nextUrl.pathname = pathname;
+
+      if (!options?.preserveSearch) {
+        nextUrl.search = '';
+      }
+
+      if (!options?.preserveHash) {
+        nextUrl.hash = '';
+      }
+
+      if (options?.replace) {
+        window.history.replaceState({}, '', nextUrl);
+      } else {
+        window.history.pushState({}, '', nextUrl);
+      }
+      setCurrentRoute(resolveAppRoute(nextUrl.pathname));
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    },
+    []
+  );
 
   const navigation = useMemo(
     () =>
@@ -86,6 +139,39 @@ function App() {
       setCurrentPage('dashboard');
     }
   }, [currentPage, navigation]);
+
+  useEffect(() => {
+    const syncRoute = () => {
+      setCurrentRoute(resolveAppRoute(window.location.pathname));
+    };
+
+    window.addEventListener('popstate', syncRoute);
+    return () => window.removeEventListener('popstate', syncRoute);
+  }, []);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    if (user) {
+      if (currentRoute !== 'app') {
+        navigateTo('/app', { replace: true });
+      }
+      return;
+    }
+
+    if (requiresPasswordReset) {
+      if (currentRoute !== 'login') {
+        navigateTo('/login', { replace: true, preserveHash: true, preserveSearch: true });
+      }
+      return;
+    }
+
+    if (currentRoute === 'app') {
+      navigateTo('/login', { replace: true });
+    }
+  }, [currentRoute, loading, navigateTo, requiresPasswordReset, user]);
 
   useEffect(() => {
     if (!showDesktopUpdateActions) {
@@ -187,9 +273,14 @@ function App() {
   }
 
   if (!user) {
+    const showLogin = currentRoute === 'login' || currentRoute === 'app' || requiresPasswordReset;
     return (
       <>
-        <LoginPage />
+        {showLogin ? (
+          <LoginPage onNavigateHome={() => navigateTo('/')} />
+        ) : (
+          <LandingPage onNavigateToLogin={() => navigateTo('/login')} />
+        )}
         <Toaster />
       </>
     );
