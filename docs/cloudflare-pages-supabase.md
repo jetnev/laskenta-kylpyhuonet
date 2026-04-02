@@ -19,7 +19,18 @@ Supabase Dashboardissa:
 3. Testiympäristössä voit poistaa `Confirm email` -vaatimuksen käytöstä, jotta rekisteröinti kirjautuu heti sisään.
 4. Tuotannossa voit jättää vahvistuksen päälle.
 
-## 3. Cloudflare Pages
+## 3. Supabase URL Configuration
+
+Supabase Dashboardissa:
+
+1. Mene `Authentication -> URL Configuration`.
+2. Aseta `Site URL` Pages-osoitteeseen, esimerkiksi `https://laskenta-kylpyhuonet.pages.dev`.
+3. Lisää `Redirect URLs` -listaan vähintään:
+   - `https://laskenta-kylpyhuonet.pages.dev`
+   - `http://localhost:5173`
+4. Jos aiot käyttää myöhemmin omaa domainia, lisää myös se samaan listaan, esimerkiksi `https://app.yritys.fi`.
+
+## 4. Cloudflare Pages
 
 1. Mene Cloudflareen kohtaan `Workers & Pages -> Create application -> Pages`.
 2. Valitse `Connect to Git`.
@@ -34,7 +45,7 @@ Supabase Dashboardissa:
    - `VITE_SUPABASE_REDIRECT_URL`
 6. Aseta `VITE_SUPABASE_REDIRECT_URL` samaan Pages-osoitteeseen kuin projekti saa, esimerkiksi `https://laskenta-kylpyhuonet.pages.dev`.
 
-## 4. Password reset
+## 5. Password reset
 
 Salasanan palautus käyttää Supabasen sähköpostilinkkiä.
 
@@ -43,11 +54,11 @@ Salasanan palautus käyttää Supabasen sähköpostilinkkiä.
 3. Linkki avaa tämän saman Pages-sovelluksen.
 4. Sovellus näyttää salasanan reset-näkymän.
 
-## 5. Ensimmäinen käyttäjä
+## 6. Ensimmäinen käyttäjä
 
 Ensimmäinen kirjautuva käyttäjä saa `admin`-roolin triggerin kautta.
 
-## 6. Päivitykset
+## 7. Päivitykset
 
 Kun repo on kytketty Pagesiin:
 
