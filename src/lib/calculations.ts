@@ -22,6 +22,20 @@ export interface QuoteCalculation {
   marginPercent: number;
 }
 
+export interface QuoteExtraChargeLine {
+  key:
+    | 'projectCosts'
+    | 'deliveryCosts'
+    | 'installationCosts'
+    | 'travelCosts'
+    | 'disposalCosts'
+    | 'demolitionCosts'
+    | 'protectionCosts'
+    | 'permitCosts';
+  label: string;
+  amount: number;
+}
+
 export interface ValidationIssue {
   field: string;
   message: string;
@@ -35,6 +49,24 @@ export interface ValidationResult {
 
 function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+export function calculateTravelCosts(quote: Pick<Quote, 'travelKilometers' | 'travelRatePerKm'>) {
+  return roundCurrency((quote.travelKilometers || 0) * (quote.travelRatePerKm || 0));
+}
+
+export function getQuoteExtraChargeLines(quote: Quote): QuoteExtraChargeLine[] {
+  const travelCosts = calculateTravelCosts(quote);
+  return [
+    { key: 'projectCosts', label: 'Muut projektikulut', amount: roundCurrency(quote.projectCosts || 0) },
+    { key: 'deliveryCosts', label: 'Toimituskulut', amount: roundCurrency(quote.deliveryCosts || 0) },
+    { key: 'installationCosts', label: 'Asennuskulut', amount: roundCurrency(quote.installationCosts || 0) },
+    { key: 'travelCosts', label: 'Kilometrikorvaukset', amount: travelCosts },
+    { key: 'disposalCosts', label: 'Kaatopaikka- ja jätemaksut', amount: roundCurrency(quote.disposalCosts || 0) },
+    { key: 'demolitionCosts', label: 'Purkutyön lisäkulut', amount: roundCurrency(quote.demolitionCosts || 0) },
+    { key: 'protectionCosts', label: 'Suojaus- ja peittokulut', amount: roundCurrency(quote.protectionCosts || 0) },
+    { key: 'permitCosts', label: 'Lupa- ja käsittelymaksut', amount: roundCurrency(quote.permitCosts || 0) },
+  ];
 }
 
 export function calculateQuoteRow(row: QuoteRow): QuoteRowCalculation {
@@ -85,7 +117,7 @@ export function calculateQuote(quote: Quote, rows: QuoteRow[]): QuoteCalculation
     rows.reduce((sum, row) => sum + calculateQuoteRow(row).costTotal, 0)
   );
   const extraChargesTotal = roundCurrency(
-    (quote.projectCosts || 0) + (quote.deliveryCosts || 0) + (quote.installationCosts || 0)
+    getQuoteExtraChargeLines(quote).reduce((sum, charge) => sum + charge.amount, 0)
   );
   const beforeDiscountSubtotal = roundCurrency(lineSubtotal + extraChargesTotal);
 

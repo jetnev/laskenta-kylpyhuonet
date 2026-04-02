@@ -49,9 +49,11 @@ import { Product, Quote, QuoteChargeType, QuoteRow, QuoteRowMode } from '../lib/
 import {
   calculateQuote,
   calculateQuoteRow,
+  calculateTravelCosts,
   canSendQuote,
   formatCurrency,
   formatNumber,
+  getQuoteExtraChargeLines,
 } from '../lib/calculations';
 import {
   exportQuoteToCustomerExcel,
@@ -84,6 +86,11 @@ const CHARGE_TYPE_LABELS: Record<QuoteChargeType, string> = {
   project: 'Projektikulu',
   delivery: 'Toimitus',
   installation: 'Asennus',
+  travel: 'Kilometrikorvaus',
+  disposal: 'Kaatopaikkamaksu',
+  demolition: 'Purkukulu',
+  protection: 'Suojaus- ja peittokulu',
+  permit: 'Lupamaksu',
   other: 'Muu veloitus',
 };
 
@@ -161,6 +168,12 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
         projectCosts: 0,
         deliveryCosts: 0,
         installationCosts: 0,
+        travelKilometers: 0,
+        travelRatePerKm: 0,
+        disposalCosts: 0,
+        demolitionCosts: 0,
+        protectionCosts: 0,
+        permitCosts: 0,
         notes: '',
         internalNotes: '',
         scheduleMilestones: [],
@@ -194,6 +207,9 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const quoteHasNewerRevision = quote ? hasNewerRevision(quote) : false;
   const isEditable = Boolean(quote && quote.status === 'draft' && !quoteHasNewerRevision);
   const calculation = quote ? calculateQuote(quote, quoteRows) : null;
+  const travelCosts = quote ? calculateTravelCosts(quote) : 0;
+  const extraChargeLines = quote ? getQuoteExtraChargeLines(quote) : [];
+  const activeExtraChargeLines = extraChargeLines.filter((line) => line.amount > 0);
   const validation = useMemo(
     () => (quote ? canSendQuote(quote, quoteRows, customer, project, quoteHasNewerRevision) : null),
     [customer, project, quote, quoteHasNewerRevision, quoteRows]
@@ -457,6 +473,12 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       projectCosts: quote.projectCosts,
       deliveryCosts: quote.deliveryCosts,
       installationCosts: quote.installationCosts,
+      travelKilometers: quote.travelKilometers,
+      travelRatePerKm: quote.travelRatePerKm,
+      disposalCosts: quote.disposalCosts,
+      demolitionCosts: quote.demolitionCosts,
+      protectionCosts: quote.protectionCosts,
+      permitCosts: quote.permitCosts,
       selectedMarginPercent: quote.selectedMarginPercent,
       pricingMode: quote.pricingMode,
     });
@@ -632,16 +654,44 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   <Input id="discount-value" type="number" min="0" step="0.01" value={quote.discountValue} onChange={(event) => updateQuote(quote.id, { discountValue: parseFloat(event.target.value) || 0 })} disabled={!isEditable || quote.discountType === 'none'} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="project-costs">Projektikulut</Label>
+                  <Label htmlFor="project-costs">Muut projektikulut</Label>
                   <Input id="project-costs" type="number" min="0" step="0.01" value={quote.projectCosts} onChange={(event) => updateQuote(quote.id, { projectCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="delivery-costs">Toimituskulut</Label>
                   <Input id="delivery-costs" type="number" min="0" step="0.01" value={quote.deliveryCosts} onChange={(event) => updateQuote(quote.id, { deliveryCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                 </div>
-                <div className="space-y-2 sm:col-span-2">
+                <div className="space-y-2">
                   <Label htmlFor="installation-costs">Asennuskulut erillisenä rivinä</Label>
                   <Input id="installation-costs" type="number" min="0" step="0.01" value={quote.installationCosts} onChange={(event) => updateQuote(quote.id, { installationCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="travel-kilometers">Kilometrit</Label>
+                  <Input id="travel-kilometers" type="number" min="0" step="1" value={quote.travelKilometers ?? 0} onChange={(event) => updateQuote(quote.id, { travelKilometers: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="travel-rate">Km-hinta</Label>
+                  <Input id="travel-rate" type="number" min="0" step="0.01" value={quote.travelRatePerKm ?? 0} onChange={(event) => updateQuote(quote.id, { travelRatePerKm: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Ajokulu yhteensä</Label>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(travelCosts)}</div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="disposal-costs">Kaatopaikka- ja jätemaksut</Label>
+                  <Input id="disposal-costs" type="number" min="0" step="0.01" value={quote.disposalCosts ?? 0} onChange={(event) => updateQuote(quote.id, { disposalCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="demolition-costs">Purkutyön lisäkulut</Label>
+                  <Input id="demolition-costs" type="number" min="0" step="0.01" value={quote.demolitionCosts ?? 0} onChange={(event) => updateQuote(quote.id, { demolitionCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="protection-costs">Suojaus- ja peittokulut</Label>
+                  <Input id="protection-costs" type="number" min="0" step="0.01" value={quote.protectionCosts ?? 0} onChange={(event) => updateQuote(quote.id, { protectionCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="permit-costs">Lupa- ja käsittelymaksut</Label>
+                  <Input id="permit-costs" type="number" min="0" step="0.01" value={quote.permitCosts ?? 0} onChange={(event) => updateQuote(quote.id, { permitCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                 </div>
               </div>
             </div>
@@ -910,7 +960,17 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                 <Separator />
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between"><span>Rivien välisumma</span><span className="font-medium">{formatCurrency(calculation.lineSubtotal)}</span></div>
-                  <div className="flex justify-between"><span>Projekti-, toimitus- ja asennuskulut</span><span className="font-medium">{formatCurrency(calculation.extraChargesTotal)}</span></div>
+                  <div className="flex justify-between"><span>Lisäkulut yhteensä</span><span className="font-medium">{formatCurrency(calculation.extraChargesTotal)}</span></div>
+                  {activeExtraChargeLines.length > 0 && (
+                    <div className="space-y-2 rounded-xl border bg-muted/20 p-3">
+                      {activeExtraChargeLines.map((line) => (
+                        <div key={line.key} className="flex justify-between gap-4 text-muted-foreground">
+                          <span>{line.label}</span>
+                          <span className="font-medium">{formatCurrency(line.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex justify-between"><span>Alennus</span><span className="font-medium">-{formatCurrency(calculation.discountAmount)}</span></div>
                   <div className="flex justify-between"><span>Välisumma</span><span className="font-medium">{formatCurrency(calculation.subtotal)}</span></div>
                   <div className="flex justify-between"><span>ALV {formatNumber(quote.vatPercent, 1)} %</span><span className="font-medium">{formatCurrency(calculation.vat)}</span></div>

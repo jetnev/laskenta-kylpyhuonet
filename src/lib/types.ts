@@ -2,7 +2,16 @@ export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected';
 export type QuoteDiscountType = 'none' | 'percent' | 'amount';
 export type QuotePricingMode = 'margin' | 'manual';
 export type QuoteRowMode = 'product' | 'installation' | 'product_installation' | 'section' | 'charge';
-export type QuoteChargeType = 'project' | 'delivery' | 'installation' | 'other';
+export type QuoteChargeType =
+  | 'project'
+  | 'delivery'
+  | 'installation'
+  | 'travel'
+  | 'disposal'
+  | 'demolition'
+  | 'protection'
+  | 'permit'
+  | 'other';
 export type UnitType = 'm2' | 'm²' | 'm' | 'm3' | 'jm' | 'kpl' | 'pkt' | 'ltv' | 'kg' | 'l' | 'erä' | 'h' | 'palvelu';
 
 export interface RegionData {
@@ -142,6 +151,12 @@ export interface Quote extends OwnedFields {
   projectCosts: number;
   deliveryCosts: number;
   installationCosts: number;
+  travelKilometers: number;
+  travelRatePerKm: number;
+  disposalCosts: number;
+  demolitionCosts: number;
+  protectionCosts: number;
+  permitCosts: number;
   selectedMarginPercent: number;
   pricingMode: QuotePricingMode;
   lastAutoSavedAt?: string;

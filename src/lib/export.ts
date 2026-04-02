@@ -1,4 +1,4 @@
-import { calculateQuote, calculateQuoteRow, formatCurrency, formatNumber } from './calculations';
+import { calculateQuote, calculateQuoteRow, formatCurrency, formatNumber, getQuoteExtraChargeLines } from './calculations';
 import { Customer, InstallationGroup, Product, Project, Quote, QuoteRow, QuoteTerms, Settings } from './types';
 
 function csvEscape(value: unknown) {
@@ -97,6 +97,7 @@ function quoteDocumentHtml(
   internal: boolean = false
 ) {
   const calculation = calculateQuote(quote, rows);
+  const extraChargeRows = getQuoteExtraChargeLines(quote).filter((line) => line.amount > 0);
   const companyName = settings?.companyName || 'Yritys Oy';
   const companyLogo = settings?.companyLogo?.trim();
   const customerAddress = [customer.address, customer.phone, customer.email]
@@ -505,9 +506,13 @@ function quoteDocumentHtml(
             <div class="summary">
               <h3>Yhteenveto</h3>
               <div class="summary-row"><span>Rivien välisumma</span><strong>${formatCurrency(calculation.lineSubtotal)}</strong></div>
-              <div class="summary-row"><span>Projektikulut</span><strong>${formatCurrency(quote.projectCosts)}</strong></div>
-              <div class="summary-row"><span>Toimituskulut</span><strong>${formatCurrency(quote.deliveryCosts)}</strong></div>
-              <div class="summary-row"><span>Asennuskulut</span><strong>${formatCurrency(quote.installationCosts)}</strong></div>
+              <div class="summary-row"><span>Lisäkulut yhteensä</span><strong>${formatCurrency(calculation.extraChargesTotal)}</strong></div>
+              ${extraChargeRows
+                .map(
+                  (line) =>
+                    `<div class="summary-row"><span>${escapeHtml(line.label)}</span><strong>${formatCurrency(line.amount)}</strong></div>`
+                )
+                .join('')}
               <div class="summary-row"><span>Alennus</span><strong>-${formatCurrency(calculation.discountAmount)}</strong></div>
               <div class="summary-row"><span>Välisumma</span><strong>${formatCurrency(calculation.subtotal)}</strong></div>
               <div class="summary-row"><span>ALV ${formatNumber(quote.vatPercent, 1)} %</span><strong>${formatCurrency(calculation.vat)}</strong></div>
