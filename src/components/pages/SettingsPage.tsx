@@ -13,10 +13,15 @@ export default function SettingsPage() {
   const { settings, updateSettings } = useSettings();
   const { canManageSharedData } = useAuth();
   const [formData, setFormData] = useState(settings);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
 
   useEffect(() => {
     setFormData(settings);
   }, [settings]);
+
+  useEffect(() => {
+    setSavedAt(null);
+  }, [formData]);
 
   if (!canManageSharedData) {
     return (
@@ -122,7 +127,12 @@ export default function SettingsPage() {
         </p>
       </Card>
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-3">
+        {savedAt && (
+          <p className="text-sm text-emerald-600">
+            Asetukset tallennettu {savedAt}
+          </p>
+        )}
         <Button
           onClick={() => {
             try {
@@ -139,8 +149,13 @@ export default function SettingsPage() {
               } else {
                 updateSettings({ ...formData, updateFeedUrl: '' });
               }
+              setSavedAt(new Intl.DateTimeFormat('fi-FI', {
+                hour: '2-digit',
+                minute: '2-digit',
+              }).format(new Date()));
               toast.success('Asetukset tallennettu.');
             } catch (error) {
+              setSavedAt(null);
               toast.error(error instanceof Error ? error.message : 'Tallennus epäonnistui.');
             }
           }}
