@@ -3,6 +3,16 @@ import { useAuth } from './use-auth';
 import { AppKvScope, isSupabaseConfigured, requireSupabase } from '../lib/supabase';
 
 type SetValueAction<T> = T | ((current: T) => T);
+type PendingWrite = {
+  recordId: string;
+  key: string;
+  scope: AppKvScope;
+  userId?: string | null;
+  value: unknown;
+  snapshot: string | null;
+};
+
+const REMOTE_WRITE_DEBOUNCE_MS = 600;
 
 const SHARED_KEYS = new Set<string>([
   'products',
@@ -21,6 +31,9 @@ const SHARED_KEYS = new Set<string>([
 
 const cache = new Map<string, unknown>();
 const listeners = new Map<string, Set<(value: unknown) => void>>();
+const persistedSnapshots = new Map<string, string | null>();
+const pendingWrites = new Map<string, PendingWrite>();
+const pendingWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function getScopeForKey(key: string): AppKvScope {
   return SHARED_KEYS.has(key) ? 'shared' : 'user';
@@ -54,6 +67,14 @@ function emit(recordId: string, value: unknown) {
   bucket?.forEach((listener) => listener(value));
 }
 
+function safeSerialize(value: unknown) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return null;
+  }
+}
+
 function readFallbackValue<T>(recordId: string, fallback: T): T {
   if (typeof window === 'undefined') {
     return fallback;
@@ -79,7 +100,9 @@ function writeFallbackValue<T>(recordId: string, value: T) {
 
 async function readRemoteValue<T>(recordId: string, fallback: T): Promise<T> {
   if (!isSupabaseConfigured) {
-    return readFallbackValue(recordId, fallback);
+    const nextValue = readFallbackValue(recordId, fallback);
+    persistedSnapshots.set(recordId, safeSerialize(nextValue));
+    return nextValue;
   }
 
   const client = requireSupabase();
@@ -94,10 +117,14 @@ async function readRemoteValue<T>(recordId: string, fallback: T): Promise<T> {
   }
 
   if (!data || data.value === null || data.value === undefined) {
+    persistedSnapshots.set(recordId, safeSerialize(fallback));
     return fallback;
   }
 
-  return data.value as T;
+  const nextValue = data.value as T;
+  persistedSnapshots.set(recordId, safeSerialize(nextValue));
+  writeFallbackValue(recordId, nextValue);
+  return nextValue;
 }
 
 async function writeRemoteValue<T>(args: {
@@ -130,6 +157,61 @@ async function writeRemoteValue<T>(args: {
   if (error) {
     throw error;
   }
+}
+
+async function flushPendingWrite(recordId: string) {
+  const pending = pendingWrites.get(recordId);
+  pendingWrites.delete(recordId);
+
+  const existingTimer = pendingWriteTimers.get(recordId);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    pendingWriteTimers.delete(recordId);
+  }
+
+  if (!pending) {
+    return;
+  }
+
+  if (pending.snapshot === persistedSnapshots.get(recordId)) {
+    return;
+  }
+
+  try {
+    await writeRemoteValue({
+      recordId: pending.recordId,
+      key: pending.key,
+      scope: pending.scope,
+      userId: pending.userId,
+      value: pending.value,
+    });
+    persistedSnapshots.set(recordId, pending.snapshot);
+  } catch (error) {
+    console.error(`Failed to persist KV key "${pending.key}".`, error);
+  }
+}
+
+function scheduleRemoteWrite(write: PendingWrite) {
+  writeFallbackValue(write.recordId, write.value);
+
+  if (!isSupabaseConfigured) {
+    persistedSnapshots.set(write.recordId, write.snapshot);
+    return;
+  }
+
+  pendingWrites.set(write.recordId, write);
+
+  const existingTimer = pendingWriteTimers.get(write.recordId);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+
+  pendingWriteTimers.set(
+    write.recordId,
+    setTimeout(() => {
+      void flushPendingWrite(write.recordId);
+    }, REMOTE_WRITE_DEBOUNCE_MS)
+  );
 }
 
 export function useKV<T>(key: string, defaultValue: T): [T, (value: SetValueAction<T>) => void] {
@@ -211,20 +293,22 @@ export function useKV<T>(key: string, defaultValue: T): [T, (value: SetValueActi
         typeof nextValue === 'function'
           ? (nextValue as (current: T) => T)(previousValue)
           : nextValue;
+      const previousSnapshot = safeSerialize(previousValue);
+      const nextSnapshot = safeSerialize(resolvedValue);
+
+      if (nextSnapshot === previousSnapshot) {
+        return;
+      }
 
       valueRef.current = resolvedValue;
       emit(recordId, resolvedValue);
-
-      void writeRemoteValue({
+      scheduleRemoteWrite({
         recordId,
         key,
         scope,
         userId,
         value: resolvedValue,
-      }).catch((error) => {
-        console.error(`Failed to persist KV key "${key}".`, error);
-        valueRef.current = previousValue;
-        emit(recordId, previousValue);
+        snapshot: nextSnapshot,
       });
     },
     [key, recordId, scope, userId]

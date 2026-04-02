@@ -3,6 +3,7 @@ create extension if not exists pgcrypto;
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = timezone('utc', now());
@@ -31,6 +32,7 @@ create or replace function public.is_admin()
 returns boolean
 language sql
 stable
+set search_path = public
 as $$
   select exists (
     select 1
@@ -92,20 +94,23 @@ drop policy if exists profiles_select_self_or_admin on public.profiles;
 create policy profiles_select_self_or_admin
 on public.profiles
 for select
-using (id = auth.uid() or public.is_admin());
+to authenticated
+using (id = (select auth.uid()) or (select public.is_admin()));
 
 drop policy if exists profiles_insert_self on public.profiles;
 create policy profiles_insert_self
 on public.profiles
 for insert
-with check (id = auth.uid());
+to authenticated
+with check (id = (select auth.uid()));
 
 drop policy if exists profiles_update_self_or_admin on public.profiles;
 create policy profiles_update_self_or_admin
 on public.profiles
 for update
-using (id = auth.uid() or public.is_admin())
-with check (id = auth.uid() or public.is_admin());
+to authenticated
+using (id = (select auth.uid()) or (select public.is_admin()))
+with check (id = (select auth.uid()) or (select public.is_admin()));
 
 create table if not exists public.app_kv (
   id text primary key,
@@ -131,40 +136,44 @@ drop policy if exists app_kv_select_shared_or_own_or_admin on public.app_kv;
 create policy app_kv_select_shared_or_own_or_admin
 on public.app_kv
 for select
+to authenticated
 using (
-  public.is_admin()
+  (select public.is_admin())
   or scope = 'shared'
-  or owner_user_id = auth.uid()
+  or owner_user_id = (select auth.uid())
 );
 
 drop policy if exists app_kv_insert_shared_admin_or_own on public.app_kv;
 create policy app_kv_insert_shared_admin_or_own
 on public.app_kv
 for insert
+to authenticated
 with check (
-  public.is_admin()
-  or (scope = 'user' and owner_user_id = auth.uid())
+  (select public.is_admin())
+  or (scope = 'user' and owner_user_id = (select auth.uid()))
 );
 
 drop policy if exists app_kv_update_shared_admin_or_own on public.app_kv;
 create policy app_kv_update_shared_admin_or_own
 on public.app_kv
 for update
+to authenticated
 using (
-  public.is_admin()
-  or (scope = 'user' and owner_user_id = auth.uid())
+  (select public.is_admin())
+  or (scope = 'user' and owner_user_id = (select auth.uid()))
 )
 with check (
-  public.is_admin()
-  or (scope = 'user' and owner_user_id = auth.uid())
+  (select public.is_admin())
+  or (scope = 'user' and owner_user_id = (select auth.uid()))
 );
 
 drop policy if exists app_kv_delete_shared_admin_or_own on public.app_kv;
 create policy app_kv_delete_shared_admin_or_own
 on public.app_kv
 for delete
+to authenticated
 using (
-  public.is_admin()
-  or (scope = 'user' and owner_user_id = auth.uid())
+  (select public.is_admin())
+  or (scope = 'user' and owner_user_id = (select auth.uid()))
 );
 
