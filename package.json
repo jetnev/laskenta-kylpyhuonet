@@ -1,18 +1,21 @@
 {
-    "name": "spark-template",
+    "name": "laskenta-kylpyhuonet",
     "private": true,
-    "version": "0.0.0",
+    "version": "0.1.0",
     "type": "module",
+    "main": "electron/main.mjs",
     "scripts": {
         "dev": "vite",
         "kill": "fuser -k 5000/tcp",
         "build": "tsc -b --noCheck && vite build",
+        "desktop:start": "npm run build && electron .",
+        "desktop:pack": "npm run build && electron-builder --win nsis portable",
+        "desktop:publish": "npm run desktop:pack",
         "lint": "eslint .",
         "optimize": "vite optimize",
         "preview": "vite preview"
     },
     "dependencies": {
-        "@github/spark": ">=0.43.1 <1",
         "@heroicons/react": "^2.2.0",
         "@hookform/resolvers": "^4.1.3",
         "@octokit/core": "^6.1.4",
@@ -44,6 +47,7 @@
         "@radix-ui/react-toggle": "^1.1.2",
         "@radix-ui/react-toggle-group": "^1.1.2",
         "@radix-ui/react-tooltip": "^1.1.8",
+        "@supabase/supabase-js": "^2.101.1",
         "@tailwindcss/container-queries": "^0.1.1",
         "@tailwindcss/vite": "^4.1.11",
         "@tanstack/react-query": "^5.83.1",
@@ -52,6 +56,7 @@
         "cmdk": "^1.1.1",
         "d3": "^7.9.0",
         "date-fns": "^3.6.0",
+        "electron-updater": "^6.8.3",
         "embla-carousel-react": "^8.5.2",
         "framer-motion": "^12.6.2",
         "input-otp": "^1.4.2",
@@ -72,6 +77,7 @@
         "tw-animate-css": "^1.2.4",
         "uuid": "^11.1.0",
         "vaul": "^1.1.2",
+        "xlsx": "^0.18.5",
         "zod": "^3.25.76"
     },
     "devDependencies": {
@@ -80,6 +86,8 @@
         "@types/react": "^19.0.10",
         "@types/react-dom": "^19.0.4",
         "@vitejs/plugin-react-swc": "^4.2.2",
+        "electron": "^41.1.1",
+        "electron-builder": "^26.8.1",
         "eslint": "^9.28.0",
         "eslint-plugin-react-hooks": "^5.2.0",
         "eslint-plugin-react-refresh": "^0.4.19",
@@ -93,5 +101,37 @@
         "packages": [
             "packages/*"
         ]
+    },
+    "build": {
+        "appId": "fi.jetnev.laskenta.kylpyhuonet",
+        "productName": "Laskenta",
+        "publish": [
+            {
+                "provider": "generic",
+                "url": "https://jetnev.github.io/laskenta-kylpyhuonet/"
+            }
+        ],
+        "directories": {
+            "output": "release"
+        },
+        "files": [
+            "dist/**/*",
+            "electron/**/*",
+            "package.json"
+        ],
+        "asar": true,
+        "win": {
+            "signAndEditExecutable": false,
+            "target": [
+                "nsis",
+                "portable"
+            ]
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true
+        }
     }
 }

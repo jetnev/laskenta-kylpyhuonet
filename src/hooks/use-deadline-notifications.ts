@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useKV } from '@github/spark/hooks';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useKV } from './use-kv';
 import { useQuotes, useProjects, useCustomers } from './use-data';
 import { Quote, ScheduleMilestone } from '../lib/types';
 import { toast } from 'sonner';
@@ -33,30 +33,37 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   lastCheck: undefined,
 };
 
+const calculateDaysUntil = (targetDate: string): number => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(targetDate);
+  target.setHours(0, 0, 0, 0);
+  const diffTime = target.getTime() - today.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
 export function useDeadlineNotifications() {
   const [settings, setSettings] = useKV<NotificationSettings>('deadline-notification-settings', DEFAULT_SETTINGS);
   const [notifiedDeadlines, setNotifiedDeadlines] = useKV<DeadlineNotification[]>('notified-deadlines', []);
   const [upcomingDeadlines, setUpcomingDeadlines] = useState<DeadlineNotification[]>([]);
+  const notifiedDeadlinesRef = useRef<DeadlineNotification[]>(notifiedDeadlines);
   
   const { quotes } = useQuotes();
   const { getProject } = useProjects();
   const { getCustomer } = useCustomers();
+  const enabled = settings?.enabled ?? DEFAULT_SETTINGS.enabled;
+  const notifyDaysBefore = settings?.notifyDaysBefore ?? DEFAULT_SETTINGS.notifyDaysBefore;
 
-  const calculateDaysUntil = (targetDate: string): number => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const target = new Date(targetDate);
-    target.setHours(0, 0, 0, 0);
-    const diffTime = target.getTime() - today.getTime();
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  };
+  useEffect(() => {
+    notifiedDeadlinesRef.current = notifiedDeadlines || [];
+  }, [notifiedDeadlines]);
 
-  const checkDeadlines = () => {
-    if (!settings || !settings.enabled) return;
+  const checkDeadlines = useCallback(() => {
+    if (!enabled) return;
 
     const now = new Date().toISOString();
     const newNotifications: DeadlineNotification[] = [];
-    const currentNotifications = notifiedDeadlines || [];
+    const currentNotifications = notifiedDeadlinesRef.current || [];
     
     quotes.forEach((quote: Quote) => {
       if (quote.status === 'draft' || quote.status === 'rejected') return;
@@ -74,7 +81,7 @@ export function useDeadlineNotifications() {
         
         if (daysUntil < 0) return;
         
-        const shouldNotify = settings.notifyDaysBefore.some(days => daysUntil === days);
+        const shouldNotify = notifyDaysBefore.some(days => daysUntil === days);
         
         if (shouldNotify) {
           const notificationId = `${quote.id}-${milestone.id}-${daysUntil}`;
@@ -101,7 +108,9 @@ export function useDeadlineNotifications() {
     });
 
     if (newNotifications.length > 0) {
-      setNotifiedDeadlines((current = []) => [...current, ...newNotifications]);
+      const nextNotifications = [...currentNotifications, ...newNotifications];
+      setNotifiedDeadlines(nextNotifications);
+      notifiedDeadlinesRef.current = nextNotifications;
       
       newNotifications.forEach(notification => {
         const daysText = notification.daysUntil === 0 
@@ -121,9 +130,9 @@ export function useDeadlineNotifications() {
     }
 
     setSettings((current = DEFAULT_SETTINGS) => ({ ...current, lastCheck: now }));
-  };
+  }, [enabled, getCustomer, getProject, notifiedDeadlinesRef, notifyDaysBefore, quotes, setNotifiedDeadlines, setSettings]);
 
-  const getAllUpcomingDeadlines = () => {
+  const getAllUpcomingDeadlines = useCallback(() => {
     const upcoming: DeadlineNotification[] = [];
     
     quotes.forEach((quote: Quote) => {
@@ -159,10 +168,10 @@ export function useDeadlineNotifications() {
 
     upcoming.sort((a, b) => a.daysUntil - b.daysUntil);
     setUpcomingDeadlines(upcoming);
-  };
+  }, [getCustomer, getProject, quotes, setUpcomingDeadlines]);
 
   useEffect(() => {
-    if (settings && settings.enabled) {
+    if (enabled) {
       checkDeadlines();
       getAllUpcomingDeadlines();
       
@@ -173,7 +182,7 @@ export function useDeadlineNotifications() {
       
       return () => clearInterval(interval);
     }
-  }, [quotes, settings]);
+  }, [enabled, checkDeadlines, getAllUpcomingDeadlines]);
 
   const updateSettings = (newSettings: Partial<NotificationSettings>) => {
     setSettings((current = DEFAULT_SETTINGS) => ({ ...current, ...newSettings }));
@@ -181,6 +190,7 @@ export function useDeadlineNotifications() {
 
   const clearNotificationHistory = () => {
     setNotifiedDeadlines([]);
+    notifiedDeadlinesRef.current = [];
     toast.success('Ilmoitushistoria tyhjennetty');
   };
 
@@ -191,33 +201,25 @@ export function useDeadlineNotifications() {
     }
 
     try {
-      const prompt = spark.llmPrompt`Luo muodollinen sähköposti-ilmoitus seuraavasta lähestyvästä määräajasta:
+      const subject = `Määräaika lähestyy: ${notification.milestoneName}`;
+      const body = [
+        'Hei,',
+        '',
+        `Projektin "${notification.projectName}" määräaika lähestyy.`,
+        `Asiakas: ${notification.customerName}`,
+        `Määräaika: ${notification.milestoneName}`,
+        `Päivämäärä: ${notification.targetDate}`,
+        `Aikaa jäljellä: ${notification.daysUntil} päivää`,
+      ].join('\n');
 
-Projekti: ${notification.projectName}
-Asiakas: ${notification.customerName}
-Määräaika: ${notification.milestoneName}
-Päivämäärä: ${notification.targetDate}
-Aikaa jäljellä: ${notification.daysUntil} päivää
+      window.location.href = `mailto:${encodeURIComponent(settings.emailAddress)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-Sähköpostin tulee olla:
-- Lyhyt ja ytimekäs
-- Suomeksi
-- Muodollinen mutta ystävällinen
-- Sisältää kaikki oleelliset tiedot
-
-Palauta JSON-muodossa: {"subject": "...", "body": "..."}`;
-
-      const result = await spark.llm(prompt, 'gpt-4o-mini', true);
-      const emailData = JSON.parse(result);
-
-      toast.info('Sähköposti-ominaisuus tulossa', {
-        description: `Aihe: ${emailData.subject}`,
+      toast.success('Sähköpostiluonnos avattiin oletussähköpostiohjelmaan.', {
+        description: subject,
       });
-
-      return emailData;
     } catch (error) {
       console.error('Email notification error:', error);
-      toast.error('Sähköpostin lähetys epäonnistui');
+      toast.error('Sähköpostiluonnoksen avaus epäonnistui');
     }
   };
 

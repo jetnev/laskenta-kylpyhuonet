@@ -1,9 +1,27 @@
-import { useState, useEffect } from 'react';
-import { Plus, Trash, Warning, FilePdf, FileXls, Copy, FloppyDisk, X } from '@phosphor-icons/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ArrowDown,
+  ArrowUp,
+  CheckCircle,
+  Copy,
+  FilePdf,
+  FileXls,
+  FloppyDisk,
+  MagnifyingGlass,
+  PaperPlaneTilt,
+  Plus,
+  Trash,
+  Warning,
+  XCircle,
+} from '@phosphor-icons/react';
+import { toast } from 'sonner';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { Card } from './ui/card';
+import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
+import { Label } from './ui/label';
+import { Badge } from './ui/badge';
+import { Alert, AlertDescription } from './ui/alert';
 import {
   Select,
   SelectContent,
@@ -11,46 +29,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Separator } from './ui/separator';
+import { ResponsiveDialog } from './ResponsiveDialog';
+import ScheduleSection from './ScheduleSection';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from './ui/table';
-import { Label } from './ui/label';
-import { Badge } from './ui/badge';
-import { Alert, AlertDescription } from './ui/alert';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from './ui/dialog';
-import {
-  useProducts,
+  useCustomers,
   useInstallationGroups,
+  useProducts,
+  useProjects,
   useQuoteRows,
   useQuotes,
-  useProjects,
-  useCustomers,
   useQuoteTerms,
   useSettings,
+  useSubstituteProducts,
 } from '../hooks/use-data';
-import { Quote, QuoteRowMode, QuoteRow, ScheduleMilestone } from '../lib/types';
+import { Product, Quote, QuoteChargeType, QuoteRow, QuoteRowMode } from '../lib/types';
 import {
-  calculateQuoteRow,
   calculateQuote,
+  calculateQuoteRow,
+  canSendQuote,
   formatCurrency,
   formatNumber,
-  canSendQuote,
 } from '../lib/calculations';
-import { toast } from 'sonner';
-import { exportQuoteToPDF, exportQuoteToCustomerExcel, exportQuoteToInternalExcel } from '../lib/export';
-import ScheduleSection from './ScheduleSection';
+import {
+  exportQuoteToCustomerExcel,
+  exportQuoteToInternalExcel,
+  exportQuoteToPDF,
+} from '../lib/export';
 
 interface QuoteEditorProps {
   projectId: string;
@@ -58,643 +64,875 @@ interface QuoteEditorProps {
   onClose: () => void;
 }
 
-const MODE_LABELS: Record<QuoteRowMode, string> = {
+const ROW_MODE_LABELS: Record<QuoteRowMode, string> = {
   product: 'Tuote',
   installation: 'Asennus',
   product_installation: 'Tuote + asennus',
+  section: 'Väliotsikko',
+  charge: 'Veloitus',
 };
+
+const STATUS_LABELS = {
+  draft: 'Luonnos',
+  sent: 'Lähetetty',
+  accepted: 'Hyväksytty',
+  rejected: 'Hylätty',
+} as const;
+
+const CHARGE_TYPE_LABELS: Record<QuoteChargeType, string> = {
+  project: 'Projektikulu',
+  delivery: 'Toimitus',
+  installation: 'Asennus',
+  other: 'Muu veloitus',
+};
+
+function roundCurrency(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function calculateSalesPrice(purchasePrice: number, marginPercent: number) {
+  return roundCurrency(Math.max(0, purchasePrice) * (1 + Math.max(0, marginPercent) / 100));
+}
+
+function getStatusVariant(status: Quote['status']): 'default' | 'secondary' | 'destructive' | 'outline' {
+  if (status === 'accepted') return 'default';
+  if (status === 'rejected') return 'destructive';
+  if (status === 'sent') return 'outline';
+  return 'secondary';
+}
 
 export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditorProps) {
   const { products } = useProducts();
   const { groups } = useInstallationGroups();
-  const { rows, addRow, updateRow, deleteRow, getRowsForQuote } = useQuoteRows();
-  const { quotes, addQuote, updateQuote, updateQuoteStatus, hasNewerRevision, getQuote } = useQuotes();
+  const { getSubstitutesForProduct } = useSubstituteProducts();
+  const { addRow, deleteRow, getRowsForQuote, updateRow } = useQuoteRows();
+  const { addQuote, getQuote, getQuotesForProject, hasNewerRevision, updateQuote, updateQuoteStatus } = useQuotes();
   const { getProject } = useProjects();
   const { getCustomer } = useCustomers();
-  const { terms, getDefaultTerms } = useQuoteTerms();
+  const { getDefaultTerms, terms } = useQuoteTerms();
   const { settings } = useSettings();
-
-  const [quote, setQuote] = useState<Quote | null>(null);
+  const project = getProject(projectId);
+  const customer = project ? getCustomer(project.customerId) : undefined;
+  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(quoteId);
+  const [productSearch, setProductSearch] = useState('');
+  const [validationOpen, setValidationOpen] = useState(false);
+  const [bootstrapQuote, setBootstrapQuote] = useState<Quote | null>(null);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [quoteLookupTimedOut, setQuoteLookupTimedOut] = useState(false);
+  const initializedDraftRef = useRef(false);
 
   useEffect(() => {
-    if (quoteId) {
-      const existingQuote = getQuote(quoteId);
-      if (existingQuote) {
-        setQuote(existingQuote);
-      }
-    } else if (!quote) {
+    setActiveQuoteId(quoteId);
+    initializedDraftRef.current = Boolean(quoteId);
+    setBootstrapQuote(null);
+    setBootstrapError(null);
+    setQuoteLookupTimedOut(false);
+  }, [quoteId]);
+
+  useEffect(() => {
+    setQuoteLookupTimedOut(false);
+    if (!activeQuoteId) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setQuoteLookupTimedOut(true);
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [activeQuoteId]);
+
+  useEffect(() => {
+    if (!project || activeQuoteId || initializedDraftRef.current) return;
+    try {
       const defaultTerms = getDefaultTerms();
       const newQuote = addQuote({
         projectId,
-        title: 'Uusi tarjous',
+        title: `${project.name} tarjous`,
+        quoteNumber: '',
         revisionNumber: 1,
-        status: 'draft',
-        vatPercent: settings.defaultVatPercent,
         termsId: defaultTerms?.id,
+        pricingMode: 'margin',
+        selectedMarginPercent: settings.defaultMarginPercent,
+        vatPercent: settings.defaultVatPercent,
+        discountType: 'none',
+        discountValue: 0,
+        projectCosts: 0,
+        deliveryCosts: 0,
+        installationCosts: 0,
+        notes: '',
+        internalNotes: '',
+        scheduleMilestones: [],
       });
-      setQuote(newQuote);
+      initializedDraftRef.current = true;
+      setBootstrapQuote(newQuote);
+      setBootstrapError(null);
+      setActiveQuoteId(newQuote.id);
+    } catch (error) {
+      initializedDraftRef.current = true;
+      setBootstrapError(error instanceof Error ? error.message : 'Tarjouksen luonnissa tapahtui virhe.');
     }
-  }, [quoteId, projectId, getQuote, quote, getDefaultTerms, addQuote, settings.defaultVatPercent]);
+  }, [activeQuoteId, addQuote, getDefaultTerms, project, projectId, settings]);
 
-  const project = getProject(projectId);
-  const customer = project ? getCustomer(project.customerId) : undefined;
-  
-  const [editingRowId, setEditingRowId] = useState<string | null>(null);
-  const [showValidationDialog, setShowValidationDialog] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const [localNotes, setLocalNotes] = useState('');
-  const [localTitle, setLocalTitle] = useState('Uusi tarjous');
-
-  useEffect(() => {
-    if (quote) {
-      setLocalNotes(quote.notes || '');
-      setLocalTitle(quote.title);
+  const quote = useMemo(() => {
+    if (!activeQuoteId) {
+      return bootstrapQuote;
     }
-  }, [quote?.id]);
+    return getQuote(activeQuoteId) ?? (bootstrapQuote?.id === activeQuoteId ? bootstrapQuote : null);
+  }, [activeQuoteId, bootstrapQuote, getQuote]);
+  const quoteRows = useMemo(() => (quote ? getRowsForQuote(quote.id) : []), [getRowsForQuote, quote]);
+  const quoteTerms = terms.find((term) => term.id === quote?.termsId);
+  const projectQuotes = useMemo(() => getQuotesForProject(projectId), [getQuotesForProject, projectId]);
+  const quoteHasNewerRevision = quote ? hasNewerRevision(quote) : false;
+  const isEditable = Boolean(quote && quote.status === 'draft' && !quoteHasNewerRevision);
+  const calculation = quote ? calculateQuote(quote, quoteRows) : null;
+  const validation = useMemo(
+    () => (quote ? canSendQuote(quote, quoteRows, customer, project, quoteHasNewerRevision) : null),
+    [customer, project, quote, quoteHasNewerRevision, quoteRows]
+  );
 
-  useEffect(() => {
-    if (!quote) return;
-    
-    const autoSaveTimer = setTimeout(() => {
-      if (quote.status === 'draft') {
-        if (localNotes !== quote.notes) {
-          updateQuote(quote.id, { notes: localNotes });
-        }
-        if (localTitle !== quote.title) {
-          updateQuote(quote.id, { title: localTitle });
-        }
-      }
-    }, 1000);
+  const matchingProducts = useMemo(() => {
+    const search = productSearch.trim().toLowerCase();
+    if (!search) return products.slice(0, 8);
+    return products
+      .filter((product) =>
+        [
+          product.code,
+          product.internalCode,
+          product.name,
+          product.description,
+          product.category,
+          product.brand,
+          product.manufacturer,
+          product.searchableText,
+        ]
+          .filter(Boolean)
+          .some((value) => value?.toLowerCase().includes(search))
+      )
+      .slice(0, 8);
+  }, [productSearch, products]);
 
-    return () => clearTimeout(autoSaveTimer);
-  }, [localNotes, localTitle, quote?.id, quote?.notes, quote?.title, quote?.status]);
-
-  if (!quote || !project || !customer) {
+  if (!project) {
     return (
-      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
-        <Card className="p-6">
-          <p>Ladataan...</p>
+      <ResponsiveDialog open onOpenChange={(open) => !open && onClose()} title="Tarjouseditori" maxWidth="full">
+        <Card className="p-10 text-center text-muted-foreground">
+          Projektia ei löytynyt. Sulje editori ja avaa tarjous projektin kautta uudelleen.
         </Card>
-      </div>
+      </ResponsiveDialog>
     );
   }
 
-  const quoteRows = getRowsForQuote(quote.id);
-  const calculation = calculateQuote(quote, quoteRows);
-  const quoteTerms = quote.termsId ? terms.find(t => t.id === quote.termsId) : undefined;
+  if (!customer) {
+    return (
+      <ResponsiveDialog open onOpenChange={(open) => !open && onClose()} title="Tarjouseditori" maxWidth="full">
+        <Card className="p-10 text-center text-muted-foreground">
+          Projektin asiakas puuttuu tai on poistettu. Korjaa asiakasprojekti ennen tarjouksen avaamista.
+        </Card>
+      </ResponsiveDialog>
+    );
+  }
 
-  const handleAddRow = () => {
-    const sortOrder = quoteRows.length;
-    addRow({
+  if (!quote) {
+    return (
+      <ResponsiveDialog open onOpenChange={(open) => !open && onClose()} title="Tarjouseditori" maxWidth="full">
+        <Card className="p-10 text-center text-muted-foreground">
+          {bootstrapError
+            ? bootstrapError
+            : quoteLookupTimedOut
+              ? 'Tarjousta ei saatu avattua. Sulje editori ja yrita uudelleen.'
+              : 'Ladataan tarjousta...'}
+        </Card>
+      </ResponsiveDialog>
+    );
+  }
+
+  if (!calculation || !validation) {
+    return (
+      <ResponsiveDialog open onOpenChange={(open) => !open && onClose()} title="Tarjouseditori" maxWidth="full">
+        <Card className="p-10 text-center text-muted-foreground">
+          Tarjouksen laskentaa ei voitu alustaa. Sulje editori ja yrita uudelleen.
+        </Card>
+      </ResponsiveDialog>
+    );
+  }
+
+  const touchQuote = () => {
+    updateQuote(quote.id, {});
+  };
+
+  const getDefaultMargin = (product?: Product, installationGroupId?: string) => {
+    const group = installationGroupId ? groups.find((item) => item.id === installationGroupId) : undefined;
+    return product?.defaultSalesMarginPercent
+      ?? group?.defaultMarginPercent
+      ?? quote.selectedMarginPercent
+      ?? settings.defaultMarginPercent;
+  };
+
+  const buildProductRow = (product: Product): Omit<QuoteRow, 'id' | 'ownerUserId' | 'createdAt' | 'updatedAt' | 'createdByUserId' | 'updatedByUserId'> => {
+    const group = product.installationGroupId ? groups.find((item) => item.id === product.installationGroupId) : undefined;
+    const marginPercent = getDefaultMargin(product, product.installationGroupId);
+    const installationPrice = product.defaultInstallationPrice ?? group?.defaultInstallationPrice ?? group?.defaultPrice ?? 0;
+    return {
       quoteId: quote.id,
-      sortOrder,
-      mode: 'product',
-      productName: '',
+      sortOrder: quoteRows.length,
+      mode: installationPrice > 0 ? 'product_installation' : 'product',
+      source: 'catalog',
+      productId: product.id,
+      productCode: product.code,
+      productName: product.name,
+      description: product.description,
       quantity: 1,
-      unit: 'kpl',
+      unit: product.unit,
+      purchasePrice: product.purchasePrice,
+      salesPrice: calculateSalesPrice(product.purchasePrice, marginPercent),
+      installationPrice,
+      marginPercent,
+      regionMultiplier: project.regionCoefficient || 1,
+      installationGroupId: product.installationGroupId,
+      notes: '',
+      manualSalesPrice: false,
+    };
+  };
+
+  const addProductRow = (product: Product) => {
+    addRow(buildProductRow(product));
+    touchQuote();
+    setProductSearch('');
+    toast.success(`Lisätty ${product.name} tarjoukselle.`);
+  };
+
+  const addManualRow = (mode: QuoteRowMode) => {
+    const baseRow: Omit<QuoteRow, 'id' | 'ownerUserId' | 'createdAt' | 'updatedAt' | 'createdByUserId' | 'updatedByUserId'> = {
+      quoteId: quote.id,
+      sortOrder: quoteRows.length,
+      mode,
+      source: 'manual',
+      productName: mode === 'section' ? 'Uusi väliotsikko' : mode === 'charge' ? 'Lisäveloitus' : '',
+      productCode: '',
+      description: '',
+      quantity: mode === 'section' ? 0 : 1,
+      unit: mode === 'section' ? 'erä' : mode === 'charge' ? 'erä' : 'kpl',
       purchasePrice: 0,
       salesPrice: 0,
       installationPrice: 0,
-      marginPercent: settings.defaultMarginPercent,
-      regionMultiplier: project.regionCoefficient,
-    });
+      marginPercent: quote.selectedMarginPercent,
+      regionMultiplier: project.regionCoefficient || 1,
+      notes: '',
+      manualSalesPrice: mode === 'charge',
+      chargeType: mode === 'charge' ? 'other' : undefined,
+    };
+    addRow(baseRow);
+    touchQuote();
   };
 
-  const handleProductSelect = (rowId: string, productId: string) => {
-    const product = products.find((p) => p.id === productId);
-    if (!product) return;
-
-    const group = product.installationGroupId
-      ? groups.find((g) => g.id === product.installationGroupId)
-      : undefined;
-
-    const marginPercent = settings.defaultMarginPercent;
-    const salesPrice = product.purchasePrice * (1 + marginPercent / 100);
-
-    updateRow(rowId, {
-      productId: product.id,
-      productName: product.name,
-      productCode: product.code,
-      unit: product.unit,
-      purchasePrice: product.purchasePrice,
-      salesPrice,
-      installationPrice: group?.defaultPrice || 0,
+  const syncRowWithMargin = (row: QuoteRow, marginPercent: number) => {
+    if (row.mode === 'section' || row.mode === 'charge' || row.mode === 'installation') return;
+    updateRow(row.id, {
       marginPercent,
+      salesPrice: calculateSalesPrice(row.purchasePrice, marginPercent),
+      manualSalesPrice: false,
     });
   };
 
-  const handleRowChange = (rowId: string, field: keyof QuoteRow, value: any) => {
-    const row = quoteRows.find((r) => r.id === rowId);
-    if (!row) return;
+  const patchRow = (row: QuoteRow, updates: Partial<QuoteRow>) => {
+    const nextRow = { ...row, ...updates };
 
-    const updates: Partial<QuoteRow> = { [field]: value };
-
-    if (field === 'purchasePrice' || field === 'marginPercent') {
-      const purchasePrice = field === 'purchasePrice' ? value : row.purchasePrice;
-      const marginPercent = field === 'marginPercent' ? value : row.marginPercent;
-      updates.salesPrice = purchasePrice * (1 + marginPercent / 100);
+    if ('installationGroupId' in updates && nextRow.installationGroupId) {
+      const group = groups.find((item) => item.id === nextRow.installationGroupId);
+      if (group && row.mode !== 'section' && row.mode !== 'charge') {
+        nextRow.installationPrice = nextRow.installationPrice || group.defaultInstallationPrice || group.defaultPrice;
+      }
     }
 
-    updateRow(rowId, updates);
-  };
-
-  const handleValidateAndShowDialog = () => {
-    const validation = canSendQuote(
-      quote,
-      quoteRows,
-      customer,
-      project,
-      hasNewerRevision(quote)
-    );
-
-    if (!validation.isValid || validation.warnings.length > 0) {
-      setShowValidationDialog(true);
-    } else {
-      handleSendQuote();
+    if (('purchasePrice' in updates || 'marginPercent' in updates) && quote.pricingMode === 'margin' && !nextRow.manualSalesPrice && nextRow.mode !== 'section' && nextRow.mode !== 'charge' && nextRow.mode !== 'installation') {
+      nextRow.salesPrice = calculateSalesPrice(nextRow.purchasePrice, nextRow.marginPercent);
     }
+
+    if ('salesPrice' in updates) {
+      nextRow.manualSalesPrice = quote.pricingMode === 'manual' ? true : Boolean(nextRow.manualSalesPrice);
+      if (nextRow.mode !== 'section' && nextRow.mode !== 'charge') {
+        nextRow.marginPercent = nextRow.salesPrice > 0
+          ? roundCurrency(((nextRow.salesPrice - nextRow.purchasePrice) / nextRow.salesPrice) * 100)
+          : 0;
+      }
+    }
+
+    updateRow(row.id, nextRow);
+    touchQuote();
   };
 
-  const handleSendQuote = () => {
-    const validation = canSendQuote(
-      quote,
-      quoteRows,
-      customer,
-      project,
-      hasNewerRevision(quote)
-    );
+  const moveRow = (rowId: string, direction: -1 | 1) => {
+    const currentIndex = quoteRows.findIndex((row) => row.id === rowId);
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= quoteRows.length) return;
+    const current = quoteRows[currentIndex];
+    const target = quoteRows[targetIndex];
+    updateRow(current.id, { sortOrder: target.sortOrder });
+    updateRow(target.id, { sortOrder: current.sortOrder });
+    touchQuote();
+  };
 
-    if (!validation.isValid) {
-      toast.error('Tarjousta ei voida lähettää', {
-        description: validation.errors.map((e) => e.message).join(', '),
+  const cloneRow = (row: QuoteRow) => {
+    addRow({
+      ...row,
+      quoteId: quote.id,
+      sortOrder: quoteRows.length,
+      productName: row.mode === 'section' ? `${row.productName} (kopio)` : row.productName,
+    });
+    touchQuote();
+    toast.success('Rivi kopioitu listan loppuun.');
+  };
+
+  const removeRow = (rowId: string) => {
+    if (!window.confirm('Haluatko varmasti poistaa tarjousrivin?')) return;
+    deleteRow(rowId);
+    touchQuote();
+  };
+
+  const applyQuoteMargin = (marginPercent: number) => {
+    updateQuote(quote.id, { selectedMarginPercent: marginPercent });
+    if (quote.pricingMode === 'margin') {
+      quoteRows.forEach((row) => {
+        if (!row.manualSalesPrice) {
+          syncRowWithMargin(row, marginPercent);
+        }
       });
-      return;
     }
-
-    if (validation.warnings.length > 0) {
-      toast.warning('Huomio', {
-        description: validation.warnings.map((w) => w.message).join(', '),
-      });
-    }
-
-    updateQuoteStatus(quote.id, 'sent');
-    toast.success('Tarjous lähetetty');
-    setShowValidationDialog(false);
   };
 
-  const handleCreateRevision = () => {
-    const newRevisionNumber = quote.revisionNumber + 1;
-    const newQuote = addQuote({
+  const createRevision = () => {
+    const familyId = quote.parentQuoteId || quote.id;
+    const nextRevision = Math.max(
+      ...projectQuotes
+        .filter((candidate) => (candidate.parentQuoteId || candidate.id) === familyId)
+        .map((candidate) => candidate.revisionNumber),
+      quote.revisionNumber
+    ) + 1;
+
+    const nextQuote = addQuote({
       projectId: quote.projectId,
       title: quote.title,
-      revisionNumber: newRevisionNumber,
-      parentQuoteId: quote.parentQuoteId || quote.id,
+      quoteNumber: '',
+      revisionNumber: nextRevision,
+      parentQuoteId: familyId,
       status: 'draft',
       vatPercent: quote.vatPercent,
+      validUntil: quote.validUntil,
       notes: quote.notes,
-      schedule: quote.schedule,
+      internalNotes: quote.internalNotes,
       scheduleMilestones: quote.scheduleMilestones,
       termsId: quote.termsId,
+      discountType: quote.discountType,
+      discountValue: quote.discountValue,
+      projectCosts: quote.projectCosts,
+      deliveryCosts: quote.deliveryCosts,
+      installationCosts: quote.installationCosts,
+      selectedMarginPercent: quote.selectedMarginPercent,
+      pricingMode: quote.pricingMode,
     });
 
     quoteRows.forEach((row, index) => {
       addRow({
-        quoteId: newQuote.id,
+        ...row,
+        quoteId: nextQuote.id,
         sortOrder: index,
-        mode: row.mode,
-        productId: row.productId,
-        productName: row.productName,
-        productCode: row.productCode,
-        quantity: row.quantity,
-        unit: row.unit,
-        purchasePrice: row.purchasePrice,
-        salesPrice: row.salesPrice,
-        installationPrice: row.installationPrice,
-        marginPercent: row.marginPercent,
-        overridePrice: row.overridePrice,
-        regionMultiplier: row.regionMultiplier,
-        notes: row.notes,
       });
     });
-
-    toast.success(`Revisio ${newRevisionNumber} luotu`);
-    onClose();
+    toast.success(`Revisio ${nextRevision} luotu.`);
+    setActiveQuoteId(nextQuote.id);
   };
 
-  const handleExportPDF = () => {
-    try {
-      exportQuoteToPDF(quote, quoteRows, customer, project, quoteTerms, settings);
-      toast.success('PDF avattu uuteen ikkunaan');
-    } catch (error) {
-      toast.error('PDF:n luonti epäonnistui');
-      console.error(error);
-    }
-  };
-
-  const handleExportCustomerExcel = () => {
-    try {
-      exportQuoteToCustomerExcel(quote, quoteRows, customer, project, quoteTerms, settings);
-      toast.success('Asiakas-Excel ladattu');
-    } catch (error) {
-      toast.error('Excelin luonti epäonnistui');
-      console.error(error);
-    }
-  };
-
-  const handleExportInternalExcel = () => {
-    try {
-      exportQuoteToInternalExcel(quote, quoteRows, customer, project, settings);
-      toast.success('Sisäinen Excel ladattu');
-    } catch (error) {
-      toast.error('Excelin luonti epäonnistui');
-      console.error(error);
-    }
-  };
-
-  const validation = canSendQuote(
-    quote,
-    quoteRows,
-    customer,
-    project,
-    hasNewerRevision(quote)
+  const footer = (
+    <>
+      <Button variant="outline" onClick={onClose}>Sulje</Button>
+      <div className="flex flex-wrap gap-2 sm:justify-end">
+        <Button variant="outline" onClick={() => exportQuoteToPDF(quote, quoteRows, customer, project, quoteTerms, settings)}>
+          <FilePdf className="h-4 w-4" />
+          PDF
+        </Button>
+        <Button variant="outline" onClick={() => exportQuoteToCustomerExcel(quote, quoteRows, customer, project, quoteTerms, settings)}>
+          <FileXls className="h-4 w-4" />
+          Asiakas-CSV
+        </Button>
+        <Button variant="outline" onClick={() => exportQuoteToInternalExcel(quote, quoteRows, customer, project, quoteTerms, settings)}>
+          <FileXls className="h-4 w-4" />
+          Sisäinen CSV
+        </Button>
+        {quote.status === 'sent' && (
+          <>
+            <Button variant="outline" onClick={() => updateQuoteStatus(quote.id, 'accepted')}>
+              <CheckCircle className="h-4 w-4" />
+              Hyväksy
+            </Button>
+            <Button variant="outline" onClick={() => updateQuoteStatus(quote.id, 'rejected')}>
+              <XCircle className="h-4 w-4" />
+              Hylkää
+            </Button>
+          </>
+        )}
+        {quote.status !== 'draft' && !quoteHasNewerRevision && (
+          <Button variant="outline" onClick={createRevision}>
+            <Copy className="h-4 w-4" />
+            Luo revisio
+          </Button>
+        )}
+        {quote.status === 'draft' && (
+          <Button onClick={() => setValidationOpen(true)} disabled={!validation.isValid && validation.errors.length > 0}>
+            <PaperPlaneTilt className="h-4 w-4" />
+            Lähetä tarjous
+          </Button>
+        )}
+      </div>
+    </>
   );
 
   return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 overflow-y-auto">
-      <div className="min-h-screen p-8">
-        <Card className="max-w-7xl mx-auto p-8">
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                {quote.status === 'draft' ? (
-                  <Input
-                    value={localTitle}
-                    onChange={(e) => setLocalTitle(e.target.value)}
-                    className="text-2xl font-semibold border-0 p-0 h-auto focus-visible:ring-0"
-                  />
-                ) : (
-                  <h2 className="text-2xl font-semibold">{quote.title}</h2>
-                )}
+    <>
+      <ResponsiveDialog open onOpenChange={(open) => !open && onClose()} title="Tarjouseditori" footer={footer} maxWidth="full">
+        <div className="space-y-6 pb-2">
+          <Card className="p-6 space-y-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={getStatusVariant(quote.status)}>{STATUS_LABELS[quote.status]}</Badge>
+                  <Badge variant="outline">Revisio {quote.revisionNumber}</Badge>
+                  <Badge variant="outline">{quote.quoteNumber}</Badge>
+                </div>
+                <Input
+                  value={quote.title}
+                  onChange={(event) => updateQuote(quote.id, { title: event.target.value })}
+                  className="max-w-2xl border-0 px-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
+                  disabled={!isEditable}
+                />
                 <p className="text-sm text-muted-foreground">
-                  Revisio {quote.revisionNumber} • {customer.name} • {project.site}
+                  {customer.name} • {project.name} • {project.site}
                 </p>
               </div>
-              <div className="flex gap-2 items-center">
-                {quote.status === 'draft' && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <FloppyDisk className="h-3 w-3" />
-                    <span>Automaattitallennus</span>
-                  </div>
-                )}
-                <Badge
-                  variant={
-                    quote.status === 'draft'
-                      ? 'secondary'
-                      : quote.status === 'sent'
-                        ? 'default'
-                        : quote.status === 'accepted'
-                          ? 'default'
-                          : 'destructive'
-                  }
-                >
-                  {quote.status === 'draft' && 'Luonnos'}
-                  {quote.status === 'sent' && 'Lähetetty'}
-                  {quote.status === 'accepted' && 'Hyväksytty'}
-                  {quote.status === 'rejected' && 'Hylätty'}
-                </Badge>
-                <Button variant="ghost" size="icon" onClick={onClose}>
-                  <X className="h-5 w-5" />
-                </Button>
+              <div className="rounded-2xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <FloppyDisk className="h-4 w-4" />
+                  Tallennus tapahtuu automaattisesti
+                </div>
+                <div className="mt-2 space-y-1 text-xs">
+                  <div>Luotu: {new Date(quote.createdAt).toLocaleString('fi-FI')}</div>
+                  <div>Päivitetty: {new Date(quote.updatedAt).toLocaleString('fi-FI')}</div>
+                  {quote.sentAt && <div>Lähetetty: {new Date(quote.sentAt).toLocaleString('fi-FI')}</div>}
+                </div>
               </div>
             </div>
 
-            {hasNewerRevision(quote) && (
+            {quoteHasNewerRevision && (
               <Alert>
                 <Warning className="h-4 w-4" />
                 <AlertDescription>
-                  Tästä tarjouksesta on olemassa uudempi revisio. Tätä versiota ei voi enää lähettää.
+                  Tarjouksesta on olemassa uudempi revisio. Tämä versio on lukutilassa.
                 </AlertDescription>
               </Alert>
             )}
 
-            <Card className="p-6 bg-muted/30">
-              <div className="space-y-2">
-                <Label htmlFor="quote-notes">Tarjoushuomautukset</Label>
-                <Textarea
-                  id="quote-notes"
-                  value={localNotes}
-                  onChange={(e) => setLocalNotes(e.target.value)}
-                  placeholder="Lisää huomautuksia tarjoukseen..."
-                  rows={3}
-                  disabled={quote.status !== 'draft'}
-                />
-              </div>
-              <div className="mt-4">
-                <Label htmlFor="quote-terms">Sopimusehdot</Label>
-                <Select
-                  value={quote.termsId || ''}
-                  onValueChange={(value) => updateQuote(quote.id, { termsId: value })}
-                  disabled={quote.status !== 'draft'}
-                >
-                  <SelectTrigger id="quote-terms">
-                    <SelectValue placeholder="Valitse ehdot" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {terms.map((term) => (
-                      <SelectItem key={term.id} value={term.id}>
-                        {term.name} {term.isDefault && '(oletus)'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </Card>
-
-            <Card className="p-6 bg-muted/30">
-              <ScheduleSection
-                milestones={quote.scheduleMilestones || []}
-                onChange={(milestones) => updateQuote(quote.id, { scheduleMilestones: milestones })}
-                disabled={quote.status !== 'draft'}
-              />
-            </Card>
-
-            <Card className="p-6">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-medium">Tarjousrivit</h3>
-                {quote.status === 'draft' && (
-                  <Button onClick={handleAddRow} size="sm" className="gap-2">
-                    <Plus weight="bold" />
-                    Lisää rivi
-                  </Button>
-                )}
-              </div>
-
-              {quoteRows.length === 0 ? (
-                <div className="py-12 text-center text-muted-foreground">
-                  Ei rivejä. Lisää ensimmäinen rivi yllä olevasta painikkeesta.
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="quote-number">Tarjousnumero</Label>
+                  <Input id="quote-number" value={quote.quoteNumber} onChange={(event) => updateQuote(quote.id, { quoteNumber: event.target.value })} disabled={!isEditable} />
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-32">Tyyppi</TableHead>
-                        <TableHead>Tuote</TableHead>
-                        <TableHead className="w-24">Määrä</TableHead>
-                        <TableHead className="w-20">Yks.</TableHead>
-                        <TableHead className="text-right">Ostohinta</TableHead>
-                        <TableHead className="text-right">Myyntihinta</TableHead>
-                        <TableHead className="text-right">As. hinta</TableHead>
-                        <TableHead className="text-right">Yhteensä</TableHead>
-                        {quote.status === 'draft' && <TableHead className="w-16"></TableHead>}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {quoteRows.map((row) => {
-                        const calc = calculateQuoteRow(row);
-                        const isEditing = editingRowId === row.id;
-
-                        return (
-                          <TableRow key={row.id}>
-                            <TableCell>
-                              <Select
-                                value={row.mode}
-                                onValueChange={(value: QuoteRowMode) =>
-                                  handleRowChange(row.id, 'mode', value)
-                                }
-                                disabled={quote.status !== 'draft'}
-                              >
-                                <SelectTrigger className="h-8">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {Object.entries(MODE_LABELS).map(([key, label]) => (
-                                    <SelectItem key={key} value={key}>
-                                      {label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            <TableCell>
-                              {isEditing && quote.status === 'draft' ? (
-                                <div className="space-y-2">
-                                  <Select
-                                    value={row.productId || 'manual'}
-                                    onValueChange={(value) => {
-                                      if (value === 'manual') {
-                                        return;
-                                      }
-                                      handleProductSelect(row.id, value);
-                                      setEditingRowId(null);
-                                    }}
-                                  >
-                                    <SelectTrigger className="w-full">
-                                      <SelectValue placeholder="Valitse tuote rekisteristä" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="manual">
-                                        <span className="italic text-muted-foreground">Kirjoita manuaalisesti alle</span>
-                                      </SelectItem>
-                                      {products.map((product) => (
-                                        <SelectItem key={product.id} value={product.id}>
-                                          {product.code} - {product.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <Input
-                                    placeholder="Tai kirjoita tuotenimi tähän..."
-                                    value={row.productName}
-                                    onChange={(e) => {
-                                      handleRowChange(row.id, 'productName', e.target.value);
-                                      handleRowChange(row.id, 'productId', undefined);
-                                    }}
-                                    onBlur={() => setEditingRowId(null)}
-                                    autoFocus
-                                    className="h-8"
-                                  />
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => quote.status === 'draft' && setEditingRowId(row.id)}
-                                  className="text-left hover:underline disabled:no-underline disabled:cursor-default w-full"
-                                  disabled={quote.status !== 'draft'}
-                                >
-                                  {row.productCode ? `${row.productCode} - ` : ''}
-                                  {row.productName || 'Valitse tai kirjoita tuote'}
-                                </button>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={row.quantity}
-                                onChange={(e) =>
-                                  handleRowChange(row.id, 'quantity', parseFloat(e.target.value) || 0)
-                                }
-                                className="h-8 font-mono"
-                                disabled={quote.status !== 'draft'}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <span className="text-sm">{row.unit}</span>
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-sm">
-                              {formatCurrency(row.purchasePrice)}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-sm">
-                              {formatCurrency(row.salesPrice)}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-sm">
-                              {formatCurrency(row.installationPrice)}
-                            </TableCell>
-                            <TableCell className="text-right font-mono font-medium">
-                              {formatCurrency(calc.rowTotal)}
-                            </TableCell>
-                            {quote.status === 'draft' && (
-                              <TableCell>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => deleteRow(row.id)}
-                                  className="h-8 w-8"
-                                >
-                                  <Trash className="text-destructive" />
-                                </Button>
-                              </TableCell>
-                            )}
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                <div className="space-y-2">
+                  <Label htmlFor="valid-until">Voimassa asti</Label>
+                  <Input id="valid-until" type="date" value={quote.validUntil || ''} onChange={(event) => updateQuote(quote.id, { validUntil: event.target.value })} disabled={!isEditable} />
                 </div>
-              )}
-
-              <div className="mt-6 flex justify-end">
-                <div className="w-80 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Välisumma:</span>
-                    <span className="font-mono">{formatCurrency(calculation.subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>ALV ({quote.vatPercent}%):</span>
-                    <span className="font-mono">{formatCurrency(calculation.vat)}</span>
-                  </div>
-                  <div className="flex justify-between border-t pt-2 text-lg font-semibold">
-                    <span>Yhteensä:</span>
-                    <span className="font-mono">{formatCurrency(calculation.total)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Kate:</span>
-                    <span className="font-mono">
-                      {formatCurrency(calculation.totalMargin)} ({formatNumber(calculation.marginPercent, 1)}%)
-                    </span>
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pricing-mode">Hinnoittelutapa</Label>
+                  <Select
+                    value={quote.pricingMode}
+                    onValueChange={(value) => {
+                      updateQuote(quote.id, { pricingMode: value as Quote['pricingMode'] });
+                      if (value === 'margin') {
+                        quoteRows.forEach((row) => {
+                          if (!row.manualSalesPrice) {
+                            syncRowWithMargin(row, quote.selectedMarginPercent);
+                          }
+                        });
+                      }
+                    }}
+                    disabled={!isEditable}
+                  >
+                    <SelectTrigger id="pricing-mode"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="margin">Kateohjattu</SelectItem>
+                      <SelectItem value="manual">Manuaalinen myyntihinta</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="quote-margin">Oletuskate %</Label>
+                  <Input id="quote-margin" type="number" min="0" step="0.1" value={quote.selectedMarginPercent} onChange={(event) => applyQuoteMargin(parseFloat(event.target.value) || 0)} disabled={!isEditable} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="vat">ALV %</Label>
+                  <Input id="vat" type="number" min="0" step="0.1" value={quote.vatPercent} onChange={(event) => updateQuote(quote.id, { vatPercent: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="terms">Ehtopohja</Label>
+                  <Select value={quote.termsId || 'none'} onValueChange={(value) => updateQuote(quote.id, { termsId: value === 'none' ? undefined : value })} disabled={!isEditable}>
+                    <SelectTrigger id="terms"><SelectValue placeholder="Valitse ehtopohja" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Ei ehtopohjaa</SelectItem>
+                      {terms.map((term) => (
+                        <SelectItem key={term.id} value={term.id}>{term.name}{term.isDefault ? ' (oletus)' : ''}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-            </Card>
 
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={onClose}>
-                Sulje
-              </Button>
-              <div className="flex gap-2">
-                {quote.status !== 'draft' && !hasNewerRevision(quote) && (
-                  <Button variant="outline" onClick={handleCreateRevision} className="gap-2">
-                    <Copy />
-                    Luo revisio
-                  </Button>
-                )}
-                
-                <Dialog open={showExportMenu} onOpenChange={setShowExportMenu}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="gap-2">
-                      <FilePdf />
-                      Vie
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Vie tarjous</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-3">
-                      <Button onClick={() => { handleExportPDF(); setShowExportMenu(false); }} variant="outline" className="w-full gap-2 justify-start">
-                        <FilePdf />
-                        Vie PDF (asiakas)
-                      </Button>
-                      <Button onClick={() => { handleExportCustomerExcel(); setShowExportMenu(false); }} variant="outline" className="w-full gap-2 justify-start">
-                        <FileXls />
-                        Vie Excel (asiakas)
-                      </Button>
-                      <Button onClick={() => { handleExportInternalExcel(); setShowExportMenu(false); }} variant="outline" className="w-full gap-2 justify-start">
-                        <FileXls />
-                        Vie Excel (sisäinen)
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-
-                {quote.status === 'draft' && !hasNewerRevision(quote) && (
-                  <Button onClick={handleValidateAndShowDialog}>Lähetä tarjous</Button>
-                )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="discount-type">Alennus</Label>
+                  <Select value={quote.discountType} onValueChange={(value) => updateQuote(quote.id, { discountType: value as Quote['discountType'] })} disabled={!isEditable}>
+                    <SelectTrigger id="discount-type"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Ei alennusta</SelectItem>
+                      <SelectItem value="percent">Prosentti</SelectItem>
+                      <SelectItem value="amount">Eurot</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="discount-value">Alennuksen arvo</Label>
+                  <Input id="discount-value" type="number" min="0" step="0.01" value={quote.discountValue} onChange={(event) => updateQuote(quote.id, { discountValue: parseFloat(event.target.value) || 0 })} disabled={!isEditable || quote.discountType === 'none'} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="project-costs">Projektikulut</Label>
+                  <Input id="project-costs" type="number" min="0" step="0.01" value={quote.projectCosts} onChange={(event) => updateQuote(quote.id, { projectCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="delivery-costs">Toimituskulut</Label>
+                  <Input id="delivery-costs" type="number" min="0" step="0.01" value={quote.deliveryCosts} onChange={(event) => updateQuote(quote.id, { deliveryCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="installation-costs">Asennuskulut erillisenä rivinä</Label>
+                  <Input id="installation-costs" type="number" min="0" step="0.01" value={quote.installationCosts} onChange={(event) => updateQuote(quote.id, { installationCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                </div>
               </div>
             </div>
 
-            <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Tarkista tarjous ennen lähetystä</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  {validation.errors.length > 0 && (
-                    <Alert variant="destructive">
-                      <AlertDescription>
-                        <div className="font-semibold mb-2">Virheet (estävät lähetyksen):</div>
-                        <ul className="list-disc list-inside space-y-1">
-                          {validation.errors.map((error, index) => (
-                            <li key={index}>{error.message}</li>
-                          ))}
-                        </ul>
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  
-                  {validation.warnings.length > 0 && (
-                    <Alert>
-                      <Warning className="h-4 w-4" />
-                      <AlertDescription>
-                        <div className="font-semibold mb-2">Varoitukset:</div>
-                        <ul className="list-disc list-inside space-y-1">
-                          {validation.warnings.map((warning, index) => (
-                            <li key={index}>{warning.message}</li>
-                          ))}
-                        </ul>
-                      </AlertDescription>
-                    </Alert>
-                  )}
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="quote-notes">Tarjoushuomautukset</Label>
+                <Textarea id="quote-notes" value={quote.notes || ''} onChange={(event) => updateQuote(quote.id, { notes: event.target.value })} disabled={!isEditable} rows={4} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="internal-notes">Sisäiset muistiinpanot</Label>
+                <Textarea id="internal-notes" value={quote.internalNotes || ''} onChange={(event) => updateQuote(quote.id, { internalNotes: event.target.value })} disabled={!isEditable} rows={4} />
+              </div>
+            </div>
+          </Card>
 
-                  {validation.isValid && validation.warnings.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      Tarjous on valmis lähetettäväksi. Vahvista lähettäminen alla olevasta painikkeesta.
-                    </p>
-                  )}
+          <div className="grid gap-6 xl:grid-cols-[1.7fr_0.9fr]">
+            <div className="space-y-6">
+              <Card className="p-6 space-y-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="space-y-2">
+                    <Label htmlFor="product-search">Lisää tuotteita tarjoukselle</Label>
+                    <div className="relative">
+                      <MagnifyingGlass className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input id="product-search" value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Hae koodilla, nimellä tai kuvauksella" className="pl-10" disabled={!isEditable} />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={() => addManualRow('product')} disabled={!isEditable}><Plus className="h-4 w-4" /> Lisää käsin</Button>
+                    <Button variant="outline" onClick={() => addManualRow('section')} disabled={!isEditable}><Plus className="h-4 w-4" /> Väliotsikko</Button>
+                    <Button variant="outline" onClick={() => addManualRow('charge')} disabled={!isEditable}><Plus className="h-4 w-4" /> Veloitus</Button>
+                  </div>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setShowValidationDialog(false)}>
-                    Peruuta
-                  </Button>
-                  <Button onClick={handleSendQuote} disabled={!validation.isValid}>
-                    Lähetä
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {matchingProducts.map((product) => (
+                    <button
+                      key={product.id}
+                      className="rounded-xl border px-4 py-3 text-left transition hover:border-primary hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={!isEditable}
+                      onClick={() => addProductRow(product)}
+                      type="button"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-medium">{product.code} • {product.name}</div>
+                          <div className="text-sm text-muted-foreground">{product.description || product.category || 'Tuoterekisterin tuote'}</div>
+                        </div>
+                        <Badge variant="outline">{formatCurrency(product.purchasePrice)}</Badge>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+
+              <Card className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Tarjousrivit</h3>
+                    <p className="text-sm text-muted-foreground">Lisää käsin, tuoterekisteristä tai käytä väliotsikoita ja lisäveloituksia.</p>
+                  </div>
+                  <Badge variant="outline">{quoteRows.length} riviä</Badge>
+                </div>
+
+                {quoteRows.length === 0 ? (
+                  <Card className="border-dashed p-10 text-center text-muted-foreground">Tarjouksella ei ole vielä rivejä.</Card>
+                ) : (
+                  <div className="space-y-4">
+                    {quoteRows.map((row, index) => {
+                      const rowCalculation = calculateQuoteRow(row);
+                      const substitutes = row.productId
+                        ? getSubstitutesForProduct(row.productId)
+                            .map((item) => products.find((product) => product.id === item.substituteProductId))
+                            .filter((item): item is Product => Boolean(item))
+                        : [];
+
+                      return (
+                        <Card key={row.id} className="border-border/80 p-4">
+                          <div className="flex flex-col gap-4">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="outline">#{index + 1}</Badge>
+                                <Badge variant="secondary">{ROW_MODE_LABELS[row.mode]}</Badge>
+                                {row.chargeType && <Badge variant="outline">{CHARGE_TYPE_LABELS[row.chargeType]}</Badge>}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <Button size="sm" variant="ghost" onClick={() => moveRow(row.id, -1)} disabled={!isEditable || index === 0}><ArrowUp className="h-4 w-4" /></Button>
+                                <Button size="sm" variant="ghost" onClick={() => moveRow(row.id, 1)} disabled={!isEditable || index === quoteRows.length - 1}><ArrowDown className="h-4 w-4" /></Button>
+                                <Button size="sm" variant="ghost" onClick={() => cloneRow(row)} disabled={!isEditable}><Copy className="h-4 w-4" /></Button>
+                                <Button size="sm" variant="ghost" onClick={() => removeRow(row.id)} disabled={!isEditable}><Trash className="h-4 w-4 text-destructive" /></Button>
+                              </div>
+                            </div>
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                              <div className="space-y-2">
+                                <Label>Tyyppi</Label>
+                                <Select value={row.mode} onValueChange={(value) => patchRow(row, { mode: value as QuoteRowMode })} disabled={!isEditable}>
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {Object.entries(ROW_MODE_LABELS).map(([value, label]) => (
+                                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              {row.mode === 'charge' && (
+                                <div className="space-y-2">
+                                  <Label>Veloituksen tyyppi</Label>
+                                  <Select value={row.chargeType || 'other'} onValueChange={(value) => patchRow(row, { chargeType: value as QuoteChargeType })} disabled={!isEditable}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      {Object.entries(CHARGE_TYPE_LABELS).map(([value, label]) => (
+                                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+                              <div className="space-y-2">
+                                <Label>Tuotekoodi</Label>
+                                <Input value={row.productCode || ''} onChange={(event) => patchRow(row, { productCode: event.target.value })} disabled={!isEditable || row.mode === 'section'} />
+                              </div>
+                              <div className="space-y-2 md:col-span-2">
+                                <Label>{row.mode === 'section' ? 'Väliotsikko' : 'Tuotenimi'}</Label>
+                                <Input value={row.productName} onChange={(event) => patchRow(row, { productName: event.target.value })} disabled={!isEditable} />
+                              </div>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                              <div className="space-y-2 xl:col-span-2">
+                                <Label>Kuvaus</Label>
+                                <Textarea value={row.description || ''} onChange={(event) => patchRow(row, { description: event.target.value })} disabled={!isEditable || row.mode === 'section'} rows={2} />
+                              </div>
+                              <div className="space-y-2 xl:col-span-2">
+                                <Label>Rivihuomautus</Label>
+                                <Textarea value={row.notes || ''} onChange={(event) => patchRow(row, { notes: event.target.value })} disabled={!isEditable || row.mode === 'section'} rows={2} />
+                              </div>
+                            </div>
+
+                            {row.mode !== 'section' && (
+                              <>
+                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+                                  <div className="space-y-2">
+                                    <Label>Määrä</Label>
+                                    <Input type="number" min="0" step="0.01" value={row.quantity} onChange={(event) => patchRow(row, { quantity: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Yksikkö</Label>
+                                    <Input value={row.unit} onChange={(event) => patchRow(row, { unit: event.target.value })} disabled={!isEditable} />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Ostohinta</Label>
+                                    <Input type="number" min="0" step="0.01" value={row.purchasePrice} onChange={(event) => patchRow(row, { purchasePrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'charge'} />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Kate %</Label>
+                                    <Input type="number" min="0" step="0.1" value={row.marginPercent} onChange={(event) => patchRow(row, { marginPercent: parseFloat(event.target.value) || 0, manualSalesPrice: false })} disabled={!isEditable || row.mode === 'charge' || quote.pricingMode === 'manual'} />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Myyntihinta</Label>
+                                    <Input type="number" min="0" step="0.01" value={row.salesPrice} onChange={(event) => patchRow(row, { salesPrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'installation'} />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Asennushinta</Label>
+                                    <Input type="number" min="0" step="0.01" value={row.installationPrice} onChange={(event) => patchRow(row, { installationPrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'charge'} />
+                                  </div>
+                                </div>
+
+                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                  <div className="space-y-2">
+                                    <Label>Hintaryhmä</Label>
+                                    <Select value={row.installationGroupId || 'none'} onValueChange={(value) => patchRow(row, { installationGroupId: value === 'none' ? undefined : value })} disabled={!isEditable || row.mode === 'charge'}>
+                                      <SelectTrigger><SelectValue placeholder="Ei hintaryhmää" /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="none">Ei hintaryhmää</SelectItem>
+                                        {groups.map((group) => (
+                                          <SelectItem key={group.id} value={group.id}>{group.name}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Aluekerroin</Label>
+                                    <Input type="number" min="0" step="0.01" value={row.regionMultiplier} onChange={(event) => patchRow(row, { regionMultiplier: parseFloat(event.target.value) || 1 })} disabled={!isEditable} />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Todellinen kate</Label>
+                                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(rowCalculation.marginAmount)}</div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Kate % toteuma</Label>
+                                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatNumber(rowCalculation.marginPercent, 1)} %</div>
+                                  </div>
+                                </div>
+
+                                {substitutes.length > 0 && (
+                                  <div className="rounded-xl border bg-muted/20 p-3">
+                                    <div className="mb-2 text-sm font-medium">Korvaavat tuotteet</div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {substitutes.map((product) => (
+                                        <Button
+                                          key={product.id}
+                                          variant="outline"
+                                          size="sm"
+                                          disabled={!isEditable}
+                                          onClick={() => patchRow(row, { ...buildProductRow(product), quantity: row.quantity, sortOrder: row.sortOrder })}
+                                        >
+                                          {product.code} • {product.name}
+                                        </Button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            )}
+
+                            <Separator />
+                            <div className="grid gap-3 md:grid-cols-3">
+                              <div className="rounded-xl border bg-muted/20 p-3">
+                                <div className="text-xs uppercase tracking-wide text-muted-foreground">Rivisumma</div>
+                                <div className="mt-1 text-lg font-semibold">{formatCurrency(rowCalculation.rowTotal)}</div>
+                              </div>
+                              <div className="rounded-xl border bg-muted/20 p-3">
+                                <div className="text-xs uppercase tracking-wide text-muted-foreground">Ostokustannus</div>
+                                <div className="mt-1 text-lg font-semibold">{formatCurrency(rowCalculation.costTotal)}</div>
+                              </div>
+                              <div className="rounded-xl border bg-muted/20 p-3">
+                                <div className="text-xs uppercase tracking-wide text-muted-foreground">Myynti + asennus</div>
+                                <div className="mt-1 text-lg font-semibold">{formatCurrency(rowCalculation.productTotal + rowCalculation.installationTotal)}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </Card>
+            </div>
+            <div className="space-y-6">
+              <Card className="p-6 space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold">Tarjouksen yhteenveto</h3>
+                  <p className="text-sm text-muted-foreground">Asiakas-, projekti- ja summatiedot tulostusta varten.</p>
+                </div>
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">Asiakas</span><span className="text-right font-medium">{customer.name}</span></div>
+                  <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">Projekti</span><span className="text-right font-medium">{project.name}</span></div>
+                  <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">Voimassa asti</span><span className="text-right font-medium">{quote.validUntil || '-'}</span></div>
+                  <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">Rivejä</span><span className="text-right font-medium">{quoteRows.filter((row) => row.mode !== 'section').length}</span></div>
+                </div>
+                <Separator />
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between"><span>Rivien välisumma</span><span className="font-medium">{formatCurrency(calculation.lineSubtotal)}</span></div>
+                  <div className="flex justify-between"><span>Projekti-, toimitus- ja asennuskulut</span><span className="font-medium">{formatCurrency(calculation.extraChargesTotal)}</span></div>
+                  <div className="flex justify-between"><span>Alennus</span><span className="font-medium">-{formatCurrency(calculation.discountAmount)}</span></div>
+                  <div className="flex justify-between"><span>Välisumma</span><span className="font-medium">{formatCurrency(calculation.subtotal)}</span></div>
+                  <div className="flex justify-between"><span>ALV {formatNumber(quote.vatPercent, 1)} %</span><span className="font-medium">{formatCurrency(calculation.vat)}</span></div>
+                  <div className="flex justify-between border-t pt-3 text-lg font-semibold"><span>Loppusumma</span><span>{formatCurrency(calculation.total)}</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>Kokonaiskate</span><span>{formatCurrency(calculation.totalMargin)} ({formatNumber(calculation.marginPercent, 1)} %)</span></div>
+                </div>
+                {quoteTerms && (
+                  <div className="rounded-xl border bg-muted/20 p-4">
+                    <div className="text-sm font-medium">Ehtopohja</div>
+                    <div className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{quoteTerms.content}</div>
+                  </div>
+                )}
+              </Card>
+
+              <Card className="p-6">
+                <ScheduleSection milestones={quote.scheduleMilestones || []} onChange={(scheduleMilestones) => updateQuote(quote.id, { scheduleMilestones })} disabled={!isEditable} />
+              </Card>
+            </div>
           </div>
-        </Card>
-      </div>
-    </div>
+        </div>
+      </ResponsiveDialog>
+
+      <Dialog open={validationOpen} onOpenChange={setValidationOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Tarkista tarjous ennen lähetystä</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {validation.errors.length > 0 && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  <div className="font-medium">Lähetys estyy näiden virheiden vuoksi:</div>
+                  <ul className="mt-2 list-disc pl-5">
+                    {validation.errors.map((error) => <li key={error.field}>{error.message}</li>)}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+            {validation.warnings.length > 0 && (
+              <Alert>
+                <Warning className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="font-medium">Tarkista vielä nämä varoitukset:</div>
+                  <ul className="mt-2 list-disc pl-5">
+                    {validation.warnings.map((warning) => <li key={warning.field}>{warning.message}</li>)}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setValidationOpen(false)}>Peruuta</Button>
+            <Button
+              onClick={() => {
+                if (!validation.isValid) {
+                  toast.error('Tarjous ei ole valmis lähetettäväksi.');
+                  return;
+                }
+                updateQuoteStatus(quote.id, 'sent');
+                setValidationOpen(false);
+                toast.success('Tarjous merkitty lähetetyksi.');
+              }}
+              disabled={!validation.isValid}
+            >
+              <PaperPlaneTilt className="h-4 w-4" />
+              Vahvista lähetys
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

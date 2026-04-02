@@ -29,7 +29,7 @@ import { ResponsiveDialog } from '../ResponsiveDialog';
 export default function SubstituteProductsPage() {
   const { substitutes, addSubstitute, deleteSubstitute } = useSubstituteProducts();
   const { products } = useProducts();
-  const { canManageUsers } = useAuth();
+  const { canManageSharedData } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [originalType, setOriginalType] = useState<'existing' | 'manual'>('existing');
 
@@ -41,8 +41,8 @@ export default function SubstituteProductsPage() {
   });
 
   const handleOpenDialog = () => {
-    if (!canManageUsers) {
-      toast.error('Vain omistaja voi lisätä korvaavia tuotteita');
+    if (!canManageSharedData) {
+      toast.error('Vain admin voi lisätä korvaavia tuotteita');
       return;
     }
 
@@ -57,8 +57,8 @@ export default function SubstituteProductsPage() {
   };
 
   const handleSave = () => {
-    if (!canManageUsers) {
-      toast.error('Vain omistaja voi tallentaa muutoksia');
+    if (!canManageSharedData) {
+      toast.error('Vain admin voi tallentaa muutoksia');
       return;
     }
 
@@ -89,8 +89,8 @@ export default function SubstituteProductsPage() {
   };
 
   const handleDelete = (id: string) => {
-    if (!canManageUsers) {
-      toast.error('Vain omistaja voi poistaa korvaavia tuotteita');
+    if (!canManageSharedData) {
+      toast.error('Vain admin voi poistaa korvaavia tuotteita');
       return;
     }
 
@@ -107,7 +107,7 @@ export default function SubstituteProductsPage() {
           <h1 className="text-2xl sm:text-3xl font-semibold">Korvaavat tuotteet</h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">Määritä tuotteiden korvattavuus</p>
         </div>
-        {canManageUsers ? (
+        {canManageSharedData ? (
           <Button onClick={handleOpenDialog} className="gap-2">
             <Plus weight="bold" />
             Lisää korvaava tuote
@@ -205,7 +205,7 @@ export default function SubstituteProductsPage() {
         </div>
       </ResponsiveDialog>
 
-      {!canManageUsers && <ReadOnlyAlert />}
+      {!canManageSharedData && <ReadOnlyAlert />}
 
       <Card className="p-6">
         {substitutes.length === 0 ? (
@@ -219,7 +219,7 @@ export default function SubstituteProductsPage() {
                 <TableHead>Alkuperäinen tuote</TableHead>
                 <TableHead></TableHead>
                 <TableHead>Korvaava tuote</TableHead>
-                {canManageUsers && <TableHead className="w-24"></TableHead>}
+                {canManageSharedData && <TableHead className="w-24"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -246,7 +246,7 @@ export default function SubstituteProductsPage() {
                     <TableCell className="font-medium">
                       {substitute ? `${substitute.code} - ${substitute.name}` : 'Tuntematon'}
                     </TableCell>
-                    {canManageUsers && (
+                    {canManageSharedData && (
                       <TableCell>
                         <Button
                           variant="ghost"

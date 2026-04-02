@@ -1,7 +1,25 @@
-import { useState } from 'react';
-import { House, Package, Wrench, ArrowsLeftRight, Folder, FileText, Gear, ChartBar, User, SignOut, List, X } from '@phosphor-icons/react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ArrowsLeftRight,
+  ArrowsClockwise,
+  ChartBar,
+  DownloadSimple,
+  FileText,
+  Folder,
+  Gear,
+  House,
+  List,
+  Package,
+  UploadSimple,
+  Shield,
+  SignOut,
+  User,
+  Wrench,
+  X,
+} from '@phosphor-icons/react';
 import Dashboard from './components/pages/Dashboard';
 import ProductsPage from './components/pages/ProductsPage';
+import ImportPage from './components/pages/ImportPage';
 import InstallationGroupsPage from './components/pages/InstallationGroupsPage';
 import SubstituteProductsPage from './components/pages/SubstituteProductsPage';
 import ProjectsPage from './components/pages/ProjectsPage';
@@ -9,40 +27,142 @@ import TermsPage from './components/pages/TermsPage';
 import SettingsPage from './components/pages/SettingsPage';
 import ReportsPage from './components/pages/ReportsPage';
 import LoginPage from './components/LoginPage';
+import AccountPage from './components/pages/AccountPage';
+import UsersPage from './components/pages/UsersPage';
 import { cn } from './lib/utils';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './hooks/use-auth';
-import { Avatar, AvatarImage, AvatarFallback } from './components/ui/avatar';
+import { Avatar, AvatarFallback } from './components/ui/avatar';
 import { Badge } from './components/ui/badge';
-import { Button } from './components/ui/button';
 import { useIsMobile } from './hooks/use-mobile';
+import { Button } from './components/ui/button';
+import { checkForDesktopUpdates, getDesktopUpdateStatus, isDesktopRuntime, restartDesktopForUpdate, type DesktopUpdateSnapshot } from './lib/desktop-update';
+import { toast } from 'sonner';
 
-type Page = 
-  | 'dashboard' 
-  | 'products' 
-  | 'installation-groups' 
-  | 'substitutes' 
-  | 'projects' 
-  | 'terms' 
-  | 'settings' 
-  | 'reports';
-
-const navigation = [
-  { id: 'dashboard' as const, name: 'Etusivu', icon: House },
-  { id: 'products' as const, name: 'Tuoterekisteri', icon: Package },
-  { id: 'installation-groups' as const, name: 'Hintaryhmät', icon: Wrench },
-  { id: 'substitutes' as const, name: 'Korvaavat tuotteet', icon: ArrowsLeftRight },
-  { id: 'projects' as const, name: 'Projektit', icon: Folder },
-  { id: 'terms' as const, name: 'Ehdot', icon: FileText },
-  { id: 'settings' as const, name: 'Asetukset', icon: Gear },
-  { id: 'reports' as const, name: 'Raportointi', icon: ChartBar },
-];
+type Page =
+  | 'dashboard'
+  | 'projects'
+  | 'products'
+  | 'import'
+  | 'installation-groups'
+  | 'substitutes'
+  | 'terms'
+  | 'reports'
+  | 'users'
+  | 'settings'
+  | 'account';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, loading, role, canManageUsers } = useAuth();
+  const [checkingForUpdates, setCheckingForUpdates] = useState(false);
+  const [restartingForUpdate, setRestartingForUpdate] = useState(false);
+  const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateSnapshot | null>(null);
+  const { user, loading, role, canManageUsers, canManageSharedData, logout } = useAuth();
   const isMobile = useIsMobile();
+  const showDesktopUpdateActions = isDesktopRuntime();
+
+  const navigation = useMemo(
+    () =>
+      [
+        { id: 'dashboard' as const, name: 'Etusivu', icon: House, visible: true },
+        { id: 'projects' as const, name: 'Projektit', icon: Folder, visible: true },
+        { id: 'products' as const, name: 'Tuoterekisteri', icon: Package, visible: true },
+        { id: 'import' as const, name: 'Tuonti', icon: UploadSimple, visible: canManageSharedData },
+        { id: 'installation-groups' as const, name: 'Hintaryhmät', icon: Wrench, visible: true },
+        { id: 'substitutes' as const, name: 'Korvaavat tuotteet', icon: ArrowsLeftRight, visible: true },
+        { id: 'terms' as const, name: 'Ehdot', icon: FileText, visible: true },
+        { id: 'reports' as const, name: 'Raportointi', icon: ChartBar, visible: true },
+        { id: 'users' as const, name: 'Käyttäjät', icon: Shield, visible: canManageUsers },
+        { id: 'settings' as const, name: 'Asetukset', icon: Gear, visible: canManageSharedData },
+        { id: 'account' as const, name: 'Oma tili', icon: User, visible: true },
+      ].filter((item) => item.visible),
+    [canManageSharedData, canManageUsers]
+  );
+
+  useEffect(() => {
+    if (!navigation.some((item) => item.id === currentPage)) {
+      setCurrentPage('dashboard');
+    }
+  }, [currentPage, navigation]);
+
+  useEffect(() => {
+    if (!showDesktopUpdateActions) {
+      return;
+    }
+
+    let mounted = true;
+    const refreshDesktopUpdateState = async () => {
+      try {
+        const state = await getDesktopUpdateStatus();
+        if (mounted) {
+          setDesktopUpdateState(state);
+        }
+      } catch {
+        // Desktop update status is a convenience only; ignore fetch failures here.
+      }
+    };
+
+    void refreshDesktopUpdateState();
+    const interval = window.setInterval(() => {
+      void refreshDesktopUpdateState();
+    }, 15_000);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+    };
+  }, [showDesktopUpdateActions]);
+
+  const handleCheckForUpdates = async () => {
+    if (!showDesktopUpdateActions) {
+      toast.info('Päivitysten tarkistus toimii exe-versiossa.');
+      return;
+    }
+
+    setCheckingForUpdates(true);
+    try {
+      const state = await checkForDesktopUpdates();
+      setDesktopUpdateState(state);
+
+      if (!state.enabled) {
+        toast.info('Päivitysfeediä ei ole määritetty.');
+        return;
+      }
+
+      if (state.status === 'error') {
+        toast.error(state.error || 'Päivityksen tarkistus epäonnistui.');
+        return;
+      }
+
+      if (state.status === 'downloading') {
+        toast.info(`Päivitys ${state.latestVersion || ''} löytyi. Lataus alkoi taustalla.`);
+        return;
+      }
+
+      if (state.status === 'downloaded' || state.needsRestart) {
+        toast.success(`Päivitys ${state.downloadedVersion || state.latestVersion || ''} on ladattu.`);
+        return;
+      }
+
+      toast.info('Uusia päivityksiä ei löytynyt.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Päivityksen tarkistus epäonnistui.');
+    } finally {
+      setCheckingForUpdates(false);
+    }
+  };
+
+  const handleRestartForUpdate = async () => {
+    setRestartingForUpdate(true);
+    try {
+      await restartDesktopForUpdate();
+      toast.success('Päivitys käynnistyy nyt.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Päivityksen käynnistys epäonnistui.');
+      setRestartingForUpdate(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -64,18 +184,9 @@ function App() {
     );
   }
 
-  const getRoleBadge = () => {
-    switch (role) {
-      case 'owner':
-        return { label: 'Omistaja', variant: 'secondary' as const };
-      case 'editor':
-        return { label: 'Muokkaaja', variant: 'default' as const };
-      case 'viewer':
-        return { label: 'Lukija', variant: 'outline' as const };
-    }
-  };
-
-  const roleBadge = getRoleBadge();
+  const roleBadge = role === 'admin'
+    ? { label: 'Admin', variant: 'default' as const }
+    : { label: 'Käyttäjä', variant: 'secondary' as const };
 
   const handleNavigate = (page: Page) => {
     setCurrentPage(page);
@@ -87,30 +198,28 @@ function App() {
   return (
     <div className="flex h-screen bg-background">
       {isMobile && mobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40"
-          onClick={() => setMobileMenuOpen(false)}
-        />
+        <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setMobileMenuOpen(false)} />
       )}
 
-      <aside className={cn(
-        "border-r border-border bg-card flex-shrink-0 flex flex-col z-50",
-        isMobile 
-          ? "fixed inset-y-0 left-0 w-64 transform transition-transform duration-300 ease-in-out" 
-          : "w-64 relative",
-        isMobile && !mobileMenuOpen && "-translate-x-full"
-      )}>
+      <aside
+        className={cn(
+          'border-r border-border bg-card flex-shrink-0 flex flex-col z-50',
+          isMobile ? 'fixed inset-y-0 left-0 w-72 transform transition-transform duration-300 ease-in-out' : 'w-72 relative',
+          isMobile && !mobileMenuOpen && '-translate-x-full'
+        )}
+      >
         <div className="flex h-16 items-center border-b border-border px-6 justify-between">
-          <h1 className="text-xl font-semibold text-primary">Laskenta</h1>
+          <div>
+            <h1 className="text-xl font-semibold text-primary">Laskenta</h1>
+            <p className="text-xs text-muted-foreground">Tarjouslaskenta</p>
+          </div>
           {isMobile && (
-            <button
-              onClick={() => setMobileMenuOpen(false)}
-              className="p-2 hover:bg-muted rounded-md"
-            >
+            <button onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-muted rounded-md">
               <X className="h-5 w-5" />
             </button>
           )}
         </div>
+
         <nav className="space-y-1 p-4 flex-1 overflow-y-auto">
           {navigation.map((item) => {
             const Icon = item.icon;
@@ -121,9 +230,7 @@ function App() {
                 onClick={() => handleNavigate(item.id)}
                 className={cn(
                   'flex w-full items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-foreground hover:bg-muted'
+                  isActive ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted'
                 )}
               >
                 <Icon className="h-5 w-5 flex-shrink-0" weight={isActive ? 'fill' : 'regular'} />
@@ -132,19 +239,46 @@ function App() {
             );
           })}
         </nav>
-        <div className="border-t border-border p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <Avatar className="w-8 h-8 flex-shrink-0">
-              <AvatarImage src={user.avatarUrl} alt={user.login} />
-              <AvatarFallback>
-                <User className="w-4 h-4" />
-              </AvatarFallback>
+
+        <div className="border-t border-border p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <Avatar className="w-10 h-10 flex-shrink-0">
+              <AvatarFallback>{user.initials}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{user.login}</p>
+              <p className="text-sm font-medium truncate">{user.displayName}</p>
+              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               <Badge variant={roleBadge.variant} className="text-xs mt-1">{roleBadge.label}</Badge>
             </div>
           </div>
+          {showDesktopUpdateActions && desktopUpdateState?.needsRestart && (
+            <Button className="w-full justify-start gap-2" onClick={() => void handleRestartForUpdate()} disabled={restartingForUpdate}>
+              <DownloadSimple className={cn('h-4 w-4', restartingForUpdate && 'animate-pulse')} />
+              {restartingForUpdate ? 'Käynnistetään...' : 'Päivitä nyt'}
+            </Button>
+          )}
+          {showDesktopUpdateActions && (
+            <Button variant="outline" className="w-full justify-start gap-2" onClick={() => void handleCheckForUpdates()} disabled={checkingForUpdates}>
+              <ArrowsClockwise className={cn('h-4 w-4', checkingForUpdates && 'animate-spin')} />
+              {checkingForUpdates ? 'Tarkistetaan...' : 'Tarkista päivitykset'}
+            </Button>
+          )}
+          <Button variant="outline" className="w-full justify-start gap-2" onClick={() => void logout()}>
+            <SignOut className="h-4 w-4" />
+            Kirjaudu ulos
+          </Button>
+          {showDesktopUpdateActions && desktopUpdateState?.feedUrl && (
+            <div className="space-y-1">
+              {desktopUpdateState.needsRestart && (
+                <p className="text-xs text-foreground">
+                  Versio {desktopUpdateState.downloadedVersion || desktopUpdateState.latestVersion || ''} on ladattu ja valmis asennettavaksi.
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground break-words">
+                Päivitysfeedi: {desktopUpdateState.feedUrl}
+              </p>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -158,20 +292,23 @@ function App() {
               <List className="h-6 w-6" />
             </button>
             <h1 className="text-lg font-semibold text-primary truncate">
-              {navigation.find(n => n.id === currentPage)?.name || 'Laskenta'}
+              {navigation.find((item) => item.id === currentPage)?.name || 'Laskenta'}
             </h1>
           </header>
         )}
 
         <main className="flex-1 overflow-auto">
-          {currentPage === 'dashboard' && <Dashboard />}
+          {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
+          {currentPage === 'projects' && <ProjectsPage />}
           {currentPage === 'products' && <ProductsPage />}
+          {currentPage === 'import' && <ImportPage />}
           {currentPage === 'installation-groups' && <InstallationGroupsPage />}
           {currentPage === 'substitutes' && <SubstituteProductsPage />}
-          {currentPage === 'projects' && <ProjectsPage />}
           {currentPage === 'terms' && <TermsPage />}
-          {currentPage === 'settings' && <SettingsPage />}
           {currentPage === 'reports' && <ReportsPage />}
+          {currentPage === 'users' && <UsersPage />}
+          {currentPage === 'settings' && <SettingsPage />}
+          {currentPage === 'account' && <AccountPage />}
         </main>
       </div>
 

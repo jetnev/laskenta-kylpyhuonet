@@ -161,7 +161,6 @@ export default function ProjectsPageFull() {
   const selectedQuote = selectedQuoteId ? quotes.find((q) => q.id === selectedQuoteId) : null;
 
   if (selectedQuote) {
-    const project = projects.find((p) => p.id === selectedQuote.projectId);
     return (
       <div className="p-8">
         <QuoteEditor projectId={selectedQuote.projectId} quoteId={selectedQuote.id} onClose={() => setSelectedQuoteId(null)} />

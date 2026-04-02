@@ -1,10 +1,24 @@
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected';
-export type QuoteRowMode = 'product' | 'installation' | 'product_installation';
-export type UnitType = 'm2' | 'm²' | 'm' | 'jm' | 'kpl' | 'pkt' | 'ltv' | 'erä';
+export type QuoteDiscountType = 'none' | 'percent' | 'amount';
+export type QuotePricingMode = 'margin' | 'manual';
+export type QuoteRowMode = 'product' | 'installation' | 'product_installation' | 'section' | 'charge';
+export type QuoteChargeType = 'project' | 'delivery' | 'installation' | 'other';
+export type UnitType = 'm2' | 'm²' | 'm' | 'm3' | 'jm' | 'kpl' | 'pkt' | 'ltv' | 'kg' | 'l' | 'erä' | 'h' | 'palvelu';
 
 export interface RegionData {
   name: string;
   coefficient: number;
+}
+
+export interface AuditFields {
+  createdAt: string;
+  updatedAt: string;
+  createdByUserId?: string;
+  updatedByUserId?: string;
+}
+
+export interface OwnedFields extends AuditFields {
+  ownerUserId: string;
 }
 
 export const DEFAULT_REGIONS: RegionData[] = [
@@ -15,45 +29,69 @@ export const DEFAULT_REGIONS: RegionData[] = [
   { name: 'Pohjois-Suomi', coefficient: 0.9 },
 ];
 
-export interface Product {
+export interface Product extends AuditFields {
   id: string;
   code: string;
   name: string;
+  description?: string;
   category?: string;
-  unit: string;
+  internalCode?: string;
+  brand?: string;
+  manufacturer?: string;
+  manufacturerSku?: string;
+  ean?: string;
+  normalizedName?: string;
+  packageSize?: number;
+  packageUnit?: string;
+  unit: UnitType | string;
+  salesUnit?: string;
+  baseUnit?: string;
   purchasePrice: number;
+  defaultCostPrice?: number;
+  defaultSalePrice?: number;
+  defaultSalesMarginPercent?: number;
+  defaultInstallationPrice?: number;
+  defaultMarginPercent?: number;
+  defaultInstallPrice?: number;
+  categoryId?: string;
+  subcategoryId?: string;
   installationGroupId?: string;
-  createdAt: string;
-  updatedAt: string;
+  isActive?: boolean;
+  active?: boolean;
+  searchableText?: string;
+  sourceNames?: string[];
+  sourceCount?: number;
+  tags?: string[];
 }
 
-export interface InstallationGroup {
+export interface InstallationGroup extends AuditFields {
   id: string;
   name: string;
   category?: string;
+  description?: string;
   defaultPrice: number;
-  createdAt: string;
-  updatedAt: string;
+  defaultMarginPercent?: number;
+  defaultInstallationPrice?: number;
 }
 
-export interface SubstituteProduct {
+export interface SubstituteProduct extends AuditFields {
   id: string;
   originalProductId?: string;
   manualOriginalCode?: string;
   manualOriginalName?: string;
   substituteProductId: string;
-  createdAt: string;
+  notes?: string;
 }
 
-export interface Customer {
+export interface Customer extends OwnedFields {
   id: string;
   name: string;
   contactPerson?: string;
   email?: string;
   phone?: string;
   address?: string;
-  createdAt: string;
-  updatedAt: string;
+  businessId?: string;
+  notes?: string;
 }
 
 export interface CustomOption {
@@ -62,7 +100,7 @@ export interface CustomOption {
   value: string;
 }
 
-export interface Project {
+export interface Project extends OwnedFields {
   id: string;
   customerId: string;
   name: string;
@@ -71,8 +109,6 @@ export interface Project {
   regionCoefficient: number;
   notes?: string;
   customOptions?: CustomOption[];
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface ScheduleMilestone {
@@ -83,48 +119,63 @@ export interface ScheduleMilestone {
   type: 'deadline' | 'delivery' | 'start' | 'completion' | 'other';
 }
 
-export interface Quote {
+export interface Quote extends OwnedFields {
   id: string;
   projectId: string;
   title: string;
+  quoteNumber: string;
   revisionNumber: number;
   parentQuoteId?: string;
   status: QuoteStatus;
   vatPercent: number;
+  validUntil?: string;
+  sentAt?: string;
+  acceptedAt?: string;
+  rejectedAt?: string;
   notes?: string;
+  internalNotes?: string;
   schedule?: string;
   scheduleMilestones?: ScheduleMilestone[];
   termsId?: string;
-  createdAt: string;
-  updatedAt: string;
+  discountType: QuoteDiscountType;
+  discountValue: number;
+  projectCosts: number;
+  deliveryCosts: number;
+  installationCosts: number;
+  selectedMarginPercent: number;
+  pricingMode: QuotePricingMode;
+  lastAutoSavedAt?: string;
 }
 
-export interface QuoteRow {
+export interface QuoteRow extends OwnedFields {
   id: string;
   quoteId: string;
   sortOrder: number;
   mode: QuoteRowMode;
+  chargeType?: QuoteChargeType;
+  source?: 'manual' | 'catalog';
   productId?: string;
   productName: string;
   productCode?: string;
+  description?: string;
   quantity: number;
-  unit: string;
+  unit: UnitType | string;
   purchasePrice: number;
   salesPrice: number;
   installationPrice: number;
   marginPercent: number;
   overridePrice?: number;
   regionMultiplier: number;
+  installationGroupId?: string;
   notes?: string;
+  manualSalesPrice?: boolean;
 }
 
-export interface QuoteTerms {
+export interface QuoteTerms extends AuditFields {
   id: string;
   name: string;
   content: string;
   isDefault: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface Settings {
@@ -132,7 +183,11 @@ export interface Settings {
   companyAddress: string;
   companyPhone: string;
   companyEmail: string;
+  updateFeedUrl?: string;
   companyLogo?: string;
   defaultVatPercent: number;
   defaultMarginPercent: number;
+  defaultValidityDays: number;
+  quoteNumberPrefix: string;
+  currency: string;
 }

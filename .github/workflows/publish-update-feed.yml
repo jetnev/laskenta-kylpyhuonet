@@ -1,0 +1,56 @@
+name: Publish Update Feed
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        shell: pwsh
+
+      - name: Align version with tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          npm version $version --no-git-tag-version --allow-same-version
+        shell: pwsh
+
+      - name: Build desktop artifacts
+        run: npm run desktop:pack
+        shell: pwsh
+
+      - name: Stage update feed
+        run: |
+          $feedDir = Join-Path $PWD 'update-feed'
+          New-Item -ItemType Directory -Force $feedDir | Out-Null
+          Get-ChildItem -Path 'release' -File |
+            Where-Object { $_.Name -ne 'builder-debug.yml' } |
+            Copy-Item -Destination $feedDir
+        shell: pwsh
+
+      - name: Publish update feed
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./update-feed
+          force_orphan: true

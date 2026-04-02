@@ -7,17 +7,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Button } from '../ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
-import { TrendUp, TrendDown, FileText, Folder, CheckCircle, XCircle, Clock, Package, ChartBar, CalendarBlank, FilePdf, FileXls, Download, Users } from '@phosphor-icons/react';
-import { useProjects } from '../../hooks/use-data';
-import { useQuotes } from '../../hooks/use-data';
-import { useQuoteRows } from '../../hooks/use-data';
-import { useProducts } from '../../hooks/use-data';
-import { useCustomers } from '../../hooks/use-data';
+import { CheckCircle, XCircle, Clock, ChartBar, CalendarBlank, FilePdf, FileText, FileXls, Folder, Users } from '@phosphor-icons/react';
+import { useProjects, useQuotes, useQuoteRows, useCustomers } from '../../hooks/use-data';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { format, subMonths } from 'date-fns';
 import { fi } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import { calculateQuote, calculateQuoteRow } from '../../lib/calculations';
 
 type TimeRange = '1m' | '3m' | '6m' | '12m' | 'all' | 'custom';
 type DateRange = {
@@ -31,7 +28,6 @@ export default function ReportsPage() {
   const { projects } = useProjects();
   const { quotes } = useQuotes();
   const { rows } = useQuoteRows();
-  const { products } = useProducts();
   const { customers } = useCustomers();
 
   const filteredQuotes = useMemo(() => {
@@ -71,22 +67,14 @@ export default function ReportsPage() {
     
     let totalValue = 0;
     let totalMargin = 0;
-    let totalCost = 0;
 
     filteredQuotes.forEach(quote => {
       const quoteRows = rows.filter(r => r.quoteId === quote.id);
-      quoteRows.forEach(row => {
-        const salesPrice = row.overridePrice !== undefined ? row.overridePrice : row.salesPrice;
-        const installPrice = row.mode === 'installation' || row.mode === 'product_installation' ? row.installationPrice : 0;
-        const rowTotal = (salesPrice + installPrice) * row.quantity * row.regionMultiplier;
-        const rowCost = row.purchasePrice * row.quantity;
-        
-        totalValue += rowTotal;
-        totalCost += rowCost;
-      });
+      const calculation = calculateQuote(quote, quoteRows);
+      totalValue += calculation.subtotal;
+      totalMargin += calculation.totalMargin;
     });
     
-    totalMargin = totalValue - totalCost;
     const marginPercent = totalValue > 0 ? (totalMargin / totalValue) * 100 : 0;
 
     return {
@@ -121,15 +109,9 @@ export default function ReportsPage() {
       months[monthKey].quotes += 1;
       
       const quoteRows = rows.filter(r => r.quoteId === quote.id);
-      quoteRows.forEach(row => {
-        const salesPrice = row.overridePrice !== undefined ? row.overridePrice : row.salesPrice;
-        const installPrice = row.mode === 'installation' || row.mode === 'product_installation' ? row.installationPrice : 0;
-        const rowTotal = (salesPrice + installPrice) * row.quantity * row.regionMultiplier;
-        const rowCost = row.purchasePrice * row.quantity;
-        
-        months[monthKey].value += rowTotal;
-        months[monthKey].margin += (rowTotal - rowCost);
-      });
+      const calculation = calculateQuote(quote, quoteRows);
+      months[monthKey].value += calculation.subtotal;
+      months[monthKey].margin += calculation.totalMargin;
     });
 
     return Object.keys(months)
@@ -160,9 +142,7 @@ export default function ReportsPage() {
           };
         }
         
-        const salesPrice = row.overridePrice !== undefined ? row.overridePrice : row.salesPrice;
-        const installPrice = row.mode === 'installation' || row.mode === 'product_installation' ? row.installationPrice : 0;
-        const rowTotal = (salesPrice + installPrice) * row.quantity * row.regionMultiplier;
+        const rowTotal = calculateQuoteRow(row).rowTotal;
         
         productStats[row.productId].quantity += row.quantity;
         productStats[row.productId].value += rowTotal;
@@ -213,13 +193,7 @@ export default function ReportsPage() {
       
       projectQuotes.forEach(quote => {
         const quoteRows = rows.filter(r => r.quoteId === quote.id);
-        let quoteValue = 0;
-        
-        quoteRows.forEach(row => {
-          const salesPrice = row.overridePrice !== undefined ? row.overridePrice : row.salesPrice;
-          const installPrice = row.mode === 'installation' || row.mode === 'product_installation' ? row.installationPrice : 0;
-          quoteValue += (salesPrice + installPrice) * row.quantity * row.regionMultiplier;
-        });
+        const quoteValue = calculateQuote(quote, quoteRows).subtotal;
         
         customerStats[project.customerId].totalValue += quoteValue;
         
@@ -278,6 +252,11 @@ export default function ReportsPage() {
   };
 
   const exportToExcel = () => {
+    if (timeRange === 'custom' && (!dateRange.from || !dateRange.to)) {
+      toast.error('Valitse päivämääräväli ennen vientiä');
+      return;
+    }
+
     const data = [
       ['Raportti', 'Laskenta Tarjouslaskenta'],
       ['Luontipäivä', format(new Date(), 'dd.MM.yyyy HH:mm', { locale: fi })],

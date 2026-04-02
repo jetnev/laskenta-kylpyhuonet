@@ -4,12 +4,20 @@ export interface QuoteRowCalculation {
   productTotal: number;
   installationTotal: number;
   rowTotal: number;
+  costTotal: number;
+  marginAmount: number;
+  marginPercent: number;
 }
 
 export interface QuoteCalculation {
+  lineSubtotal: number;
+  extraChargesTotal: number;
+  beforeDiscountSubtotal: number;
+  discountAmount: number;
   subtotal: number;
   vat: number;
   total: number;
+  totalCost: number;
   totalMargin: number;
   marginPercent: number;
 }
@@ -25,52 +33,85 @@ export interface ValidationResult {
   warnings: ValidationIssue[];
 }
 
+function roundCurrency(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 export function calculateQuoteRow(row: QuoteRow): QuoteRowCalculation {
-  const productTotal = row.mode !== 'installation' 
-    ? row.salesPrice * row.quantity 
-    : 0;
-  
+  if (row.mode === 'section') {
+    return {
+      productTotal: 0,
+      installationTotal: 0,
+      rowTotal: 0,
+      costTotal: 0,
+      marginAmount: 0,
+      marginPercent: 0,
+    };
+  }
+
+  const quantity = Number.isFinite(row.quantity) ? row.quantity : 0;
+  const regionMultiplier = Number.isFinite(row.regionMultiplier) && row.regionMultiplier > 0 ? row.regionMultiplier : 1;
+  const productTotal = row.mode !== 'installation' ? roundCurrency(row.salesPrice * quantity) : 0;
   const installationTotal = row.mode !== 'product'
-    ? row.installationPrice * row.quantity * row.regionMultiplier
+    ? roundCurrency(row.installationPrice * quantity * regionMultiplier)
     : 0;
-  
+
+  const costTotal = row.mode !== 'installation'
+    ? roundCurrency(row.purchasePrice * quantity)
+    : 0;
+
   const rowTotal = row.overridePrice !== undefined
-    ? row.overridePrice
-    : productTotal + installationTotal;
-  
+    ? roundCurrency(row.overridePrice)
+    : roundCurrency(productTotal + installationTotal);
+
+  const marginAmount = roundCurrency(rowTotal - costTotal);
+  const marginPercent = rowTotal > 0 ? roundCurrency((marginAmount / rowTotal) * 100) : 0;
+
   return {
     productTotal,
     installationTotal,
     rowTotal,
+    costTotal,
+    marginAmount,
+    marginPercent,
   };
 }
 
 export function calculateQuote(quote: Quote, rows: QuoteRow[]): QuoteCalculation {
-  const subtotal = rows.reduce((sum, row) => {
-    const calc = calculateQuoteRow(row);
-    return sum + calc.rowTotal;
-  }, 0);
-  
-  const vat = subtotal * (quote.vatPercent / 100);
-  const total = subtotal + vat;
-  
-  const totalCost = rows.reduce((sum, row) => {
-    const productCost = row.mode !== 'installation'
-      ? row.purchasePrice * row.quantity
-      : 0;
-    const installationCost = row.mode !== 'product'
-      ? row.installationPrice * row.quantity * row.regionMultiplier
-      : 0;
-    return sum + productCost + installationCost;
-  }, 0);
-  
-  const totalMargin = subtotal - totalCost;
-  const marginPercent = subtotal > 0 ? (totalMargin / subtotal) * 100 : 0;
-  
+  const lineSubtotal = roundCurrency(
+    rows.reduce((sum, row) => sum + calculateQuoteRow(row).rowTotal, 0)
+  );
+  const totalCost = roundCurrency(
+    rows.reduce((sum, row) => sum + calculateQuoteRow(row).costTotal, 0)
+  );
+  const extraChargesTotal = roundCurrency(
+    (quote.projectCosts || 0) + (quote.deliveryCosts || 0) + (quote.installationCosts || 0)
+  );
+  const beforeDiscountSubtotal = roundCurrency(lineSubtotal + extraChargesTotal);
+
+  const rawDiscountAmount =
+    quote.discountType === 'percent'
+      ? beforeDiscountSubtotal * ((quote.discountValue || 0) / 100)
+      : quote.discountType === 'amount'
+        ? quote.discountValue || 0
+        : 0;
+
+  const discountAmount = roundCurrency(Math.min(beforeDiscountSubtotal, Math.max(0, rawDiscountAmount)));
+  const subtotal = roundCurrency(Math.max(0, beforeDiscountSubtotal - discountAmount));
+  const vat = roundCurrency(subtotal * ((quote.vatPercent || 0) / 100));
+  const total = roundCurrency(subtotal + vat);
+  const totalMargin = roundCurrency(subtotal - totalCost);
+  const marginPercent = subtotal > 0 ? roundCurrency((totalMargin / subtotal) * 100) : 0;
+
   return {
+    lineSubtotal,
+    extraChargesTotal,
+    beforeDiscountSubtotal,
+    discountAmount,
     subtotal,
     vat,
     total,
+    totalCost,
     totalMargin,
     marginPercent,
   };
@@ -85,37 +126,56 @@ export function canSendQuote(
 ): ValidationResult {
   const errors: ValidationIssue[] = [];
   const warnings: ValidationIssue[] = [];
-  
+
+  if (!quote.title.trim()) {
+    errors.push({ field: 'title', message: 'Tarjouksen otsikko puuttuu.' });
+  }
+  if (!quote.quoteNumber.trim()) {
+    errors.push({ field: 'quoteNumber', message: 'Tarjousnumero puuttuu.' });
+  }
   if (!customer) {
-    errors.push({ field: 'customer', message: 'Asiakas puuttuu' });
+    errors.push({ field: 'customer', message: 'Asiakas puuttuu.' });
   }
-  
   if (!project) {
-    errors.push({ field: 'project', message: 'Projekti puuttuu' });
+    errors.push({ field: 'project', message: 'Projekti puuttuu.' });
   }
-  
-  if (rows.length === 0) {
-    errors.push({ field: 'rows', message: 'Tarjouksella ei ole yhtään riviä' });
+  if (!quote.validUntil) {
+    warnings.push({ field: 'validUntil', message: 'Voimassaoloaikaa ei ole asetettu.' });
   }
-  
+  if (rows.filter((row) => row.mode !== 'section').length === 0) {
+    errors.push({ field: 'rows', message: 'Tarjouksella ei ole laskutettavia rivejä.' });
+  }
   if (hasNewerRevision) {
-    errors.push({ field: 'revision', message: 'Tarjouksesta on olemassa uudempi revisio' });
+    errors.push({ field: 'revision', message: 'Tarjouksesta on jo olemassa uudempi revisio.' });
   }
-  
+
   rows.forEach((row, index) => {
-    if (!row.productName || row.productName.trim() === '') {
-      warnings.push({ field: `row-${index}`, message: `Rivi ${index + 1}: Tuotenimi puuttuu` });
+    if (row.mode === 'section') {
+      if (!row.productName.trim()) {
+        warnings.push({ field: `row-${index}`, message: `Väliotsikko ${index + 1} on tyhjä.` });
+      }
+      return;
+    }
+
+    if (!row.productName.trim()) {
+      errors.push({ field: `row-${index}`, message: `Riviltä ${index + 1} puuttuu nimi.` });
     }
     if (row.quantity <= 0) {
-      errors.push({ field: `row-${index}`, message: `Rivi ${index + 1}: Määrä on nolla tai negatiivinen` });
+      errors.push({ field: `row-${index}`, message: `Rivin ${index + 1} määrä on virheellinen.` });
+    }
+    if (calculateQuoteRow(row).marginAmount < 0) {
+      warnings.push({ field: `row-${index}`, message: `Rivin ${index + 1} kate on negatiivinen.` });
     }
   });
-  
+
   const calc = calculateQuote(quote, rows);
-  if (calc.marginPercent < 0) {
-    warnings.push({ field: 'margin', message: 'Tarjouksen kate on negatiivinen' });
+  if (calc.total <= 0) {
+    errors.push({ field: 'total', message: 'Tarjouksen loppusumma on oltava positiivinen.' });
   }
-  
+  if (calc.marginPercent < 0) {
+    warnings.push({ field: 'margin', message: 'Tarjouksen kokonaiskate on negatiivinen.' });
+  }
+
   return {
     isValid: errors.length === 0,
     errors,

@@ -1,256 +1,152 @@
-import { useState } from 'react';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
+import { useEffect, useState } from 'react';
+import { Gear, Shield } from '@phosphor-icons/react';
 import { Card } from '../ui/card';
+import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { useSettings } from '../../hooks/use-data';
-import { useAuth, UserRole } from '../../hooks/use-auth';
-import { useKV } from '@github/spark/hooks';
-import { toast } from 'sonner';
-import { User as UserIcon, Info } from '@phosphor-icons/react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select';
-import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
 import { Alert, AlertDescription } from '../ui/alert';
-
-interface AppUserRole {
-  userId: string;
-  role: UserRole;
-  grantedBy: string;
-  grantedAt: string;
-}
+import { useSettings } from '../../hooks/use-data';
+import { useAuth } from '../../hooks/use-auth';
+import { toast } from 'sonner';
 
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings();
-  const { canManageUsers, user: currentUser } = useAuth();
-  const [userRoles, setUserRoles] = useKV<AppUserRole[]>("user-roles", []);
-  
-  const [formData, setFormData] = useState({
-    companyName: settings.companyName,
-    companyAddress: settings.companyAddress,
-    companyPhone: settings.companyPhone,
-    companyEmail: settings.companyEmail,
-    defaultVatPercent: settings.defaultVatPercent,
-    defaultMarginPercent: settings.defaultMarginPercent,
-  });
+  const { canManageSharedData } = useAuth();
+  const [formData, setFormData] = useState(settings);
 
-  const handleSave = () => {
-    updateSettings(formData);
-    toast.success('Asetukset tallennettu');
-  };
+  useEffect(() => {
+    setFormData(settings);
+  }, [settings]);
 
-  const handleRoleChange = (userId: string, newRole: UserRole) => {
-    if (!currentUser) return;
-    
-    setUserRoles((current) => {
-      const existing = current?.find(r => r.userId === userId);
-      if (existing) {
-        return (current || []).map(r => 
-          r.userId === userId 
-            ? { ...r, role: newRole, grantedBy: currentUser.id, grantedAt: new Date().toISOString() }
-            : r
-        );
-      } else {
-        return [
-          ...(current || []),
-          {
-            userId,
-            role: newRole,
-            grantedBy: currentUser.id,
-            grantedAt: new Date().toISOString(),
-          }
-        ];
-      }
-    });
-    
-    toast.success('Käyttäjärooli päivitetty');
-  };
-
-  const getRoleBadgeVariant = (role: UserRole) => {
-    switch (role) {
-      case 'owner':
-        return 'secondary';
-      case 'editor':
-        return 'default';
-      case 'viewer':
-        return 'outline';
-    }
-  };
-
-  const getRoleLabel = (role: UserRole) => {
-    switch (role) {
-      case 'owner':
-        return 'Omistaja';
-      case 'editor':
-        return 'Muokkaaja';
-      case 'viewer':
-        return 'Lukija';
-    }
-  };
+  if (!canManageSharedData) {
+    return (
+      <div className="p-4 sm:p-8">
+        <Card className="p-8 text-center text-muted-foreground">
+          Asetukset ovat vain admin-roolille.
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-3xl font-semibold">Asetukset</h1>
-        <p className="text-muted-foreground mt-1">Sovelluksen yleiset asetukset</p>
+        <h1 className="text-2xl sm:text-3xl font-semibold">Asetukset</h1>
+        <p className="text-muted-foreground mt-1">Yleiset yritys- ja tarjousasetukset koko sovellukselle.</p>
       </div>
 
-      <Card className="p-6">
-        <h3 className="text-lg font-medium mb-4">Yritystiedot</h3>
-        <div className="space-y-4 max-w-2xl">
+      <Alert>
+        <Shield className="h-4 w-4" />
+        <AlertDescription>
+          Muutokset vaikuttavat kaikkiin käyttäjiin, koska nämä tiedot ovat yhteisiä koko sovellukselle.
+        </AlertDescription>
+      </Alert>
+
+      <Card className="p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+            <Gear className="h-5 w-5" weight="bold" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">Yritystiedot</h2>
+            <p className="text-sm text-muted-foreground">Näitä käytetään tarjousyhteenvedossa ja dokumenteissa.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="companyName">Yrityksen nimi</Label>
-            <Input
-              id="companyName"
-              value={formData.companyName}
-              onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-            />
+            <Label htmlFor="settings-company-name">Yrityksen nimi</Label>
+            <Input id="settings-company-name" value={formData.companyName} onChange={(event) => setFormData((current) => ({ ...current, companyName: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="companyAddress">Osoite</Label>
-            <Input
-              id="companyAddress"
-              value={formData.companyAddress}
-              onChange={(e) => setFormData({ ...formData, companyAddress: e.target.value })}
-            />
+            <Label htmlFor="settings-company-email">Sähköposti</Label>
+            <Input id="settings-company-email" type="email" value={formData.companyEmail} onChange={(event) => setFormData((current) => ({ ...current, companyEmail: event.target.value }))} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="companyPhone">Puhelin</Label>
-              <Input
-                id="companyPhone"
-                value={formData.companyPhone}
-                onChange={(e) => setFormData({ ...formData, companyPhone: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="companyEmail">Sähköposti</Label>
-              <Input
-                id="companyEmail"
-                type="email"
-                value={formData.companyEmail}
-                onChange={(e) => setFormData({ ...formData, companyEmail: e.target.value })}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="settings-company-phone">Puhelin</Label>
+            <Input id="settings-company-phone" value={formData.companyPhone} onChange={(event) => setFormData((current) => ({ ...current, companyPhone: event.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="settings-company-address">Osoite</Label>
+            <Input id="settings-company-address" value={formData.companyAddress} onChange={(event) => setFormData((current) => ({ ...current, companyAddress: event.target.value }))} />
           </div>
         </div>
       </Card>
 
-      <Card className="p-6">
-        <h3 className="text-lg font-medium mb-4">Oletusarvot</h3>
-        <div className="space-y-4 max-w-2xl">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="vatPercent">Oletusarvonlisävero (%)</Label>
-              <Input
-                id="vatPercent"
-                type="number"
-                step="0.1"
-                value={formData.defaultVatPercent}
-                onChange={(e) => setFormData({ ...formData, defaultVatPercent: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="marginPercent">Oletuskateprosentti (%)</Label>
-              <Input
-                id="marginPercent"
-                type="number"
-                step="0.1"
-                value={formData.defaultMarginPercent}
-                onChange={(e) => setFormData({ ...formData, defaultMarginPercent: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
+      <Card className="p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Tarjouksen oletusarvot</h2>
+          <p className="text-sm text-muted-foreground">Näitä arvoja käytetään uusien tarjousten luonnissa.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-2">
+            <Label htmlFor="settings-vat">ALV %</Label>
+            <Input id="settings-vat" type="number" step="0.1" value={formData.defaultVatPercent} onChange={(event) => setFormData((current) => ({ ...current, defaultVatPercent: parseFloat(event.target.value) || 0 }))} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="settings-margin">Oletuskate %</Label>
+            <Input id="settings-margin" type="number" step="0.1" value={formData.defaultMarginPercent} onChange={(event) => setFormData((current) => ({ ...current, defaultMarginPercent: parseFloat(event.target.value) || 0 }))} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="settings-validity">Voimassaolopäivät</Label>
+            <Input id="settings-validity" type="number" value={formData.defaultValidityDays} onChange={(event) => setFormData((current) => ({ ...current, defaultValidityDays: parseInt(event.target.value, 10) || 0 }))} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="settings-prefix">Tarjousnumeroiden etuliite</Label>
+            <Input id="settings-prefix" value={formData.quoteNumberPrefix} onChange={(event) => setFormData((current) => ({ ...current, quoteNumberPrefix: event.target.value.toUpperCase() }))} />
           </div>
         </div>
       </Card>
 
-      {canManageUsers && (
-        <Card className="p-6">
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-medium">Käyttäjäroolit</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Hallinnoi sovelluksen käyttäjien oikeuksia
-              </p>
-            </div>
-
-            <Alert>
-              <Info className="w-4 h-4" />
-              <AlertDescription>
-                Roolit määritetään GitHub-käyttäjille. Sovelluksen omistaja saa automaattisesti owner-roolin.
-                Muille käyttäjille voit määrittää roolin Editor (muokkausoikeudet) tai Viewer (lukuoikeus).
-              </AlertDescription>
-            </Alert>
-
-            {userRoles && userRoles.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Käyttäjä ID</TableHead>
-                    <TableHead>Rooli</TableHead>
-                    <TableHead>Myönnetty</TableHead>
-                    <TableHead className="w-[200px]">Toiminnot</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {userRoles.map((userRole) => (
-                    <TableRow key={userRole.userId}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <UserIcon className="w-4 h-4 text-muted-foreground" />
-                          <span className="font-mono text-sm">{userRole.userId}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getRoleBadgeVariant(userRole.role)}>
-                          {getRoleLabel(userRole.role)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {new Date(userRole.grantedAt).toLocaleDateString('fi-FI')}
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={userRole.role}
-                          onValueChange={(value) => handleRoleChange(userRole.userId, value as UserRole)}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="editor">Muokkaaja</SelectItem>
-                            <SelectItem value="viewer">Lukija</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-muted-foreground text-sm">
-                Ei määritettyjä rooleja. Roolit lisätään automaattisesti kun käyttäjä kirjautuu ensimmäisen kerran.
-              </p>
-            )}
-          </div>
-        </Card>
-      )}
+      <Card className="p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Automaattiset päivitykset</h2>
+          <p className="text-sm text-muted-foreground">
+            Sovellus tarkistaa päivitykset tästä osoitteesta. Osoitteen tulee olla suora generic-feed, jossa on
+            `latest.yml` ja julkaisuartefaktit.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="settings-update-feed-url">Päivitysfeedin URL</Label>
+          <Input
+            id="settings-update-feed-url"
+            type="url"
+            placeholder="https://oma-domain.fi/laskenta/"
+            value={formData.updateFeedUrl || ''}
+            onChange={(event) => setFormData((current) => ({ ...current, updateFeedUrl: event.target.value }))}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Voit käyttää omaa domainia, GitHub Pages -osoitetta tai muuta HTTPS-palvelinta. Jätä kenttä tyhjäksi, jos
+          feed määritetään ympäristömuuttujalla.
+        </p>
+      </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave}>Tallenna asetukset</Button>
+        <Button
+          onClick={() => {
+            try {
+              const nextFeedUrl = formData.updateFeedUrl?.trim() || '';
+              if (nextFeedUrl) {
+                try {
+                  const parsedUrl = new URL(nextFeedUrl);
+                  const normalizedFeedUrl = parsedUrl.toString().endsWith('/') ? parsedUrl.toString() : `${parsedUrl.toString()}/`;
+                  updateSettings({ ...formData, updateFeedUrl: normalizedFeedUrl });
+                } catch {
+                  toast.error('Päivitysfeedin URL ei ole kelvollinen.');
+                  return;
+                }
+              } else {
+                updateSettings({ ...formData, updateFeedUrl: '' });
+              }
+              toast.success('Asetukset tallennettu.');
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : 'Tallennus epäonnistui.');
+            }
+          }}
+        >
+          Tallenna asetukset
+        </Button>
       </div>
     </div>
   );

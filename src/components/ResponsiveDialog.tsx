@@ -19,7 +19,6 @@ import { ScrollArea } from './ui/scroll-area';
 interface ResponsiveDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  trigger?: ReactNode;
   title: string;
   children: ReactNode;
   footer?: ReactNode;
@@ -38,7 +37,6 @@ const maxWidthClasses = {
 export function ResponsiveDialog({
   open,
   onOpenChange,
-  trigger,
   title,
   children,
   footer,

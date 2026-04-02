@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { Plus, Pencil, Trash, FileText, Building, Users, MagnifyingGlass, X } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
-import { useProjects, useCustomers, useQuotes } from '../../hooks/use-data';
+import { useProjects, useCustomers, useQuotes, useQuoteRows, useQuoteTerms, useSettings } from '../../hooks/use-data';
 import { toast } from 'sonner';
 import { Project, Customer } from '../../lib/types';
 import QuoteEditor from '../QuoteEditor';
@@ -15,7 +15,10 @@ import QuoteEditor from '../QuoteEditor';
 export default function ProjectsPage() {
   const { projects, addProject, updateProject, deleteProject } = useProjects();
   const { customers, addCustomer, updateCustomer, deleteCustomer, getCustomer } = useCustomers();
-  const { quotes, getQuotesForProject, deleteQuote } = useQuotes();
+  const { addQuote, getQuotesForProject, deleteQuote } = useQuotes();
+  const { rows, deleteRow } = useQuoteRows();
+  const { getDefaultTerms } = useQuoteTerms();
+  const { settings } = useSettings();
   
   const [showProjectDialog, setShowProjectDialog] = useState(false);
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
@@ -35,9 +38,6 @@ export default function ProjectsPage() {
     regionCoefficient: 1.0,
     customOptions: [] as { id: string; label: string; value: string }[],
   });
-  
-  const [newOptionLabel, setNewOptionLabel] = useState('');
-  const [newOptionValue, setNewOptionValue] = useState('');
   
   const [customerForm, setCustomerForm] = useState({
     name: '',
@@ -80,8 +80,6 @@ export default function ProjectsPage() {
     setShowProjectDialog(false);
     setEditingProject(null);
     setProjectForm({ customerId: '', name: '', site: '', regionCoefficient: 1.0, customOptions: [] });
-    setNewOptionLabel('');
-    setNewOptionValue('');
   };
 
   const handleSaveCustomer = () => {
@@ -127,10 +125,32 @@ export default function ProjectsPage() {
     setShowCustomerDialog(true);
   };
 
+  const deleteQuoteWithRows = (quoteId: string) => {
+    rows
+      .filter(row => row.quoteId === quoteId)
+      .forEach(row => deleteRow(row.id));
+    deleteQuote(quoteId);
+  };
+
   const handleDeleteProject = (id: string) => {
-    if (confirm('Haluatko varmasti poistaa projektin?')) {
+    const projectQuotes = getQuotesForProject(id);
+    const projectQuoteRows = rows.filter(row => projectQuotes.some(quote => quote.id === row.quoteId));
+    const confirmMessage = projectQuotes.length > 0
+      ? `Haluatko varmasti poistaa projektin? Tämä poistaa myös ${projectQuotes.length} tarjousta ja ${projectQuoteRows.length} riviä.`
+      : 'Haluatko varmasti poistaa projektin?';
+
+    if (confirm(confirmMessage)) {
+      projectQuoteRows.forEach(row => deleteRow(row.id));
+      projectQuotes.forEach(quote => deleteQuote(quote.id));
       deleteProject(id);
-      toast.success('Projekti poistettu');
+
+      if (selectedProjectId === id) {
+        setShowQuoteEditor(false);
+        setSelectedProjectId(null);
+        setSelectedQuoteId(null);
+      }
+
+      toast.success(projectQuotes.length > 0 ? 'Projekti ja siihen liittyvät tarjoukset poistettu' : 'Projekti poistettu');
     }
   };
 
@@ -148,8 +168,34 @@ export default function ProjectsPage() {
   };
 
   const handleCreateQuote = (projectId: string) => {
+    const project = projects.find((candidate) => candidate.id === projectId);
+    if (!project) {
+      toast.error('Projektia ei löytynyt.');
+      return;
+    }
+
+    const defaultTerms = getDefaultTerms();
+    const newQuote = addQuote({
+      projectId,
+      title: `${project.name} tarjous`,
+      quoteNumber: '',
+      revisionNumber: 1,
+      termsId: defaultTerms?.id,
+      pricingMode: 'margin',
+      selectedMarginPercent: settings.defaultMarginPercent,
+      vatPercent: settings.defaultVatPercent,
+      discountType: 'none',
+      discountValue: 0,
+      projectCosts: 0,
+      deliveryCosts: 0,
+      installationCosts: 0,
+      notes: '',
+      internalNotes: '',
+      scheduleMilestones: [],
+    });
+
     setSelectedProjectId(projectId);
-    setSelectedQuoteId(null);
+    setSelectedQuoteId(newQuote.id);
     setShowQuoteEditor(true);
   };
 
@@ -161,12 +207,19 @@ export default function ProjectsPage() {
 
   const handleDeleteQuote = (quoteId: string) => {
     if (confirm('Haluatko varmasti poistaa tarjouksen?')) {
-      deleteQuote(quoteId);
+      deleteQuoteWithRows(quoteId);
       setSelectedQuotes(prev => {
         const newSet = new Set(prev);
         newSet.delete(quoteId);
         return newSet;
       });
+
+      if (selectedQuoteId === quoteId) {
+        setShowQuoteEditor(false);
+        setSelectedProjectId(null);
+        setSelectedQuoteId(null);
+      }
+
       toast.success('Tarjous poistettu');
     }
   };
@@ -178,7 +231,7 @@ export default function ProjectsPage() {
     }
 
     if (confirm(`Haluatko varmasti poistaa ${selectedQuotes.size} tarjousta?`)) {
-      selectedQuotes.forEach(id => deleteQuote(id));
+      selectedQuotes.forEach(id => deleteQuoteWithRows(id));
       setSelectedQuotes(new Set());
       toast.success(`${selectedQuotes.size} tarjousta poistettu`);
     }
@@ -238,8 +291,6 @@ export default function ProjectsPage() {
                   onClick={() => {
                     setEditingProject(null);
                     setProjectForm({ customerId: '', name: '', site: '', regionCoefficient: 1.0, customOptions: [] });
-                    setNewOptionLabel('');
-                    setNewOptionValue('');
                   }}
                 >
                   <Plus className="h-4 w-4" />
