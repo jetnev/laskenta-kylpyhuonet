@@ -47,13 +47,31 @@ export default function ProjectsPage() {
     address: '',
   });
 
-  const filteredProjects = projects.filter(p => {
-    const customer = getCustomer(p.customerId);
-    const searchLower = searchProjects.toLowerCase();
+  const filteredProjects = projects.filter(project => {
+    const customer = getCustomer(project.customerId);
+    const projectQuotes = getQuotesForProject(project.id);
+    const searchLower = searchProjects.trim().toLowerCase();
+
+    if (!searchLower) {
+      return true;
+    }
+
     return (
-      p.name.toLowerCase().includes(searchLower) ||
-      p.site.toLowerCase().includes(searchLower) ||
-      (customer && customer.name.toLowerCase().includes(searchLower))
+      project.name.toLowerCase().includes(searchLower) ||
+      project.site.toLowerCase().includes(searchLower) ||
+      (customer && customer.name.toLowerCase().includes(searchLower)) ||
+      projectQuotes.some((quote) =>
+        [
+          quote.title,
+          quote.quoteNumber,
+          quote.status === 'draft' ? 'luonnos' :
+          quote.status === 'sent' ? 'lähetetty' :
+          quote.status === 'accepted' ? 'hyväksytty' :
+          'hylätty',
+        ]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(searchLower))
+      )
     );
   });
 
@@ -358,7 +376,7 @@ export default function ProjectsPage() {
               <Input
                 value={searchProjects}
                 onChange={(e) => setSearchProjects(e.target.value)}
-                placeholder="Hae projekteja..."
+                placeholder="Hae projektia, asiakasta tai tarjousnumeroa..."
                 className="pl-10"
               />
             </div>
@@ -432,6 +450,11 @@ export default function ProjectsPage() {
                             >
                               <div className="flex items-center gap-2">
                                 <span>{quote.title}</span>
+                                {quote.quoteNumber && (
+                                  <Badge variant="outline" className="text-xs font-mono">
+                                    {quote.quoteNumber}
+                                  </Badge>
+                                )}
                                 <Badge variant="outline" className="text-xs">
                                   v{quote.revisionNumber}
                                 </Badge>
