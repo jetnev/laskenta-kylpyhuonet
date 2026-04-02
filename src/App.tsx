@@ -57,6 +57,7 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [checkingForUpdates, setCheckingForUpdates] = useState(false);
   const [restartingForUpdate, setRestartingForUpdate] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateSnapshot | null>(null);
   const { user, loading, role, canManageUsers, canManageSharedData, logout } = useAuth();
   const isMobile = useIsMobile();
@@ -164,6 +165,16 @@ function App() {
     }
   };
 
+  const handleLogout = async () => {
+    setSigningOut(true);
+    try {
+      await logout();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Uloskirjautuminen epäonnistui.');
+      setSigningOut(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -263,9 +274,9 @@ function App() {
               {checkingForUpdates ? 'Tarkistetaan...' : 'Tarkista päivitykset'}
             </Button>
           )}
-          <Button variant="outline" className="w-full justify-start gap-2" onClick={() => void logout()}>
+          <Button variant="outline" className="w-full justify-start gap-2" onClick={() => void handleLogout()} disabled={signingOut}>
             <SignOut className="h-4 w-4" />
-            Kirjaudu ulos
+            {signingOut ? 'Kirjaudutaan ulos...' : 'Kirjaudu ulos'}
           </Button>
           {showDesktopUpdateActions && desktopUpdateState?.feedUrl && (
             <div className="space-y-1">

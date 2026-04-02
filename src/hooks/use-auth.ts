@@ -182,6 +182,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [requiresPasswordReset, setRequiresPasswordReset] = useState(false);
   const backendConfigError = isSupabaseConfigured ? null : getSupabaseConfigError();
 
+  const clearAuthState = useCallback(() => {
+    setRequiresPasswordReset(false);
+    setUser(null);
+    setUsers([]);
+    setLoading(false);
+  }, []);
+
   const loadUsers = useCallback(async (currentUser?: AuthUser | null) => {
     if (!isSupabaseConfigured) {
       setUsers(currentUser ? [currentUser] : []);
@@ -269,10 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (event === 'SIGNED_OUT') {
-        setRequiresPasswordReset(false);
-        setUser(null);
-        setUsers([]);
-        setLoading(false);
+        clearAuthState();
         return;
       }
 
@@ -293,7 +297,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false;
       authListener.subscription.unsubscribe();
     };
-  }, [hydrateSession]);
+  }, [clearAuthState, hydrateSession]);
 
   const register = async ({ displayName, email, password }: RegisterInput) => {
     const trimmedName = displayName.trim();
@@ -352,11 +356,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     const client = requireSupabase();
-    const { error } = await client.auth.signOut();
-    if (error) {
-      throw new Error(error.message);
+    let signOutError: Error | null = null;
+
+    try {
+      const { error } = await client.auth.signOut({ scope: 'local' });
+      if (error) {
+        signOutError = new Error(error.message);
+      }
+    } catch (error) {
+      signOutError = error instanceof Error ? error : new Error('Uloskirjautuminen epäonnistui.');
+    } finally {
+      clearAuthState();
     }
-    setRequiresPasswordReset(false);
+
+    if (signOutError) {
+      throw signOutError;
+    }
   };
 
   const requestPasswordReset = async (email: string) => {

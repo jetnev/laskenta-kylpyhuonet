@@ -12,6 +12,7 @@ export default function AccountPage() {
   const { user, updateProfile, changePassword, logout } = useAuth();
   const [profileError, setProfileError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const [profileForm, setProfileForm] = useState({
     displayName: user?.displayName ?? '',
     email: user?.email ?? '',
@@ -63,9 +64,22 @@ export default function AccountPage() {
           </div>
           <div className="rounded-xl border bg-muted/30 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Tilan hallinta</p>
-            <Button className="mt-2 w-full" variant="outline" onClick={() => void logout()}>
+            <Button
+              className="mt-2 w-full"
+              variant="outline"
+              disabled={signingOut}
+              onClick={async () => {
+                try {
+                  setSigningOut(true);
+                  await logout();
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : 'Uloskirjautuminen epäonnistui.');
+                  setSigningOut(false);
+                }
+              }}
+            >
               <SignOut className="h-4 w-4" />
-              Kirjaudu ulos
+              {signingOut ? 'Kirjaudutaan ulos...' : 'Kirjaudu ulos'}
             </Button>
           </div>
         </div>
