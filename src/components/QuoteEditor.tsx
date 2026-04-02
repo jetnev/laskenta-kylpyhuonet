@@ -708,7 +708,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
             </div>
           </Card>
 
-          <div className="grid gap-6 xl:grid-cols-[1.7fr_0.9fr]">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.8fr)_minmax(340px,0.95fr)]">
             <div className="space-y-6">
               <Card className="p-6 space-y-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -945,7 +945,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                 )}
               </Card>
             </div>
-            <div className="space-y-6">
+            <div className="space-y-6 xl:sticky xl:top-0 self-start">
               <Card className="p-6 space-y-4">
                 <div>
                   <h3 className="text-lg font-semibold">Tarjouksen yhteenveto</h3>

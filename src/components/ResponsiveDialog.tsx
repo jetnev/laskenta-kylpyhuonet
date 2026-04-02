@@ -31,7 +31,7 @@ const maxWidthClasses = {
   lg: 'sm:max-w-lg',
   xl: 'sm:max-w-xl',
   '2xl': 'sm:max-w-2xl',
-  full: 'sm:max-w-[90vw]',
+  full: 'sm:max-w-[calc(100vw-2rem)]',
 };
 
 export function ResponsiveDialog({
@@ -43,6 +43,7 @@ export function ResponsiveDialog({
   maxWidth = 'lg',
 }: ResponsiveDialogProps) {
   const isMobile = useIsMobile();
+  const isFullscreenDesktop = maxWidth === 'full' && !isMobile;
 
   if (isMobile) {
     return (
@@ -66,14 +67,24 @@ export function ResponsiveDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={maxWidthClasses[maxWidth]}>
-        <DialogHeader>
+      <DialogContent
+        className={
+          isFullscreenDesktop
+            ? `${maxWidthClasses[maxWidth]} h-[calc(100vh-1.5rem)] max-h-[calc(100vh-1.5rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0`
+            : maxWidthClasses[maxWidth]
+        }
+      >
+        <DialogHeader className={isFullscreenDesktop ? 'border-b px-6 py-5 pr-14' : undefined}>
           <DialogTitle className="text-xl">{title}</DialogTitle>
         </DialogHeader>
-        <ScrollArea className="max-h-[60vh] overflow-y-auto pr-4">
+        <ScrollArea className={isFullscreenDesktop ? 'min-h-0 overflow-y-auto px-6 py-5' : 'max-h-[60vh] overflow-y-auto pr-4'}>
           <div>{children}</div>
         </ScrollArea>
-        {footer && <DialogFooter className="gap-2">{footer}</DialogFooter>}
+        {footer && (
+          <DialogFooter className={isFullscreenDesktop ? 'gap-2 border-t bg-background px-6 py-4' : 'gap-2'}>
+            {footer}
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
