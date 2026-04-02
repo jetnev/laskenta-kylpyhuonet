@@ -519,6 +519,17 @@ export function useQuoteRows() {
     );
   };
 
+  const deleteRows = (ids: string[]) => {
+    const currentUserId = ensureSignedIn(userId);
+    if (!canDelete) {
+      throw new Error('Sinulla ei ole oikeuksia poistaa tarjousrivejä.');
+    }
+    const idSet = new Set(ids);
+    setRows((current = []) =>
+      current.filter((row) => !idSet.has(row.id) || (!canManageUsers && row.ownerUserId !== currentUserId))
+    );
+  };
+
   const deleteRowsForQuote = (quoteId: string) => {
     const currentUserId = ensureSignedIn(userId);
     setRows((current = []) =>
@@ -531,7 +542,7 @@ export function useQuoteRows() {
   const getRowsForQuote = (quoteId: string) =>
     rows.filter((row) => row.quoteId === quoteId).sort((left, right) => left.sortOrder - right.sortOrder);
 
-  return { rows, addRow, updateRow, deleteRow, deleteRowsForQuote, getRowsForQuote };
+  return { rows, addRow, updateRow, deleteRow, deleteRows, deleteRowsForQuote, getRowsForQuote };
 }
 
 export function useQuoteTerms() {

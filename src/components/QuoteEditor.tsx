@@ -21,6 +21,7 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { Badge } from './ui/badge';
+import { Checkbox } from './ui/checkbox';
 import { Alert, AlertDescription } from './ui/alert';
 import {
   Select,
@@ -105,7 +106,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const { products } = useProducts();
   const { groups } = useInstallationGroups();
   const { getSubstitutesForProduct } = useSubstituteProducts();
-  const { addRow, deleteRow, getRowsForQuote, updateRow } = useQuoteRows();
+  const { addRow, deleteRow, deleteRows, getRowsForQuote, updateRow } = useQuoteRows();
   const { addQuote, getQuote, getQuotesForProject, hasNewerRevision, updateQuote, updateQuoteStatus } = useQuotes();
   const { getProject } = useProjects();
   const { getCustomer } = useCustomers();
@@ -119,6 +120,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const [bootstrapQuote, setBootstrapQuote] = useState<Quote | null>(null);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [quoteLookupTimedOut, setQuoteLookupTimedOut] = useState(false);
+  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const initializedDraftRef = useRef(false);
 
   useEffect(() => {
@@ -127,6 +129,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     setBootstrapQuote(null);
     setBootstrapError(null);
     setQuoteLookupTimedOut(false);
+    setSelectedRowIds([]);
   }, [quoteId]);
 
   useEffect(() => {
@@ -179,6 +182,13 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     return getQuote(activeQuoteId) ?? (bootstrapQuote?.id === activeQuoteId ? bootstrapQuote : null);
   }, [activeQuoteId, bootstrapQuote, getQuote]);
   const quoteRows = useMemo(() => (quote ? getRowsForQuote(quote.id) : []), [getRowsForQuote, quote]);
+  useEffect(() => {
+    setSelectedRowIds((current) => {
+      const availableIds = new Set(quoteRows.map((row) => row.id));
+      const next = current.filter((rowId) => availableIds.has(rowId));
+      return next.length === current.length ? current : next;
+    });
+  }, [quoteRows]);
   const quoteTerms = terms.find((term) => term.id === quote?.termsId);
   const projectQuotes = useMemo(() => getQuotesForProject(projectId), [getQuotesForProject, projectId]);
   const quoteHasNewerRevision = quote ? hasNewerRevision(quote) : false;
@@ -209,6 +219,8 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       )
       .slice(0, 8);
   }, [productSearch, products]);
+  const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
+  const allRowsSelected = quoteRows.length > 0 && selectedRowIds.length === quoteRows.length;
 
   if (!project) {
     return (
@@ -385,6 +397,26 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     if (!window.confirm('Haluatko varmasti poistaa tarjousrivin?')) return;
     deleteRow(rowId);
     touchQuote();
+  };
+
+  const toggleRowSelection = (rowId: string) => {
+    setSelectedRowIds((current) =>
+      current.includes(rowId) ? current.filter((selectedId) => selectedId !== rowId) : [...current, rowId]
+    );
+  };
+
+  const toggleAllRowSelections = () => {
+    setSelectedRowIds(allRowsSelected ? [] : quoteRows.map((row) => row.id));
+  };
+
+  const removeSelectedRows = () => {
+    const count = selectedRowIds.length;
+    if (count === 0) return;
+    if (!window.confirm(`Haluatko varmasti poistaa ${count} valittua tarjousriviä?`)) return;
+    deleteRows(selectedRowIds);
+    setSelectedRowIds([]);
+    touchQuote();
+    toast.success(count === 1 ? '1 tarjousrivi poistettu.' : `${count} tarjousriviä poistettu.`);
   };
 
   const applyQuoteMargin = (marginPercent: number) => {
@@ -670,7 +702,17 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                     <h3 className="text-lg font-semibold">Tarjousrivit</h3>
                     <p className="text-sm text-muted-foreground">Lisää käsin, tuoterekisteristä tai käytä väliotsikoita ja lisäveloituksia.</p>
                   </div>
-                  <Badge variant="outline">{quoteRows.length} riviä</Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedRowIds.length > 0 && <Badge variant="secondary">{selectedRowIds.length} valittu</Badge>}
+                    <Badge variant="outline">{quoteRows.length} riviä</Badge>
+                    <Button size="sm" variant="outline" onClick={toggleAllRowSelections} disabled={!isEditable || quoteRows.length === 0}>
+                      {allRowsSelected ? 'Poista valinta' : 'Valitse kaikki'}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={removeSelectedRows} disabled={!isEditable || selectedRowIds.length === 0}>
+                      <Trash className="h-4 w-4" />
+                      Poista valitut
+                    </Button>
+                  </div>
                 </div>
 
                 {quoteRows.length === 0 ? (
@@ -690,6 +732,12 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                           <div className="flex flex-col gap-4">
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                               <div className="flex flex-wrap items-center gap-2">
+                                <Checkbox
+                                  checked={selectedRowIdSet.has(row.id)}
+                                  onCheckedChange={() => toggleRowSelection(row.id)}
+                                  disabled={!isEditable}
+                                  aria-label={`Valitse tarjousrivi ${index + 1}`}
+                                />
                                 <Badge variant="outline">#{index + 1}</Badge>
                                 <Badge variant="secondary">{ROW_MODE_LABELS[row.mode]}</Badge>
                                 {row.chargeType && <Badge variant="outline">{CHARGE_TYPE_LABELS[row.chargeType]}</Badge>}
