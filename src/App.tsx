@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowsLeftRight,
   ArrowsClockwise,
@@ -17,19 +17,6 @@ import {
   Wrench,
   X,
 } from '@phosphor-icons/react';
-import Dashboard from './components/pages/Dashboard';
-import ProductsPage from './components/pages/ProductsPage';
-import ImportPage from './components/pages/ImportPage';
-import InstallationGroupsPage from './components/pages/InstallationGroupsPage';
-import SubstituteProductsPage from './components/pages/SubstituteProductsPage';
-import ProjectsPage from './components/pages/ProjectsPage';
-import TermsPage from './components/pages/TermsPage';
-import SettingsPage from './components/pages/SettingsPage';
-import ReportsPage from './components/pages/ReportsPage';
-import LoginPage from './components/LoginPage';
-import LandingPage from './components/LandingPage';
-import AccountPage from './components/pages/AccountPage';
-import UsersPage from './components/pages/UsersPage';
 import { cn } from './lib/utils';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './hooks/use-auth';
@@ -39,6 +26,20 @@ import { useIsMobile } from './hooks/use-mobile';
 import { Button } from './components/ui/button';
 import { checkForDesktopUpdates, getDesktopUpdateStatus, isDesktopRuntime, restartDesktopForUpdate, type DesktopUpdateSnapshot } from './lib/desktop-update';
 import { toast } from 'sonner';
+
+const Dashboard = lazy(() => import('./components/pages/Dashboard'));
+const ProductsPage = lazy(() => import('./components/pages/ProductsPage'));
+const ImportPage = lazy(() => import('./components/pages/ImportPage'));
+const InstallationGroupsPage = lazy(() => import('./components/pages/InstallationGroupsPage'));
+const SubstituteProductsPage = lazy(() => import('./components/pages/SubstituteProductsPage'));
+const ProjectsPage = lazy(() => import('./components/pages/ProjectsPage'));
+const TermsPage = lazy(() => import('./components/pages/TermsPage'));
+const SettingsPage = lazy(() => import('./components/pages/SettingsPage'));
+const ReportsPage = lazy(() => import('./components/pages/ReportsPage'));
+const LoginPage = lazy(() => import('./components/LoginPage'));
+const LandingPage = lazy(() => import('./components/LandingPage'));
+const AccountPage = lazy(() => import('./components/pages/AccountPage'));
+const UsersPage = lazy(() => import('./components/pages/UsersPage'));
 
 type Page =
   | 'dashboard'
@@ -75,6 +76,17 @@ function resolveAppRoute(pathname: string): AppRoute {
   }
 
   return 'landing';
+}
+
+function RouteLoadingFallback() {
+  return (
+    <div className="flex h-screen items-center justify-center bg-background">
+      <div className="text-center space-y-4">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-muted-foreground">Ladataan...</p>
+      </div>
+    </div>
+  );
 }
 
 function App() {
@@ -262,25 +274,20 @@ function App() {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-muted-foreground">Ladataan...</p>
-        </div>
-      </div>
-    );
+    return <RouteLoadingFallback />;
   }
 
   if (!user) {
     const showLogin = currentRoute === 'login' || currentRoute === 'app' || requiresPasswordReset;
     return (
       <>
-        {showLogin ? (
-          <LoginPage onNavigateHome={() => navigateTo('/')} />
-        ) : (
-          <LandingPage onNavigateToLogin={() => navigateTo('/login')} />
-        )}
+        <Suspense fallback={<RouteLoadingFallback />}>
+          {showLogin ? (
+            <LoginPage onNavigateHome={() => navigateTo('/')} />
+          ) : (
+            <LandingPage onNavigateToLogin={() => navigateTo('/login')} />
+          )}
+        </Suspense>
         <Toaster />
       </>
     );
@@ -400,17 +407,19 @@ function App() {
         )}
 
         <main className="flex-1 overflow-auto">
-          {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
-          {currentPage === 'projects' && <ProjectsPage />}
-          {currentPage === 'products' && <ProductsPage />}
-          {currentPage === 'import' && <ImportPage />}
-          {currentPage === 'installation-groups' && <InstallationGroupsPage />}
-          {currentPage === 'substitutes' && <SubstituteProductsPage />}
-          {currentPage === 'terms' && <TermsPage />}
-          {currentPage === 'reports' && <ReportsPage />}
-          {currentPage === 'users' && <UsersPage />}
-          {currentPage === 'settings' && <SettingsPage />}
-          {currentPage === 'account' && <AccountPage />}
+          <Suspense fallback={<RouteLoadingFallback />}>
+            {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
+            {currentPage === 'projects' && <ProjectsPage />}
+            {currentPage === 'products' && <ProductsPage />}
+            {currentPage === 'import' && <ImportPage />}
+            {currentPage === 'installation-groups' && <InstallationGroupsPage />}
+            {currentPage === 'substitutes' && <SubstituteProductsPage />}
+            {currentPage === 'terms' && <TermsPage />}
+            {currentPage === 'reports' && <ReportsPage />}
+            {currentPage === 'users' && <UsersPage />}
+            {currentPage === 'settings' && <SettingsPage />}
+            {currentPage === 'account' && <AccountPage />}
+          </Suspense>
         </main>
       </div>
 
