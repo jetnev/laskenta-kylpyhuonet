@@ -331,7 +331,7 @@ export default function ProductsPage() {
   };
 
   const seedDemo = () => {
-    const result = catalog.seedDemoSources(600);
+    const result = catalog.seedDemoSources(1200);
     toast.success(`Demoaineisto luotu. Uusia tuotteita: ${result.createdProducts}`);
   };
 

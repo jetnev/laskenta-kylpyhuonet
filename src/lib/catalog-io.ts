@@ -263,44 +263,6 @@ function createGenericAdapter(sourceName: string, displayName: string): SourceAd
   };
 }
 
-function seedBrandPool(sourceName: string) {
-  if (normalizeComparableText(sourceName).includes('stark')) {
-    return ['Oras', 'Grohe', 'Pukkila', 'Uponor', 'Ido', 'Hafa', 'Tarkett', 'Nora', 'Svedbergs', 'Bosch'];
-  }
-  return ['Oras', 'Pukkila', 'Hafa', 'Ido', 'Uponor', 'Fischer', 'Sini', 'Bosch', 'Tikkurila', 'Kährs'];
-}
-
-function seedTemplatePool(sourceName: string) {
-  if (normalizeComparableText(sourceName).includes('stark')) {
-    return [
-      'Keraaminen laatta',
-      'Pesuallashana',
-      'Suihkuseinä',
-      'WC-istuin',
-      'Allaskaappi',
-      'Pex-putki',
-      'Kupariliitin',
-      'LED-valaisin',
-      'Kytkin',
-      'Porakärkiruuvi',
-      'Runkopuu',
-    ];
-  }
-  return [
-    'Keraaminen laatta',
-    'Pesuallashana',
-    'Suihkuseinä',
-    'WC-istuin',
-    'Allaskaappi',
-    'Monikerrosputki',
-    'Puserrusliitin',
-    'LED-valaisin',
-    'Kytkin',
-    'Porakärkiruuvi',
-    'Runkopuu',
-  ];
-}
-
 function makeSeededRandom(seed: string) {
   let h = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) || 1;
   return () => {
@@ -309,82 +271,205 @@ function makeSeededRandom(seed: string) {
   };
 }
 
+type DemoCategoryDefinition = {
+  path: string;
+  unit: string;
+  packageUnit: string;
+  key:
+    | 'tiles-wall'
+    | 'tiles-floor'
+    | 'fixtures'
+    | 'furniture'
+    | 'showers'
+    | 'pipes'
+    | 'fittings'
+    | 'lighting'
+    | 'switches'
+    | 'fasteners'
+    | 'boards';
+  brands: string[];
+  templates: string[];
+  basePriceRange: [number, number];
+  installPriceRange?: [number, number];
+};
+
+const DEMO_CATEGORY_DEFINITIONS: DemoCategoryDefinition[] = [
+  {
+    key: 'tiles-wall',
+    path: 'Laatat > Seinälaatat',
+    unit: 'm2',
+    packageUnit: 'm2',
+    brands: ['Pukkila', 'Lasselsberger', 'Cersanit'],
+    templates: ['Keraaminen seinälaatta', 'Mattapintainen seinälaatta', 'Kiiltävä seinälaatta'],
+    basePriceRange: [18, 52],
+    installPriceRange: [8, 22],
+  },
+  {
+    key: 'tiles-floor',
+    path: 'Laatat > Lattialaatat',
+    unit: 'm2',
+    packageUnit: 'm2',
+    brands: ['Pukkila', 'Villeroy & Boch', 'Laattapiste'],
+    templates: ['Keraaminen lattialaatta', 'Kivijäljitelmälaatta', 'Karheapintainen lattialaatta'],
+    basePriceRange: [22, 68],
+    installPriceRange: [9, 25],
+  },
+  {
+    key: 'fixtures',
+    path: 'Vesikalusteet > Hanat',
+    unit: 'kpl',
+    packageUnit: 'kpl',
+    brands: ['Oras', 'Grohe', 'Hansgrohe'],
+    templates: ['Pesuallashana', 'Suihkuhana', 'Termostaattihana'],
+    basePriceRange: [95, 340],
+    installPriceRange: [55, 145],
+  },
+  {
+    key: 'furniture',
+    path: 'Kalusteet > Allaskaapit',
+    unit: 'kpl',
+    packageUnit: 'kpl',
+    brands: ['IDO', 'Hafa', 'Svedbergs'],
+    templates: ['Allaskaappi', 'Peilikaappi', 'Laatikostoallas'],
+    basePriceRange: [180, 620],
+    installPriceRange: [40, 95],
+  },
+  {
+    key: 'showers',
+    path: 'Suihkuratkaisut > Suihkuseinät',
+    unit: 'kpl',
+    packageUnit: 'kpl',
+    brands: ['Hietakari', 'Sanka', 'Bathlife'],
+    templates: ['Suihkuseinä', 'Suihkunurkka', 'Kääntyvä suihkuseinä'],
+    basePriceRange: [220, 740],
+    installPriceRange: [65, 180],
+  },
+  {
+    key: 'pipes',
+    path: 'LVI > Putket',
+    unit: 'm',
+    packageUnit: 'm',
+    brands: ['Uponor', 'Thermotech', 'LK'],
+    templates: ['Monikerrosputki', 'PEX-putki', 'Suojaputki'],
+    basePriceRange: [2.5, 18],
+  },
+  {
+    key: 'fittings',
+    path: 'LVI > Liittimet',
+    unit: 'kpl',
+    packageUnit: 'kpl',
+    brands: ['Uponor', 'VSH', 'Geberit'],
+    templates: ['Puserrusliitin', 'Kulmaliitin', 'Jatkoliitin'],
+    basePriceRange: [3.5, 28],
+  },
+  {
+    key: 'lighting',
+    path: 'Sähkö > Valaisimet',
+    unit: 'kpl',
+    packageUnit: 'kpl',
+    brands: ['Airam', 'Philips', 'Hide-a-lite'],
+    templates: ['LED-valaisin', 'Peilivalaisin', 'Kattospotti'],
+    basePriceRange: [18, 190],
+  },
+  {
+    key: 'switches',
+    path: 'Sähkö > Kytkimet',
+    unit: 'kpl',
+    packageUnit: 'kpl',
+    brands: ['ABB', 'Schneider Electric', 'Ensto'],
+    templates: ['Kytkin', 'Himmentin', 'Pistorasia'],
+    basePriceRange: [6, 55],
+  },
+  {
+    key: 'fasteners',
+    path: 'Rakennusmateriaalit > Kiinnikkeet',
+    unit: 'pkt',
+    packageUnit: 'pkt',
+    brands: ['Fischer', 'Essve', 'Senco'],
+    templates: ['Porakärkiruuvi', 'Yleisruuvi', 'Kipsilevyruuvi'],
+    basePriceRange: [4.5, 22],
+  },
+  {
+    key: 'boards',
+    path: 'Rakennusmateriaalit > Levyt ja rungot',
+    unit: 'kpl',
+    packageUnit: 'kpl',
+    brands: ['Gyproc', 'Metsä Wood', 'Kronospan'],
+    templates: ['Runkopuu', 'Kipsilevy', 'Rakennuslevy'],
+    basePriceRange: [8, 42],
+  },
+];
+
 function inferDemoCategory(index: number) {
-  const demoCategories = [
-    { path: 'Laatat > Seinälaatat', unit: 'm2', packageUnit: 'm2', key: 'tiles' },
-    { path: 'Laatat > Lattialaatat', unit: 'm2', packageUnit: 'm2', key: 'tiles' },
-    { path: 'Vesikalusteet > Hanat', unit: 'kpl', packageUnit: 'kpl', key: 'fixtures' },
-    { path: 'Kalusteet > Allaskaapit', unit: 'kpl', packageUnit: 'kpl', key: 'furniture' },
-    { path: 'Suihkuratkaisut > Suihkuseinät', unit: 'kpl', packageUnit: 'kpl', key: 'showers' },
-    { path: 'LVI > Putket', unit: 'm', packageUnit: 'm', key: 'pipes' },
-    { path: 'LVI > Liittimet', unit: 'kpl', packageUnit: 'kpl', key: 'fittings' },
-    { path: 'Sähkö > Valaisimet', unit: 'kpl', packageUnit: 'kpl', key: 'lighting' },
-    { path: 'Sähkö > Kytkimet', unit: 'kpl', packageUnit: 'kpl', key: 'switches' },
-    { path: 'Rakennusmateriaalit > Kiinnikkeet', unit: 'pkt', packageUnit: 'pkt', key: 'fasteners' },
-    { path: 'Rakennusmateriaalit > Levyt ja rungot', unit: 'kpl', packageUnit: 'kpl', key: 'boards' },
-  ] as const;
-  return demoCategories[index % demoCategories.length];
+  return DEMO_CATEGORY_DEFINITIONS[index % DEMO_CATEGORY_DEFINITIONS.length];
+}
+
+export function getDemoProductIndex(sourceProductId: string) {
+  const match = sourceProductId.match(/-(\d{6})$/);
+  if (!match) {
+    return undefined;
+  }
+
+  const value = Number.parseInt(match[1], 10);
+  return Number.isFinite(value) && value > 0 ? value - 1 : undefined;
+}
+
+export function generateDemoSourceRecord(sourceName: string, index: number): SourceProductRecord {
+  const category = inferDemoCategory(index);
+  const random = makeSeededRandom(`demo-${index}`);
+  const brand = category.brands[Math.floor(random() * category.brands.length) % category.brands.length];
+  const template = category.templates[Math.floor(random() * category.templates.length) % category.templates.length];
+  const variant = `${Math.floor(random() * 900) + 100}`;
+  const productNumber = String(index + 1).padStart(6, '0');
+  const [minPrice, maxPrice] = category.basePriceRange;
+  const basePrice = roundCurrency(minPrice + random() * (maxPrice - minPrice));
+  const marginPercent = roundCurrency(18 + random() * 32);
+  const salePrice = roundCurrency(calculateSalePrice(basePrice, marginPercent));
+  const installPrice = category.installPriceRange
+    ? roundCurrency(category.installPriceRange[0] + random() * (category.installPriceRange[1] - category.installPriceRange[0]))
+    : 0;
+  const packageSize = category.packageUnit === 'm2' ? `${1 + Math.round(random() * 4)} ${category.packageUnit}` : `1 ${category.packageUnit}`;
+  const name = `${brand} ${template} ${variant}`;
+  const description = `${template} ${variant}, ${brand}, ${category.path.toLowerCase()}.`;
+
+  return {
+    sourceName,
+    sourceProductId: `${sourceName}-${productNumber}`,
+    sourceUrl: `https://example.invalid/${sourceName}/${productNumber}`,
+    sourceCategoryPath: category.path,
+    sourceBrand: brand,
+    sourceNameRaw: name,
+    sourceDescriptionRaw: description,
+    sourcePrice: basePrice,
+    sourceSalePrice: salePrice,
+    sourceInstallPrice: installPrice,
+    sourceMarginPercent: marginPercent,
+    sourceSaleUnit: category.unit,
+    sourcePackageSize: packageSize,
+    sourceCurrency: DEFAULT_CURRENCY,
+    availabilityText: index % 5 === 0 ? 'Rajallinen saatavuus' : index % 7 === 0 ? 'Tilaustuote' : 'Varastossa',
+    manufacturerSku: `${brand.slice(0, 3).toUpperCase()}-${productNumber}`,
+    ean: String(6400000000000 + index),
+    rawPayload: {
+      source_name: sourceName,
+      source_product_id: `${sourceName}-${productNumber}`,
+      category_path: category.path,
+      brand,
+      name,
+      description,
+      price: basePrice,
+      sale_price: salePrice,
+      install_price: installPrice,
+      margin_percent: marginPercent,
+      unit: category.unit,
+      package_size: packageSize,
+      availability: index % 5 === 0 ? 'Rajallinen saatavuus' : index % 7 === 0 ? 'Tilaustuote' : 'Varastossa',
+    },
+  };
 }
 
 export function generateDemoSourceRecords(sourceName: string, count = 1200): SourceProductRecord[] {
-  const brandPool = seedBrandPool(sourceName);
-  const templatePool = seedTemplatePool(sourceName);
-  const random = makeSeededRandom(sourceName);
-  const records: SourceProductRecord[] = [];
-
-  for (let index = 0; index < count; index += 1) {
-    const category = inferDemoCategory(index);
-    const brand = brandPool[index % brandPool.length];
-    const template = templatePool[index % templatePool.length];
-    const variant = `${Math.floor(random() * 900) + 100}`;
-    const productNumber = String(index + 1).padStart(6, '0');
-    const basePrice = roundCurrency(4.5 + random() * 295);
-    const marginPercent = roundCurrency(18 + random() * 32);
-    const salePrice = roundCurrency(calculateSalePrice(basePrice, marginPercent));
-    const installPrice =
-      category.key === 'fixtures' || category.key === 'showers'
-        ? roundCurrency(45 + random() * 185)
-        : category.key === 'tiles'
-          ? roundCurrency(8 + random() * 25)
-          : 0;
-
-    records.push({
-      sourceName,
-      sourceProductId: `${sourceName}-${productNumber}`,
-      sourceUrl: `https://example.invalid/${sourceName}/${productNumber}`,
-      sourceCategoryPath: category.path,
-      sourceBrand: brand,
-      sourceNameRaw: `${brand} ${template} ${variant}`,
-      sourceDescriptionRaw: `${template} ${variant}, ${brand}, ${category.path.toLowerCase()}.`,
-      sourcePrice: basePrice,
-      sourceSalePrice: salePrice,
-      sourceInstallPrice: installPrice,
-      sourceMarginPercent: marginPercent,
-      sourceSaleUnit: category.unit,
-      sourcePackageSize: category.packageUnit === 'm2' ? `${1 + Math.round(random() * 4)} ${category.packageUnit}` : `1 ${category.packageUnit}`,
-      sourceCurrency: DEFAULT_CURRENCY,
-      availabilityText: index % 5 === 0 ? 'Rajallinen saatavuus' : index % 7 === 0 ? 'Tilaustuote' : 'Varastossa',
-      manufacturerSku: `${brand.slice(0, 3).toUpperCase()}-${productNumber}`,
-      ean: String(6400000000000 + index),
-      rawPayload: {
-        source_name: sourceName,
-        source_product_id: `${sourceName}-${productNumber}`,
-        category_path: category.path,
-        brand,
-        name: `${brand} ${template} ${variant}`,
-        description: `${template} ${variant}`,
-        price: basePrice,
-        sale_price: salePrice,
-        install_price: installPrice,
-        margin_percent: marginPercent,
-        unit: category.unit,
-        package_size: category.packageUnit === 'm2' ? `${1 + Math.round(random() * 4)} ${category.packageUnit}` : `1 ${category.packageUnit}`,
-        availability: index % 5 === 0 ? 'Rajallinen saatavuus' : index % 7 === 0 ? 'Tilaustuote' : 'Varastossa',
-      },
-    });
-  }
-
-  return records;
+  return Array.from({ length: count }, (_, index) => generateDemoSourceRecord(sourceName, index));
 }
 
 function getAdapterDisplayName(sourceName: string) {

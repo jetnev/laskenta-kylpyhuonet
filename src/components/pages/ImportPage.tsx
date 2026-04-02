@@ -80,7 +80,7 @@ export default function ImportPage() {
   const [importType, setImportType] = useState<CatalogImportType>('csv');
   const [selectedRunId, setSelectedRunId] = useState<string>('');
   const [selectedFileName, setSelectedFileName] = useState('');
-  const [demoCount, setDemoCount] = useState('600');
+  const [demoCount, setDemoCount] = useState('1200');
   const [mapping, setMapping] = useState<MappingFormState>({
     sourceName: 'generic',
     sourceCategoryPath: '',
@@ -137,7 +137,7 @@ export default function ImportPage() {
   };
 
   const handleDemoImport = (demoSource: 'k_rauta_demo' | 'stark_demo') => {
-    const count = Number.parseInt(demoCount, 10) || 600;
+    const count = Number.parseInt(demoCount, 10) || 1200;
     const rows = catalog.previewDemoImport(demoSource, count);
     setSourceName(demoSource);
     setImportType('demo');

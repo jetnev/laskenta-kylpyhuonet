@@ -397,29 +397,60 @@ export function createDefaultCatalogCategories(now = nowIso()) {
 }
 
 export function createDefaultSourceCategoryMappings(now = nowIso()) {
+  const mapping = (
+    id: string,
+    sourceName: string,
+    sourceCategoryPath: string,
+    categoryId?: string,
+    subcategoryId?: string
+  ) => ({
+    id,
+    sourceName,
+    sourceCategoryPath,
+    categoryId,
+    subcategoryId,
+    createdAt: now,
+    updatedAt: now,
+  });
+
   return [
-    { id: 'map-bathroom-tiles', sourceName: 'generic', sourceCategoryPath: 'laatat', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-tiles', createdAt: now, updatedAt: now },
-    { id: 'map-bathroom-fixtures', sourceName: 'generic', sourceCategoryPath: 'vesikalusteet', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-fixtures', createdAt: now, updatedAt: now },
-    { id: 'map-bathroom-furniture', sourceName: 'generic', sourceCategoryPath: 'kalusteet', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-furniture', createdAt: now, updatedAt: now },
-    { id: 'map-bathroom-showers', sourceName: 'generic', sourceCategoryPath: 'suihkut', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-showers', createdAt: now, updatedAt: now },
-    { id: 'map-plumbing-pipes', sourceName: 'generic', sourceCategoryPath: 'putket', categoryId: 'cat-plumbing', subcategoryId: 'cat-plumbing-pipes', createdAt: now, updatedAt: now },
-    { id: 'map-plumbing-fittings', sourceName: 'generic', sourceCategoryPath: 'liittimet', categoryId: 'cat-plumbing', subcategoryId: 'cat-plumbing-fittings', createdAt: now, updatedAt: now },
-    { id: 'map-electrical-lighting', sourceName: 'generic', sourceCategoryPath: 'valaisimet', categoryId: 'cat-electrical', subcategoryId: 'cat-electrical-lighting', createdAt: now, updatedAt: now },
-    { id: 'map-electrical-switches', sourceName: 'generic', sourceCategoryPath: 'kytkimet', categoryId: 'cat-electrical', subcategoryId: 'cat-electrical-switches', createdAt: now, updatedAt: now },
-    { id: 'map-krauta-tiles', sourceName: 'k_rauta', sourceCategoryPath: 'laatat', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-tiles', createdAt: now, updatedAt: now },
-    { id: 'map-krauta-fixtures', sourceName: 'k_rauta', sourceCategoryPath: 'vesikalusteet', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-fixtures', createdAt: now, updatedAt: now },
-    { id: 'map-krauta-furniture', sourceName: 'k_rauta', sourceCategoryPath: 'kalusteet', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-furniture', createdAt: now, updatedAt: now },
-    { id: 'map-krauta-showers', sourceName: 'k_rauta', sourceCategoryPath: 'suihkut', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-showers', createdAt: now, updatedAt: now },
-    { id: 'map-stark-tiles', sourceName: 'stark', sourceCategoryPath: 'laatat', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-tiles', createdAt: now, updatedAt: now },
-    { id: 'map-stark-fixtures', sourceName: 'stark', sourceCategoryPath: 'vesikalusteet', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-fixtures', createdAt: now, updatedAt: now },
-    { id: 'map-stark-plumbing', sourceName: 'stark', sourceCategoryPath: 'putket', categoryId: 'cat-plumbing', subcategoryId: 'cat-plumbing-pipes', createdAt: now, updatedAt: now },
-    { id: 'map-stark-electrical', sourceName: 'stark', sourceCategoryPath: 'sahko', categoryId: 'cat-electrical', subcategoryId: 'cat-electrical-lighting', createdAt: now, updatedAt: now },
-    { id: 'map-krauta-demo-tiles', sourceName: 'k_rauta_demo', sourceCategoryPath: 'laatat', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-tiles', createdAt: now, updatedAt: now },
-    { id: 'map-krauta-demo-fixtures', sourceName: 'k_rauta_demo', sourceCategoryPath: 'vesikalusteet', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-fixtures', createdAt: now, updatedAt: now },
-    { id: 'map-krauta-demo-furniture', sourceName: 'k_rauta_demo', sourceCategoryPath: 'kalusteet', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-furniture', createdAt: now, updatedAt: now },
-    { id: 'map-krauta-demo-plumbing', sourceName: 'k_rauta_demo', sourceCategoryPath: 'putket', categoryId: 'cat-plumbing', subcategoryId: 'cat-plumbing-pipes', createdAt: now, updatedAt: now },
-    { id: 'map-stark-demo-tiles', sourceName: 'stark_demo', sourceCategoryPath: 'laatat', categoryId: 'cat-bathroom', subcategoryId: 'cat-bathroom-tiles', createdAt: now, updatedAt: now },
-    { id: 'map-stark-demo-electrical', sourceName: 'stark_demo', sourceCategoryPath: 'sahko', categoryId: 'cat-electrical', subcategoryId: 'cat-electrical-lighting', createdAt: now, updatedAt: now },
+    mapping('map-bathroom-tiles', 'generic', 'laatat', 'cat-bathroom', 'cat-bathroom-tiles'),
+    mapping('map-bathroom-wall-tiles', 'generic', 'seinälaatat', 'cat-bathroom', 'cat-bathroom-tiles'),
+    mapping('map-bathroom-floor-tiles', 'generic', 'lattialaatat', 'cat-bathroom', 'cat-bathroom-tiles'),
+    mapping('map-bathroom-fixtures', 'generic', 'vesikalusteet', 'cat-bathroom', 'cat-bathroom-fixtures'),
+    mapping('map-bathroom-faucets', 'generic', 'hanat', 'cat-bathroom', 'cat-bathroom-fixtures'),
+    mapping('map-bathroom-furniture', 'generic', 'kalusteet', 'cat-bathroom', 'cat-bathroom-furniture'),
+    mapping('map-bathroom-vanities', 'generic', 'allaskaapit', 'cat-bathroom', 'cat-bathroom-furniture'),
+    mapping('map-bathroom-showers', 'generic', 'suihkut', 'cat-bathroom', 'cat-bathroom-showers'),
+    mapping('map-bathroom-shower-solutions', 'generic', 'suihkuratkaisut', 'cat-bathroom', 'cat-bathroom-showers'),
+    mapping('map-bathroom-shower-walls', 'generic', 'suihkuseinat', 'cat-bathroom', 'cat-bathroom-showers'),
+    mapping('map-plumbing-root', 'generic', 'lvi', 'cat-plumbing'),
+    mapping('map-plumbing-pipes', 'generic', 'putket', 'cat-plumbing', 'cat-plumbing-pipes'),
+    mapping('map-plumbing-fittings', 'generic', 'liittimet', 'cat-plumbing', 'cat-plumbing-fittings'),
+    mapping('map-plumbing-valves', 'generic', 'venttiilit', 'cat-plumbing', 'cat-plumbing-valves'),
+    mapping('map-electrical-root', 'generic', 'sahko', 'cat-electrical'),
+    mapping('map-electrical-lighting', 'generic', 'valaisimet', 'cat-electrical', 'cat-electrical-lighting'),
+    mapping('map-electrical-switches', 'generic', 'kytkimet', 'cat-electrical', 'cat-electrical-switches'),
+    mapping('map-electrical-sockets', 'generic', 'pistorasiat', 'cat-electrical', 'cat-electrical-switches'),
+    mapping('map-building-root', 'generic', 'rakennusmateriaalit', 'cat-building'),
+    mapping('map-building-fasteners', 'generic', 'kiinnikkeet', 'cat-building', 'cat-building-fasteners'),
+    mapping('map-building-boards', 'generic', 'levyt ja rungot', 'cat-building', 'cat-building-boards'),
+    mapping('map-building-boards-alt', 'generic', 'rakennuslevyt', 'cat-building', 'cat-building-boards'),
+    mapping('map-building-frames', 'generic', 'rungot', 'cat-building', 'cat-building-boards'),
+    mapping('map-krauta-tiles', 'k_rauta', 'laatat', 'cat-bathroom', 'cat-bathroom-tiles'),
+    mapping('map-krauta-fixtures', 'k_rauta', 'vesikalusteet', 'cat-bathroom', 'cat-bathroom-fixtures'),
+    mapping('map-krauta-furniture', 'k_rauta', 'kalusteet', 'cat-bathroom', 'cat-bathroom-furniture'),
+    mapping('map-krauta-showers', 'k_rauta', 'suihkut', 'cat-bathroom', 'cat-bathroom-showers'),
+    mapping('map-stark-tiles', 'stark', 'laatat', 'cat-bathroom', 'cat-bathroom-tiles'),
+    mapping('map-stark-fixtures', 'stark', 'vesikalusteet', 'cat-bathroom', 'cat-bathroom-fixtures'),
+    mapping('map-stark-plumbing', 'stark', 'putket', 'cat-plumbing', 'cat-plumbing-pipes'),
+    mapping('map-stark-electrical', 'stark', 'sahko', 'cat-electrical'),
+    mapping('map-krauta-demo-tiles', 'k_rauta_demo', 'laatat', 'cat-bathroom', 'cat-bathroom-tiles'),
+    mapping('map-krauta-demo-fixtures', 'k_rauta_demo', 'vesikalusteet', 'cat-bathroom', 'cat-bathroom-fixtures'),
+    mapping('map-krauta-demo-furniture', 'k_rauta_demo', 'kalusteet', 'cat-bathroom', 'cat-bathroom-furniture'),
+    mapping('map-krauta-demo-plumbing', 'k_rauta_demo', 'putket', 'cat-plumbing', 'cat-plumbing-pipes'),
+    mapping('map-stark-demo-tiles', 'stark_demo', 'laatat', 'cat-bathroom', 'cat-bathroom-tiles'),
+    mapping('map-stark-demo-electrical', 'stark_demo', 'sahko', 'cat-electrical'),
   ] as SourceCategoryMapping[];
 }
 
@@ -457,19 +488,29 @@ export function resolveSourceCategoryMapping(
   );
   if (exact) return exact;
 
-  const pathMatch = mappings.find(
-    (mapping) =>
-      normalizeComparableText(mapping.sourceName) === normalizedSourceName &&
-      normalizedPath.includes(buildSourceCategoryKey(mapping.sourceCategoryPath))
-  );
-  if (pathMatch) return pathMatch;
+  const candidates = mappings
+    .map((mapping) => ({
+      mapping,
+      sourceKey: normalizeComparableText(mapping.sourceName),
+      pathKey: buildSourceCategoryKey(mapping.sourceCategoryPath),
+    }))
+    .filter(
+      (candidate) =>
+        candidate.pathKey &&
+        normalizedPath.includes(candidate.pathKey) &&
+        (candidate.sourceKey === normalizedSourceName || candidate.sourceKey === 'generic')
+    )
+    .sort((left, right) => {
+      if (right.pathKey.length !== left.pathKey.length) {
+        return right.pathKey.length - left.pathKey.length;
+      }
 
-  const generic = mappings.find(
-    (mapping) =>
-      normalizeComparableText(mapping.sourceName) === 'generic' &&
-      normalizedPath.includes(buildSourceCategoryKey(mapping.sourceCategoryPath))
-  );
-  return generic;
+      const leftSpecificity = left.sourceKey === normalizedSourceName ? 1 : 0;
+      const rightSpecificity = right.sourceKey === normalizedSourceName ? 1 : 0;
+      return rightSpecificity - leftSpecificity;
+    });
+
+  return candidates[0]?.mapping;
 }
 
 export interface CatalogStoreState {

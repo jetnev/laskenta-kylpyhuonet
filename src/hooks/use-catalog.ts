@@ -12,6 +12,8 @@ import {
   SourceCategoryMapping,
   createDefaultCatalogCategories,
   createDefaultSourceCategoryMappings,
+  generateDemoSourceRecord,
+  getDemoProductIndex,
   normalizeComparableText,
   normalizeUnit,
   nowIso,
@@ -23,6 +25,7 @@ import {
   mapLegacyProductToCatalogProduct,
   buildProductSourceSummary,
   buildProductSourceList,
+  resolveSourceCategoryMapping,
 } from '../lib/catalog';
 import { Product as LegacyProduct } from '../lib/types';
 
@@ -33,13 +36,127 @@ interface CatalogBootstrapState {
 }
 
 const AUTO_SEED_DELAY_MS = 1500;
-const AUTO_SEED_PRODUCTS_PER_SOURCE = 180;
+const AUTO_SEED_PRODUCTS_PER_SOURCE = 320;
+const MANUAL_DEMO_PRODUCTS_PER_SOURCE = 1200;
+const CATALOG_BOOTSTRAP_VERSION = 2;
 
 const DEFAULT_BOOTSTRAP_STATE: CatalogBootstrapState = {
   version: 1,
   legacyMigrated: false,
   demoSeeded: false,
 };
+
+function buildMappingKey(mapping: Pick<SourceCategoryMapping, 'sourceName' | 'sourceCategoryPath'>) {
+  return `${normalizeComparableText(mapping.sourceName)}::${normalizeComparableText(mapping.sourceCategoryPath)}`;
+}
+
+function mergeCatalogCategories(current: CatalogCategory[]) {
+  const defaults = createDefaultCatalogCategories();
+  if (current.length === 0) {
+    return defaults;
+  }
+
+  const existingIds = new Set(current.map((category) => category.id));
+  const additions = defaults.filter((category) => !existingIds.has(category.id));
+  if (additions.length === 0) {
+    return current;
+  }
+
+  return [...current, ...additions].sort(
+    (left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'fi')
+  );
+}
+
+function mergeSourceCategoryMappings(current: SourceCategoryMapping[]) {
+  const defaults = createDefaultSourceCategoryMappings();
+  if (current.length === 0) {
+    return defaults;
+  }
+
+  const existingKeys = new Set(current.map((mapping) => buildMappingKey(mapping)));
+  const additions = defaults.filter((mapping) => !existingKeys.has(buildMappingKey(mapping)));
+  if (additions.length === 0) {
+    return current;
+  }
+
+  return [...current, ...additions];
+}
+
+function repairProductCategoriesFromSources(
+  products: CatalogProduct[],
+  productSources: ProductSource[],
+  mappings: SourceCategoryMapping[]
+) {
+  const sourcesByProductId = new Map<string, ProductSource[]>();
+  productSources.forEach((source) => {
+    const current = sourcesByProductId.get(source.productId) || [];
+    current.push(source);
+    sourcesByProductId.set(source.productId, current);
+  });
+
+  let changed = false;
+  const now = nowIso();
+  const nextProducts = products.map((product) => {
+    if (product.categoryId && product.subcategoryId) {
+      return product;
+    }
+
+    const matchingMapping = (sourcesByProductId.get(product.id) || [])
+      .map((source) => resolveSourceCategoryMapping(source.sourceName, source.sourceCategoryPath, mappings))
+      .find((mapping) => mapping?.categoryId || mapping?.subcategoryId);
+
+    if (!matchingMapping) {
+      return product;
+    }
+
+    const nextCategoryId = product.categoryId || matchingMapping.categoryId;
+    const nextSubcategoryId = product.subcategoryId || matchingMapping.subcategoryId;
+    if (nextCategoryId === product.categoryId && nextSubcategoryId === product.subcategoryId) {
+      return product;
+    }
+
+    changed = true;
+    return {
+      ...product,
+      categoryId: nextCategoryId,
+      subcategoryId: nextSubcategoryId,
+      updatedAt: now,
+    };
+  });
+
+  return changed ? nextProducts : products;
+}
+
+function repairDemoCatalogSource(sourceName: 'k_rauta_demo' | 'stark_demo', state: CatalogStoreState) {
+  const indices = Array.from(
+    new Set(
+      state.productSources
+        .filter((source) => source.sourceName === sourceName)
+        .map((source) => getDemoProductIndex(source.sourceProductId))
+        .filter((value): value is number => value !== undefined)
+    )
+  ).sort((left, right) => left - right);
+
+  if (indices.length === 0) {
+    return state;
+  }
+
+  const previewRows = prepareCatalogImportPreview(
+    indices.map((index) => generateDemoSourceRecord(sourceName, index)),
+    state
+  );
+
+  if (previewRows.every((row) => row.action === 'skip')) {
+    return state;
+  }
+
+  const result = commitCatalogImportPreview(previewRows, state, sourceName, 'demo');
+  return {
+    ...state,
+    products: result.products,
+    productSources: result.productSources,
+  };
+}
 
 function sameComparableProduct(left: CatalogProduct, right: CatalogProduct) {
   return (
@@ -140,6 +257,60 @@ export function useCatalog() {
       setSourceCategoryMappings(createDefaultSourceCategoryMappings());
     }
   }, [setSourceCategoryMappings, sourceCategoryMappings.length]);
+
+  useEffect(() => {
+    if (categories.length === 0 || bootstrapState.version >= CATALOG_BOOTSTRAP_VERSION) {
+      return;
+    }
+
+    const mergedCategories = mergeCatalogCategories(categories);
+    const mergedMappings = mergeSourceCategoryMappings(sourceCategoryMappings);
+    let nextState = toCatalogStoreState({
+      products,
+      productSources,
+      importRuns,
+      rawImportRecords,
+      categories: mergedCategories,
+      sourceCategoryMappings: mergedMappings,
+    });
+
+    nextState = repairDemoCatalogSource('k_rauta_demo', nextState);
+    nextState = repairDemoCatalogSource('stark_demo', nextState);
+
+    const repairedProducts = repairProductCategoriesFromSources(
+      nextState.products,
+      nextState.productSources,
+      mergedMappings
+    );
+
+    if (mergedCategories !== categories) {
+      setCategories(mergedCategories);
+    }
+    if (mergedMappings !== sourceCategoryMappings) {
+      setSourceCategoryMappings(mergedMappings);
+    }
+    if (repairedProducts !== products) {
+      setProducts(repairedProducts);
+    }
+    if (nextState.productSources !== productSources) {
+      setProductSources(nextState.productSources);
+    }
+
+    updateBootstrapState({ version: CATALOG_BOOTSTRAP_VERSION });
+  }, [
+    bootstrapState.version,
+    categories,
+    importRuns,
+    productSources,
+    products,
+    rawImportRecords,
+    setCategories,
+    setProductSources,
+    setProducts,
+    setSourceCategoryMappings,
+    sourceCategoryMappings,
+    updateBootstrapState,
+  ]);
 
   useEffect(() => {
     if (
@@ -397,7 +568,7 @@ export function useCatalog() {
   );
 
   const seedDemoSources = useCallback(
-    (count = 1200) => {
+    (count = MANUAL_DEMO_PRODUCTS_PER_SOURCE) => {
       const kRautaPreview = previewDemoImport('k_rauta_demo', count);
       const kRautaResult = commitImportPreview(kRautaPreview, 'k_rauta_demo', 'demo');
       const starkPreview = prepareCatalogImportPreview(parseCatalogDemo('stark_demo', count), {
