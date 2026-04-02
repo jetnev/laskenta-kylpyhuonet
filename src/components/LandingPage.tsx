@@ -1,5 +1,4 @@
 import { ArrowRight, ChartBar, CheckCircle, FileText, Folder, Package, SignIn } from '@phosphor-icons/react';
-import { motion } from 'framer-motion';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 
@@ -76,12 +75,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
       <main>
         <section className="relative overflow-hidden">
           <div className="mx-auto grid max-w-7xl gap-14 px-6 pb-20 pt-14 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:pb-28 lg:pt-20">
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, ease: 'easeOut' }}
-              className="max-w-2xl"
-            >
+            <div className="max-w-2xl">
               <Badge variant="outline" className="mb-6 rounded-full border-slate-300 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">
                 Yritysohjelmisto tarjouslaskentaan
               </Badge>
@@ -117,13 +111,10 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                   <div className="mt-2 text-sm text-slate-700">Vakaa käyttöliittymä päivittäiseen tarjousprosessiin.</div>
                 </div>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div
+            <div
               id="ominaisuudet"
-              initial={{ opacity: 0, y: 20, scale: 0.985 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.65, ease: 'easeOut', delay: 0.12 }}
               className="relative"
             >
               <div className="absolute inset-x-10 top-8 -z-10 h-[88%] rounded-[32px] bg-slate-950/8 blur-3xl" />
@@ -195,9 +186,8 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                       </div>
                       <div className="divide-y divide-slate-200">
                         {previewRows.map((row) => (
-                          <motion.div
+                          <div
                             key={row.quote}
-                            whileHover={{ backgroundColor: 'rgba(248,250,252,1)' }}
                             className="grid grid-cols-[1.5fr_1.3fr_0.9fr_0.8fr_0.9fr] gap-4 px-5 py-4 text-sm text-slate-700"
                           >
                             <div className="space-y-1">
@@ -218,7 +208,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                             </div>
                             <div className="self-center font-medium">{row.margin}</div>
                             <div className="self-center font-medium text-slate-950">{row.amount}</div>
-                          </motion.div>
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -274,7 +264,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                   </div>
                 </div>
               </div>
-            </motion.div>
+            </div>
           </div>
         </section>
 
@@ -292,18 +282,14 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
 
             <div className="mt-12 grid gap-5 lg:grid-cols-2 xl:grid-cols-4">
               {benefitCards.map((card, index) => (
-                <motion.div
+                <div
                   key={card.title}
-                  initial={{ opacity: 0, y: 16 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, amount: 0.2 }}
-                  transition={{ duration: 0.45, delay: index * 0.06 }}
                   className="rounded-[24px] border border-slate-200 bg-[#f9fbfd] px-5 py-6 shadow-[0_20px_50px_-34px_rgba(15,23,42,0.35)]"
                 >
                   <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">0{index + 1}</div>
                   <h3 className="mt-4 text-xl font-semibold tracking-[-0.03em] text-slate-950">{card.title}</h3>
                   <p className="mt-3 text-sm leading-7 text-slate-600">{card.description}</p>
-                </motion.div>
+                </div>
               ))}
             </div>
           </div>

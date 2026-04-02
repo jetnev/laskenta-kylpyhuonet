@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowCounterClockwise, ArrowLeft, CheckCircle, Key, SignIn, UserPlus } from '@phosphor-icons/react';
-import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -108,12 +107,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
       </header>
 
       <main className="relative z-10 mx-auto grid max-w-6xl gap-12 px-6 py-12 lg:grid-cols-[0.95fr_0.8fr] lg:items-start lg:py-20">
-        <motion.section
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
-          className="max-w-xl pt-2"
-        >
+        <section className="max-w-xl pt-2">
           <div className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Tarjouslaskenta</div>
           <h1 className="mt-5 text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">
             Tervetuloa takaisin
@@ -134,13 +128,9 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
               </div>
             ))}
           </div>
-        </motion.section>
+        </section>
 
-        <motion.section
-          initial={{ opacity: 0, y: 22 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: 'easeOut', delay: 0.08 }}
-        >
+        <section>
           <Card className="overflow-hidden rounded-[28px] border-slate-200/90 bg-white shadow-[0_32px_80px_-42px_rgba(15,23,42,0.45)]">
             <CardHeader className="border-b border-slate-200/90 px-7 py-6">
               <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/8 text-primary">
@@ -352,7 +342,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
               )}
             </CardContent>
           </Card>
-        </motion.section>
+        </section>
       </main>
     </div>
   );
