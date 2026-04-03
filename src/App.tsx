@@ -27,6 +27,7 @@ import { Button } from './components/ui/button';
 import { checkForDesktopUpdates, getDesktopUpdateStatus, isDesktopRuntime, restartDesktopForUpdate, type DesktopUpdateSnapshot } from './lib/desktop-update';
 import { toast } from 'sonner';
 import Dashboard from './components/pages/Dashboard';
+import HelpPage from './components/pages/HelpPage';
 import ProductsPage from './components/pages/ProductsPage';
 import InstallationGroupsPage from './components/pages/InstallationGroupsPage';
 import SubstituteProductsPage from './components/pages/SubstituteProductsPage';
@@ -40,6 +41,7 @@ import UsersPage from './components/pages/UsersPage';
 
 type Page =
   | 'dashboard'
+  | 'help'
   | 'projects'
   | 'products'
   | 'installation-groups'
@@ -113,6 +115,7 @@ function App() {
     () =>
       [
         { id: 'dashboard' as const, name: 'Etusivu', icon: House, visible: true },
+        { id: 'help' as const, name: 'Ohjeet', icon: List, visible: true },
         { id: 'projects' as const, name: 'Projektit', icon: Folder, visible: true },
         { id: 'products' as const, name: 'Tuoterekisteri', icon: Package, visible: true },
         { id: 'installation-groups' as const, name: 'Hintaryhmät', icon: Wrench, visible: true },
@@ -381,6 +384,7 @@ function App() {
 
         <main className="flex-1 overflow-auto">
           {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
+          {currentPage === 'help' && <HelpPage />}
           {currentPage === 'projects' && <ProjectsPage />}
           {currentPage === 'products' && <ProductsPage />}
           {currentPage === 'installation-groups' && <InstallationGroupsPage />}
