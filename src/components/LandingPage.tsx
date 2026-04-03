@@ -9,27 +9,27 @@ interface LandingPageProps {
 const benefitCards = [
   {
     title: 'Nopeampi tarjousprosessi',
-    description: 'Keskitetty tuoterekisteri, projektikohtaiset tarjoukset ja selkeä laskentanäkymä yhdessä paikassa.',
+    description: 'Keskitetty tuoterekisteri, projektikohtaiset tarjoukset ja seurattavat työvaiheet yhdessä paikassa.',
   },
   {
     title: 'Parempi katehallinta',
-    description: 'Näe ostohinnat, myyntihinnat ja marginaalit selkeästi ilman hajanaista Excel-työtä.',
+    description: 'Näe ostohinnat, myyntihinnat, lisäkulut ja marginaalit selkeästi ilman hajanaista Excel-työtä.',
   },
   {
     title: 'Hallittu projektiseuranta',
-    description: 'Pidä tarjousversiot, projektit ja asiakaskohtaiset tiedot järjestyksessä koko prosessin ajan.',
+    description: 'Pidä tarjousversiot, projektit, asiakkaat ja määräajat järjestyksessä koko prosessin ajan.',
   },
   {
     title: 'Yrityskäyttöön suunniteltu',
-    description: 'Selkeä käyttöoikeusmalli, turvallinen kirjautuminen ja ammattimainen käyttöliittymä.',
+    description: 'Selkeä käyttöoikeusmalli, turvallinen kirjautuminen ja käyttöliittymä, joka sopii pk-yrityksen arkeen.',
   },
 ];
 
 const previewRows = [
-  { quote: 'TAR-20260403-8F3A12', customer: 'Rakennusliike Laine', status: 'Lähetetty', margin: '18,4 %', amount: '48 200 €' },
-  { quote: 'TAR-20260403-71B8E4', customer: 'KVR Sisärakenne', status: 'Luonnos', margin: '21,1 %', amount: '16 890 €' },
-  { quote: 'TAR-20260402-2A66BA', customer: 'Talotekniikka Aalto', status: 'Hyväksytty', margin: '17,6 %', amount: '92 400 €' },
-  { quote: 'TAR-20260401-54CD21', customer: 'Korjausurakka Niemi', status: 'Luonnos', margin: '19,9 %', amount: '33 750 €' },
+  { quote: 'TAR-20260403-8F3A12', project: 'Julkisivun korjaus / vaihe 2', customer: 'Rakennusliike Laine', status: 'Lähetetty', margin: '18,4 %', amount: '48 200 €' },
+  { quote: 'TAR-20260403-71B8E4', project: 'KVR sisävalmistus', customer: 'KVR Sisärakenne', status: 'Luonnos', margin: '21,1 %', amount: '16 890 €' },
+  { quote: 'TAR-20260402-2A66BA', project: 'Talotekniikan saneeraus', customer: 'Talotekniikka Aalto', status: 'Hyväksytty', margin: '17,6 %', amount: '92 400 €' },
+  { quote: 'TAR-20260401-54CD21', project: 'Korjausurakka / vaiheistus', customer: 'Korjausurakka Niemi', status: 'Luonnos', margin: '19,9 %', amount: '33 750 €' },
 ];
 
 const audienceItems = [
@@ -77,14 +77,24 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
           <div className="mx-auto grid max-w-7xl gap-14 px-6 pb-20 pt-14 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:pb-28 lg:pt-20">
             <div className="max-w-2xl">
               <Badge variant="outline" className="mb-6 rounded-full border-slate-300 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">
-                Yritysohjelmisto tarjouslaskentaan
+                Tarjouslaskenta ja projektiseuranta
               </Badge>
               <h1 className="max-w-3xl text-5xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-6xl">
-                Tarjouslaskenta rakennusalan yrityksille
+                Tarjouslaskenta ja projektiseuranta rakennusalan yrityksille
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">
-                Hallitse tuotteet, projektit, tarjousversiot ja hinnoittelu yhdessä järjestelmässä. Nopeampi laskenta, vähemmän virheitä ja parempi katehallinta.
+                Hallitse tuotteet, projektit, tarjousversiot, hinnoittelu ja seuranta yhdessä järjestelmässä. Nopeampi laskenta, selkeämpi projektinäkymä, vähemmän virheitä ja parempi katehallinta.
               </p>
+              <div className="mt-6 flex flex-wrap gap-2">
+                {['Tarjoukset', 'Projektit', 'Tuoterekisteri', 'Katehallinta'].map((item) => (
+                  <span
+                    key={item}
+                    className="inline-flex rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-sm font-medium text-slate-600 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.35)]"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button className="h-11 gap-2 px-6 text-sm" onClick={handleRequestDemo}>
@@ -98,17 +108,17 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
               </div>
 
               <div className="mt-10 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.45)]">
+                <div className="flex min-h-[152px] flex-col rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.45)]">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Keskitetty tieto</div>
-                  <div className="mt-2 text-sm text-slate-700">Tuotteet, projektit ja tarjoukset samassa näkymässä.</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-700">Tuotteet, projektit ja tarjoukset pysyvät samassa näkymässä ilman irrallisia tiedostoja.</div>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.45)]">
+                <div className="flex min-h-[152px] flex-col rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.45)]">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Kate hallinnassa</div>
-                  <div className="mt-2 text-sm text-slate-700">Osto, myynti ja marginaali näkyvät päätöksiä varten.</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-700">Osto, myynti, lisäkulut ja marginaali näkyvät päätöksiä varten yhdellä silmäyksellä.</div>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.45)]">
+                <div className="flex min-h-[152px] flex-col rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.45)]">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Yrityskäyttöön</div>
-                  <div className="mt-2 text-sm text-slate-700">Vakaa käyttöliittymä päivittäiseen tarjousprosessiin.</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-700">Vakaa käyttöliittymä päivittäiseen tarjouslaskentaan ja projektiseurantaan.</div>
                 </div>
               </div>
             </div>
@@ -120,9 +130,9 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
               <div className="absolute inset-x-10 top-8 -z-10 h-[88%] rounded-[32px] bg-slate-950/8 blur-3xl" />
               <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_44px_90px_-42px_rgba(15,23,42,0.48)]">
                 <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-6 py-4">
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-sm font-semibold text-slate-950">Tarjouslaskenta</div>
-                    <div className="mt-1 text-xs text-slate-500">Aktiiviset tarjoukset ja projektiseuranta</div>
+                    <div className="mt-1 text-xs text-slate-500">Tarjouslaskenta, projektiseuranta ja tuotetieto samassa työtilassa</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge className="rounded-full bg-slate-950 px-3 py-1 text-xs text-white hover:bg-slate-950">Hyväksyntä 62 %</Badge>
@@ -177,37 +187,66 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                     </div>
 
                     <div className="overflow-hidden rounded-[24px] border border-slate-200">
-                      <div className="grid grid-cols-[1.5fr_1.3fr_0.9fr_0.8fr_0.9fr] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      <div className="hidden grid-cols-[1.4fr_1.5fr_0.9fr_0.8fr_0.9fr] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 lg:grid">
                         <div>Tarjous</div>
-                        <div>Asiakas</div>
+                        <div>Projekti</div>
                         <div>Status</div>
                         <div>Kate</div>
                         <div>Arvo</div>
                       </div>
                       <div className="divide-y divide-slate-200">
                         {previewRows.map((row) => (
-                          <div
-                            key={row.quote}
-                            className="grid grid-cols-[1.5fr_1.3fr_0.9fr_0.8fr_0.9fr] gap-4 px-5 py-4 text-sm text-slate-700"
-                          >
-                            <div className="space-y-1">
-                              <div className="font-semibold text-slate-950">{row.quote}</div>
-                              <div className="text-xs text-slate-500">Kylpyhuone- ja korjausrakentaminen</div>
+                          <div key={row.quote}>
+                            <div className="grid hidden grid-cols-[1.4fr_1.5fr_0.9fr_0.8fr_0.9fr] gap-4 px-5 py-4 text-sm text-slate-700 lg:grid">
+                              <div className="min-w-0 space-y-1">
+                                <div className="truncate font-semibold text-slate-950">{row.quote}</div>
+                                <div className="text-xs text-slate-500">Asiakas: {row.customer}</div>
+                              </div>
+                              <div className="min-w-0 self-center">
+                                <div className="truncate text-slate-700">{row.project}</div>
+                              </div>
+                              <div className="self-center">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+                                  row.status === 'Hyväksytty'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : row.status === 'Lähetetty'
+                                      ? 'bg-blue-50 text-blue-700'
+                                      : 'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {row.status}
+                                </span>
+                              </div>
+                              <div className="self-center font-medium">{row.margin}</div>
+                              <div className="self-center font-medium text-slate-950">{row.amount}</div>
                             </div>
-                            <div className="self-center">{row.customer}</div>
-                            <div className="self-center">
-                              <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                                row.status === 'Hyväksytty'
-                                  ? 'bg-emerald-50 text-emerald-700'
-                                  : row.status === 'Lähetetty'
-                                    ? 'bg-blue-50 text-blue-700'
-                                    : 'bg-slate-100 text-slate-700'
-                              }`}>
-                                {row.status}
-                              </span>
+                            <div className="space-y-3 px-5 py-4 lg:hidden">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="truncate font-semibold text-slate-950">{row.quote}</div>
+                                  <div className="mt-1 text-sm text-slate-600">{row.project}</div>
+                                  <div className="mt-1 text-xs text-slate-500">{row.customer}</div>
+                                </div>
+                                <span className={`inline-flex flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                                  row.status === 'Hyväksytty'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : row.status === 'Lähetetty'
+                                      ? 'bg-blue-50 text-blue-700'
+                                      : 'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {row.status}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Kate</div>
+                                  <div className="mt-1 font-medium text-slate-950">{row.margin}</div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Arvo</div>
+                                  <div className="mt-1 font-medium text-slate-950">{row.amount}</div>
+                                </div>
+                              </div>
                             </div>
-                            <div className="self-center font-medium">{row.margin}</div>
-                            <div className="self-center font-medium text-slate-950">{row.amount}</div>
                           </div>
                         ))}
                       </div>
@@ -216,23 +255,29 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                     <div className="grid gap-4 xl:grid-cols-[1.25fr_0.95fr]">
                       <div className="rounded-[24px] border border-slate-200 px-5 py-5">
                         <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Projektin tarjousrivit</div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Projektiseuranta</div>
                             <div className="mt-2 text-lg font-semibold text-slate-950">Kylpyhuoneremontti / As Oy Merituuli</div>
                           </div>
                           <Badge variant="outline" className="rounded-full border-slate-300 px-3 py-1 text-xs text-slate-600">Revisio 3</Badge>
                         </div>
                         <div className="mt-5 space-y-3">
                           {[
-                            { label: 'Seinälaatat ja kiinnitystarvikkeet', amount: '6 420 €' },
-                            { label: 'Kalusteet ja suihkutila', amount: '4 860 €' },
-                            { label: 'Purkutyö ja jätekulut', amount: '1 280 €' },
+                            { label: 'Purkutyö valmis', amount: '08.04.2026' },
+                            { label: 'Materiaalit tilattu', amount: '10.04.2026' },
+                            { label: 'Asennus käynnistyy', amount: '14.04.2026' },
                           ].map((item) => (
-                            <div key={item.label} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm">
-                              <span className="text-slate-600">{item.label}</span>
-                              <span className="font-semibold text-slate-950">{item.amount}</span>
+                            <div key={item.label} className="flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm">
+                              <span className="min-w-0 text-slate-600">{item.label}</span>
+                              <span className="flex-shrink-0 font-semibold text-slate-950">{item.amount}</span>
                             </div>
                           ))}
+                        </div>
+                        <div className="mt-5 rounded-2xl border border-slate-200 px-4 py-4">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Projektin tila</div>
+                          <div className="mt-2 text-sm leading-6 text-slate-600">
+                            Tarjous, aikataulu ja työn eteneminen pysyvät samassa näkymässä ilman erillisiä projektitaulukoita.
+                          </div>
                         </div>
                       </div>
 
@@ -273,10 +318,10 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
             <div className="max-w-2xl">
               <div className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Hyödyt</div>
               <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-4xl">
-                Suunniteltu poistamaan tarjouslaskennan kitka
+                Suunniteltu poistamaan tarjouslaskennan ja projektiseurannan kitka
               </h2>
               <p className="mt-4 text-lg text-slate-600">
-                Tarjouslaskenta kokoaa hajallaan olevan tiedon yhteen työnkulkuun, jossa tarjous saadaan ulos nopeammin ja johdonmukaisemmin.
+                Tarjouslaskenta kokoaa hajallaan olevan tiedon yhteen työnkulkuun, jossa tarjous saadaan ulos nopeammin ja projektin eteneminen pysyy näkyvissä alusta loppuun.
               </p>
             </div>
 
@@ -323,7 +368,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
         <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-lg font-semibold tracking-tight text-slate-950">Tarjouslaskenta</div>
-            <div className="mt-1 text-sm text-slate-500">Yrityksille suunniteltu tarjouslaskennan käyttöjärjestelmä.</div>
+            <div className="mt-1 text-sm text-slate-500">Yrityksille suunniteltu tarjouslaskennan ja projektiseurannan käyttöjärjestelmä.</div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="ghost" onClick={onNavigateToLogin}>
