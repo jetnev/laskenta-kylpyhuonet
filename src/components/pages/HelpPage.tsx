@@ -29,6 +29,11 @@ const quickStartSteps = [
     description:
       'Käytä PDF:ää asiakaslähetykseen, asiakas-Exceliä jaettavaan taulukkoon ja sisäistä Exceliä omalle tiimille tai tarkempaan kustannusseurantaan.',
   },
+  {
+    title: 'Tarkista ennen lähetystä',
+    description:
+      'Varmista vielä asiakkaan tiedot, työkohde, loppusumma ja valittu vientimuoto ennen kuin lähetät tarjouksen eteenpäin.',
+  },
 ];
 
 const reminders = [
@@ -163,8 +168,8 @@ export default function HelpPage() {
         </div>
       </div>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <Card className="overflow-hidden">
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <Card className="h-full overflow-hidden">
           <CardHeader className="border-b bg-muted/30">
             <CardTitle className="flex items-center gap-2 text-lg">
               <CheckCircle className="h-5 w-5 text-primary" weight="fill" />
@@ -172,9 +177,9 @@ export default function HelpPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
-            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid auto-rows-fr gap-4 md:grid-cols-2 2xl:grid-cols-3">
               {quickStartSteps.map((step, index) => (
-                <div key={step.title} className="rounded-xl border bg-background p-4 space-y-3">
+                <div key={step.title} className="flex h-full flex-col rounded-xl border bg-background p-4 space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">
                       {index + 1}
@@ -188,44 +193,51 @@ export default function HelpPage() {
           </CardContent>
         </Card>
 
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b bg-muted/30">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Warning className="h-5 w-5 text-primary" weight="fill" />
-              Hyvä muistaa
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-6">
-            {reminders.map((item) => (
-              <div key={item} className="flex items-start gap-3 rounded-xl border bg-background p-4">
-                <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" weight="fill" />
-                <p className="text-sm text-muted-foreground leading-6">{item}</p>
-              </div>
-            ))}
+        <div className="grid auto-rows-fr gap-6">
+          <Card className="h-full overflow-hidden">
+            <CardHeader className="border-b bg-muted/30">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Warning className="h-5 w-5 text-primary" weight="fill" />
+                Hyvä muistaa
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              {reminders.map((item) => (
+                <div key={item} className="flex items-start gap-3 rounded-xl border bg-background p-4">
+                  <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" weight="fill" />
+                  <p className="text-sm text-muted-foreground leading-6">{item}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
-            <div className="space-y-3">
-              <div>
-                <h2 className="text-sm font-semibold">Missä mikäkin tehdään?</h2>
-                <p className="text-sm text-muted-foreground">
-                  Kun näkymät ovat selvät, ensimmäinen tarjous syntyy huomattavasti nopeammin.
-                </p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+          <Card className="h-full overflow-hidden">
+            <CardHeader className="border-b bg-muted/30">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Folder className="h-5 w-5 text-primary" weight="fill" />
+                Missä mikäkin tehdään?
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              <p className="text-sm text-muted-foreground leading-6">
+                Kun näkymät ovat selvät, ensimmäinen tarjous syntyy huomattavasti nopeammin.
+              </p>
+              <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-2">
                 {quickLinks.map((item) => (
-                  <div key={item.title} className="rounded-xl border bg-background p-4 space-y-1">
+                  <div key={item.title} className="flex h-full flex-col rounded-xl border bg-background p-4 space-y-1">
                     <div className="text-sm font-semibold">{item.title}</div>
                     <p className="text-sm text-muted-foreground leading-6">{item.description}</p>
                   </div>
                 ))}
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      <div className="grid items-start gap-6 xl:grid-cols-2">
+      <div className="grid auto-rows-fr gap-6 xl:grid-cols-2">
         {faqSections.map((section) => (
-          <Card key={section.title} className="overflow-hidden">
+          <Card key={section.title} className="h-full overflow-hidden">
             <CardHeader className="border-b bg-muted/30">
               <CardTitle className="flex items-center gap-2 text-lg">
                 {section.title === 'Tarjouksen tekeminen' && <Folder className="h-5 w-5 text-primary" weight="fill" />}
