@@ -120,6 +120,7 @@ function isRecoverableProfileError(error: unknown) {
     message.includes('statement timeout') ||
     message.includes('canceling statement') ||
     message.includes('timeout') ||
+    message.includes('stack depth') ||
     message.includes('network') ||
     message.includes('failed to fetch') ||
     message.includes('fetch failed')
