@@ -73,7 +73,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
               {/* Trust badges */}
               <div className="mt-10 flex flex-wrap gap-3">
                 {[
-                  { icon: Hardhat, text: 'Rakennusalalle suunniteltu' },
+                  { icon: HardHat, text: 'Rakennusalalle suunniteltu' },
                   { icon: CurrencyCircleDollar, text: 'Kate näkyy ennen päätöstä' },
                   { icon: ShieldCheck, text: 'Tarjous ja projekti samassa järjestelmässä' },
                 ].map((b) => {
