@@ -316,7 +316,7 @@ function App() {
         <div className="flex h-16 items-center border-b border-border px-6 justify-between">
           <div>
             <h1 className="text-xl font-semibold text-primary">Laskenta</h1>
-            <p className="text-xs text-muted-foreground">{organization?.name || 'Tarjouslaskenta'}</p>
+            <p className="text-xs text-muted-foreground">{organization?.name || user?.organizationName || 'Tarjouslaskenta'}</p>
           </div>
           {isMobile && (
             <button onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-muted rounded-md">

@@ -323,6 +323,7 @@ set search_path = public
 as $$
 declare
   next_name text;
+  next_role text;
 begin
   if exists (select 1 from public.profiles where id = new.id) then
     return new;
@@ -333,12 +334,17 @@ begin
     split_part(coalesce(new.email, 'Kayttaja'), '@', 1)
   );
 
+  next_role := case
+    when not exists (select 1 from public.profiles) then 'admin'
+    else 'user'
+  end;
+
   insert into public.profiles (id, email, display_name, role, status, created_at, updated_at)
   values (
     new.id,
     coalesce(lower(new.email), ''),
     next_name,
-    'user',
+    next_role,
     'active',
     timezone('utc', now()),
     timezone('utc', now())
@@ -353,6 +359,22 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row
 execute function public.handle_new_user();
+
+do $$
+begin
+  if not exists (select 1 from public.profiles where role = 'admin') then
+    update public.profiles
+    set role = 'admin',
+        updated_at = timezone('utc', now())
+    where id = (
+      select id
+      from public.profiles
+      order by created_at asc, id asc
+      limit 1
+    );
+  end if;
+end;
+$$;
 
 alter table public.organizations enable row level security;
 

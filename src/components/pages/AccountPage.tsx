@@ -126,7 +126,7 @@ export default function AccountPage() {
           <div>
             <h2 className="text-xl font-semibold">{user.displayName}</h2>
             <p className="text-sm text-muted-foreground">{user.email}</p>
-            <p className="text-xs text-muted-foreground mt-1">Työtila: {organization?.name || 'Ei työtilaa'}</p>
+            <p className="text-xs text-muted-foreground mt-1">Työtila: {organization?.name || user.organizationName || 'Ei työtilaa'}</p>
             <p className="text-xs text-muted-foreground mt-1">Työtilarooli: {getOrganizationRoleLabel(user.organizationRole)}</p>
             <p className="text-xs text-muted-foreground mt-1">Alustarooli: {getPlatformRoleLabel(user.role)}</p>
           </div>

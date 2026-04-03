@@ -299,6 +299,78 @@ function buildFallbackAuthUser(user: User, markLogin = false): AuthUser {
   };
 }
 
+function getCachedAuthUserStorageKey(userId: string) {
+  return `laskenta:auth-user:${userId}`;
+}
+
+function readCachedAuthUser(userId: string) {
+  if (typeof window === 'undefined' || !userId) {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(getCachedAuthUserStorageKey(userId));
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<AuthUser>;
+    if (parsed.id !== userId || typeof parsed.email !== 'string' || typeof parsed.displayName !== 'string') {
+      return null;
+    }
+
+    return {
+      id: parsed.id,
+      email: normalizeEmail(parsed.email),
+      displayName: parsed.displayName,
+      role: parsed.role === 'admin' ? 'admin' : 'user',
+      organizationId: parsed.organizationId ?? null,
+      organizationRole:
+        parsed.organizationRole === 'owner' || parsed.organizationRole === 'employee'
+          ? parsed.organizationRole
+          : null,
+      organizationName: typeof parsed.organizationName === 'string' ? parsed.organizationName : null,
+      initials:
+        typeof parsed.initials === 'string' && parsed.initials.trim().length > 0
+          ? parsed.initials
+          : getInitials(parsed.displayName),
+      createdAt:
+        typeof parsed.createdAt === 'string' && parsed.createdAt.trim().length > 0
+          ? parsed.createdAt
+          : new Date().toISOString(),
+      lastLoginAt: typeof parsed.lastLoginAt === 'string' ? parsed.lastLoginAt : undefined,
+      status: parsed.status === 'disabled' ? 'disabled' : 'active',
+    } satisfies AuthUser;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedAuthUser(user: AuthUser) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(getCachedAuthUserStorageKey(user.id), JSON.stringify(user));
+}
+
+function buildRecoverableFallbackAuthUser(user: User, markLogin = false): AuthUser {
+  const cachedUser = readCachedAuthUser(user.id);
+  if (!cachedUser) {
+    return buildFallbackAuthUser(user, markLogin);
+  }
+
+  const displayName = toDisplayName(user, cachedUser.displayName);
+  return {
+    ...cachedUser,
+    email: normalizeEmail(user.email || cachedUser.email),
+    displayName,
+    initials: getInitials(displayName),
+    createdAt: cachedUser.createdAt || user.created_at || new Date().toISOString(),
+    lastLoginAt: markLogin ? new Date().toISOString() : cachedUser.lastLoginAt,
+  };
+}
+
 async function getProfile(userId: string) {
   const client = requireSupabase();
   const { data, error } = await client.from('profiles').select('*').eq('id', userId).maybeSingle();
@@ -441,6 +513,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
+  useEffect(() => {
+    if (user) {
+      writeCachedAuthUser(user);
+    }
+  }, [user]);
+
   const loadUsers = useCallback(async (currentUser?: AuthUser | null, currentOrganization?: OrganizationRow | null) => {
     if (!isSupabaseConfigured) {
       setUsers(currentUser ? [currentUser] : []);
@@ -499,16 +577,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error('Käyttäjätili on poistettu käytöstä.');
         }
 
-        let currentOrganization = profile.organization_id ? await getOrganization(profile.organization_id) : null;
-        if (!currentOrganization) {
-          currentOrganization = await createOrganizationForCurrentUser(resolveSeedOrganizationName(session.user, profile));
-          profile = (await getProfile(session.user.id)) ?? profile;
+        let currentOrganization: OrganizationRow | null = null;
+
+        if (profile.organization_id) {
+          try {
+            currentOrganization = await getOrganization(profile.organization_id);
+          } catch (error) {
+            if (!isRecoverableProfileError(error)) {
+              throw error;
+            }
+
+            console.error('Supabase organization lookup failed, continuing without organization context.', error);
+          }
+        }
+
+        if (!currentOrganization && !profile.organization_id) {
+          try {
+            currentOrganization = await createOrganizationForCurrentUser(resolveSeedOrganizationName(session.user, profile));
+            profile = (await getProfile(session.user.id)) ?? profile;
+          } catch (error) {
+            if (!isRecoverableProfileError(error)) {
+              throw error;
+            }
+
+            console.error('Supabase organization bootstrap failed, continuing without organization context.', error);
+          }
         }
 
         const nextUser = toAuthUser(profile, currentOrganization);
         setOrganization(currentOrganization);
         setUser(nextUser);
-        await loadUsers(nextUser, currentOrganization);
+        setUsers([nextUser]);
+
+        void loadUsers(nextUser, currentOrganization).catch((error) => {
+          console.error('Supabase user directory bootstrap failed, continuing with current user only.', error);
+          setUsers([nextUser]);
+        });
+
         return nextUser;
       } catch (error) {
         if (!isRecoverableProfileError(error)) {
@@ -516,7 +621,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         console.error('Supabase profile bootstrap failed, continuing with auth fallback.', error);
-        const nextUser = buildFallbackAuthUser(session.user, options?.markLogin);
+        const nextUser = buildRecoverableFallbackAuthUser(session.user, options?.markLogin);
         setOrganization(null);
         setUser(nextUser);
         setUsers([nextUser]);
@@ -560,6 +665,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: authListener } = client.auth.onAuthStateChange((event, session) => {
       if (!mounted) {
+        return;
+      }
+
+      if (event === 'INITIAL_SESSION') {
         return;
       }
 
@@ -627,7 +736,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (data.session) {
-      await hydrateSession(data.session, { markLogin: true });
       return;
     }
 
@@ -646,8 +754,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(mapLoginErrorMessage(error));
     }
 
-    const nextUser = await hydrateSession(data.session, { markLogin: true });
-    if (!nextUser) {
+    if (!data.session?.user) {
       throw new Error('Kirjautuminen epäonnistui.');
     }
   };
