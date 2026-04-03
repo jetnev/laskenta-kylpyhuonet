@@ -9,6 +9,36 @@ import { Button } from '../ui/button';
 import { Alert, AlertDescription } from '../ui/alert';
 import { toast } from 'sonner';
 
+function toNameCase(value: string) {
+  return value
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join('-');
+}
+
+function getExampleSurname(displayName?: string, email?: string) {
+  const displayNameParts = (displayName || '')
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.replace(/[^\p{L}\p{M}-]/gu, ''))
+    .filter(Boolean);
+  const emailParts = (email || '')
+    .split('@')[0]
+    ?.split(/[._-]+/)
+    .map((part) => part.replace(/[^\p{L}\p{M}-]/gu, ''))
+    .filter(Boolean) || [];
+
+  const candidate =
+    (displayNameParts.length > 1 ? displayNameParts.at(-1) : undefined) ||
+    (emailParts.length > 1 ? emailParts.at(-1) : undefined) ||
+    displayNameParts[0] ||
+    emailParts[0] ||
+    '';
+
+  return candidate ? toNameCase(candidate) : '';
+}
+
 export default function AccountPage() {
   const { user, updateProfile, changePassword, logout } = useAuth();
   const { companyProfile, updateCompanyProfile } = useCompanyProfile();
@@ -37,6 +67,10 @@ export default function AccountPage() {
     () => (user ? new Date(user.createdAt).toLocaleDateString('fi-FI') : ''),
     [user]
   );
+  const companyNamePlaceholder = useMemo(() => {
+    const surname = getExampleSurname(user?.displayName, user?.email);
+    return surname ? `Esim. Kylpyhuoneet ${surname} Oy` : 'Esim. Oma Yritys Oy';
+  }, [user?.displayName, user?.email]);
 
   useEffect(() => {
     setProfileForm({
@@ -175,7 +209,7 @@ export default function AccountPage() {
               id="account-company-name"
               value={companyForm.companyName}
               onChange={(event) => setCompanyForm((current) => ({ ...current, companyName: event.target.value }))}
-              placeholder="Esim. Kylpyhuoneet Nevalainen Oy"
+              placeholder={companyNamePlaceholder}
             />
           </div>
           <div className="space-y-2">
