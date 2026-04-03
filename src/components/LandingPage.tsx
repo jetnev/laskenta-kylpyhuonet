@@ -373,7 +373,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
 
             <div className="mx-auto mt-12 grid max-w-3xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[
-                { icon: Hardhat, label: 'Urakoitsijat' },
+                { icon: HardHat, label: 'Urakoitsijat' },
                 { icon: Wrench, label: 'Talotekniikka' },
                 { icon: Buildings, label: 'Remontointi' },
                 { icon: ListChecks, label: 'Asennusliiketoiminta' },
