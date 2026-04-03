@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowsLeftRight,
   ArrowsClockwise,
@@ -27,19 +27,18 @@ import { useIsMobile } from './hooks/use-mobile';
 import { Button } from './components/ui/button';
 import { checkForDesktopUpdates, getDesktopUpdateStatus, isDesktopRuntime, restartDesktopForUpdate, type DesktopUpdateSnapshot } from './lib/desktop-update';
 import { toast } from 'sonner';
-
-const Dashboard = lazy(() => import('./components/pages/Dashboard'));
-const ProductsPage = lazy(() => import('./components/pages/ProductsPage'));
-const ImportPage = lazy(() => import('./components/pages/ImportPage'));
-const InstallationGroupsPage = lazy(() => import('./components/pages/InstallationGroupsPage'));
-const SubstituteProductsPage = lazy(() => import('./components/pages/SubstituteProductsPage'));
-const ProjectsPage = lazy(() => import('./components/pages/ProjectsPage'));
-const TermsPage = lazy(() => import('./components/pages/TermsPage'));
-const SettingsPage = lazy(() => import('./components/pages/SettingsPage'));
-const ReportsPage = lazy(() => import('./components/pages/ReportsPage'));
-const LoginPage = lazy(() => import('./components/LoginPage'));
-const AccountPage = lazy(() => import('./components/pages/AccountPage'));
-const UsersPage = lazy(() => import('./components/pages/UsersPage'));
+import Dashboard from './components/pages/Dashboard';
+import ProductsPage from './components/pages/ProductsPage';
+import ImportPage from './components/pages/ImportPage';
+import InstallationGroupsPage from './components/pages/InstallationGroupsPage';
+import SubstituteProductsPage from './components/pages/SubstituteProductsPage';
+import ProjectsPage from './components/pages/ProjectsPage';
+import TermsPage from './components/pages/TermsPage';
+import SettingsPage from './components/pages/SettingsPage';
+import ReportsPage from './components/pages/ReportsPage';
+import LoginPage from './components/LoginPage';
+import AccountPage from './components/pages/AccountPage';
+import UsersPage from './components/pages/UsersPage';
 
 type Page =
   | 'dashboard'
@@ -265,9 +264,7 @@ function App() {
   if (!user) {
     return (
       <>
-        <Suspense fallback={<RouteLoadingFallback />}>
-          <LoginPage onNavigateHome={() => window.location.assign('/')} />
-        </Suspense>
+        <LoginPage onNavigateHome={() => window.location.assign('/')} />
         <Toaster />
       </>
     );
@@ -387,19 +384,17 @@ function App() {
         )}
 
         <main className="flex-1 overflow-auto">
-          <Suspense fallback={<RouteLoadingFallback />}>
-            {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
-            {currentPage === 'projects' && <ProjectsPage />}
-            {currentPage === 'products' && <ProductsPage />}
-            {currentPage === 'import' && <ImportPage />}
-            {currentPage === 'installation-groups' && <InstallationGroupsPage />}
-            {currentPage === 'substitutes' && <SubstituteProductsPage />}
-            {currentPage === 'terms' && <TermsPage />}
-            {currentPage === 'reports' && <ReportsPage />}
-            {currentPage === 'users' && <UsersPage />}
-            {currentPage === 'settings' && <SettingsPage />}
-            {currentPage === 'account' && <AccountPage />}
-          </Suspense>
+          {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
+          {currentPage === 'projects' && <ProjectsPage />}
+          {currentPage === 'products' && <ProductsPage />}
+          {currentPage === 'import' && <ImportPage />}
+          {currentPage === 'installation-groups' && <InstallationGroupsPage />}
+          {currentPage === 'substitutes' && <SubstituteProductsPage />}
+          {currentPage === 'terms' && <TermsPage />}
+          {currentPage === 'reports' && <ReportsPage />}
+          {currentPage === 'users' && <UsersPage />}
+          {currentPage === 'settings' && <SettingsPage />}
+          {currentPage === 'account' && <AccountPage />}
         </main>
       </div>
 
