@@ -5,37 +5,37 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 
 const quickStartSteps = [
   {
-    title: 'Tayta omat yritystiedot',
+    title: 'Täytä omat yritystiedot',
     description:
-      'Avaa Oma tili ja lisaa yrityksen nimi, sahkoposti, puhelin ja osoite. Naita tietoja kaytetaan PDF- ja Excel-vienneissa.',
+      'Avaa Oma tili ja lisää yrityksen nimi, sähköposti, puhelin ja osoite. Näitä tietoja käytetään PDF- ja Excel-vienneissä.',
   },
   {
-    title: 'Lisaa asiakas',
+    title: 'Lisää asiakas',
     description:
-      'Siirry Projektit-sivulle ja luo ensin asiakas. Sen jalkeen samaan asiakkaaseen on helppo liittaa useita projekteja ja tarjouksia.',
+      'Siirry Projektit-sivulle ja luo ensin asiakas. Sen jälkeen samaan asiakkaaseen on helppo liittää useita projekteja ja tarjouksia.',
   },
   {
     title: 'Luo projekti',
     description:
-      'Luo projekti asiakkaan alle ja tayta ainakin projektin nimi ja tyokohde. Tarjoukset rakennetaan aina projektin sisalle.',
+      'Luo projekti asiakkaan alle ja täytä ainakin projektin nimi ja työkohde. Tarjoukset rakennetaan aina projektin sisälle.',
   },
   {
     title: 'Tee tarjouspohja valmiiksi',
     description:
-      'Avaa projekti ja luo uusi tarjous tai muokkaa valmista mallitarjousta. Voit lisata riveja, valiotsikoita ja lisakuluja samaan tarjoukseen.',
+      'Avaa projekti ja luo uusi tarjous tai muokkaa valmista mallitarjousta. Voit lisätä rivejä, väliotsikoita ja lisäkuluja samaan tarjoukseen.',
   },
   {
     title: 'Vie asiakkaalle sopivaan muotoon',
     description:
-      'Kayta PDF:aa asiakaslahetykseen, asiakas-Excelia jaettavaan taulukkoon ja sisainen Excel omalle tiimille tai tarkempaan kustannusseurantaan.',
+      'Käytä PDF:ää asiakaslähetykseen, asiakas-Exceliä jaettavaan taulukkoon ja sisäistä Exceliä omalle tiimille tai tarkempaan kustannusseurantaan.',
   },
 ];
 
 const reminders = [
-  'Malliasiakas, malliprojekti ja mallitarjous ovat vain aloitusta varten. Muokkaa tai poista ne ennen omaa kayttoa.',
-  'Tarjouksen loppusumma muodostuu tarjousriveista, lisakuluista, mahdollisesta alennuksesta ja arvonlisaverosta.',
-  'Jos viet dokumentin asiakkaalle, tarkista ensin yritystiedot, asiakas ja tyokohde.',
-  'Sisainen Excel sisaltaa enemman tietoa kuin asiakkaalle tarkoitettu vienti.',
+  'Malliasiakas, malliprojekti ja mallitarjous ovat vain aloitusta varten. Muokkaa tai poista ne ennen omaa käyttöä.',
+  'Tarjouksen loppusumma muodostuu tarjousriveistä, lisäkuluista, mahdollisesta alennuksesta ja arvonlisäverosta.',
+  'Jos viet dokumentin asiakkaalle, tarkista ensin yritystiedot, asiakas ja työkohde.',
+  'Sisäinen Excel sisältää enemmän tietoa kuin asiakkaalle tarkoitettu vienti.',
 ];
 
 const faqSections = [
@@ -43,19 +43,19 @@ const faqSections = [
     title: 'Aloittaminen',
     items: [
       {
-        question: 'Miten paasen alkuun, jos nakyma on tyhja?',
+        question: 'Miten pääsen alkuun, jos näkymä on tyhjä?',
         answer:
-          'Aloita tayttamalla omat yritystietosi Oma tili -sivulla. Sen jalkeen mene Projektit-sivulle, luo asiakas, luo projekti asiakkaan alle ja tee ensimmainen tarjous projektin sisalle. Jos tililla on valmiiksi mallisisaltoa, voit kayttaa sita pohjana.',
+          'Aloita täyttämällä omat yritystietosi Oma tili -sivulla. Sen jälkeen mene Projektit-sivulle, luo asiakas, luo projekti asiakkaan alle ja tee ensimmäinen tarjous projektin sisälle. Jos tilillä on valmiiksi mallisisältöä, voit käyttää sitä pohjana.',
       },
       {
-        question: 'Miten kaytan mallitarjousta oman tarjouksen pohjana?',
+        question: 'Miten käytän mallitarjousta oman tarjouksen pohjana?',
         answer:
-          'Avaa mallitarjous, vaihda asiakkaan ja projektin tiedot oikeiksi, muokkaa rivit vastaamaan oikeaa kohdetta ja tarkista lopuksi hinnat ja yritystiedot ennen vientia.',
+          'Avaa mallitarjous, vaihda asiakkaan ja projektin tiedot oikeiksi, muokkaa rivit vastaamaan oikeaa kohdetta ja tarkista lopuksi hinnat ja yritystiedot ennen vientiä.',
       },
       {
-        question: 'Missa taytan omat yritystiedot tarjoukselle?',
+        question: 'Missä täytän omat yritystiedot tarjoukselle?',
         answer:
-          'Avaa Oma tili ja tallenna yrityksen nimi, sahkoposti, puhelin, osoite ja tarvittaessa logon URL. Naita tietoja kaytetaan automaattisesti PDF- ja Excel-vienneissa.',
+          'Avaa Oma tili ja tallenna yrityksen nimi, sähköposti, puhelin, osoite ja tarvittaessa logon URL. Näitä tietoja käytetään automaattisesti PDF- ja Excel-vienneissä.',
       },
     ],
   },
@@ -63,24 +63,24 @@ const faqSections = [
     title: 'Tarjouksen tekeminen',
     items: [
       {
-        question: 'Miten lisaan asiakkaan ja projektin?',
+        question: 'Miten lisään asiakkaan ja projektin?',
         answer:
-          'Projektit-sivulla voit lisata ensin asiakkaan ja sen jalkeen uuden projektin. Projekti kuuluu aina yhdelle asiakkaalle, joten asiakkaan luonti kannattaa tehda ensin.',
+          'Projektit-sivulla voit lisätä ensin asiakkaan ja sen jälkeen uuden projektin. Projekti kuuluu aina yhdelle asiakkaalle, joten asiakkaan luonti kannattaa tehdä ensin.',
       },
       {
-        question: 'Miten lisaan riveja, valiotsikoita ja lisakuluja?',
+        question: 'Miten lisään rivejä, väliotsikoita ja lisäkuluja?',
         answer:
-          'Tarjouseditorissa voit lisata normaalin tuoterivin, asennusrivin, yhdistetyn tuote ja asennus -rivin, valiotsikon tai erillisen veloitusrivin. Valiotsikko auttaa ryhmittelemaan tarjouksen sisallon selkeasti asiakkaalle.',
+          'Tarjouseditorissa voit lisätä normaalin tuoterivin, asennusrivin, yhdistetyn tuote ja asennus -rivin, väliotsikon tai erillisen veloitusrivin. Väliotsikko auttaa ryhmittelemään tarjouksen sisällön selkeästi asiakkaalle.',
       },
       {
         question: 'Miten hinnat ja loppusumma muodostuvat?',
         answer:
-          'Jokainen tarjousrivi kasvattaa rivien valisummaa. Sen paalle lisataan mahdolliset lisakulut, vahennetaan mahdollinen alennus ja lopuksi lasketaan ALV. Lopputulos nakyy yhteenvedossa reaaliajassa.',
+          'Jokainen tarjousrivi kasvattaa rivien välisummaa. Sen päälle lisätään mahdolliset lisäkulut, vähennetään mahdollinen alennus ja lopuksi lasketaan ALV. Lopputulos näkyy yhteenvedossa reaaliajassa.',
       },
       {
-        question: 'Mita revisio tarkoittaa?',
+        question: 'Mitä revisio tarkoittaa?',
         answer:
-          'Revisio tarkoittaa tarjouksen uutta versiota. Kayta revisiota silloin, kun haluat jatkaa aiemmin lahetetysta tai valmiista tarjouksesta ilman etta alkuperainen versio katoaa.',
+          'Revisio tarkoittaa tarjouksen uutta versiota. Käytä revisiota silloin, kun haluat jatkaa aiemmin lähetetystä tai valmiista tarjouksesta ilman että alkuperäinen versio katoaa.',
       },
     ],
   },
@@ -88,24 +88,19 @@ const faqSections = [
     title: 'PDF ja Excel',
     items: [
       {
-        question: 'Milloin kaytan PDF:aa?',
+        question: 'Milloin käytän PDF:ää?',
         answer:
-          'PDF sopii asiakkaalle lahetettavaan viralliseen tarjoukseen. Se on selkein vaihtoehto silloin, kun haluat asiakkaalle helppolukuisen dokumentin ilman muokattavaa taulukkoa.',
+          'PDF sopii asiakkaalle lähetettävään viralliseen tarjoukseen. Se on selkein vaihtoehto silloin, kun haluat asiakkaalle helppolukuisen dokumentin ilman muokattavaa taulukkoa.',
       },
       {
-        question: 'Mita eroa on asiakas-Excelilla ja sisaisella Excelilla?',
+        question: 'Mitä eroa on asiakas-Excelillä ja sisäisellä Excelillä?',
         answer:
-          'Asiakas-Excel on kevyempi, siistimpi ja tarkoitettu jaettavaksi asiakkaalle. Sisainen Excel sisaltaa laajemmat laskentatiedot, kuten ostohintoja, katetta tai muuta omaan kayttoon sopivaa tietoa.',
+          'Asiakas-Excel on kevyempi, siistimpi ja tarkoitettu jaettavaksi asiakkaalle. Sisäinen Excel sisältää laajemmat laskentatiedot, kuten ostohintoja, katetta tai muuta omaan käyttöön sopivaa tietoa.',
       },
       {
-        question: 'Miksi PDF:ssa tai Excelissa nakyy vaarat yritystiedot?',
+        question: 'Miksi PDF:ssä tai Excelissä näkyy väärät yritystiedot?',
         answer:
-          'Tarkista ensin Oma tili -sivun yritystiedot. Jos omia tietoja ei ole tallennettu, sovellus voi kayttaa yhteisia oletustietoja. Paivita tiedot ja vie dokumentti uudelleen.',
-      },
-      {
-        question: 'Miksi asiakkaalle tarkoitettu PDF ei nayta tilaa?',
-        answer:
-          'Asiakasversiossa ei nayteta luonnos- tai muita sisaisia tilatietoja, jotta dokumentti pysyy virallisena ja asiakkaalle selkeana.',
+          'Tarkista ensin Oma tili -sivun yritystiedot. Jos omia tietoja ei ole tallennettu, sovellus voi käyttää yhteisiä oletustietoja. Päivitä tiedot ja vie dokumentti uudelleen.',
       },
     ],
   },
@@ -113,24 +108,24 @@ const faqSections = [
     title: 'Ongelmatilanteet',
     items: [
       {
-        question: 'Mita teen, jos kirjautuminen ei onnistu?',
+        question: 'Mitä teen, jos kirjautuminen ei onnistu?',
         answer:
-          'Tarkista ensin sahkopostiosoite ja salasana. Jos ongelma jatkuu, kokeile salasanan vaihtoa Unohtuiko salasana? -toiminnolla. Jos saat edelleen virheen, ota yhteys jarjestelman yllapitajaan.',
+          'Tarkista ensin sähköpostiosoite ja salasana. Jos ongelma jatkuu, kokeile salasanan vaihtoa Unohtuiko salasana? -toiminnolla. Jos saat edelleen virheen, ota yhteys järjestelmän ylläpitäjään.',
       },
       {
         question: 'Miten vaihdan salasanani?',
         answer:
-          'Avaa Oma tili -sivu, syota nykyinen salasana ja uusi salasana seka vahvistus. Tallenna muutos lopuksi samalta sivulta.',
+          'Avaa Oma tili -sivu, syötä nykyinen salasana ja uusi salasana sekä vahvistus. Tallenna muutos lopuksi samalta sivulta.',
       },
       {
         question: 'Voinko poistaa virheellisen tarjouksen?',
         answer:
-          'Kyllä. Avaa oikea projekti, etsi tarjous listasta ja poista se. Tarkista ennen poistamista, ettei kyseessa ole tarjous, jonka haluatkin sailyttaa revisiohistorian vuoksi.',
+          'Kyllä. Avaa oikea projekti, etsi tarjous listasta ja poista se. Tarkista ennen poistamista, ettei kyseessä ole tarjous, jonka haluatkin säilyttää revisiohistorian vuoksi.',
       },
       {
-        question: 'Mista loydan vanhat tarjoukset ja projektit?',
+        question: 'Mistä löydän vanhat tarjoukset ja projektit?',
         answer:
-          'Projektit-sivulla jokaisen projektin alta nakyvat siihen liittyvat tarjoukset. Hae projektin nimella, asiakkaalla tai tarjousnumerolla, jos et loyda oikeaa kohdetta heti.',
+          'Projektit-sivulla jokaisen projektin alta näkyvät siihen liittyvät tarjoukset. Hae projektin nimellä, asiakkaalla tai tarjousnumerolla, jos et löydä oikeaa kohdetta heti.',
       },
     ],
   },
@@ -144,7 +139,7 @@ export default function HelpPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-semibold">Pika-aloitus ja UKK</h1>
           <p className="text-muted-foreground mt-1 max-w-3xl">
-            Taman sivun tarkoitus on auttaa kayttajaa paasemaan nopeasti alkuun, luomaan ensimmainen tarjous ja ratkaisemaan tavallisimmat ongelmat ilman erillista opastusta.
+            Tämän sivun tarkoitus on auttaa käyttäjää pääsemään nopeasti alkuun, luomaan ensimmäinen tarjous ja ratkaisemaan tavallisimmat ongelmat ilman erillistä opastusta.
           </p>
         </div>
       </div>
@@ -178,7 +173,7 @@ export default function HelpPage() {
           <CardHeader className="border-b bg-muted/30">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Warning className="h-5 w-5 text-primary" weight="fill" />
-              Hyva muistaa
+              Hyvä muistaa
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6 space-y-4">
