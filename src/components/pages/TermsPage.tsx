@@ -209,6 +209,79 @@ function getTemplateSurface(template: QuoteTerms) {
   };
 }
 
+type TermDocumentPreviewProps = {
+  html: string;
+  companyName?: string;
+  companyEmail?: string;
+  segmentLabel: string;
+  scopeLabel: string;
+  eyebrow: string;
+  title: string;
+};
+
+function TermDocumentPreview({
+  html,
+  companyName,
+  companyEmail,
+  segmentLabel,
+  scopeLabel,
+  eyebrow,
+  title,
+}: TermDocumentPreviewProps) {
+  const resolvedCompanyName = companyName?.trim() || 'Yrityksen nimi puuttuu';
+  const resolvedCompanyEmail = companyEmail?.trim() || 'Lisää sähköposti dokumenttiasetuksiin viimeistellympää asiakasnäkymää varten.';
+
+  return (
+    <div className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-slate-50 shadow-[0_24px_70px_-48px_rgba(15,23,42,0.55)]">
+      <div className="flex flex-col gap-4 border-b border-slate-200/80 bg-white/90 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-rose-300" />
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
+          </div>
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{eyebrow}</div>
+            <div className="text-sm font-semibold text-slate-950">{title}</div>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="secondary">{segmentLabel}</Badge>
+          <Badge variant="outline">{scopeLabel}</Badge>
+        </div>
+      </div>
+
+      <div className="bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.95),rgba(241,245,249,0.94)_56%,rgba(226,232,240,0.9))] p-4 sm:p-6">
+        <div className="mx-auto w-full max-w-[920px] rounded-[26px] border border-slate-200/80 bg-white p-6 shadow-[0_28px_80px_-50px_rgba(15,23,42,0.6)] sm:p-10">
+          <div className="mb-8 flex flex-col gap-5 border-b border-slate-100 pb-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="max-w-2xl">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Tarjousliite / Ehdot</div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-[2rem]">{resolvedCompanyName}</div>
+              <p className="mt-2 text-sm leading-6 text-slate-500">{resolvedCompanyEmail}</p>
+            </div>
+
+            <div className="grid gap-2 sm:min-w-[230px]">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Dokumentti</div>
+                <div className="mt-1 text-sm font-medium text-slate-900">{title}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Käyttö</div>
+                <div className="mt-1 text-sm font-medium text-slate-900">{segmentLabel} · {scopeLabel}</div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className="prose prose-slate prose-base max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-slate-950 prose-h1:mb-4 prose-h1:text-3xl prose-h2:mt-8 prose-h2:border-t prose-h2:border-slate-100 prose-h2:pt-6 prose-h2:text-xl prose-h3:mt-6 prose-h3:text-lg prose-p:my-3 prose-p:leading-7 prose-p:text-slate-700 prose-strong:text-slate-950 prose-li:my-1 prose-li:leading-7 prose-li:text-slate-700"
+            dangerouslySetInnerHTML={{ __html: html || '<p>Ei sisältöä.</p>' }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function toFormState(template?: QuoteTerms | null): TemplateFormState {
   if (!template) {
     return DEFAULT_FORM;
@@ -827,18 +900,16 @@ export default function TermsPage() {
               </div>
               <Badge variant="outline" className="self-start sm:self-auto">Asiakasnäkymä</Badge>
             </div>
-            <div className="bg-muted/15 p-4 sm:p-6">
-              <div className="mx-auto max-w-4xl rounded-[28px] border bg-background p-6 shadow-sm sm:p-8">
-                <div className="mb-5 flex flex-wrap gap-2">
-                  <Badge variant="secondary">Esimerkkiasiakas</Badge>
-                  <Badge variant="outline">{documentSettings.companyName || 'Yritystiedot puuttuvat'}</Badge>
-                  {documentSettings.companyEmail && <Badge variant="outline">{documentSettings.companyEmail}</Badge>}
-                </div>
-                <div
-                  className="prose prose-base prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-foreground prose-h1:mb-4 prose-h1:text-2xl prose-h2:mt-8 prose-h2:text-xl prose-h3:mt-6 prose-h3:text-lg prose-p:leading-7 prose-p:text-foreground/90 prose-li:leading-7 prose-li:text-foreground/90 max-w-none"
-                  dangerouslySetInnerHTML={{ __html: previewHtml || '<p>Ei sisältöä.</p>' }}
-                />
-              </div>
+            <div className="p-4 sm:p-6">
+              <TermDocumentPreview
+                html={previewHtml}
+                companyName={documentSettings.companyName}
+                companyEmail={documentSettings.companyEmail}
+                segmentLabel={TERM_TEMPLATE_SEGMENT_LABELS[formData.customerSegment]}
+                scopeLabel={TERM_TEMPLATE_SCOPE_LABELS[formData.scopeType]}
+                eyebrow="Asiakasnäkymä"
+                title="Esimerkkiasiakkaan ehdot"
+              />
             </div>
           </Card>
         </div>
@@ -863,41 +934,74 @@ export default function TermsPage() {
           <div className="space-y-4">
             {(() => {
               const previewGuide = getTemplateGuide(previewTemplate.customerSegment, previewTemplate.scopeType);
+              const previewSurface = getTemplateSurface(previewTemplate);
 
               return (
                 <>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant={previewTemplate.isSystem ? 'secondary' : 'default'}>
-                {previewTemplate.isSystem ? 'Valmis pohja' : 'Oma versio'}
-              </Badge>
-              <Badge variant="outline">{TERM_TEMPLATE_SEGMENT_LABELS[previewTemplate.customerSegment]}</Badge>
-              <Badge variant="outline">{TERM_TEMPLATE_SCOPE_LABELS[previewTemplate.scopeType]}</Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">{previewTemplate.description || previewGuide.summary}</p>
-            <div className="grid gap-3 rounded-xl border bg-muted/15 p-3 sm:grid-cols-2">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Ero muihin</div>
-                <p className="mt-1 text-sm text-foreground/80">{previewGuide.difference}</p>
-              </div>
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Sopii esimerkiksi</div>
-                <p className="mt-1 text-sm text-foreground/80">{previewGuide.example}</p>
-              </div>
-            </div>
-            <Card className="overflow-hidden">
-              <div className="border-b bg-muted/20 px-5 py-4">
-                <div className="text-sm font-semibold">Dokumenttiesikatselu</div>
-                <p className="mt-1 text-sm text-muted-foreground">Muuttujat näytetään esimerkkitiedoilla täytettyinä, jotta rakenne on helppo arvioida.</p>
-              </div>
-              <div className="bg-muted/15 p-4 sm:p-6">
-                <div className="mx-auto max-w-4xl rounded-[28px] border bg-background p-6 shadow-sm sm:p-8">
-                  <div
-                    className="prose prose-base prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-foreground prose-h1:mb-4 prose-h1:text-2xl prose-h2:mt-8 prose-h2:text-xl prose-h3:mt-6 prose-h3:text-lg prose-p:leading-7 prose-p:text-foreground/90 prose-li:leading-7 prose-li:text-foreground/90 max-w-none"
-                    dangerouslySetInnerHTML={{ __html: previewTemplateHtml || '<p>Ei sisältöä.</p>' }}
-                  />
-                </div>
-              </div>
-            </Card>
+                  <div className={`rounded-[28px] border p-5 sm:p-6 ${previewSurface.header}`}>
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant={previewTemplate.isSystem ? 'secondary' : 'default'}>
+                            {previewTemplate.isSystem ? 'Valmis pohja' : 'Oma versio'}
+                          </Badge>
+                          <Badge variant="outline">{TERM_TEMPLATE_SEGMENT_LABELS[previewTemplate.customerSegment]}</Badge>
+                          <Badge variant="outline">{TERM_TEMPLATE_SCOPE_LABELS[previewTemplate.scopeType]}</Badge>
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                            {previewTemplate.isSystem ? 'Valmis lähtökohta' : 'Muokattu oma versio'}
+                          </div>
+                          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-[2rem]">{previewTemplate.name}</h2>
+                        </div>
+                        <p className="max-w-3xl text-sm leading-6 text-foreground/80">{previewTemplate.description || previewGuide.summary}</p>
+                      </div>
+
+                      <div className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${previewSurface.meta}`}>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Esikatselu käyttää</div>
+                        <div className="mt-1 font-medium text-foreground">Malliasiakkaan tietoja</div>
+                        <div className="mt-1 text-xs text-muted-foreground">Sisältö täydennetään nykyisillä dokumenttiasetuksillasi, jotta lopputulos vastaa oikeaa tarjousliitettä.</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+                    <div className="space-y-4">
+                      <div className={`rounded-[24px] border p-4 ${previewSurface.panel}`}>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Ero muihin</div>
+                        <p className="mt-2 text-sm leading-6 text-foreground/85">{previewGuide.difference}</p>
+                      </div>
+
+                      <div className={`rounded-[24px] border p-4 ${previewSurface.panel}`}>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Sopii esimerkiksi</div>
+                        <p className="mt-2 text-sm leading-6 text-foreground/85">{previewGuide.example}</p>
+                      </div>
+
+                      <div className={`rounded-[24px] border p-4 ${previewSurface.excerpt}`}>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Rakenne nopeasti</div>
+                        <div className="mt-3 line-clamp-8 whitespace-pre-wrap text-sm leading-6 text-foreground/75">
+                          {previewTemplate.contentMd}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="px-1">
+                        <div className="text-sm font-semibold text-foreground">Dokumenttiesikatselu</div>
+                        <p className="mt-1 text-sm text-muted-foreground">Nyt esikatselu esitetään valmiin tarjousliitteen kaltaisena paperina, jotta rytmi, otsikointi ja yleisilme on helpompi arvioida.</p>
+                      </div>
+
+                      <TermDocumentPreview
+                        html={previewTemplateHtml}
+                        companyName={documentSettings.companyName}
+                        companyEmail={documentSettings.companyEmail}
+                        segmentLabel={TERM_TEMPLATE_SEGMENT_LABELS[previewTemplate.customerSegment]}
+                        scopeLabel={TERM_TEMPLATE_SCOPE_LABELS[previewTemplate.scopeType]}
+                        eyebrow="Dokumenttiesikatselu"
+                        title={previewTemplate.name}
+                      />
+                    </div>
+                  </div>
                 </>
               );
             })()}
