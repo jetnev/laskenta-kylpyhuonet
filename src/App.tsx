@@ -404,7 +404,7 @@ function App() {
 
         <main className="flex-1 overflow-auto">
           {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
-          {currentPage === 'help' && <HelpPage />}
+          {currentPage === 'help' && <HelpPage onNavigate={handleNavigate} />}
           {currentPage === 'projects' && <ProjectsPage />}
           {currentPage === 'invoices' && <InvoicesPage />}
           {currentPage === 'products' && <ProductsPage />}

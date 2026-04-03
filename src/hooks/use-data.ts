@@ -1512,7 +1512,7 @@ export function useInvoices() {
 }
 
 export function useCompanyProfile() {
-  const [storedCompanyProfile = DEFAULT_COMPANY_PROFILE, setCompanyProfile] = useKV<CompanyProfile>(
+  const [storedCompanyProfile = DEFAULT_COMPANY_PROFILE, setCompanyProfile, companyProfileLoaded] = useKV<CompanyProfile>(
     'company-profile',
     DEFAULT_COMPANY_PROFILE
   );
@@ -1535,13 +1535,13 @@ export function useCompanyProfile() {
     );
   };
 
-  return { companyProfile, updateCompanyProfile, companyProfileUpdatedBy: user?.id };
+  return { companyProfile, updateCompanyProfile, companyProfileUpdatedBy: user?.id, companyProfileLoaded };
 }
 
 export function useDocumentSettings() {
   const { user, canManageSharedData } = useAuth();
   const { settings } = useSettings();
-  const { companyProfile } = useCompanyProfile();
+  const { companyProfile, companyProfileLoaded } = useCompanyProfile();
   const documentSettings = useMemo(
     () =>
       mergeDocumentSettings(settings, companyProfile, {
@@ -1551,7 +1551,7 @@ export function useDocumentSettings() {
     [canManageSharedData, companyProfile, settings, user?.email]
   );
 
-  return { sharedSettings: settings, documentSettings, companyProfile };
+  return { sharedSettings: settings, documentSettings, companyProfile, companyProfileLoaded };
 }
 
 export function useSettings() {
