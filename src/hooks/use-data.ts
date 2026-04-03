@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useKV } from './use-kv';
 import {
   CompanyProfile,
+  Invoice,
   Product,
   InstallationGroup,
   InstallationGroupCategorySettings,
@@ -27,6 +28,7 @@ import {
   setTermTemplateArchived,
   updateTermTemplate,
 } from '../lib/term-templates';
+import { createInvoiceSnapshotFromQuote } from '../lib/invoices';
 
 type OwnedAuditKeys = 'id' | keyof ReturnType<typeof buildOwnedAudit>;
 type QuoteCreateInput = Pick<Quote, 'projectId'> & Partial<Omit<Quote, OwnedAuditKeys | 'projectId'>>;
@@ -73,6 +75,12 @@ const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   companyPhone: '',
   companyEmail: '',
   companyLogo: '',
+  businessId: '',
+  iban: '',
+  bic: '',
+  invoiceNumberPrefix: 'LASKU',
+  defaultInvoiceDueDays: 14,
+  lateInterestPercent: 8,
 };
 
 const DEFAULT_INSTALLATION_GROUP_CATEGORY_SETTINGS: InstallationGroupCategorySettings = {
@@ -306,6 +314,15 @@ function normalizeCompanyProfile(profile?: Partial<CompanyProfile>): CompanyProf
     companyPhone: profile?.companyPhone?.trim() || '',
     companyEmail: profile?.companyEmail?.trim() || '',
     companyLogo: profile?.companyLogo?.trim() || '',
+    businessId: profile?.businessId?.trim() || '',
+    iban: profile?.iban?.replace(/\s+/g, '').toUpperCase() || '',
+    bic: profile?.bic?.trim().toUpperCase() || '',
+    invoiceNumberPrefix: profile?.invoiceNumberPrefix?.trim().toUpperCase() || 'LASKU',
+    defaultInvoiceDueDays: Math.max(0, Math.round(profile?.defaultInvoiceDueDays || 14)),
+    lateInterestPercent:
+      typeof profile?.lateInterestPercent === 'number'
+        ? profile.lateInterestPercent
+        : 8,
   };
 }
 
@@ -1094,6 +1111,144 @@ export function useQuoteTerms() {
     getDefaultTerms,
     getTermById,
     createQuoteTermsSnapshot,
+  };
+}
+
+export function useInvoices() {
+  const [allInvoices = [], setInvoices] = useKV<Invoice[]>('invoices', []);
+  const { user, canDelete, canEdit, canManageUsers } = useAuth();
+  const { documentSettings, companyProfile } = useDocumentSettings();
+  const userId = user?.id;
+
+  const invoices = useMemo(() => {
+    if (!userId) return [];
+    if (canManageUsers) return allInvoices;
+    return allInvoices.filter((invoice) => invoice.ownerUserId === userId);
+  }, [allInvoices, canManageUsers, userId]);
+
+  const orderedInvoices = useMemo(
+    () =>
+      [...invoices].sort(
+        (left, right) =>
+          new Date(right.issueDate || right.createdAt).getTime() - new Date(left.issueDate || left.createdAt).getTime() ||
+          right.invoiceNumber.localeCompare(left.invoiceNumber, 'fi')
+      ),
+    [invoices]
+  );
+
+  const createInvoiceFromQuote = (
+    quote: Parameters<typeof createInvoiceSnapshotFromQuote>[0]['quote'],
+    rows: Parameters<typeof createInvoiceSnapshotFromQuote>[0]['rows'],
+    customer: Parameters<typeof createInvoiceSnapshotFromQuote>[0]['customer'],
+    project: Parameters<typeof createInvoiceSnapshotFromQuote>[0]['project']
+  ) => {
+    const currentUserId = ensureSignedIn(userId);
+    if (!canEdit) {
+      throw new Error('Sinulla ei ole oikeuksia luoda laskuja.');
+    }
+    if (orderedInvoices.some((invoice) => invoice.sourceQuoteId === quote.id && invoice.status !== 'cancelled')) {
+      throw new Error('Tarjouksesta on jo olemassa lasku.');
+    }
+
+    const snapshot = createInvoiceSnapshotFromQuote({
+      quote,
+      rows,
+      customer,
+      project,
+      settings: documentSettings,
+      companyProfile,
+    });
+
+    const newInvoice: Invoice = {
+      ...snapshot,
+      id: crypto.randomUUID(),
+      ...buildOwnedAudit(currentUserId),
+      lastAutoSavedAt: nowIso(),
+    };
+
+    setInvoices((current = []) => [...current, newInvoice]);
+    return newInvoice;
+  };
+
+  const updateInvoice = (id: string, updates: Partial<Invoice>) => {
+    const currentUserId = ensureSignedIn(userId);
+    if (!canEdit) {
+      throw new Error('Sinulla ei ole oikeuksia muokata laskuja.');
+    }
+
+    setInvoices((current = []) =>
+      current.map((invoice) =>
+        invoice.id === id && (canManageUsers || invoice.ownerUserId === currentUserId)
+          ? {
+              ...invoice,
+              ...updates,
+              updatedAt: nowIso(),
+              updatedByUserId: currentUserId,
+              lastAutoSavedAt: nowIso(),
+            }
+          : invoice
+      )
+    );
+  };
+
+  const updateInvoiceStatus = (id: string, status: Invoice['status']) => {
+    const currentUserId = ensureSignedIn(userId);
+    if (!canEdit) {
+      throw new Error('Sinulla ei ole oikeuksia muokata laskuja.');
+    }
+
+    const timestamp = nowIso();
+    setInvoices((current = []) =>
+      current.map((invoice) => {
+        if (invoice.id !== id || (!canManageUsers && invoice.ownerUserId !== currentUserId)) {
+          return invoice;
+        }
+
+        return {
+          ...invoice,
+          status,
+          issuedAt:
+            status === 'issued' || status === 'paid'
+              ? invoice.issuedAt || timestamp
+              : invoice.issuedAt,
+          paidAt: status === 'paid' ? timestamp : undefined,
+          cancelledAt: status === 'cancelled' ? timestamp : undefined,
+          updatedAt: timestamp,
+          updatedByUserId: currentUserId,
+          lastAutoSavedAt: timestamp,
+        };
+      })
+    );
+  };
+
+  const deleteInvoice = (id: string) => {
+    const currentUserId = ensureSignedIn(userId);
+    if (!canDelete) {
+      throw new Error('Sinulla ei ole oikeuksia poistaa laskuja.');
+    }
+
+    setInvoices((current = []) =>
+      current.filter(
+        (invoice) => invoice.id !== id || (!canManageUsers && invoice.ownerUserId !== currentUserId)
+      )
+    );
+  };
+
+  const getInvoice = (id: string) => orderedInvoices.find((invoice) => invoice.id === id);
+  const getInvoicesForProject = (projectId: string) =>
+    orderedInvoices.filter((invoice) => invoice.projectId === projectId);
+  const getInvoicesForQuote = (quoteId: string) =>
+    orderedInvoices.filter((invoice) => invoice.sourceQuoteId === quoteId);
+
+  return {
+    invoices: orderedInvoices,
+    createInvoiceFromQuote,
+    updateInvoice,
+    updateInvoiceStatus,
+    deleteInvoice,
+    getInvoice,
+    getInvoicesForProject,
+    getInvoicesForQuote,
   };
 }
 

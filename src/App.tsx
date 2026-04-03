@@ -10,6 +10,7 @@ import {
   House,
   List,
   Package,
+  Receipt,
   Shield,
   SignOut,
   User,
@@ -33,6 +34,7 @@ import InstallationGroupsPage from './components/pages/InstallationGroupsPage';
 import SubstituteProductsPage from './components/pages/SubstituteProductsPage';
 import ProjectsPage from './components/pages/ProjectsPage';
 import TermsPage from './components/pages/TermsPage';
+import InvoicesPage from './components/pages/InvoicesPage';
 import SettingsPage from './components/pages/SettingsPage';
 import ReportsPage from './components/pages/ReportsPage';
 import LoginPage from './components/LoginPage';
@@ -43,6 +45,7 @@ type Page =
   | 'dashboard'
   | 'help'
   | 'projects'
+  | 'invoices'
   | 'products'
   | 'installation-groups'
   | 'substitutes'
@@ -117,6 +120,7 @@ function App() {
         { id: 'dashboard' as const, name: 'Etusivu', icon: House, visible: true },
         { id: 'help' as const, name: 'Ohjeet', icon: List, visible: true },
         { id: 'projects' as const, name: 'Projektit', icon: Folder, visible: true },
+        { id: 'invoices' as const, name: 'Laskut', icon: Receipt, visible: true },
         { id: 'products' as const, name: 'Tuoterekisteri', icon: Package, visible: true },
         { id: 'installation-groups' as const, name: 'Hintaryhmät', icon: Wrench, visible: true },
         { id: 'substitutes' as const, name: 'Korvaavat tuotteet', icon: ArrowsLeftRight, visible: true },
@@ -386,6 +390,7 @@ function App() {
           {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
           {currentPage === 'help' && <HelpPage />}
           {currentPage === 'projects' && <ProjectsPage />}
+          {currentPage === 'invoices' && <InvoicesPage />}
           {currentPage === 'products' && <ProductsPage />}
           {currentPage === 'installation-groups' && <InstallationGroupsPage />}
           {currentPage === 'substitutes' && <SubstituteProductsPage />}

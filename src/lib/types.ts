@@ -1,4 +1,5 @@
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected';
+export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'cancelled';
 export type QuoteDiscountType = 'none' | 'percent' | 'amount';
 export type QuotePricingMode = 'margin' | 'manual';
 export type QuoteRowMode = 'product' | 'installation' | 'product_installation' | 'section' | 'charge';
@@ -229,12 +230,89 @@ export interface QuoteTerms extends AuditFields {
   ownerUserId?: string;
 }
 
+export interface InvoiceCustomerSnapshot {
+  name: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  businessId?: string;
+}
+
+export interface InvoiceProjectSnapshot {
+  name: string;
+  site: string;
+  region?: string;
+  notes?: string;
+}
+
+export interface InvoiceCompanySnapshot {
+  companyName: string;
+  companyAddress: string;
+  companyPhone: string;
+  companyEmail: string;
+  companyLogo?: string;
+  businessId?: string;
+  iban?: string;
+  bic?: string;
+  invoiceNumberPrefix?: string;
+  defaultInvoiceDueDays?: number;
+  lateInterestPercent?: number;
+}
+
+export interface Invoice extends OwnedFields {
+  id: string;
+  projectId: string;
+  customerId: string;
+  sourceQuoteId: string;
+  sourceQuoteNumber: string;
+  sourceQuoteRevisionNumber: number;
+  invoiceNumber: string;
+  referenceNumber: string;
+  title: string;
+  status: InvoiceStatus;
+  issueDate: string;
+  dueDate: string;
+  paymentTermDays: number;
+  currency: string;
+  vatPercent: number;
+  discountType: QuoteDiscountType;
+  discountValue: number;
+  projectCosts: number;
+  deliveryCosts: number;
+  installationCosts: number;
+  travelKilometers: number;
+  travelRatePerKm: number;
+  disposalCosts: number;
+  demolitionCosts: number;
+  protectionCosts: number;
+  permitCosts: number;
+  notes?: string;
+  internalNotes?: string;
+  termsSnapshotName?: string;
+  termsSnapshotContentMd?: string;
+  customer: InvoiceCustomerSnapshot;
+  project: InvoiceProjectSnapshot;
+  company: InvoiceCompanySnapshot;
+  rows: QuoteRow[];
+  issuedAt?: string;
+  paidAt?: string;
+  cancelledAt?: string;
+  lastAutoSavedAt?: string;
+}
+
 export interface CompanyProfile {
   companyName: string;
   companyAddress: string;
   companyPhone: string;
   companyEmail: string;
   companyLogo?: string;
+  businessId?: string;
+  iban?: string;
+  bic?: string;
+  invoiceNumberPrefix?: string;
+  defaultInvoiceDueDays?: number;
+  lateInterestPercent?: number;
 }
 
 export interface Settings {

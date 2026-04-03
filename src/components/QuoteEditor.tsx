@@ -10,11 +10,13 @@ import {
   MagnifyingGlass,
   PaperPlaneTilt,
   Plus,
+  Receipt,
   Trash,
   Warning,
   XCircle,
 } from '@phosphor-icons/react';
 import { toast } from 'sonner';
+import InvoiceEditor from './InvoiceEditor';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
@@ -42,6 +44,7 @@ import {
   useProjects,
   useQuoteRows,
   useQuotes,
+  useInvoices,
   useQuoteTerms,
   useSettings,
   useSubstituteProducts,
@@ -160,6 +163,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const { getSubstitutesForProduct } = useSubstituteProducts();
   const { addRow, deleteRow, deleteRows, getRowsForQuote, updateRow } = useQuoteRows();
   const { addQuote, getQuote, getQuotesForProject, hasNewerRevision, updateQuote, updateQuoteStatus } = useQuotes();
+  const { createInvoiceFromQuote, getInvoicesForQuote } = useInvoices();
   const { getProject } = useProjects();
   const { getCustomer } = useCustomers();
   const { activeTerms, createQuoteTermsSnapshot, getDefaultTerms, getTermById } = useQuoteTerms();
@@ -169,6 +173,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(quoteId);
   const [productSearch, setProductSearch] = useState('');
   const [validationOpen, setValidationOpen] = useState(false);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [bootstrapQuote, setBootstrapQuote] = useState<Quote | null>(null);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [quoteLookupTimedOut, setQuoteLookupTimedOut] = useState(false);
@@ -258,6 +263,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     [customer, documentSettings, project, quote, quoteTerms]
   );
   const projectQuotes = useMemo(() => getQuotesForProject(projectId), [getQuotesForProject, projectId]);
+  const quoteInvoices = useMemo(() => (quote ? getInvoicesForQuote(quote.id) : []), [getInvoicesForQuote, quote]);
   const quoteHasNewerRevision = quote ? hasNewerRevision(quote) : false;
   const isEditable = Boolean(quote && quote.status === 'draft' && !quoteHasNewerRevision);
   const calculation = quote ? calculateQuote(quote, quoteRows) : null;
@@ -567,6 +573,21 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     setActiveQuoteId(nextQuote.id);
   };
 
+  const openOrCreateInvoice = () => {
+    if (quoteInvoices.length > 0) {
+      setSelectedInvoiceId(quoteInvoices[0].id);
+      return;
+    }
+
+    try {
+      const invoice = createInvoiceFromQuote(quote, quoteRows, customer, project);
+      setSelectedInvoiceId(invoice.id);
+      toast.success(`Lasku ${invoice.invoiceNumber} luotu.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Laskun luonti epäonnistui.');
+    }
+  };
+
   const footer = (
     <>
       <Button variant="outline" onClick={onClose}>Sulje</Button>
@@ -599,6 +620,12 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
           <Button variant="outline" onClick={createRevision}>
             <Copy className="h-4 w-4" />
             Luo revisio
+          </Button>
+        )}
+        {quote.status === 'accepted' && (
+          <Button variant="outline" onClick={openOrCreateInvoice}>
+            <Receipt className="h-4 w-4" />
+            {quoteInvoices.length > 0 ? 'Avaa lasku' : 'Luo lasku'}
           </Button>
         )}
         {quote.status === 'draft' && (
@@ -1165,6 +1192,8 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {selectedInvoiceId && <InvoiceEditor invoiceId={selectedInvoiceId} onClose={() => setSelectedInvoiceId(null)} />}
     </>
   );
 }

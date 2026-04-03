@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { calculateQuote, calculateQuoteRow, formatCurrency, formatNumber, getQuoteExtraChargeLines } from './calculations';
-import { Customer, InstallationGroup, Product, Project, Quote, QuoteRow, QuoteTerms, Settings } from './types';
+import { Customer, InstallationGroup, Invoice, Product, Project, Quote, QuoteRow, QuoteTerms, Settings } from './types';
+import { getInvoiceStatusLabel, invoiceToQuoteLike, isInvoiceOverdue } from './invoices';
 import { renderTermTemplateHtml, renderTermTemplatePlainText, resolveTermTemplatePlaceholders } from './term-templates';
 
 type ExcelCellValue = string | number;
@@ -918,6 +919,407 @@ export function exportQuoteToInternalExcel(
     `tarjous-sisainen-${quote.quoteNumber}.xlsx`,
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   );
+}
+
+function invoiceDocumentHtml(invoice: Invoice) {
+  const quoteLikeInvoice = invoiceToQuoteLike(invoice);
+  const calculation = calculateQuote(quoteLikeInvoice, invoice.rows);
+  const extraChargeRows = getQuoteExtraChargeLines(quoteLikeInvoice).filter((line) => line.amount > 0);
+  const isOverdue = isInvoiceOverdue(invoice);
+  const customerAddress = [invoice.customer.address, invoice.customer.phone, invoice.customer.email]
+    .filter(Boolean)
+    .map((value) => escapeHtml(value))
+    .join('<br />');
+
+  return `
+    <!DOCTYPE html>
+    <html lang="fi">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Lasku ${escapeHtml(invoice.invoiceNumber)}</title>
+        <style>
+          :root {
+            --ink: #0f172a;
+            --muted: #475569;
+            --line: #dbe4ee;
+            --line-strong: #c4d2e1;
+            --panel: #f8fbff;
+            --panel-strong: #eef4fb;
+            --accent: #0f766e;
+            --accent-soft: #ccfbf1;
+            --warn: #b45309;
+            --warn-soft: #fef3c7;
+            --success: #166534;
+            --success-soft: #dcfce7;
+          }
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            color: var(--ink);
+            background: #edf2f7;
+            font-family: "Inter", "Segoe UI", Arial, sans-serif;
+            line-height: 1.45;
+          }
+          .page {
+            max-width: 1040px;
+            margin: 0 auto;
+            padding: 40px 32px 56px;
+            background: #fff;
+          }
+          .topband {
+            height: 10px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #0f172a 0%, #0f766e 55%, #5eead4 100%);
+            margin-bottom: 28px;
+          }
+          .hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+            gap: 22px;
+            margin-bottom: 24px;
+            align-items: start;
+          }
+          .brand-block { display: flex; gap: 16px; align-items: flex-start; }
+          .logo {
+            width: 68px;
+            height: 68px;
+            border-radius: 18px;
+            object-fit: cover;
+            border: 1px solid var(--line);
+            background: #fff;
+          }
+          .hero-eyebrow {
+            margin: 0 0 8px;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 11px;
+            font-weight: 700;
+          }
+          .hero h1 {
+            margin: 0;
+            font-size: 34px;
+            line-height: 1.05;
+            letter-spacing: -0.03em;
+          }
+          .company-meta {
+            margin-top: 12px;
+            display: grid;
+            gap: 4px;
+            color: var(--muted);
+            font-size: 14px;
+          }
+          .meta-card,
+          .panel,
+          .summary,
+          .note-panel {
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            background: linear-gradient(180deg, #ffffff 0%, var(--panel) 100%);
+          }
+          .meta-card {
+            padding: 18px 20px;
+          }
+          .meta-kicker,
+          .panel h2,
+          .summary h3,
+          .note-panel h3 {
+            margin: 0 0 10px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--muted);
+          }
+          .invoice-id {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin-bottom: 14px;
+          }
+          .meta-grid,
+          .summary-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px 18px;
+            font-size: 13px;
+          }
+          .meta-label,
+          .summary-row span:first-child { color: var(--muted); }
+          .meta-value { font-weight: 600; text-align: right; }
+          .status-pill {
+            margin-top: 12px;
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+          }
+          .status-pill.draft { background: #e2e8f0; color: #334155; }
+          .status-pill.issued { background: var(--accent-soft); color: var(--accent); }
+          .status-pill.paid { background: var(--success-soft); color: var(--success); }
+          .status-pill.cancelled { background: #fee2e2; color: #b91c1c; }
+          .status-pill.overdue { background: var(--warn-soft); color: var(--warn); }
+          .title-panel {
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            padding: 18px 20px;
+            background: var(--panel);
+            margin-bottom: 18px;
+          }
+          .title-panel .eyebrow {
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            margin-bottom: 8px;
+            font-weight: 700;
+          }
+          .title-panel .title {
+            font-size: 28px;
+            line-height: 1.15;
+            letter-spacing: -0.03em;
+            font-weight: 700;
+            margin: 0;
+          }
+          .title-panel .context {
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 14px;
+          }
+          .grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+            margin-bottom: 22px;
+          }
+          .panel {
+            padding: 18px 20px;
+            min-height: 180px;
+          }
+          .panel .lead {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0 0 10px;
+            letter-spacing: -0.02em;
+          }
+          .panel .stack {
+            display: grid;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 14px;
+          }
+          .table-wrap {
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            overflow: hidden;
+            margin: 20px 0 24px;
+          }
+          .table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          .table th,
+          .table td {
+            padding: 14px 14px;
+            border-bottom: 1px solid var(--line);
+            vertical-align: top;
+            text-align: left;
+          }
+          .table th {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            background: var(--panel);
+            font-weight: 700;
+          }
+          .table tbody tr:last-child td { border-bottom: 0; }
+          .table .section-row td {
+            background: var(--accent-soft);
+            color: var(--accent);
+            font-weight: 700;
+          }
+          .code-cell {
+            width: 170px;
+            color: var(--muted);
+            font-size: 13px;
+          }
+          .description-cell strong {
+            display: block;
+            font-size: 15px;
+            line-height: 1.3;
+            margin-bottom: 2px;
+          }
+          .number-cell { text-align: right; white-space: nowrap; }
+          .total-cell { font-weight: 700; }
+          .subtle {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 4px;
+          }
+          .summary-layout {
+            display: grid;
+            grid-template-columns: 1fr minmax(320px, 390px);
+            gap: 18px;
+            align-items: start;
+          }
+          .note-panel {
+            padding: 18px 20px;
+            min-height: 100%;
+          }
+          .note-panel p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 14px;
+            white-space: pre-wrap;
+          }
+          .summary {
+            padding: 18px 20px;
+          }
+          .summary-row {
+            padding: 8px 0;
+            font-size: 14px;
+          }
+          .summary-row strong { font-weight: 700; }
+          .summary-row.total {
+            border-top: 1px solid var(--line-strong);
+            margin-top: 10px;
+            padding-top: 14px;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+          }
+          .summary-row.total span:first-child { color: var(--ink); }
+          @media print {
+            body { background: #fff; }
+            .page { padding: 24px; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="page">
+          <div class="topband"></div>
+
+          <div class="hero">
+            <div class="brand-block">
+              ${invoice.company.companyLogo ? `<img class="logo" src="${escapeHtml(invoice.company.companyLogo)}" alt="${escapeHtml(invoice.company.companyName)}" />` : ''}
+              <div>
+                <p class="hero-eyebrow">Lasku</p>
+                <h1>${escapeHtml(invoice.company.companyName)}</h1>
+                <div class="company-meta">
+                  ${invoice.company.companyAddress ? `<div>${escapeHtml(invoice.company.companyAddress)}</div>` : ''}
+                  ${invoice.company.companyEmail ? `<div>${escapeHtml(invoice.company.companyEmail)}</div>` : ''}
+                  ${invoice.company.companyPhone ? `<div>${escapeHtml(invoice.company.companyPhone)}</div>` : ''}
+                  ${invoice.company.businessId ? `<div>Y-tunnus: ${escapeHtml(invoice.company.businessId)}</div>` : ''}
+                </div>
+              </div>
+            </div>
+            <div class="meta-card">
+              <div class="meta-kicker">Laskun tiedot</div>
+              <div class="invoice-id">${escapeHtml(invoice.invoiceNumber)}</div>
+              <div class="meta-grid">
+                <div class="meta-label">Päiväys</div>
+                <div class="meta-value">${escapeHtml(formatDate(invoice.issueDate))}</div>
+                <div class="meta-label">Eräpäivä</div>
+                <div class="meta-value">${escapeHtml(formatDate(invoice.dueDate))}</div>
+                <div class="meta-label">Viitenumero</div>
+                <div class="meta-value">${escapeHtml(invoice.referenceNumber)}</div>
+                <div class="meta-label">Lähdetarjous</div>
+                <div class="meta-value">${escapeHtml(invoice.sourceQuoteNumber)}</div>
+              </div>
+              <div class="status-pill ${isOverdue ? 'overdue' : invoice.status}">
+                ${escapeHtml(isOverdue ? `Erääntynyt • ${getInvoiceStatusLabel(invoice.status)}` : getInvoiceStatusLabel(invoice.status))}
+              </div>
+            </div>
+          </div>
+
+          <div class="title-panel">
+            <div class="eyebrow">Laskun otsikko</div>
+            <p class="title">${escapeHtml(invoice.title)}</p>
+            <div class="context">Projekti: ${escapeHtml(invoice.project.name)} • Kohde: ${escapeHtml(invoice.project.site)}</div>
+          </div>
+
+          <div class="grid">
+            <div class="panel">
+              <h2>Laskutetaan</h2>
+              <p class="lead">${escapeHtml(invoice.customer.name)}</p>
+              <div class="stack">
+                ${invoice.customer.contactPerson ? `<div>${escapeHtml(invoice.customer.contactPerson)}</div>` : ''}
+                ${customerAddress ? `<div>${customerAddress}</div>` : '<div>Ei yhteystietoja.</div>'}
+                ${invoice.customer.businessId ? `<div>Y-tunnus: ${escapeHtml(invoice.customer.businessId)}</div>` : ''}
+              </div>
+            </div>
+            <div class="panel">
+              <h2>Maksutiedot</h2>
+              <div class="stack">
+                <div>Maksuehto: ${invoice.paymentTermDays} pv</div>
+                <div>IBAN: ${escapeHtml(invoice.company.iban || '-')}</div>
+                <div>BIC: ${escapeHtml(invoice.company.bic || '-')}</div>
+                <div>Viitenumero: ${escapeHtml(invoice.referenceNumber)}</div>
+                <div>Viivästyskorko: ${formatNumber(invoice.company.lateInterestPercent || 0, 1)} %</div>
+              </div>
+            </div>
+            <div class="panel">
+              <h2>Laskun peruste</h2>
+              <p class="lead">${escapeHtml(invoice.project.name)}</p>
+              <div class="stack">
+                <div>Kohde: ${escapeHtml(invoice.project.site)}</div>
+                <div>Tarjousnumero: ${escapeHtml(invoice.sourceQuoteNumber)}</div>
+                <div>Tarjousrevisio: ${invoice.sourceQuoteRevisionNumber}</div>
+                ${invoice.project.notes ? `<div>${escapeHtml(invoice.project.notes)}</div>` : ''}
+              </div>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Koodi</th>
+                  <th>Rivi</th>
+                  <th class="number-cell">Määrä</th>
+                  <th class="number-cell">Yks.</th>
+                  <th class="number-cell">Yks. hinta</th>
+                  <th class="number-cell">Yhteensä</th>
+                </tr>
+              </thead>
+              <tbody>${renderQuoteRows(invoice.rows, false)}</tbody>
+            </table>
+          </div>
+
+          <div class="summary-layout">
+            <div class="note-panel">
+              <h3>Lisätiedot</h3>
+              <p>${invoice.notes ? escapeHtml(invoice.notes) : 'Lasku on luotu hyväksytystä tarjouksesta snapshot-muodossa. Tämä dokumentti säilyttää laskutushetken sisällön riippumatta myöhemmistä tarjousmuutoksista.'}</p>
+            </div>
+            <div class="summary">
+              <h3>Yhteenveto</h3>
+              <div class="summary-row"><span>Rivien välisumma</span><strong>${formatCurrency(calculation.lineSubtotal)}</strong></div>
+              <div class="summary-row"><span>Lisäkulut yhteensä</span><strong>${formatCurrency(calculation.extraChargesTotal)}</strong></div>
+              ${extraChargeRows
+                .map(
+                  (line) =>
+                    `<div class="summary-row"><span>${escapeHtml(line.label)}</span><strong>${formatCurrency(line.amount)}</strong></div>`
+                )
+                .join('')}
+              <div class="summary-row"><span>Alennus</span><strong>-${formatCurrency(calculation.discountAmount)}</strong></div>
+              <div class="summary-row"><span>Veroton yhteensä</span><strong>${formatCurrency(calculation.subtotal)}</strong></div>
+              <div class="summary-row"><span>ALV ${formatNumber(invoice.vatPercent, 1)} %</span><strong>${formatCurrency(calculation.vat)}</strong></div>
+              <div class="summary-row total"><span>Laskun loppusumma</span><span>${formatCurrency(calculation.total)}</span></div>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+export function exportInvoiceToPDF(invoice: Invoice) {
+  const html = invoiceDocumentHtml(invoice);
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
 }
 
 interface ReportPdfExportInput {

@@ -56,6 +56,12 @@ export default function AccountPage() {
     companyPhone: companyProfile.companyPhone,
     companyAddress: companyProfile.companyAddress,
     companyLogo: companyProfile.companyLogo || '',
+    businessId: companyProfile.businessId || '',
+    iban: companyProfile.iban || '',
+    bic: companyProfile.bic || '',
+    invoiceNumberPrefix: companyProfile.invoiceNumberPrefix || 'LASKU',
+    defaultInvoiceDueDays: companyProfile.defaultInvoiceDueDays || 14,
+    lateInterestPercent: companyProfile.lateInterestPercent || 8,
   });
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -86,6 +92,12 @@ export default function AccountPage() {
       companyPhone: companyProfile.companyPhone,
       companyAddress: companyProfile.companyAddress,
       companyLogo: companyProfile.companyLogo || '',
+      businessId: companyProfile.businessId || '',
+      iban: companyProfile.iban || '',
+      bic: companyProfile.bic || '',
+      invoiceNumberPrefix: companyProfile.invoiceNumberPrefix || 'LASKU',
+      defaultInvoiceDueDays: companyProfile.defaultInvoiceDueDays || 14,
+      lateInterestPercent: companyProfile.lateInterestPercent || 8,
     });
   }, [companyProfile]);
 
@@ -194,8 +206,8 @@ export default function AccountPage() {
 
       <Card className="p-6 space-y-4">
         <div>
-          <h2 className="text-lg font-semibold">Yritystiedot tarjouksille</h2>
-          <p className="text-sm text-muted-foreground">Nämä tiedot näkyvät juuri sinun omissa tarjousdokumenteissasi ja PDF- tai Excel-vienneissä.</p>
+          <h2 className="text-lg font-semibold">Yritys- ja laskutustiedot</h2>
+          <p className="text-sm text-muted-foreground">Nämä tiedot näkyvät omissa tarjous- ja laskudokumenteissasi. Täytä erityisesti Y-tunnus, IBAN ja BIC ennen laskujen luontia.</p>
         </div>
         {companyError && (
           <Alert variant="destructive">
@@ -238,6 +250,65 @@ export default function AccountPage() {
               value={companyForm.companyAddress}
               onChange={(event) => setCompanyForm((current) => ({ ...current, companyAddress: event.target.value }))}
               placeholder="Esimerkkikatu 1, 00100 Helsinki"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="account-company-business-id">Y-tunnus</Label>
+            <Input
+              id="account-company-business-id"
+              value={companyForm.businessId}
+              onChange={(event) => setCompanyForm((current) => ({ ...current, businessId: event.target.value }))}
+              placeholder="1234567-8"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="account-company-iban">IBAN</Label>
+            <Input
+              id="account-company-iban"
+              value={companyForm.iban}
+              onChange={(event) => setCompanyForm((current) => ({ ...current, iban: event.target.value.toUpperCase() }))}
+              placeholder="FI2112345600000785"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="account-company-bic">BIC</Label>
+            <Input
+              id="account-company-bic"
+              value={companyForm.bic}
+              onChange={(event) => setCompanyForm((current) => ({ ...current, bic: event.target.value.toUpperCase() }))}
+              placeholder="NDEAFIHH"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="account-invoice-prefix">Laskunumeroiden etuliite</Label>
+            <Input
+              id="account-invoice-prefix"
+              value={companyForm.invoiceNumberPrefix}
+              onChange={(event) => setCompanyForm((current) => ({ ...current, invoiceNumberPrefix: event.target.value.toUpperCase() }))}
+              placeholder="LASKU"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="account-invoice-due-days">Maksuehto (pv)</Label>
+            <Input
+              id="account-invoice-due-days"
+              type="number"
+              min="0"
+              value={companyForm.defaultInvoiceDueDays}
+              onChange={(event) => setCompanyForm((current) => ({ ...current, defaultInvoiceDueDays: parseInt(event.target.value, 10) || 0 }))}
+              placeholder="14"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="account-late-interest">Viivästyskorko %</Label>
+            <Input
+              id="account-late-interest"
+              type="number"
+              min="0"
+              step="0.1"
+              value={companyForm.lateInterestPercent}
+              onChange={(event) => setCompanyForm((current) => ({ ...current, lateInterestPercent: parseFloat(event.target.value) || 0 }))}
+              placeholder="8"
             />
           </div>
           <div className="space-y-2 sm:col-span-2">
