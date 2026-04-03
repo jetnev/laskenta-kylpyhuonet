@@ -162,10 +162,10 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const { groups } = useInstallationGroups();
   const { getSubstitutesForProduct } = useSubstituteProducts();
   const { addRow, deleteRow, deleteRows, getRowsForQuote, updateRow } = useQuoteRows();
-  const { addQuote, getQuote, getQuotesForProject, hasNewerRevision, updateQuote, updateQuoteStatus } = useQuotes();
+  const { addQuote, getQuote, getQuotesForProject, hasNewerRevision, quotesLoaded, updateQuote, updateQuoteStatus } = useQuotes();
   const { createInvoiceFromQuote, getInvoicesForQuote } = useInvoices();
-  const { getProject } = useProjects();
-  const { getCustomer } = useCustomers();
+  const { getProject, projectsLoaded } = useProjects();
+  const { customersLoaded, getCustomer } = useCustomers();
   const { activeTerms, createQuoteTermsSnapshot, getDefaultTerms, getTermById } = useQuoteTerms();
   const { sharedSettings, documentSettings } = useDocumentSettings();
   const project = getProject(projectId);
@@ -176,7 +176,6 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [bootstrapQuote, setBootstrapQuote] = useState<Quote | null>(null);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
-  const [quoteLookupTimedOut, setQuoteLookupTimedOut] = useState(false);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const initializedDraftRef = useRef(false);
 
@@ -185,20 +184,8 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     initializedDraftRef.current = Boolean(quoteId);
     setBootstrapQuote(null);
     setBootstrapError(null);
-    setQuoteLookupTimedOut(false);
     setSelectedRowIds([]);
   }, [quoteId]);
-
-  useEffect(() => {
-    setQuoteLookupTimedOut(false);
-    if (!activeQuoteId) {
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      setQuoteLookupTimedOut(true);
-    }, 1500);
-    return () => window.clearTimeout(timer);
-  }, [activeQuoteId]);
 
   useEffect(() => {
     if (!project || activeQuoteId || initializedDraftRef.current) return;
@@ -317,6 +304,20 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
   const allRowsSelected = quoteRows.length > 0 && selectedRowIds.length === quoteRows.length;
 
+  const isProjectLoading = !projectsLoaded;
+  const isCustomerLoading = Boolean(project) && !customersLoaded;
+  const isQuoteLoading = Boolean(activeQuoteId && !quote && !quotesLoaded);
+
+  if (isProjectLoading || isCustomerLoading || isQuoteLoading) {
+    return (
+      <ResponsiveDialog open onOpenChange={(open) => !open && onClose()} title="Tarjouseditori" maxWidth="full">
+        <Card className="p-10 text-center text-muted-foreground">
+          Ladataan tarjousta...
+        </Card>
+      </ResponsiveDialog>
+    );
+  }
+
   if (!project) {
     return (
       <ResponsiveDialog open onOpenChange={(open) => !open && onClose()} title="Tarjouseditori" maxWidth="full">
@@ -343,9 +344,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
         <Card className="p-10 text-center text-muted-foreground">
           {bootstrapError
             ? bootstrapError
-            : quoteLookupTimedOut
-              ? 'Tarjousta ei saatu avattua. Sulje editori ja yrita uudelleen.'
-              : 'Ladataan tarjousta...'}
+            : 'Tarjousta ei löytynyt. Se on voitu poistaa tai se ei ole käytettävissä tällä käyttäjällä.'}
         </Card>
       </ResponsiveDialog>
     );
@@ -606,13 +605,13 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
         </Button>
         {quote.status === 'sent' && (
           <>
-            <Button variant="outline" onClick={() => updateQuoteStatus(quote.id, 'accepted')}>
+            <Button onClick={() => updateQuoteStatus(quote.id, 'accepted')}>
               <CheckCircle className="h-4 w-4" />
-              Hyväksy
+              Merkitse hyväksytyksi
             </Button>
             <Button variant="outline" onClick={() => updateQuoteStatus(quote.id, 'rejected')}>
               <XCircle className="h-4 w-4" />
-              Hylkää
+              Merkitse hylätyksi
             </Button>
           </>
         )}
@@ -647,6 +646,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={getStatusVariant(quote.status)}>{STATUS_LABELS[quote.status]}</Badge>
+                  {quote.status === 'sent' && <Badge variant="outline">Odottaa asiakkaan päätöstä</Badge>}
                   <Badge variant="outline">Revisio {quote.revisionNumber}</Badge>
                   <Badge variant="outline">{quote.quoteNumber}</Badge>
                 </div>
@@ -678,6 +678,19 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                 <Warning className="h-4 w-4" />
                 <AlertDescription>
                   Tarjouksesta on olemassa uudempi revisio. Tämä versio on lukutilassa.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {quote.status === 'sent' && !quoteHasNewerRevision && (
+              <Alert className="border-primary/20 bg-primary/5">
+                <PaperPlaneTilt className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="font-medium text-foreground">Tarjous on lähetetty asiakkaalle ja odottaa päätöstä.</div>
+                  <div className="mt-1 text-muted-foreground">
+                    Paina <strong>Merkitse hyväksytyksi</strong> vasta silloin, kun asiakas on vahvistanut tilauksen.
+                    Jos asiakas ei hyväksy tarjousta, valitse <strong>Merkitse hylätyksi</strong>.
+                  </div>
                 </AlertDescription>
               </Alert>
             )}

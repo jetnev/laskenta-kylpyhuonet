@@ -706,7 +706,7 @@ export function useStarterWorkspaceTemplate() {
 }
 
 export function useCustomers() {
-  const [allCustomers = [], setCustomers] = useKV<Customer[]>('customers', []);
+  const [allCustomers = [], setCustomers, customersLoaded] = useKV<Customer[]>('customers', []);
   const { user, canDelete, canEdit, canManageUsers } = useAuth();
   const userId = user?.id;
 
@@ -758,11 +758,11 @@ export function useCustomers() {
 
   const getCustomer = (id: string) => customers.find((customer) => customer.id === id);
 
-  return { customers, addCustomer, updateCustomer, deleteCustomer, getCustomer };
+  return { customers, customersLoaded, addCustomer, updateCustomer, deleteCustomer, getCustomer };
 }
 
 export function useProjects() {
-  const [allProjects = [], setProjects] = useKV<Project[]>('projects', []);
+  const [allProjects = [], setProjects, projectsLoaded] = useKV<Project[]>('projects', []);
   const { user, canDelete, canEdit, canManageUsers } = useAuth();
   const userId = user?.id;
 
@@ -816,11 +816,11 @@ export function useProjects() {
   const getProjectsForCustomer = (customerId: string) =>
     projects.filter((project) => project.customerId === customerId);
 
-  return { projects, addProject, updateProject, deleteProject, getProject, getProjectsForCustomer };
+  return { projects, projectsLoaded, addProject, updateProject, deleteProject, getProject, getProjectsForCustomer };
 }
 
 export function useQuotes() {
-  const [allQuotes = [], setQuotes] = useKV<Quote[]>('quotes', []);
+  const [allQuotes = [], setQuotes, quotesLoaded] = useKV<Quote[]>('quotes', []);
   const { user, canDelete, canEdit, canManageUsers } = useAuth();
   const { settings } = useSettings();
   const userId = user?.id;
@@ -927,6 +927,7 @@ export function useQuotes() {
 
   return {
     quotes,
+    quotesLoaded,
     addQuote,
     updateQuote,
     updateQuoteStatus,
