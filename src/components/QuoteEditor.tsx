@@ -36,6 +36,7 @@ import ScheduleSection from './ScheduleSection';
 import FieldHelpLabel from './FieldHelpLabel';
 import {
   useCustomers,
+  useDocumentSettings,
   useInstallationGroups,
   useProducts,
   useProjects,
@@ -161,7 +162,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const { getProject } = useProjects();
   const { getCustomer } = useCustomers();
   const { getDefaultTerms, terms } = useQuoteTerms();
-  const { settings } = useSettings();
+  const { sharedSettings, documentSettings } = useDocumentSettings();
   const project = getProject(projectId);
   const customer = project ? getCustomer(project.customerId) : undefined;
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(quoteId);
@@ -204,8 +205,8 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
         revisionNumber: 1,
         termsId: defaultTerms?.id,
         pricingMode: 'margin',
-        selectedMarginPercent: settings.defaultMarginPercent,
-        vatPercent: settings.defaultVatPercent,
+        selectedMarginPercent: sharedSettings.defaultMarginPercent,
+        vatPercent: sharedSettings.defaultVatPercent,
         discountType: 'none',
         discountValue: 0,
         projectCosts: 0,
@@ -229,7 +230,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       initializedDraftRef.current = true;
       setBootstrapError(error instanceof Error ? error.message : 'Tarjouksen luonnissa tapahtui virhe.');
     }
-  }, [activeQuoteId, addQuote, getDefaultTerms, project, projectId, settings]);
+  }, [activeQuoteId, addQuote, getDefaultTerms, project, projectId, sharedSettings]);
 
   const quote = useMemo(() => {
     if (!activeQuoteId) {
@@ -334,7 +335,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     return product?.defaultSalesMarginPercent
       ?? group?.defaultMarginPercent
       ?? quote.selectedMarginPercent
-      ?? settings.defaultMarginPercent;
+      ?? sharedSettings.defaultMarginPercent;
   };
 
   const buildProductRow = (product: Product): Omit<QuoteRow, 'id' | 'ownerUserId' | 'createdAt' | 'updatedAt' | 'createdByUserId' | 'updatedByUserId'> => {
@@ -541,15 +542,15 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     <>
       <Button variant="outline" onClick={onClose}>Sulje</Button>
       <div className="flex flex-wrap gap-2 sm:justify-end">
-        <Button variant="outline" onClick={() => exportQuoteToPDF(quote, quoteRows, customer, project, quoteTerms, settings)}>
+        <Button variant="outline" onClick={() => exportQuoteToPDF(quote, quoteRows, customer, project, quoteTerms, documentSettings)}>
           <FilePdf className="h-4 w-4" />
           PDF
         </Button>
-        <Button variant="outline" onClick={() => exportQuoteToCustomerExcel(quote, quoteRows, customer, project, quoteTerms, settings)}>
+        <Button variant="outline" onClick={() => exportQuoteToCustomerExcel(quote, quoteRows, customer, project, quoteTerms, documentSettings)}>
           <FileXls className="h-4 w-4" />
           Asiakas-Excel
         </Button>
-        <Button variant="outline" onClick={() => exportQuoteToInternalExcel(quote, quoteRows, customer, project, quoteTerms, settings)}>
+        <Button variant="outline" onClick={() => exportQuoteToInternalExcel(quote, quoteRows, customer, project, quoteTerms, documentSettings)}>
           <FileXls className="h-4 w-4" />
           Sisäinen Excel
         </Button>

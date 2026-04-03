@@ -215,6 +215,14 @@ export interface QuoteTerms extends AuditFields {
   isDefault: boolean;
 }
 
+export interface CompanyProfile {
+  companyName: string;
+  companyAddress: string;
+  companyPhone: string;
+  companyEmail: string;
+  companyLogo?: string;
+}
+
 export interface Settings {
   companyName: string;
   companyAddress: string;

@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Key, SignOut, UserCircle } from '@phosphor-icons/react';
 import { useAuth } from '../../hooks/use-auth';
+import { useCompanyProfile } from '../../hooks/use-data';
 import { Card } from '../ui/card';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
@@ -10,12 +11,21 @@ import { toast } from 'sonner';
 
 export default function AccountPage() {
   const { user, updateProfile, changePassword, logout } = useAuth();
+  const { companyProfile, updateCompanyProfile } = useCompanyProfile();
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [companyError, setCompanyError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [profileForm, setProfileForm] = useState({
     displayName: user?.displayName ?? '',
     email: user?.email ?? '',
+  });
+  const [companyForm, setCompanyForm] = useState({
+    companyName: companyProfile.companyName,
+    companyEmail: companyProfile.companyEmail,
+    companyPhone: companyProfile.companyPhone,
+    companyAddress: companyProfile.companyAddress,
+    companyLogo: companyProfile.companyLogo || '',
   });
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -27,6 +37,23 @@ export default function AccountPage() {
     () => (user ? new Date(user.createdAt).toLocaleDateString('fi-FI') : ''),
     [user]
   );
+
+  useEffect(() => {
+    setProfileForm({
+      displayName: user?.displayName ?? '',
+      email: user?.email ?? '',
+    });
+  }, [user?.displayName, user?.email]);
+
+  useEffect(() => {
+    setCompanyForm({
+      companyName: companyProfile.companyName,
+      companyEmail: companyProfile.companyEmail,
+      companyPhone: companyProfile.companyPhone,
+      companyAddress: companyProfile.companyAddress,
+      companyLogo: companyProfile.companyLogo || '',
+    });
+  }, [companyProfile]);
 
   if (!user) {
     return null;
@@ -127,6 +154,83 @@ export default function AccountPage() {
             }}
           >
             Tallenna profiili
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Yritystiedot tarjouksille</h2>
+          <p className="text-sm text-muted-foreground">Nämä tiedot näkyvät juuri sinun omissa tarjousdokumenteissasi ja PDF- tai Excel-vienneissä.</p>
+        </div>
+        {companyError && (
+          <Alert variant="destructive">
+            <AlertDescription>{companyError}</AlertDescription>
+          </Alert>
+        )}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="account-company-name">Yrityksen nimi</Label>
+            <Input
+              id="account-company-name"
+              value={companyForm.companyName}
+              onChange={(event) => setCompanyForm((current) => ({ ...current, companyName: event.target.value }))}
+              placeholder="Esim. Kylpyhuoneet Nevalainen Oy"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="account-company-email">Yrityksen sähköposti</Label>
+            <Input
+              id="account-company-email"
+              type="email"
+              value={companyForm.companyEmail}
+              onChange={(event) => setCompanyForm((current) => ({ ...current, companyEmail: event.target.value }))}
+              placeholder="myynti@yritys.fi"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="account-company-phone">Yrityksen puhelin</Label>
+            <Input
+              id="account-company-phone"
+              value={companyForm.companyPhone}
+              onChange={(event) => setCompanyForm((current) => ({ ...current, companyPhone: event.target.value }))}
+              placeholder="+358 40 123 4567"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="account-company-address">Yrityksen osoite</Label>
+            <Input
+              id="account-company-address"
+              value={companyForm.companyAddress}
+              onChange={(event) => setCompanyForm((current) => ({ ...current, companyAddress: event.target.value }))}
+              placeholder="Esimerkkikatu 1, 00100 Helsinki"
+            />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="account-company-logo">Logon URL</Label>
+            <Input
+              id="account-company-logo"
+              type="url"
+              value={companyForm.companyLogo}
+              onChange={(event) => setCompanyForm((current) => ({ ...current, companyLogo: event.target.value }))}
+              placeholder="https://yritys.fi/logo.png"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            onClick={() => {
+              try {
+                setCompanyError(null);
+                updateCompanyProfile(companyForm);
+                toast.success('Yritystiedot tallennettu.');
+              } catch (error) {
+                setCompanyError(error instanceof Error ? error.message : 'Yritystietojen tallennus epäonnistui.');
+              }
+            }}
+          >
+            Tallenna yritystiedot
           </Button>
         </div>
       </Card>

@@ -212,7 +212,7 @@ function scheduleRemoteWrite(write: PendingWrite) {
   );
 }
 
-export function useKV<T>(key: string, defaultValue: T): [T, (value: SetValueAction<T>) => void] {
+export function useKV<T>(key: string, defaultValue: T): [T, (value: SetValueAction<T>) => void, boolean] {
   const { user } = useAuth();
   const scope = useMemo(() => getScopeForKey(key), [key]);
   const userId = user?.id ?? null;
@@ -240,6 +240,7 @@ export function useKV<T>(key: string, defaultValue: T): [T, (value: SetValueActi
     }
     return readFallbackValue(recordId, defaultValue);
   });
+  const [isLoaded, setIsLoaded] = useState(() => Boolean(recordId && persistedSnapshots.has(recordId)));
   const valueRef = useRef(value);
 
   useEffect(() => {
@@ -249,6 +250,7 @@ export function useKV<T>(key: string, defaultValue: T): [T, (value: SetValueActi
   useEffect(() => {
     if (!recordId) {
       setValueState(defaultRef.current);
+      setIsLoaded(false);
       return;
     }
 
@@ -263,12 +265,15 @@ export function useKV<T>(key: string, defaultValue: T): [T, (value: SetValueActi
       setValueState(cache.get(recordId) as T);
     }
 
+    setIsLoaded(persistedSnapshots.has(recordId));
+
     void readRemoteValue<T>(recordId, defaultRef.current)
       .then((nextValue) => {
         if (cancelled) {
           return;
         }
         emit(recordId, nextValue);
+        setIsLoaded(true);
       })
       .catch((error) => {
         console.error(`Failed to load KV key "${key}".`, error);
@@ -312,6 +317,6 @@ export function useKV<T>(key: string, defaultValue: T): [T, (value: SetValueActi
     [key, recordId, scope, userId]
   );
 
-  return [value, setValue];
+  return [value, setValue, isLoaded];
 }
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash, FileText, Building, Users, MagnifyingGlass, X } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
-import { useProjects, useCustomers, useQuotes, useQuoteRows, useQuoteTerms, useSettings } from '../../hooks/use-data';
+import { useProjects, useCustomers, useQuotes, useQuoteRows, useQuoteTerms, useSettings, useStarterWorkspaceTemplate } from '../../hooks/use-data';
 import { toast } from 'sonner';
 import { Project, Customer } from '../../lib/types';
 import QuoteEditor from '../QuoteEditor';
@@ -28,6 +28,7 @@ const CUSTOMER_FIELD_HELP = {
 } as const;
 
 export default function ProjectsPage() {
+  const starterWorkspace = useStarterWorkspaceTemplate();
   const { projects, addProject, updateProject, deleteProject } = useProjects();
   const { customers, addCustomer, updateCustomer, deleteCustomer, getCustomer } = useCustomers();
   const { addQuote, getQuotesForProject, deleteQuote } = useQuotes();
@@ -95,6 +96,14 @@ export default function ProjectsPage() {
     (c.contactPerson && c.contactPerson.toLowerCase().includes(searchCustomers.toLowerCase())) ||
     (c.email && c.email.toLowerCase().includes(searchCustomers.toLowerCase()))
   );
+
+  useEffect(() => {
+    if (!starterWorkspace) {
+      return;
+    }
+
+    toast.success('Lisäsimme valmiiksi malliasiakkaan, malliprojektin ja mallitarjouksen. Voit muokata niitä suoraan oman työn pohjaksi.');
+  }, [starterWorkspace]);
 
   const handleSaveProject = () => {
     if (!projectForm.customerId || !projectForm.name || !projectForm.site) {

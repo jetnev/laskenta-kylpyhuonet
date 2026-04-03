@@ -49,13 +49,13 @@ export default function SettingsPage() {
     <div className="p-4 sm:p-8 space-y-6 max-w-5xl">
       <div>
         <h1 className="text-2xl sm:text-3xl font-semibold">Asetukset</h1>
-        <p className="text-muted-foreground mt-1">Yleiset yritys- ja tarjousasetukset koko sovellukselle.</p>
+        <p className="text-muted-foreground mt-1">Yhteiset oletusarvot koko sovellukselle.</p>
       </div>
 
       <Alert>
         <Shield className="h-4 w-4" />
         <AlertDescription>
-          Muutokset vaikuttavat kaikkiin käyttäjiin, koska nämä tiedot ovat yhteisiä koko sovellukselle.
+          Muutokset vaikuttavat kaikkiin käyttäjiin. Käyttäjien omat yritystiedot hallitaan Oma tili -sivulla, ja nämä asetukset toimivat yhteisinä oletus- ja varatietoina.
         </AlertDescription>
       </Alert>
 
@@ -65,8 +65,8 @@ export default function SettingsPage() {
             <Gear className="h-5 w-5" weight="bold" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Yritystiedot</h2>
-            <p className="text-sm text-muted-foreground">Näitä käytetään tarjousyhteenvedossa ja dokumenteissa.</p>
+            <h2 className="text-lg font-semibold">Yhteiset oletusyritystiedot</h2>
+            <p className="text-sm text-muted-foreground">Näitä käytetään tarjousdokumenteissa vain silloin, jos käyttäjä ei ole tallentanut omia yritystietoja Oma tili -sivulla.</p>
           </div>
         </div>
 

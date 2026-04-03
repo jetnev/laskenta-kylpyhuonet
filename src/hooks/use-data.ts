@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useKV } from './use-kv';
 import {
+  CompanyProfile,
   Product,
   InstallationGroup,
   InstallationGroupCategorySettings,
@@ -18,6 +19,29 @@ import { useAuth } from './use-auth';
 type OwnedAuditKeys = 'id' | keyof ReturnType<typeof buildOwnedAudit>;
 type QuoteCreateInput = Pick<Quote, 'projectId'> & Partial<Omit<Quote, OwnedAuditKeys | 'projectId'>>;
 
+const STARTER_WORKSPACE_VERSION = 1;
+
+interface StarterWorkspaceSeedResult {
+  customerId: string;
+  projectId: string;
+  quoteId: string;
+}
+
+interface StarterWorkspaceState {
+  version: number;
+  status: 'seeded' | 'skipped';
+  handledAt: string;
+  templateIds?: StarterWorkspaceSeedResult;
+}
+
+interface StarterWorkspaceTemplate {
+  customers: Customer[];
+  projects: Project[];
+  quotes: Quote[];
+  rows: QuoteRow[];
+  ids: StarterWorkspaceSeedResult;
+}
+
 const DEFAULT_SETTINGS: Settings = {
   companyName: 'Yritys Oy',
   companyAddress: '',
@@ -29,6 +53,14 @@ const DEFAULT_SETTINGS: Settings = {
   defaultValidityDays: 30,
   quoteNumberPrefix: 'TAR',
   currency: 'EUR',
+};
+
+const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
+  companyName: '',
+  companyAddress: '',
+  companyPhone: '',
+  companyEmail: '',
+  companyLogo: '',
 };
 
 const DEFAULT_INSTALLATION_GROUP_CATEGORY_SETTINGS: InstallationGroupCategorySettings = {
@@ -74,6 +106,207 @@ function generateQuoteNumber(prefix: string = 'TAR') {
     String(date.getDate()).padStart(2, '0'),
   ].join('');
   return `${prefix}-${parts}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+}
+
+function createStarterWorkspaceTemplate(userId: string, settings: Settings): StarterWorkspaceTemplate {
+  const customerId = crypto.randomUUID();
+  const projectId = crypto.randomUUID();
+  const quoteId = crypto.randomUUID();
+  const scheduleStart = new Date();
+  scheduleStart.setDate(scheduleStart.getDate() + 14);
+  const scheduleEnd = new Date(scheduleStart);
+  scheduleEnd.setDate(scheduleEnd.getDate() + 10);
+  const validUntil = new Date();
+  validUntil.setDate(validUntil.getDate() + (settings.defaultValidityDays || 30));
+
+  const customer: Customer = {
+    id: customerId,
+    name: 'Malliasiakas Oy',
+    contactPerson: 'Maija Mallinen',
+    email: 'maija.mallinen@example.com',
+    phone: '+358 40 123 4567',
+    address: 'Esimerkkikatu 10 A 3, 00100 Helsinki',
+    businessId: '1234567-8',
+    notes: 'Valmiiksi luotu esimerkkiasiakas. Muokkaa tai poista tiedot ennen omaa käyttöä.',
+    ...buildOwnedAudit(userId),
+  };
+
+  const project: Project = {
+    id: projectId,
+    customerId,
+    name: 'Malliprojekti: kylpyhuoneremontti',
+    site: 'Esimerkkikatu 10 A 3, Helsinki',
+    region: 'Pääkaupunkiseutu',
+    regionCoefficient: 1,
+    notes: 'Valmiiksi luotu malliprojekti ensimmäistä tarjousta varten.',
+    customOptions: [
+      {
+        id: crypto.randomUUID(),
+        label: 'Työn aloitus',
+        value: '2-3 viikon sisällä tilauksesta',
+      },
+      {
+        id: crypto.randomUUID(),
+        label: 'Työn kesto',
+        value: 'Arviolta 2 viikkoa',
+      },
+    ],
+    ...buildOwnedAudit(userId),
+  };
+
+  const quote: Quote = {
+    id: quoteId,
+    projectId,
+    title: 'Mallitarjous: kylpyhuoneremontti',
+    quoteNumber: generateQuoteNumber(settings.quoteNumberPrefix),
+    revisionNumber: 1,
+    status: 'draft',
+    vatPercent: settings.defaultVatPercent,
+    validUntil: validUntil.toISOString().slice(0, 10),
+    notes: 'Tämä on valmiiksi luotu mallitarjous. Päivitä rivit, määrät ja hinnat kohteeseesi sopiviksi ennen lähettämistä.',
+    internalNotes: 'Mallitarjous on luotu käyttöönoton helpottamiseksi. Poista tai korvaa tämä teksti ennen tarjouksen lähettämistä.',
+    schedule: 'Työ voidaan aloittaa noin kahden viikon kuluessa tilauksesta.',
+    scheduleMilestones: [
+      {
+        id: crypto.randomUUID(),
+        title: 'Työn aloitus',
+        targetDate: scheduleStart.toISOString().slice(0, 10),
+        type: 'start',
+      },
+      {
+        id: crypto.randomUUID(),
+        title: 'Työn valmistuminen',
+        targetDate: scheduleEnd.toISOString().slice(0, 10),
+        type: 'completion',
+      },
+    ],
+    discountType: 'none',
+    discountValue: 0,
+    projectCosts: 0,
+    deliveryCosts: 95,
+    installationCosts: 0,
+    travelKilometers: 0,
+    travelRatePerKm: 0,
+    disposalCosts: 0,
+    demolitionCosts: 0,
+    protectionCosts: 0,
+    permitCosts: 0,
+    selectedMarginPercent: settings.defaultMarginPercent,
+    pricingMode: 'margin',
+    ...buildOwnedAudit(userId),
+    lastAutoSavedAt: nowIso(),
+  };
+
+  const rows: QuoteRow[] = [
+    {
+      id: crypto.randomUUID(),
+      quoteId,
+      sortOrder: 10,
+      mode: 'section',
+      source: 'manual',
+      productName: 'Esimerkkisisältö',
+      description: 'Mallitarjous näyttää miten väliotsikot, tuoteryhmittely ja hinnoittelu toimivat yhdessä.',
+      quantity: 0,
+      unit: 'erä',
+      purchasePrice: 0,
+      salesPrice: 0,
+      installationPrice: 0,
+      marginPercent: 0,
+      regionMultiplier: 1,
+      ...buildOwnedAudit(userId),
+    },
+    {
+      id: crypto.randomUUID(),
+      quoteId,
+      sortOrder: 20,
+      mode: 'product_installation',
+      source: 'manual',
+      productCode: 'MALLI-001',
+      productName: 'Seinä- ja lattialaatoitus',
+      description: 'Esimerkkirivi materiaalille ja asennukselle. Päivitä oma määrä, hinta ja kuvaus tähän.',
+      quantity: 18,
+      unit: 'm²',
+      purchasePrice: 29.5,
+      salesPrice: 42,
+      installationPrice: 36,
+      marginPercent: 29,
+      regionMultiplier: 1,
+      notes: 'Sisältää peruslaastit, sauma-aineet ja normaalin asennuksen.',
+      ...buildOwnedAudit(userId),
+    },
+    {
+      id: crypto.randomUUID(),
+      quoteId,
+      sortOrder: 30,
+      mode: 'product_installation',
+      source: 'manual',
+      productCode: 'MALLI-002',
+      productName: 'Kalusteiden ja hanan asennus',
+      description: 'Esimerkkirivi kalusteiden, altaan ja hanan toimitukselle sekä asennukselle.',
+      quantity: 1,
+      unit: 'erä',
+      purchasePrice: 210,
+      salesPrice: 295,
+      installationPrice: 320,
+      marginPercent: 28,
+      regionMultiplier: 1,
+      notes: 'Voit jakaa tämän myöhemmin omille riveilleen tarpeen mukaan.',
+      ...buildOwnedAudit(userId),
+    },
+    {
+      id: crypto.randomUUID(),
+      quoteId,
+      sortOrder: 40,
+      mode: 'charge',
+      source: 'manual',
+      chargeType: 'protection',
+      productName: 'Suojaus, loppusiivous ja jätekuljetus',
+      description: 'Esimerkkiveloitus yleiskuluille, jotka eivät kuulu yhdelle yksittäiselle tarjousriville.',
+      quantity: 1,
+      unit: 'erä',
+      purchasePrice: 0,
+      salesPrice: 190,
+      installationPrice: 0,
+      marginPercent: 100,
+      regionMultiplier: 1,
+      manualSalesPrice: true,
+      ...buildOwnedAudit(userId),
+    },
+  ];
+
+  return {
+    customers: [customer],
+    projects: [project],
+    quotes: [quote],
+    rows,
+    ids: {
+      customerId,
+      projectId,
+      quoteId,
+    },
+  };
+}
+
+function normalizeCompanyProfile(profile?: Partial<CompanyProfile>): CompanyProfile {
+  return {
+    companyName: profile?.companyName?.trim() || '',
+    companyAddress: profile?.companyAddress?.trim() || '',
+    companyPhone: profile?.companyPhone?.trim() || '',
+    companyEmail: profile?.companyEmail?.trim() || '',
+    companyLogo: profile?.companyLogo?.trim() || '',
+  };
+}
+
+function mergeDocumentSettings(settings: Settings, companyProfile?: CompanyProfile): Settings {
+  const profile = normalizeCompanyProfile(companyProfile);
+  return {
+    ...settings,
+    companyName: profile.companyName || settings.companyName,
+    companyAddress: profile.companyAddress || settings.companyAddress,
+    companyPhone: profile.companyPhone || settings.companyPhone,
+    companyEmail: profile.companyEmail || settings.companyEmail,
+    companyLogo: profile.companyLogo || settings.companyLogo,
+  };
 }
 
 export function useProducts() {
@@ -357,6 +590,90 @@ export function useSubstituteProducts() {
     substitutes.filter((substitute) => substitute.originalProductId === productId);
 
   return { substitutes, addSubstitute, deleteSubstitute, getSubstitutesForProduct };
+}
+
+export function useStarterWorkspaceTemplate() {
+  const { user, canEdit } = useAuth();
+  const { settings } = useSettings();
+  const [customers = [], setCustomers, customersReady] = useKV<Customer[]>('customers', []);
+  const [projects = [], setProjects, projectsReady] = useKV<Project[]>('projects', []);
+  const [quotes = [], setQuotes, quotesReady] = useKV<Quote[]>('quotes', []);
+  const [rows = [], setRows, rowsReady] = useKV<QuoteRow[]>('quote-rows', []);
+  const [bootstrapState = null, setBootstrapState, bootstrapReady] = useKV<StarterWorkspaceState | null>(
+    'starter-workspace-state',
+    null
+  );
+  const [seededTemplate, setSeededTemplate] = useState<StarterWorkspaceSeedResult | null>(null);
+  const handledUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    handledUserIdRef.current = null;
+    setSeededTemplate(null);
+  }, [user?.id]);
+
+  useEffect(() => {
+    const currentUserId = user?.id;
+    if (!currentUserId || !canEdit) {
+      return;
+    }
+
+    if (!customersReady || !projectsReady || !quotesReady || !rowsReady || !bootstrapReady) {
+      return;
+    }
+
+    if (handledUserIdRef.current === currentUserId) {
+      return;
+    }
+
+    handledUserIdRef.current = currentUserId;
+
+    if (bootstrapState?.version === STARTER_WORKSPACE_VERSION) {
+      return;
+    }
+
+    if (customers.length > 0 || projects.length > 0 || quotes.length > 0 || rows.length > 0) {
+      setBootstrapState({
+        version: STARTER_WORKSPACE_VERSION,
+        status: 'skipped',
+        handledAt: nowIso(),
+      });
+      return;
+    }
+
+    const template = createStarterWorkspaceTemplate(currentUserId, settings);
+    setCustomers(template.customers);
+    setProjects(template.projects);
+    setQuotes(template.quotes);
+    setRows(template.rows);
+    setBootstrapState({
+      version: STARTER_WORKSPACE_VERSION,
+      status: 'seeded',
+      handledAt: nowIso(),
+      templateIds: template.ids,
+    });
+    setSeededTemplate(template.ids);
+  }, [
+    bootstrapReady,
+    bootstrapState?.version,
+    canEdit,
+    customers.length,
+    customersReady,
+    projects.length,
+    projectsReady,
+    quotes.length,
+    quotesReady,
+    rows.length,
+    rowsReady,
+    setBootstrapState,
+    setCustomers,
+    setProjects,
+    setQuotes,
+    setRows,
+    settings,
+    user?.id,
+  ]);
+
+  return seededTemplate;
 }
 
 export function useCustomers() {
@@ -724,6 +1041,41 @@ export function useQuoteTerms() {
   const getDefaultTerms = () => terms.find((term) => term.isDefault);
 
   return { terms, addTerms, updateTerms, deleteTerms, getDefaultTerms };
+}
+
+export function useCompanyProfile() {
+  const [storedCompanyProfile = DEFAULT_COMPANY_PROFILE, setCompanyProfile] = useKV<CompanyProfile>(
+    'company-profile',
+    DEFAULT_COMPANY_PROFILE
+  );
+  const { user } = useAuth();
+  const companyProfile = useMemo(
+    () => normalizeCompanyProfile(storedCompanyProfile),
+    [storedCompanyProfile]
+  );
+
+  const updateCompanyProfile = (updates: Partial<CompanyProfile>) => {
+    ensureSignedIn(user?.id);
+    setCompanyProfile((current = DEFAULT_COMPANY_PROFILE) =>
+      normalizeCompanyProfile({
+        ...current,
+        ...updates,
+      })
+    );
+  };
+
+  return { companyProfile, updateCompanyProfile, companyProfileUpdatedBy: user?.id };
+}
+
+export function useDocumentSettings() {
+  const { settings } = useSettings();
+  const { companyProfile } = useCompanyProfile();
+  const documentSettings = useMemo(
+    () => mergeDocumentSettings(settings, companyProfile),
+    [companyProfile, settings]
+  );
+
+  return { sharedSettings: settings, documentSettings, companyProfile };
 }
 
 export function useSettings() {

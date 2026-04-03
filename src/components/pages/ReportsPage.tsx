@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { calculateQuote, calculateQuoteRow } from '../../lib/calculations';
 import { exportReportsToPDF } from '../../lib/export';
-import { useSettings } from '../../hooks/use-data';
+import { useDocumentSettings } from '../../hooks/use-data';
 
 type TimeRange = '1m' | '3m' | '6m' | '12m' | 'all' | 'custom';
 type DateRange = {
@@ -31,7 +31,7 @@ export default function ReportsPage() {
   const { quotes } = useQuotes();
   const { rows } = useQuoteRows();
   const { customers } = useCustomers();
-  const { settings } = useSettings();
+  const { documentSettings } = useDocumentSettings();
 
   const filteredQuotes = useMemo(() => {
     if (timeRange === 'custom' && dateRange.from && dateRange.to) {
@@ -279,7 +279,7 @@ export default function ReportsPage() {
         topProducts,
         customerAnalysis,
         recentProjects,
-        settings,
+        settings: documentSettings,
       });
       toast.success('Raportin PDF-näkymä avattu', {
         description: 'Voit tallentaa raportin PDF-muotoon selaimen tulostusikkunasta.',
