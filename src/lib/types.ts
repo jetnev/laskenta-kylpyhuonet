@@ -83,6 +83,28 @@ export interface InstallationGroup extends AuditFields {
   defaultInstallationPrice?: number;
 }
 
+export type InstallationGroupIndustryPreset =
+  | 'construction'
+  | 'electrical'
+  | 'plumbing'
+  | 'furniture'
+  | 'general'
+  | 'custom';
+
+export interface InstallationGroupCategoryPreference {
+  name: string;
+  visible: boolean;
+  favorite: boolean;
+  sortOrder: number;
+}
+
+export interface InstallationGroupCategorySettings {
+  industryPreset?: InstallationGroupIndustryPreset;
+  hideEmptyCategories: boolean;
+  showFavoritesOnly: boolean;
+  preferences: InstallationGroupCategoryPreference[];
+}
+
 export interface SubstituteProduct extends AuditFields {
   id: string;
   originalProductId?: string;

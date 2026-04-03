@@ -3,6 +3,7 @@ import { useKV } from './use-kv';
 import {
   Product,
   InstallationGroup,
+  InstallationGroupCategorySettings,
   SubstituteProduct,
   Customer,
   Project,
@@ -28,6 +29,13 @@ const DEFAULT_SETTINGS: Settings = {
   defaultValidityDays: 30,
   quoteNumberPrefix: 'TAR',
   currency: 'EUR',
+};
+
+const DEFAULT_INSTALLATION_GROUP_CATEGORY_SETTINGS: InstallationGroupCategorySettings = {
+  industryPreset: undefined,
+  hideEmptyCategories: false,
+  showFavoritesOnly: false,
+  preferences: [],
 };
 
 function nowIso() {
@@ -273,6 +281,52 @@ export function useInstallationGroups() {
   };
 
   return { groups, addGroup, updateGroup, deleteGroup };
+}
+
+export function useInstallationGroupCategorySettings() {
+  const [storedSettings = DEFAULT_INSTALLATION_GROUP_CATEGORY_SETTINGS, setSettings] = useKV<InstallationGroupCategorySettings>(
+    'installation-group-category-settings',
+    DEFAULT_INSTALLATION_GROUP_CATEGORY_SETTINGS
+  );
+
+  const settings = useMemo(
+    () => ({
+      ...DEFAULT_INSTALLATION_GROUP_CATEGORY_SETTINGS,
+      ...storedSettings,
+      preferences: [...(storedSettings.preferences ?? [])].sort((left, right) => left.sortOrder - right.sortOrder),
+    }),
+    [storedSettings]
+  );
+
+  const updateSettings = (
+    updates:
+      | Partial<InstallationGroupCategorySettings>
+      | ((current: InstallationGroupCategorySettings) => InstallationGroupCategorySettings)
+  ) => {
+    setSettings((current = DEFAULT_INSTALLATION_GROUP_CATEGORY_SETTINGS) => {
+      const normalizedCurrent: InstallationGroupCategorySettings = {
+        ...DEFAULT_INSTALLATION_GROUP_CATEGORY_SETTINGS,
+        ...current,
+        preferences: [...(current.preferences ?? [])].sort((left, right) => left.sortOrder - right.sortOrder),
+      };
+
+      const nextSettings =
+        typeof updates === 'function'
+          ? updates(normalizedCurrent)
+          : {
+              ...normalizedCurrent,
+              ...updates,
+            };
+
+      return {
+        ...DEFAULT_INSTALLATION_GROUP_CATEGORY_SETTINGS,
+        ...nextSettings,
+        preferences: [...(nextSettings.preferences ?? [])].sort((left, right) => left.sortOrder - right.sortOrder),
+      };
+    });
+  };
+
+  return { settings, updateSettings };
 }
 
 export function useSubstituteProducts() {
