@@ -1,22 +1,28 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
+import { deriveAccessState } from '../lib/access-control';
 import {
   createIsolatedSupabaseClient,
   getSupabaseConfigError,
   isSupabaseConfigured,
+  OrganizationRow,
   ProfileRow,
   requireSupabase,
+  type OrganizationRole,
   type UserRole,
   type UserStatus,
 } from '../lib/supabase';
 
-export type { UserRole, UserStatus } from '../lib/supabase';
+export type { OrganizationRole, OrganizationRow, UserRole, UserStatus } from '../lib/supabase';
 
 export interface AuthUser {
   id: string;
   email: string;
   displayName: string;
   role: UserRole;
+  organizationId?: string | null;
+  organizationRole?: OrganizationRole | null;
+  organizationName?: string | null;
   initials: string;
   createdAt: string;
   lastLoginAt?: string;
@@ -27,6 +33,7 @@ interface RegisterInput {
   displayName: string;
   email: string;
   password: string;
+  organizationName: string;
 }
 
 interface LoginInput {
@@ -47,12 +54,22 @@ interface AdminCreateUserInput {
   status: UserStatus;
 }
 
+interface OrganizationEmployeeInput {
+  displayName: string;
+  email: string;
+  password: string;
+  status: UserStatus;
+}
+
 interface AuthContextValue {
   user: AuthUser | null;
   users: AuthUser[];
+  organization: OrganizationRow | null;
   role: UserRole | null;
+  organizationRole: OrganizationRole | null;
   loading: boolean;
   isAuthenticated: boolean;
+  isPlatformAdmin: boolean;
   canEdit: boolean;
   canDelete: boolean;
   canManageUsers: boolean;
@@ -67,8 +84,10 @@ interface AuthContextValue {
   updateProfile: (input: ProfileInput) => Promise<void>;
   changePassword: (currentPassword: string, nextPassword: string) => Promise<void>;
   createUserByAdmin: (input: AdminCreateUserInput) => Promise<void>;
+  createOrganizationEmployee: (input: OrganizationEmployeeInput) => Promise<void>;
   updateUserRole: (userId: string, nextRole: UserRole) => Promise<void>;
   updateUserStatus: (userId: string, nextStatus: UserStatus) => Promise<void>;
+  updateOrganizationEmployeeStatus: (userId: string, nextStatus: UserStatus) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -117,8 +136,7 @@ function toError(error: unknown, fallbackMessage = 'Toiminto epäonnistui.') {
 }
 
 function isRecoverableProfileError(error: unknown) {
-  const candidate =
-    error && typeof error === 'object' ? (error as { code?: unknown }) : null;
+  const candidate = error && typeof error === 'object' ? (error as { code?: unknown }) : null;
   const code = typeof candidate?.code === 'string' ? candidate.code : '';
   const message = extractErrorMessage(error).toLowerCase();
 
@@ -140,13 +158,11 @@ function isRecoverableProfileError(error: unknown) {
 
   return (
     message.includes('profiles') &&
-    (
-      message.includes('does not exist') ||
+    (message.includes('does not exist') ||
       message.includes('permission denied') ||
       message.includes('row-level security') ||
       message.includes('policy') ||
-      message.includes('schema cache')
-    )
+      message.includes('schema cache'))
   );
 }
 
@@ -198,8 +214,14 @@ function mapProvisioningErrorMessage(error: unknown) {
 
 function getInitials(displayName: string) {
   const parts = displayName.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return 'US';
-  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('');
+  if (parts.length === 0) {
+    return 'US';
+  }
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
 }
 
 function getAuthRedirectUrl() {
@@ -214,19 +236,45 @@ function getAuthRedirectUrl() {
 }
 
 function toDisplayName(user: User, fallbackDisplayName?: string) {
-  const rawName = typeof user.user_metadata?.display_name === 'string' ? user.user_metadata.display_name : fallbackDisplayName;
+  const rawName =
+    typeof user.user_metadata?.display_name === 'string'
+      ? user.user_metadata.display_name
+      : fallbackDisplayName;
+
   if (rawName?.trim()) {
     return rawName.trim();
   }
+
   return user.email?.split('@')[0] || 'Käyttäjä';
 }
 
-function toAuthUser(profile: ProfileRow): AuthUser {
+function resolveSeedOrganizationName(user: User, profile: ProfileRow) {
+  const metadataName =
+    typeof user.user_metadata?.organization_name === 'string'
+      ? user.user_metadata.organization_name.trim()
+      : '';
+
+  if (metadataName) {
+    return metadataName;
+  }
+
+  const displayName = profile.display_name.trim();
+  if (displayName) {
+    return `${displayName} työtila`;
+  }
+
+  return `${user.email?.split('@')[0] || 'Yritys'} työtila`;
+}
+
+function toAuthUser(profile: ProfileRow, organization?: OrganizationRow | null): AuthUser {
   return {
     id: profile.id,
     email: profile.email,
     displayName: profile.display_name,
     role: profile.role,
+    organizationId: profile.organization_id ?? null,
+    organizationRole: profile.organization_role ?? null,
+    organizationName: organization?.name ?? null,
     initials: getInitials(profile.display_name),
     createdAt: profile.created_at,
     lastLoginAt: profile.last_login_at || undefined,
@@ -241,6 +289,9 @@ function buildFallbackAuthUser(user: User, markLogin = false): AuthUser {
     email: normalizeEmail(user.email || ''),
     displayName,
     role: 'user',
+    organizationId: null,
+    organizationRole: null,
+    organizationName: null,
     initials: getInitials(displayName),
     createdAt: user.created_at || new Date().toISOString(),
     lastLoginAt: markLogin ? new Date().toISOString() : undefined,
@@ -250,11 +301,7 @@ function buildFallbackAuthUser(user: User, markLogin = false): AuthUser {
 
 async function getProfile(userId: string) {
   const client = requireSupabase();
-  const { data, error } = await client
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .maybeSingle();
+  const { data, error } = await client.from('profiles').select('*').eq('id', userId).maybeSingle();
 
   if (error) {
     throw toError(error, 'Käyttäjäprofiilin haku epäonnistui.');
@@ -263,26 +310,40 @@ async function getProfile(userId: string) {
   return data as ProfileRow | null;
 }
 
-async function countProfiles() {
+async function getOrganization(organizationId: string) {
   const client = requireSupabase();
-  const { count, error } = await client
-    .from('profiles')
-    .select('id', { count: 'exact', head: true });
+  const { data, error } = await client
+    .from('organizations')
+    .select('*')
+    .eq('id', organizationId)
+    .maybeSingle();
 
   if (error) {
-    throw toError(error, 'Käyttäjäprofiilien lataus epäonnistui.');
+    throw toError(error, 'Yritystyötilan haku epäonnistui.');
   }
 
-  return count ?? 0;
+  return data as OrganizationRow | null;
+}
+
+async function getOrganizationsByIds(organizationIds: string[]) {
+  const uniqueIds = Array.from(new Set(organizationIds.filter(Boolean)));
+  if (uniqueIds.length === 0) {
+    return new Map<string, OrganizationRow>();
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client.from('organizations').select('*').in('id', uniqueIds);
+
+  if (error) {
+    throw toError(error, 'Yritystyötilojen lataus epäonnistui.');
+  }
+
+  return new Map((data as OrganizationRow[]).map((organization) => [organization.id, organization]));
 }
 
 async function upsertProfile(row: ProfileRow) {
   const client = requireSupabase();
-  const { data, error } = await client
-    .from('profiles')
-    .upsert(row, { onConflict: 'id' })
-    .select('*')
-    .single();
+  const { data, error } = await client.from('profiles').upsert(row, { onConflict: 'id' }).select('*').single();
 
   if (error) {
     throw toError(error, 'Käyttäjäprofiilin tallennus epäonnistui.');
@@ -297,12 +358,13 @@ async function ensureProfile(user: User, fallbackDisplayName?: string) {
     return existing;
   }
 
-  const role: UserRole = (await countProfiles()) === 0 ? 'admin' : 'user';
   return upsertProfile({
     id: user.id,
     email: normalizeEmail(user.email || ''),
     display_name: toDisplayName(user, fallbackDisplayName),
-    role,
+    role: 'user',
+    organization_id: null,
+    organization_role: null,
     status: 'active',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -318,12 +380,55 @@ async function refreshProfileFromAuthUser(user: User, profile: ProfileRow, markL
     updated_at: new Date().toISOString(),
     last_login_at: markLogin ? new Date().toISOString() : profile.last_login_at ?? null,
   };
+
   return upsertProfile(nextProfile);
+}
+
+async function createOrganizationForCurrentUser(organizationName: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('create_organization_for_current_user', {
+    p_organization_name: organizationName,
+  });
+
+  if (error) {
+    throw toError(error, 'Yritystyötilan luonti epäonnistui.');
+  }
+
+  return data as OrganizationRow | null;
+}
+
+async function assignEmployeeToCurrentOrganization(userId: string, status: UserStatus) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('assign_employee_to_current_organization', {
+    p_user_id: userId,
+    p_status: status,
+  });
+
+  if (error) {
+    throw toError(error, 'Työntekijän liittäminen yritykseen epäonnistui.');
+  }
+
+  return data as ProfileRow;
+}
+
+async function updateEmployeeStatusInCurrentOrganization(userId: string, status: UserStatus) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('update_employee_status_in_current_organization', {
+    p_user_id: userId,
+    p_status: status,
+  });
+
+  if (error) {
+    throw toError(error, 'Työntekijän tilan päivitys epäonnistui.');
+  }
+
+  return data as ProfileRow;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [users, setUsers] = useState<AuthUser[]>([]);
+  const [organization, setOrganization] = useState<OrganizationRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [requiresPasswordReset, setRequiresPasswordReset] = useState(false);
   const backendConfigError = isSupabaseConfigured ? null : getSupabaseConfigError();
@@ -332,31 +437,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRequiresPasswordReset(false);
     setUser(null);
     setUsers([]);
+    setOrganization(null);
     setLoading(false);
   }, []);
 
-  const loadUsers = useCallback(async (currentUser?: AuthUser | null) => {
+  const loadUsers = useCallback(async (currentUser?: AuthUser | null, currentOrganization?: OrganizationRow | null) => {
     if (!isSupabaseConfigured) {
       setUsers(currentUser ? [currentUser] : []);
       return;
     }
 
-    if (!currentUser || currentUser.role !== 'admin') {
-      setUsers(currentUser ? [currentUser] : []);
+    if (!currentUser) {
+      setUsers([]);
+      return;
+    }
+
+    if (currentUser.role !== 'admin' && currentUser.organizationRole !== 'owner') {
+      setUsers([currentUser]);
       return;
     }
 
     const client = requireSupabase();
-    const { data, error } = await client
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: true });
+    let query = client.from('profiles').select('*').order('created_at', { ascending: true });
 
+    if (currentUser.role !== 'admin' && currentUser.organizationId) {
+      query = query.eq('organization_id', currentUser.organizationId);
+    }
+
+    const { data, error } = await query;
     if (error) {
       throw toError(error, 'Käyttäjälistan lataus epäonnistui.');
     }
 
-    setUsers((data as ProfileRow[]).map(toAuthUser));
+    const profileRows = data as ProfileRow[];
+    const organizationMap = await getOrganizationsByIds(
+      profileRows.map((profile) => profile.organization_id ?? '').filter(Boolean)
+    );
+
+    if (currentOrganization) {
+      organizationMap.set(currentOrganization.id, currentOrganization);
+    }
+
+    setUsers(profileRows.map((profile) => toAuthUser(profile, organizationMap.get(profile.organization_id ?? ''))));
   }, []);
 
   const hydrateSession = useCallback(
@@ -364,6 +486,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!session?.user) {
         setUser(null);
         setUsers([]);
+        setOrganization(null);
         return null;
       }
 
@@ -376,9 +499,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error('Käyttäjätili on poistettu käytöstä.');
         }
 
-        const nextUser = toAuthUser(profile);
+        let currentOrganization = profile.organization_id ? await getOrganization(profile.organization_id) : null;
+        if (!currentOrganization) {
+          currentOrganization = await createOrganizationForCurrentUser(resolveSeedOrganizationName(session.user, profile));
+          profile = (await getProfile(session.user.id)) ?? profile;
+        }
+
+        const nextUser = toAuthUser(profile, currentOrganization);
+        setOrganization(currentOrganization);
         setUser(nextUser);
-        await loadUsers(nextUser);
+        await loadUsers(nextUser, currentOrganization);
         return nextUser;
       } catch (error) {
         if (!isRecoverableProfileError(error)) {
@@ -387,6 +517,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         console.error('Supabase profile bootstrap failed, continuing with auth fallback.', error);
         const nextUser = buildFallbackAuthUser(session.user, options?.markLogin);
+        setOrganization(null);
         setUser(nextUser);
         setUsers([nextUser]);
         return nextUser;
@@ -408,15 +539,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) {
         return;
       }
+
       try {
         if (error) {
           throw toError(error, 'Kirjautumistilan tarkistus epäonnistui.');
         }
+
         await hydrateSession(data.session);
       } catch (authError) {
         console.error('Supabase auth bootstrap failed.', authError);
         setUser(null);
         setUsers([]);
+        setOrganization(null);
       } finally {
         if (mounted) {
           setLoading(false);
@@ -457,12 +591,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [clearAuthState, hydrateSession]);
 
-  const register = async ({ displayName, email, password }: RegisterInput) => {
+  const register = async ({ displayName, email, password, organizationName }: RegisterInput) => {
     const trimmedName = displayName.trim();
     const normalizedEmail = normalizeEmail(email);
+    const trimmedOrganizationName = organizationName.trim();
 
     if (trimmedName.length < 2) {
       throw new Error('Anna vähintään kaksimerkkinen nimi.');
+    }
+    if (trimmedOrganizationName.length < 2) {
+      throw new Error('Anna yritykselle tai työtilalle nimi.');
     }
     if (!validateEmail(normalizedEmail)) {
       throw new Error('Anna kelvollinen sähköpostiosoite.');
@@ -479,6 +617,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         emailRedirectTo: getAuthRedirectUrl(),
         data: {
           display_name: trimmedName,
+          organization_name: trimmedOrganizationName,
         },
       },
     });
@@ -606,9 +745,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updated_at: new Date().toISOString(),
     });
 
-    const nextUser = toAuthUser(updatedProfile);
+    const nextUser = toAuthUser(updatedProfile, organization);
     setUser(nextUser);
-    await loadUsers(nextUser);
+    await loadUsers(nextUser, organization);
   };
 
   const changePassword = async (currentPassword: string, nextPassword: string) => {
@@ -635,8 +774,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const requirePlatformAdmin = () => {
+    if (!user || user.role !== 'admin') {
+      throw new Error('Toiminto vaatii pääkäyttäjän oikeudet.');
+    }
+  };
+
+  const requireOrganizationOwner = () => {
+    if (!user || user.organizationRole !== 'owner') {
+      throw new Error('Toiminto vaatii yrityksen omistajan oikeudet.');
+    }
+  };
+
   const createUserByAdmin = async ({ displayName, email, password, role, status }: AdminCreateUserInput) => {
-    requireAdmin();
+    requirePlatformAdmin();
 
     const trimmedName = displayName.trim();
     const normalizedEmail = normalizeEmail(email);
@@ -678,23 +829,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: normalizedEmail,
       display_name: trimmedName,
       role,
+      organization_id: null,
+      organization_role: null,
       status,
       created_at: createdUser.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
       last_login_at: null,
     });
 
-    await loadUsers(user);
+    await loadUsers(user, organization);
   };
 
-  const requireAdmin = () => {
-    if (!user || user.role !== 'admin') {
-      throw new Error('Toiminto vaatii admin-oikeudet.');
+  const createOrganizationEmployee = async ({ displayName, email, password, status }: OrganizationEmployeeInput) => {
+    requireOrganizationOwner();
+
+    const trimmedName = displayName.trim();
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!organization?.id) {
+      throw new Error('Yritystyötilaa ei löytynyt.');
     }
+    if (trimmedName.length < 2) {
+      throw new Error('Anna vahintaan kaksimerkkinen nimi.');
+    }
+    if (!validateEmail(normalizedEmail)) {
+      throw new Error('Anna kelvollinen sahkopostiosoite.');
+    }
+    if (!validatePassword(password)) {
+      throw new Error('Salasanan on oltava vahintaan 8 merkkia.');
+    }
+
+    const authClient = createIsolatedSupabaseClient();
+    const { data, error } = await authClient.auth.signUp({
+      email: normalizedEmail,
+      password,
+      options: {
+        emailRedirectTo: getAuthRedirectUrl(),
+        data: {
+          display_name: trimmedName,
+        },
+      },
+    });
+
+    if (error) {
+      throw new Error(mapProvisioningErrorMessage(error));
+    }
+
+    const createdUser = data.user;
+    const identities = (createdUser as { identities?: unknown[] } | null)?.identities;
+    if (!createdUser?.id || (Array.isArray(identities) && identities.length === 0)) {
+      throw new Error('Talle sahkopostiosoitteelle on jo olemassa kayttajatili.');
+    }
+
+    await assignEmployeeToCurrentOrganization(createdUser.id, status);
+    await loadUsers(user, organization);
   };
 
   const updateUserRole = async (userId: string, nextRole: UserRole) => {
-    requireAdmin();
+    requirePlatformAdmin();
     const currentProfile = await getProfile(userId);
     if (!currentProfile) {
       throw new Error('Käyttäjää ei löytynyt.');
@@ -706,14 +898,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updated_at: new Date().toISOString(),
     });
 
-    if (user?.id === updatedProfile.id) {
-      setUser(toAuthUser(updatedProfile));
+    const nextCurrentUser = user?.id === updatedProfile.id ? toAuthUser(updatedProfile, organization) : user;
+    if (nextCurrentUser) {
+      setUser(nextCurrentUser);
     }
-    await loadUsers(user);
+    await loadUsers(nextCurrentUser, organization);
   };
 
   const updateUserStatus = async (userId: string, nextStatus: UserStatus) => {
-    requireAdmin();
+    requirePlatformAdmin();
     if (user?.id === userId && nextStatus === 'disabled') {
       throw new Error('Et voi poistaa omaa käyttäjätiliäsi käytöstä.');
     }
@@ -723,25 +916,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Käyttäjää ei löytynyt.');
     }
 
-    await upsertProfile({
+    const updatedProfile = await upsertProfile({
       ...currentProfile,
       status: nextStatus,
       updated_at: new Date().toISOString(),
     });
 
-    await loadUsers(user);
+    const nextCurrentUser = user?.id === updatedProfile.id ? toAuthUser(updatedProfile, organization) : user;
+    if (nextCurrentUser) {
+      setUser(nextCurrentUser);
+    }
+    await loadUsers(nextCurrentUser, organization);
   };
+
+  const updateOrganizationEmployeeStatus = async (userId: string, nextStatus: UserStatus) => {
+    requireOrganizationOwner();
+    await updateEmployeeStatusInCurrentOrganization(userId, nextStatus);
+    await loadUsers(user, organization);
+  };
+
+  const accessState = deriveAccessState({
+    platformRole: user?.role,
+    organizationRole: user?.organizationRole,
+    status: user?.status,
+  });
 
   const value: AuthContextValue = {
     user,
     users,
+    organization,
     role: user?.role ?? null,
+    organizationRole: user?.organizationRole ?? null,
     loading,
     isAuthenticated: Boolean(user),
-    canEdit: Boolean(user && user.status === 'active'),
-    canDelete: Boolean(user && user.status === 'active'),
-    canManageUsers: user?.role === 'admin',
-    canManageSharedData: user?.role === 'admin',
+    isPlatformAdmin: accessState.isPlatformAdmin,
+    canEdit: accessState.canEdit,
+    canDelete: accessState.canDelete,
+    canManageUsers: accessState.canManageUsers,
+    canManageSharedData: accessState.canManageSharedData,
     requiresPasswordReset,
     backendConfigError,
     register,
@@ -752,8 +964,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     updateProfile,
     changePassword,
     createUserByAdmin,
+    createOrganizationEmployee,
     updateUserRole,
     updateUserStatus,
+    updateOrganizationEmployeeStatus,
   };
 
   return createElement(AuthContext.Provider, { value }, children);

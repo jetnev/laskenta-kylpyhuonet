@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useKV } from './use-kv';
+import { useKV, useUserScopedKVMany } from './use-kv';
 import {
   CompanyProfile,
   Invoice,
@@ -117,6 +117,22 @@ function ensureSignedIn(userId?: string | null): string {
     throw new Error('Kirjautuminen vaaditaan.');
   }
   return userId;
+}
+
+function getVisibleUserIds(users: Array<{ id: string }>, currentUserId?: string | null, canManageUsers = false) {
+  if (!currentUserId) {
+    return [];
+  }
+
+  if (!canManageUsers) {
+    return [currentUserId];
+  }
+
+  return Array.from(new Set(users.map((user) => user.id).filter(Boolean)));
+}
+
+function flattenUserScopedValues<T>(userIds: string[], valuesByUserId: Record<string, T[]>) {
+  return userIds.flatMap((userId) => valuesByUserId[userId] ?? []);
 }
 
 function generateQuoteNumber(prefix: string = 'TAR') {
@@ -525,7 +541,7 @@ export function useInstallationGroups() {
 
   const addGroup = (group: Omit<InstallationGroup, 'id' | keyof ReturnType<typeof buildAudit>>) => {
     if (!canManageSharedData) {
-      throw new Error('Vain admin voi lisätä hintaryhmiä.');
+      throw new Error('Vain omistaja tai pääkäyttäjä voi lisätä hintaryhmiä.');
     }
     const newGroup: InstallationGroup = {
       ...group,
@@ -538,7 +554,7 @@ export function useInstallationGroups() {
 
   const updateGroup = (id: string, updates: Partial<InstallationGroup>) => {
     if (!canManageSharedData) {
-      throw new Error('Vain admin voi muokata hintaryhmiä.');
+      throw new Error('Vain omistaja tai pääkäyttäjä voi muokata hintaryhmiä.');
     }
     setGroups((current = []) =>
       current.map((group) =>
@@ -551,7 +567,7 @@ export function useInstallationGroups() {
 
   const deleteGroup = (id: string) => {
     if (!canManageSharedData) {
-      throw new Error('Vain admin voi poistaa hintaryhmiä.');
+      throw new Error('Vain omistaja tai pääkäyttäjä voi poistaa hintaryhmiä.');
     }
     setGroups((current = []) => current.filter((group) => group.id !== id));
   };
@@ -720,15 +736,25 @@ export function useStarterWorkspaceTemplate() {
 }
 
 export function useCustomers() {
-  const [allCustomers = [], setCustomers, customersLoaded] = useKV<Customer[]>('customers', []);
-  const { user, canDelete, canEdit, canManageUsers } = useAuth();
+  const { user, users, canDelete, canEdit, canManageUsers } = useAuth();
   const userId = user?.id;
+  const visibleUserIds = useMemo(
+    () => getVisibleUserIds(users, userId, canManageUsers),
+    [canManageUsers, userId, users]
+  );
+  const [customersByUserId, setCustomersForUser, customersLoaded] = useUserScopedKVMany<Customer[]>(
+    'customers',
+    [],
+    visibleUserIds
+  );
 
   const customers = useMemo(() => {
-    if (!userId) return [];
-    if (canManageUsers) return allCustomers;
-    return allCustomers.filter((customer) => customer.ownerUserId === userId);
-  }, [allCustomers, canManageUsers, userId]);
+    if (!userId) {
+      return [];
+    }
+
+    return flattenUserScopedValues(visibleUserIds, customersByUserId);
+  }, [customersByUserId, userId, visibleUserIds]);
 
   const addCustomer = (customer: Omit<Customer, 'id' | keyof ReturnType<typeof buildOwnedAudit>>) => {
     const currentUserId = ensureSignedIn(userId);
@@ -740,7 +766,7 @@ export function useCustomers() {
       id: crypto.randomUUID(),
       ...buildOwnedAudit(currentUserId),
     };
-    setCustomers((current = []) => [...current, newCustomer]);
+    setCustomersForUser(currentUserId, (current = []) => [...current, newCustomer]);
     return newCustomer;
   };
 
@@ -749,9 +775,14 @@ export function useCustomers() {
     if (!canEdit) {
       throw new Error('Sinulla ei ole oikeuksia muokata asiakkaita.');
     }
-    setCustomers((current = []) =>
+    const targetCustomer = customers.find((customer) => customer.id === id);
+    if (!targetCustomer || (!canManageUsers && targetCustomer.ownerUserId !== currentUserId)) {
+      return;
+    }
+
+    setCustomersForUser(targetCustomer.ownerUserId, (current = []) =>
       current.map((customer) =>
-        customer.id === id && (canManageUsers || customer.ownerUserId === currentUserId)
+        customer.id === id
           ? { ...customer, ...updates, updatedAt: nowIso(), updatedByUserId: currentUserId }
           : customer
       )
@@ -763,10 +794,14 @@ export function useCustomers() {
     if (!canDelete) {
       throw new Error('Sinulla ei ole oikeuksia poistaa asiakkaita.');
     }
-    setCustomers((current = []) =>
-      current.filter(
-        (customer) => customer.id !== id || (!canManageUsers && customer.ownerUserId !== currentUserId)
-      )
+
+    const targetCustomer = customers.find((customer) => customer.id === id);
+    if (!targetCustomer || (!canManageUsers && targetCustomer.ownerUserId !== currentUserId)) {
+      return;
+    }
+
+    setCustomersForUser(targetCustomer.ownerUserId, (current = []) =>
+      current.filter((customer) => customer.id !== id)
     );
   };
 
@@ -776,15 +811,25 @@ export function useCustomers() {
 }
 
 export function useProjects() {
-  const [allProjects = [], setProjects, projectsLoaded] = useKV<Project[]>('projects', []);
-  const { user, canDelete, canEdit, canManageUsers } = useAuth();
+  const { user, users, canDelete, canEdit, canManageUsers } = useAuth();
   const userId = user?.id;
+  const visibleUserIds = useMemo(
+    () => getVisibleUserIds(users, userId, canManageUsers),
+    [canManageUsers, userId, users]
+  );
+  const [projectsByUserId, setProjectsForUser, projectsLoaded] = useUserScopedKVMany<Project[]>(
+    'projects',
+    [],
+    visibleUserIds
+  );
 
   const projects = useMemo(() => {
-    if (!userId) return [];
-    if (canManageUsers) return allProjects;
-    return allProjects.filter((project) => project.ownerUserId === userId);
-  }, [allProjects, canManageUsers, userId]);
+    if (!userId) {
+      return [];
+    }
+
+    return flattenUserScopedValues(visibleUserIds, projectsByUserId);
+  }, [projectsByUserId, userId, visibleUserIds]);
 
   const addProject = (project: Omit<Project, 'id' | keyof ReturnType<typeof buildOwnedAudit>>) => {
     const currentUserId = ensureSignedIn(userId);
@@ -796,7 +841,7 @@ export function useProjects() {
       id: crypto.randomUUID(),
       ...buildOwnedAudit(currentUserId),
     };
-    setProjects((current = []) => [...current, newProject]);
+    setProjectsForUser(currentUserId, (current = []) => [...current, newProject]);
     return newProject;
   };
 
@@ -805,9 +850,14 @@ export function useProjects() {
     if (!canEdit) {
       throw new Error('Sinulla ei ole oikeuksia muokata projekteja.');
     }
-    setProjects((current = []) =>
+    const targetProject = projects.find((project) => project.id === id);
+    if (!targetProject || (!canManageUsers && targetProject.ownerUserId !== currentUserId)) {
+      return;
+    }
+
+    setProjectsForUser(targetProject.ownerUserId, (current = []) =>
       current.map((project) =>
-        project.id === id && (canManageUsers || project.ownerUserId === currentUserId)
+        project.id === id
           ? { ...project, ...updates, updatedAt: nowIso(), updatedByUserId: currentUserId }
           : project
       )
@@ -819,10 +869,14 @@ export function useProjects() {
     if (!canDelete) {
       throw new Error('Sinulla ei ole oikeuksia poistaa projekteja.');
     }
-    setProjects((current = []) =>
-      current.filter(
-        (project) => project.id !== id || (!canManageUsers && project.ownerUserId !== currentUserId)
-      )
+
+    const targetProject = projects.find((project) => project.id === id);
+    if (!targetProject || (!canManageUsers && targetProject.ownerUserId !== currentUserId)) {
+      return;
+    }
+
+    setProjectsForUser(targetProject.ownerUserId, (current = []) =>
+      current.filter((project) => project.id !== id)
     );
   };
 
@@ -834,16 +888,26 @@ export function useProjects() {
 }
 
 export function useQuotes() {
-  const [allQuotes = [], setQuotes, quotesLoaded] = useKV<Quote[]>('quotes', []);
-  const { user, canDelete, canEdit, canManageUsers } = useAuth();
+  const { user, users, canDelete, canEdit, canManageUsers } = useAuth();
   const { settings } = useSettings();
   const userId = user?.id;
+  const visibleUserIds = useMemo(
+    () => getVisibleUserIds(users, userId, canManageUsers),
+    [canManageUsers, userId, users]
+  );
+  const [quotesByUserId, setQuotesForUser, quotesLoaded] = useUserScopedKVMany<Quote[]>(
+    'quotes',
+    [],
+    visibleUserIds
+  );
 
   const quotes = useMemo(() => {
-    if (!userId) return [];
-    if (canManageUsers) return allQuotes;
-    return allQuotes.filter((quote) => quote.ownerUserId === userId);
-  }, [allQuotes, canManageUsers, userId]);
+    if (!userId) {
+      return [];
+    }
+
+    return flattenUserScopedValues(visibleUserIds, quotesByUserId);
+  }, [quotesByUserId, userId, visibleUserIds]);
 
   const addQuote = (quote: QuoteCreateInput) => {
     const currentUserId = ensureSignedIn(userId);
@@ -881,7 +945,7 @@ export function useQuotes() {
       ...buildOwnedAudit(currentUserId),
       lastAutoSavedAt: now,
     };
-    setQuotes((current = []) => [...current, newQuote]);
+    setQuotesForUser(currentUserId, (current = []) => [...current, newQuote]);
     return newQuote;
   };
 
@@ -890,9 +954,14 @@ export function useQuotes() {
     if (!canEdit) {
       throw new Error('Sinulla ei ole oikeuksia muokata tarjouksia.');
     }
-    setQuotes((current = []) =>
+    const targetQuote = quotes.find((quote) => quote.id === id);
+    if (!targetQuote || (!canManageUsers && targetQuote.ownerUserId !== currentUserId)) {
+      return;
+    }
+
+    setQuotesForUser(targetQuote.ownerUserId, (current = []) =>
       current.map((quote) =>
-        quote.id === id && (canManageUsers || quote.ownerUserId === currentUserId)
+        quote.id === id
           ? {
               ...quote,
               ...updates,
@@ -920,10 +989,14 @@ export function useQuotes() {
     if (!canDelete) {
       throw new Error('Sinulla ei ole oikeuksia poistaa tarjouksia.');
     }
-    setQuotes((current = []) =>
-      current.filter(
-        (quote) => quote.id !== id || (!canManageUsers && quote.ownerUserId !== currentUserId)
-      )
+
+    const targetQuote = quotes.find((quote) => quote.id === id);
+    if (!targetQuote || (!canManageUsers && targetQuote.ownerUserId !== currentUserId)) {
+      return;
+    }
+
+    setQuotesForUser(targetQuote.ownerUserId, (current = []) =>
+      current.filter((quote) => quote.id !== id)
     );
   };
 
@@ -953,17 +1026,28 @@ export function useQuotes() {
 }
 
 export function useQuoteRows() {
-  const [allRows = [], setRows] = useKV<QuoteRow[]>('quote-rows', []);
-  const { user, canDelete, canEdit, canManageUsers } = useAuth();
+  const { user, users, canDelete, canEdit, canManageUsers } = useAuth();
   const { quotes } = useQuotes();
   const userId = user?.id;
+  const visibleUserIds = useMemo(
+    () => getVisibleUserIds(users, userId, canManageUsers),
+    [canManageUsers, userId, users]
+  );
+  const [rowsByUserId, setRowsForUser] = useUserScopedKVMany<QuoteRow[]>('quote-rows', [], visibleUserIds);
 
   const visibleQuoteIds = useMemo(() => new Set(quotes.map((quote) => quote.id)), [quotes]);
   const rows = useMemo(() => {
-    if (!userId) return [];
-    if (canManageUsers) return allRows;
+    if (!userId) {
+      return [];
+    }
+
+    const allRows = flattenUserScopedValues(visibleUserIds, rowsByUserId);
+    if (canManageUsers) {
+      return allRows;
+    }
+
     return allRows.filter((row) => row.ownerUserId === userId || visibleQuoteIds.has(row.quoteId));
-  }, [allRows, canManageUsers, userId, visibleQuoteIds]);
+  }, [canManageUsers, rowsByUserId, userId, visibleQuoteIds, visibleUserIds]);
 
   const addRow = (row: Omit<QuoteRow, 'id' | keyof ReturnType<typeof buildOwnedAudit>>) => {
     const currentUserId = ensureSignedIn(userId);
@@ -976,7 +1060,7 @@ export function useQuoteRows() {
       source: row.source ?? 'manual',
       ...buildOwnedAudit(currentUserId),
     };
-    setRows((current = []) => [...current, newRow]);
+    setRowsForUser(currentUserId, (current = []) => [...current, newRow]);
     return newRow;
   };
 
@@ -985,9 +1069,14 @@ export function useQuoteRows() {
     if (!canEdit) {
       throw new Error('Sinulla ei ole oikeuksia muokata tarjousrivejä.');
     }
-    setRows((current = []) =>
+    const targetRow = rows.find((row) => row.id === id);
+    if (!targetRow || (!canManageUsers && targetRow.ownerUserId !== currentUserId)) {
+      return;
+    }
+
+    setRowsForUser(targetRow.ownerUserId, (current = []) =>
       current.map((row) =>
-        row.id === id && (canManageUsers || row.ownerUserId === currentUserId)
+        row.id === id
           ? { ...row, ...updates, updatedAt: nowIso(), updatedByUserId: currentUserId }
           : row
       )
@@ -999,9 +1088,13 @@ export function useQuoteRows() {
     if (!canDelete) {
       throw new Error('Sinulla ei ole oikeuksia poistaa tarjousrivejä.');
     }
-    setRows((current = []) =>
-      current.filter((row) => row.id !== id || (!canManageUsers && row.ownerUserId !== currentUserId))
-    );
+
+    const targetRow = rows.find((row) => row.id === id);
+    if (!targetRow || (!canManageUsers && targetRow.ownerUserId !== currentUserId)) {
+      return;
+    }
+
+    setRowsForUser(targetRow.ownerUserId, (current = []) => current.filter((row) => row.id !== id));
   };
 
   const deleteRows = (ids: string[]) => {
@@ -1009,19 +1102,40 @@ export function useQuoteRows() {
     if (!canDelete) {
       throw new Error('Sinulla ei ole oikeuksia poistaa tarjousrivejä.');
     }
+
     const idSet = new Set(ids);
-    setRows((current = []) =>
-      current.filter((row) => !idSet.has(row.id) || (!canManageUsers && row.ownerUserId !== currentUserId))
+    const targetRows = rows.filter(
+      (row) => idSet.has(row.id) && (canManageUsers || row.ownerUserId === currentUserId)
     );
+    const idsByOwner = new Map<string, Set<string>>();
+
+    targetRows.forEach((row) => {
+      const ownerIds = idsByOwner.get(row.ownerUserId) ?? new Set<string>();
+      ownerIds.add(row.id);
+      idsByOwner.set(row.ownerUserId, ownerIds);
+    });
+
+    idsByOwner.forEach((ownedIds, ownerUserId) => {
+      setRowsForUser(ownerUserId, (current = []) => current.filter((row) => !ownedIds.has(row.id)));
+    });
   };
 
   const deleteRowsForQuote = (quoteId: string) => {
     const currentUserId = ensureSignedIn(userId);
-    setRows((current = []) =>
-      current.filter(
-        (row) => row.quoteId !== quoteId || (!canManageUsers && row.ownerUserId !== currentUserId)
-      )
+    const targetRows = rows.filter(
+      (row) => row.quoteId === quoteId && (canManageUsers || row.ownerUserId === currentUserId)
     );
+    const idsByOwner = new Map<string, Set<string>>();
+
+    targetRows.forEach((row) => {
+      const ownerIds = idsByOwner.get(row.ownerUserId) ?? new Set<string>();
+      ownerIds.add(row.id);
+      idsByOwner.set(row.ownerUserId, ownerIds);
+    });
+
+    idsByOwner.forEach((ownedIds, ownerUserId) => {
+      setRowsForUser(ownerUserId, (current = []) => current.filter((row) => !ownedIds.has(row.id)));
+    });
   };
 
   const getRowsForQuote = (quoteId: string) =>
@@ -1032,9 +1146,17 @@ export function useQuoteRows() {
 
 export function useQuoteTerms() {
   const [storedTemplates = [], setStoredTemplates] = useKV<QuoteTerms[]>('term-templates', []);
-  const [allQuotes = []] = useKV<Quote[]>('quotes', []);
-  const { user, canEdit, canDelete } = useAuth();
+  const { user, users, canManageUsers, canManageSharedData } = useAuth();
   const userId = user?.id;
+  const visibleUserIds = useMemo(
+    () => getVisibleUserIds(users, userId, canManageUsers),
+    [canManageUsers, userId, users]
+  );
+  const [quotesByUserId] = useUserScopedKVMany<Quote[]>('quotes', [], visibleUserIds);
+  const allVisibleQuotes = useMemo(
+    () => flattenUserScopedValues(visibleUserIds, quotesByUserId),
+    [quotesByUserId, visibleUserIds]
+  );
 
   const ownTemplates = useMemo(
     () => hydrateStoredTermTemplates(storedTemplates, userId),
@@ -1053,8 +1175,8 @@ export function useQuoteTerms() {
 
   const addTerms = (input: Parameters<typeof createTermTemplate>[1]) => {
     const currentUserId = ensureSignedIn(userId);
-    if (!canEdit) {
-      throw new Error('Sinulla ei ole oikeuksia lisätä ehtopohjia.');
+    if (!canManageSharedData) {
+      throw new Error('Vain omistaja tai pääkäyttäjä voi lisätä ehtopohjia.');
     }
     const result = createTermTemplate(storedTemplates, input, currentUserId);
     setStoredTemplates(result.templates);
@@ -1063,8 +1185,8 @@ export function useQuoteTerms() {
 
   const updateTerms = (id: string, updates: Parameters<typeof updateTermTemplate>[2]) => {
     const currentUserId = ensureSignedIn(userId);
-    if (!canEdit) {
-      throw new Error('Sinulla ei ole oikeuksia muokata ehtopohjia.');
+    if (!canManageSharedData) {
+      throw new Error('Vain omistaja tai pääkäyttäjä voi muokata ehtopohjia.');
     }
     const result = updateTermTemplate(storedTemplates, id, updates, currentUserId);
     setStoredTemplates(result.templates);
@@ -1073,8 +1195,8 @@ export function useQuoteTerms() {
 
   const cloneTermsFromMaster = (masterId: string) => {
     const currentUserId = ensureSignedIn(userId);
-    if (!canEdit) {
-      throw new Error('Sinulla ei ole oikeuksia luoda ehtopohjia.');
+    if (!canManageSharedData) {
+      throw new Error('Vain omistaja tai pääkäyttäjä voi luoda ehtopohjia.');
     }
     const result = cloneTermTemplateFromMaster(storedTemplates, masterId, currentUserId);
     setStoredTemplates(result.templates);
@@ -1083,8 +1205,8 @@ export function useQuoteTerms() {
 
   const duplicateTerms = (templateId: string) => {
     const currentUserId = ensureSignedIn(userId);
-    if (!canEdit) {
-      throw new Error('Sinulla ei ole oikeuksia monistaa ehtopohjia.');
+    if (!canManageSharedData) {
+      throw new Error('Vain omistaja tai pääkäyttäjä voi monistaa ehtopohjia.');
     }
     const result = duplicateTermTemplate(storedTemplates, templateId, currentUserId);
     setStoredTemplates(result.templates);
@@ -1093,8 +1215,8 @@ export function useQuoteTerms() {
 
   const restoreTermsFromMaster = (templateId: string) => {
     const currentUserId = ensureSignedIn(userId);
-    if (!canEdit) {
-      throw new Error('Sinulla ei ole oikeuksia palauttaa ehtopohjia.');
+    if (!canManageSharedData) {
+      throw new Error('Vain omistaja tai pääkäyttäjä voi palauttaa ehtopohjia.');
     }
     const result = restoreTermTemplateFromMaster(storedTemplates, templateId, currentUserId);
     setStoredTemplates(result.templates);
@@ -1103,8 +1225,8 @@ export function useQuoteTerms() {
 
   const archiveTerms = (templateId: string, archived = true) => {
     const currentUserId = ensureSignedIn(userId);
-    if (!canDelete) {
-      throw new Error('Sinulla ei ole oikeuksia arkistoida ehtopohjia.');
+    if (!canManageSharedData) {
+      throw new Error('Vain omistaja tai pääkäyttäjä voi arkistoida ehtopohjia.');
     }
     const result = setTermTemplateArchived(storedTemplates, templateId, archived, currentUserId);
     setStoredTemplates(result.templates);
@@ -1113,10 +1235,10 @@ export function useQuoteTerms() {
 
   const deleteTerms = (templateId: string) => {
     const currentUserId = ensureSignedIn(userId);
-    if (!canDelete) {
-      throw new Error('Sinulla ei ole oikeuksia poistaa ehtopohjia.');
+    if (!canManageSharedData) {
+      throw new Error('Vain omistaja tai pääkäyttäjä voi poistaa ehtopohjia.');
     }
-    if (allQuotes.some((quote) => quote.termsId === templateId)) {
+    if (allVisibleQuotes.some((quote) => quote.termsId === templateId)) {
       throw new Error('Ehtopohja on valittuna tarjoukselle. Poista ehtopohja tarjoukselta ennen poistamista.');
     }
 
@@ -1146,16 +1268,26 @@ export function useQuoteTerms() {
 }
 
 export function useInvoices() {
-  const [allInvoices = [], setInvoices] = useKV<Invoice[]>('invoices', []);
-  const { user, canDelete, canEdit, canManageUsers } = useAuth();
+  const { user, users, canDelete, canEdit, canManageUsers } = useAuth();
   const { documentSettings, companyProfile } = useDocumentSettings();
   const userId = user?.id;
+  const visibleUserIds = useMemo(
+    () => getVisibleUserIds(users, userId, canManageUsers),
+    [canManageUsers, userId, users]
+  );
+  const [invoicesByUserId, setInvoicesForUser] = useUserScopedKVMany<Invoice[]>(
+    'invoices',
+    [],
+    visibleUserIds
+  );
 
   const invoices = useMemo(() => {
-    if (!userId) return [];
-    if (canManageUsers) return allInvoices;
-    return allInvoices.filter((invoice) => invoice.ownerUserId === userId);
-  }, [allInvoices, canManageUsers, userId]);
+    if (!userId) {
+      return [];
+    }
+
+    return flattenUserScopedValues(visibleUserIds, invoicesByUserId);
+  }, [invoicesByUserId, userId, visibleUserIds]);
 
   const orderedInvoices = useMemo(
     () =>
@@ -1197,7 +1329,7 @@ export function useInvoices() {
       lastAutoSavedAt: nowIso(),
     };
 
-    setInvoices((current = []) => [...current, newInvoice]);
+    setInvoicesForUser(currentUserId, (current = []) => [...current, newInvoice]);
     return newInvoice;
   };
 
@@ -1207,9 +1339,14 @@ export function useInvoices() {
       throw new Error('Sinulla ei ole oikeuksia muokata laskuja.');
     }
 
-    setInvoices((current = []) =>
+    const targetInvoice = orderedInvoices.find((invoice) => invoice.id === id);
+    if (!targetInvoice || (!canManageUsers && targetInvoice.ownerUserId !== currentUserId)) {
+      return;
+    }
+
+    setInvoicesForUser(targetInvoice.ownerUserId, (current = []) =>
       current.map((invoice) =>
-        invoice.id === id && (canManageUsers || invoice.ownerUserId === currentUserId)
+        invoice.id === id
           ? {
               ...invoice,
               ...updates,
@@ -1229,9 +1366,14 @@ export function useInvoices() {
     }
 
     const timestamp = nowIso();
-    setInvoices((current = []) =>
+    const targetInvoice = orderedInvoices.find((invoice) => invoice.id === id);
+    if (!targetInvoice || (!canManageUsers && targetInvoice.ownerUserId !== currentUserId)) {
+      return;
+    }
+
+    setInvoicesForUser(targetInvoice.ownerUserId, (current = []) =>
       current.map((invoice) => {
-        if (invoice.id !== id || (!canManageUsers && invoice.ownerUserId !== currentUserId)) {
+        if (invoice.id !== id) {
           return invoice;
         }
 
@@ -1258,10 +1400,13 @@ export function useInvoices() {
       throw new Error('Sinulla ei ole oikeuksia poistaa laskuja.');
     }
 
-    setInvoices((current = []) =>
-      current.filter(
-        (invoice) => invoice.id !== id || (!canManageUsers && invoice.ownerUserId !== currentUserId)
-      )
+    const targetInvoice = orderedInvoices.find((invoice) => invoice.id === id);
+    if (!targetInvoice || (!canManageUsers && targetInvoice.ownerUserId !== currentUserId)) {
+      return;
+    }
+
+    setInvoicesForUser(targetInvoice.ownerUserId, (current = []) =>
+      current.filter((invoice) => invoice.id !== id)
     );
   };
 
@@ -1288,7 +1433,7 @@ export function useCompanyProfile() {
     'company-profile',
     DEFAULT_COMPANY_PROFILE
   );
-  const { user } = useAuth();
+  const { user, canManageSharedData } = useAuth();
   const companyProfile = useMemo(
     () => normalizeCompanyProfile(storedCompanyProfile),
     [storedCompanyProfile]
@@ -1296,6 +1441,9 @@ export function useCompanyProfile() {
 
   const updateCompanyProfile = (updates: Partial<CompanyProfile>) => {
     ensureSignedIn(user?.id);
+    if (!canManageSharedData) {
+      throw new Error('Yritystietoja voi muokata vain omistaja tai pääkäyttäjä.');
+    }
     setCompanyProfile((current = DEFAULT_COMPANY_PROFILE) =>
       normalizeCompanyProfile({
         ...current,
@@ -1330,7 +1478,7 @@ export function useSettings() {
 
   const updateSettings = (updates: Partial<Settings>) => {
     if (!canManageSharedData) {
-      throw new Error('Vain admin voi muokata asetuksia.');
+      throw new Error('Vain omistaja tai pääkäyttäjä voi muokata asetuksia.');
     }
     setSettings((current = DEFAULT_SETTINGS) => ({
       ...DEFAULT_SETTINGS,

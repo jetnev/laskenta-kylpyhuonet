@@ -39,7 +39,7 @@ export default function SettingsPage() {
     return (
       <div className="p-4 sm:p-8">
         <Card className="p-8 text-center text-muted-foreground">
-          Asetukset ovat vain admin-roolille.
+          Asetukset ovat vain yrityksen omistajalle tai pääkäyttäjälle.
         </Card>
       </div>
     );
@@ -49,13 +49,13 @@ export default function SettingsPage() {
     <div className="p-4 sm:p-8 space-y-6 max-w-5xl">
       <div>
         <h1 className="text-2xl sm:text-3xl font-semibold">Asetukset</h1>
-        <p className="text-muted-foreground mt-1">Yhteiset oletusarvot koko sovellukselle.</p>
+        <p className="text-muted-foreground mt-1">Yhteiset oletusarvot koko yritystyötilalle.</p>
       </div>
 
       <Alert>
         <Shield className="h-4 w-4" />
         <AlertDescription>
-          Muutokset vaikuttavat kaikkiin käyttäjiin. Käyttäjien omat yritystiedot hallitaan Oma tili -sivulla, ja yhteiset asetukset toimivat oletusarvoina ilman että tavallisen käyttäjän dokumentteihin tuodaan adminin sähköpostia tai puhelinta fallbackina.
+          Muutokset vaikuttavat koko yritystyötilaan. Yrityksen omistaja hallitsee yhteisiä oletusarvoja, ja työntekijöiden dokumenteissa käytetään työtilan yritystietoja ilman että pääkäyttäjän yhteystiedot vuotavat fallbackina.
         </AlertDescription>
       </Alert>
 

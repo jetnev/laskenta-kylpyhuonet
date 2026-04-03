@@ -2,13 +2,23 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export type UserRole = 'admin' | 'user';
 export type UserStatus = 'active' | 'disabled';
-export type AppKvScope = 'shared' | 'user';
+export type OrganizationRole = 'owner' | 'employee';
+export type AppKvScope = 'shared' | 'organization' | 'user';
+
+export interface OrganizationRow {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface ProfileRow {
   id: string;
   email: string;
   display_name: string;
   role: UserRole;
+  organization_id?: string | null;
+  organization_role?: OrganizationRole | null;
   status: UserStatus;
   created_at: string;
   updated_at: string;
@@ -19,6 +29,7 @@ export interface AppKvRow<T = unknown> {
   id: string;
   storage_key: string;
   scope: AppKvScope;
+  organization_id: string | null;
   owner_user_id: string | null;
   value: T;
   updated_at: string;

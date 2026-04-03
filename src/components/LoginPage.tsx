@@ -128,6 +128,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({
     displayName: '',
+    organizationName: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -164,7 +165,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
       case 'register':
         return {
           title: 'Luo käyttäjätili',
-          description: 'Luo uusi käyttäjätili organisaation käyttöön.',
+          description: 'Luo yrityksellesi työtila ja omistajatili.',
           actionLabel: 'Luo käyttäjätili',
           icon: UserPlus,
         };
@@ -325,6 +326,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
                     void runAction(() =>
                       register({
                         displayName: registerForm.displayName,
+                        organizationName: registerForm.organizationName,
                         email: registerForm.email,
                         password: registerForm.password,
                       })
@@ -337,6 +339,15 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
                       id="register-name"
                       value={registerForm.displayName}
                       onChange={(event) => setRegisterForm((current) => ({ ...current, displayName: event.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="register-organization">Yrityksen tai työtilan nimi</Label>
+                    <Input
+                      id="register-organization"
+                      value={registerForm.organizationName}
+                      onChange={(event) => setRegisterForm((current) => ({ ...current, organizationName: event.target.value }))}
+                      placeholder="Esim. Kylpyhuoneet Nieminen Oy"
                     />
                   </div>
                   <div className="space-y-2">

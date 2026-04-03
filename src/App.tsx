@@ -17,6 +17,7 @@ import {
   Wrench,
   X,
 } from '@phosphor-icons/react';
+import { deriveAccessState } from './lib/access-control';
 import { cn } from './lib/utils';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './hooks/use-auth';
@@ -83,7 +84,16 @@ function App() {
   const [restartingForUpdate, setRestartingForUpdate] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateSnapshot | null>(null);
-  const { user, loading, role, canManageUsers, canManageSharedData, logout, requiresPasswordReset } = useAuth();
+  const {
+    user,
+    loading,
+    role,
+    organization,
+    canManageUsers,
+    canManageSharedData,
+    logout,
+    requiresPasswordReset,
+  } = useAuth();
   const isMobile = useIsMobile();
   const showDesktopUpdateActions = isDesktopRuntime();
 
@@ -273,9 +283,15 @@ function App() {
     );
   }
 
-  const roleBadge = role === 'admin'
-    ? { label: 'Admin', variant: 'default' as const }
-    : { label: 'Käyttäjä', variant: 'secondary' as const };
+  const accessState = deriveAccessState({
+    platformRole: role,
+    organizationRole: user?.organizationRole,
+    status: user?.status,
+  });
+  const roleBadge = {
+    label: accessState.roleLabel,
+    variant: accessState.roleBadgeVariant,
+  };
 
   const handleNavigate = (page: Page) => {
     setCurrentPage(page);
@@ -300,7 +316,7 @@ function App() {
         <div className="flex h-16 items-center border-b border-border px-6 justify-between">
           <div>
             <h1 className="text-xl font-semibold text-primary">Laskenta</h1>
-            <p className="text-xs text-muted-foreground">Tarjouslaskenta</p>
+            <p className="text-xs text-muted-foreground">{organization?.name || 'Tarjouslaskenta'}</p>
           </div>
           {isMobile && (
             <button onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-muted rounded-md">

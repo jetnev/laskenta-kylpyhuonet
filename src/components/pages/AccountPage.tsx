@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Key, SignOut, UserCircle } from '@phosphor-icons/react';
+import { deriveAccessState, getOrganizationRoleLabel, getPlatformRoleLabel } from '../../lib/access-control';
 import { useAuth } from '../../hooks/use-auth';
 import { useCompanyProfile } from '../../hooks/use-data';
 import { Card } from '../ui/card';
@@ -40,7 +41,7 @@ function getExampleSurname(displayName?: string, email?: string) {
 }
 
 export default function AccountPage() {
-  const { user, updateProfile, changePassword, logout } = useAuth();
+  const { user, organization, canManageSharedData, updateProfile, changePassword, logout } = useAuth();
   const { companyProfile, updateCompanyProfile } = useCompanyProfile();
   const [profileError, setProfileError] = useState<string | null>(null);
   const [companyError, setCompanyError] = useState<string | null>(null);
@@ -77,6 +78,11 @@ export default function AccountPage() {
     const surname = getExampleSurname(user?.displayName, user?.email);
     return surname ? `Esim. Kylpyhuoneet ${surname} Oy` : 'Esim. Oma Yritys Oy';
   }, [user?.displayName, user?.email]);
+  const accessState = deriveAccessState({
+    platformRole: user?.role,
+    organizationRole: user?.organizationRole,
+    status: user?.status,
+  });
 
   useEffect(() => {
     setProfileForm({
@@ -120,7 +126,9 @@ export default function AccountPage() {
           <div>
             <h2 className="text-xl font-semibold">{user.displayName}</h2>
             <p className="text-sm text-muted-foreground">{user.email}</p>
-            <p className="text-xs text-muted-foreground mt-1">Käyttäjärooli: {user.role === 'admin' ? 'Admin' : 'Käyttäjä'}</p>
+            <p className="text-xs text-muted-foreground mt-1">Työtila: {organization?.name || 'Ei työtilaa'}</p>
+            <p className="text-xs text-muted-foreground mt-1">Työtilarooli: {getOrganizationRoleLabel(user.organizationRole)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Alustarooli: {getPlatformRoleLabel(user.role)}</p>
           </div>
         </div>
 
@@ -207,11 +215,18 @@ export default function AccountPage() {
       <Card className="p-6 space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Yritys- ja laskutustiedot</h2>
-          <p className="text-sm text-muted-foreground">Nämä tiedot näkyvät omissa tarjous- ja laskudokumenteissasi. Täytä erityisesti Y-tunnus, IBAN ja BIC ennen laskujen luontia.</p>
+          <p className="text-sm text-muted-foreground">Nämä tiedot näkyvät yrityksesi tarjous- ja laskudokumenteissa. Täytä erityisesti Y-tunnus, IBAN ja BIC ennen laskujen luontia.</p>
         </div>
         {companyError && (
           <Alert variant="destructive">
             <AlertDescription>{companyError}</AlertDescription>
+          </Alert>
+        )}
+        {!canManageSharedData && (
+          <Alert>
+            <AlertDescription>
+              Yritystietoja hallitsee yrityksen omistaja tai pääkäyttäjä. Näet tässä samat tiedot, joita käytetään työtilan dokumenteissa.
+            </AlertDescription>
           </Alert>
         )}
         <div className="grid gap-4 sm:grid-cols-2">
@@ -220,6 +235,7 @@ export default function AccountPage() {
             <Input
               id="account-company-name"
               value={companyForm.companyName}
+              disabled={!canManageSharedData}
               onChange={(event) => setCompanyForm((current) => ({ ...current, companyName: event.target.value }))}
               placeholder={companyNamePlaceholder}
             />
@@ -230,6 +246,7 @@ export default function AccountPage() {
               id="account-company-email"
               type="email"
               value={companyForm.companyEmail}
+              disabled={!canManageSharedData}
               onChange={(event) => setCompanyForm((current) => ({ ...current, companyEmail: event.target.value }))}
               placeholder="myynti@yritys.fi"
             />
@@ -239,6 +256,7 @@ export default function AccountPage() {
             <Input
               id="account-company-phone"
               value={companyForm.companyPhone}
+              disabled={!canManageSharedData}
               onChange={(event) => setCompanyForm((current) => ({ ...current, companyPhone: event.target.value }))}
               placeholder="+358 40 123 4567"
             />
@@ -248,6 +266,7 @@ export default function AccountPage() {
             <Input
               id="account-company-address"
               value={companyForm.companyAddress}
+              disabled={!canManageSharedData}
               onChange={(event) => setCompanyForm((current) => ({ ...current, companyAddress: event.target.value }))}
               placeholder="Esimerkkikatu 1, 00100 Helsinki"
             />
@@ -257,6 +276,7 @@ export default function AccountPage() {
             <Input
               id="account-company-business-id"
               value={companyForm.businessId}
+              disabled={!canManageSharedData}
               onChange={(event) => setCompanyForm((current) => ({ ...current, businessId: event.target.value }))}
               placeholder="1234567-8"
             />
@@ -266,6 +286,7 @@ export default function AccountPage() {
             <Input
               id="account-company-iban"
               value={companyForm.iban}
+              disabled={!canManageSharedData}
               onChange={(event) => setCompanyForm((current) => ({ ...current, iban: event.target.value.toUpperCase() }))}
               placeholder="FI2112345600000785"
             />
@@ -275,6 +296,7 @@ export default function AccountPage() {
             <Input
               id="account-company-bic"
               value={companyForm.bic}
+              disabled={!canManageSharedData}
               onChange={(event) => setCompanyForm((current) => ({ ...current, bic: event.target.value.toUpperCase() }))}
               placeholder="NDEAFIHH"
             />
@@ -284,6 +306,7 @@ export default function AccountPage() {
             <Input
               id="account-invoice-prefix"
               value={companyForm.invoiceNumberPrefix}
+              disabled={!canManageSharedData}
               onChange={(event) => setCompanyForm((current) => ({ ...current, invoiceNumberPrefix: event.target.value.toUpperCase() }))}
               placeholder="LASKU"
             />
@@ -295,6 +318,7 @@ export default function AccountPage() {
               type="number"
               min="0"
               value={companyForm.defaultInvoiceDueDays}
+              disabled={!canManageSharedData}
               onChange={(event) => setCompanyForm((current) => ({ ...current, defaultInvoiceDueDays: parseInt(event.target.value, 10) || 0 }))}
               placeholder="14"
             />
@@ -307,6 +331,7 @@ export default function AccountPage() {
               min="0"
               step="0.1"
               value={companyForm.lateInterestPercent}
+              disabled={!canManageSharedData}
               onChange={(event) => setCompanyForm((current) => ({ ...current, lateInterestPercent: parseFloat(event.target.value) || 0 }))}
               placeholder="8"
             />
@@ -317,6 +342,7 @@ export default function AccountPage() {
               id="account-company-logo"
               type="url"
               value={companyForm.companyLogo}
+              disabled={!canManageSharedData}
               onChange={(event) => setCompanyForm((current) => ({ ...current, companyLogo: event.target.value }))}
               placeholder="https://yritys.fi/logo.png"
             />
@@ -325,6 +351,7 @@ export default function AccountPage() {
         <div className="flex justify-end">
           <Button
             variant="outline"
+            disabled={!canManageSharedData}
             onClick={() => {
               try {
                 setCompanyError(null);
@@ -335,7 +362,7 @@ export default function AccountPage() {
               }
             }}
           >
-            Tallenna yritystiedot
+            {canManageSharedData ? 'Tallenna yritystiedot' : `${accessState.roleLabel} ei voi muokata yritystietoja`}
           </Button>
         </div>
       </Card>

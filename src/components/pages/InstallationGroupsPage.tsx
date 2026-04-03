@@ -230,7 +230,7 @@ export default function InstallationGroupsPage() {
 
   const openDialog = (group?: InstallationGroup) => {
     if (!canManageSharedData) {
-      toast.error('Vain admin voi lisätä ja muokata hintaryhmiä.');
+      toast.error('Vain omistaja tai pääkäyttäjä voi lisätä ja muokata hintaryhmiä.');
       return;
     }
 
