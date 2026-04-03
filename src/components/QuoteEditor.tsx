@@ -49,7 +49,7 @@ import {
   useSettings,
   useSubstituteProducts,
 } from '../hooks/use-data';
-import { Product, Quote, QuoteChargeType, QuoteRow, QuoteRowMode } from '../lib/types';
+import { Product, Quote, QuoteChargeType, QuoteRow, QuoteRowMode, ScheduleMilestone } from '../lib/types';
 import {
   calculateQuote,
   calculateQuoteRow,
@@ -142,6 +142,14 @@ const QUOTE_ROW_FIELD_HELP = {
   realizedMarginPercent: 'Kate % toteuma näyttää prosentteina, kuinka kannattava rivi on tällä hetkellä.',
 } as const;
 
+const SCHEDULE_MILESTONE_LABELS: Record<ScheduleMilestone['type'], string> = {
+  start: 'Aloitus',
+  deadline: 'Määräaika',
+  delivery: 'Toimitus',
+  completion: 'Valmistuminen',
+  other: 'Muu',
+};
+
 function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -155,6 +163,32 @@ function getStatusVariant(status: Quote['status']): 'default' | 'secondary' | 'd
   if (status === 'rejected') return 'destructive';
   if (status === 'sent') return 'outline';
   return 'secondary';
+}
+
+function hasScheduleMilestoneContent(milestone: ScheduleMilestone) {
+  return Boolean(milestone.title.trim() || milestone.description?.trim() || milestone.targetDate);
+}
+
+function getScheduleMilestoneTitle(milestone: ScheduleMilestone) {
+  const title = milestone.title.trim();
+  return title || SCHEDULE_MILESTONE_LABELS[milestone.type];
+}
+
+function formatScheduleMilestoneDate(value?: string) {
+  if (!value) {
+    return 'Päivä avoin';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString('fi-FI', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
 }
 
 export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditorProps) {
@@ -257,6 +291,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const travelCosts = quote ? calculateTravelCosts(quote) : 0;
   const extraChargeLines = quote ? getQuoteExtraChargeLines(quote) : [];
   const activeExtraChargeLines = extraChargeLines.filter((line) => line.amount > 0);
+  const visibleScheduleMilestones = quote ? (quote.scheduleMilestones || []).filter(hasScheduleMilestoneContent) : [];
   const applyTermsTemplateSelection = (value: string) => {
     if (!quote) {
       return;
@@ -1121,6 +1156,38 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">Voimassa asti</span><span className="text-right font-medium">{quote.validUntil || '-'}</span></div>
                   <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">Rivejä</span><span className="text-right font-medium">{quoteRows.filter((row) => row.mode !== 'section').length}</span></div>
                 </div>
+                {visibleScheduleMilestones.length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <div>
+                        <div className="text-sm font-medium">Aikataulu ja määräajat</div>
+                        <p className="text-xs text-muted-foreground">Nämä tiedot näkyvät myös tarjouksen tulosteella ja asiakasversiossa.</p>
+                      </div>
+                      <div className="space-y-2">
+                        {visibleScheduleMilestones.map((milestone) => {
+                          const typeLabel = SCHEDULE_MILESTONE_LABELS[milestone.type];
+                          const hasCustomTitle = milestone.title.trim().length > 0;
+
+                          return (
+                            <div key={milestone.id} className="rounded-xl border bg-muted/20 p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="font-medium">{getScheduleMilestoneTitle(milestone)}</div>
+                                  {hasCustomTitle && <div className="text-xs text-muted-foreground">{typeLabel}</div>}
+                                  {milestone.description?.trim() && (
+                                    <div className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{milestone.description.trim()}</div>
+                                  )}
+                                </div>
+                                <div className="shrink-0 text-right text-sm font-medium">{formatScheduleMilestoneDate(milestone.targetDate)}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
                 <Separator />
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between"><span>Rivien välisumma</span><span className="font-medium">{formatCurrency(calculation.lineSubtotal)}</span></div>

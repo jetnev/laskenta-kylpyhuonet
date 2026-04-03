@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { calculateQuote, calculateQuoteRow, formatCurrency, formatNumber, getQuoteExtraChargeLines } from './calculations';
-import { Customer, InstallationGroup, Invoice, Product, Project, Quote, QuoteRow, QuoteTerms, Settings } from './types';
+import { Customer, InstallationGroup, Invoice, Product, Project, Quote, QuoteRow, QuoteTerms, ScheduleMilestone, Settings } from './types';
 import { getInvoiceStatusLabel, invoiceToQuoteLike, isInvoiceOverdue } from './invoices';
 import { renderTermTemplateHtml, renderTermTemplatePlainText, resolveTermTemplatePlaceholders } from './term-templates';
 
@@ -96,6 +96,78 @@ function getQuoteStatusLabel(status: Quote['status']) {
     default:
       return 'Luonnos';
   }
+}
+
+const SCHEDULE_MILESTONE_LABELS: Record<ScheduleMilestone['type'], string> = {
+  start: 'Aloitus',
+  deadline: 'Määräaika',
+  delivery: 'Toimitus',
+  completion: 'Valmistuminen',
+  other: 'Muu',
+};
+
+function hasScheduleMilestoneContent(milestone: ScheduleMilestone) {
+  return Boolean(milestone.title.trim() || milestone.description?.trim() || milestone.targetDate);
+}
+
+function getVisibleScheduleMilestones(quote: Quote) {
+  return (quote.scheduleMilestones || []).filter(hasScheduleMilestoneContent);
+}
+
+function getScheduleMilestoneTitle(milestone: ScheduleMilestone) {
+  const title = milestone.title.trim();
+  return title || SCHEDULE_MILESTONE_LABELS[milestone.type];
+}
+
+function renderQuoteScheduleHtml(milestones: ScheduleMilestone[]) {
+  if (milestones.length === 0) {
+    return '';
+  }
+
+  return `
+    <div class="schedule">
+      <h2>Aikataulu ja määräajat</h2>
+      <div class="schedule-list">
+        ${milestones
+          .map((milestone) => {
+            const hasCustomTitle = milestone.title.trim().length > 0;
+            const description = milestone.description?.trim();
+            const dateLabel = milestone.targetDate ? formatDate(milestone.targetDate) : 'Päivä avoin';
+
+            return `
+              <div class="schedule-item">
+                <div class="schedule-head">
+                  <div>
+                    <div class="schedule-title">${escapeHtml(getScheduleMilestoneTitle(milestone))}</div>
+                    ${hasCustomTitle ? `<div class="schedule-meta">${escapeHtml(SCHEDULE_MILESTONE_LABELS[milestone.type])}</div>` : ''}
+                  </div>
+                  <div class="schedule-date${milestone.targetDate ? '' : ' schedule-date-muted'}">${escapeHtml(dateLabel)}</div>
+                </div>
+                ${description ? `<div class="schedule-description">${escapeHtml(description)}</div>` : ''}
+              </div>
+            `;
+          })
+          .join('')}
+      </div>
+    </div>
+  `;
+}
+
+function getQuoteScheduleWorksheetRows(quote: Quote): ExcelCellValue[][] {
+  const milestones = getVisibleScheduleMilestones(quote);
+  if (milestones.length === 0) {
+    return [];
+  }
+
+  return [
+    ['Tyyppi', 'Otsikko', 'Päivämäärä', 'Kuvaus'],
+    ...milestones.map((milestone) => [
+      SCHEDULE_MILESTONE_LABELS[milestone.type],
+      getScheduleMilestoneTitle(milestone),
+      milestone.targetDate ? formatDate(milestone.targetDate) : 'Päivä avoin',
+      milestone.description?.trim() || '',
+    ]),
+  ];
 }
 
 function downloadTextFile(content: string, filename: string, mimeType: string) {
@@ -200,6 +272,7 @@ function quoteDocumentHtml(
 ) {
   const calculation = calculateQuote(quote, rows);
   const extraChargeRows = getQuoteExtraChargeLines(quote).filter((line) => line.amount > 0);
+  const scheduleMilestones = getVisibleScheduleMilestones(quote);
   const resolvedTermsContent = terms
     ? resolveTermTemplatePlaceholders(terms.contentMd, { customer, project, quote, settings })
     : undefined;
@@ -498,6 +571,61 @@ function quoteDocumentHtml(
             margin-top: 10px;
             padding-top: 12px;
           }
+          .schedule {
+            margin-top: 24px;
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 18px 20px;
+            background: linear-gradient(180deg, #ffffff 0%, var(--panel) 100%);
+          }
+          .schedule h2 {
+            margin: 0 0 14px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--muted);
+          }
+          .schedule-list {
+            display: grid;
+            gap: 12px;
+          }
+          .schedule-item {
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 14px 16px;
+            background: #fff;
+          }
+          .schedule-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: flex-start;
+          }
+          .schedule-title {
+            font-size: 15px;
+            font-weight: 700;
+          }
+          .schedule-meta {
+            margin-top: 4px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+          }
+          .schedule-date {
+            white-space: nowrap;
+            font-size: 14px;
+            font-weight: 700;
+          }
+          .schedule-date-muted {
+            color: var(--muted);
+          }
+          .schedule-description {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 14px;
+            white-space: pre-wrap;
+          }
           .terms {
             margin-top: 28px;
             border-top: 1px solid var(--line);
@@ -644,6 +772,8 @@ function quoteDocumentHtml(
             </div>
           </div>
 
+          ${renderQuoteScheduleHtml(scheduleMilestones)}
+
           ${terms && resolvedTermsContent ? `<div class="terms"><h2>Tarjousehdot</h2>${renderTermTemplateHtml(resolvedTermsContent)}</div>` : ''}
         </div>
       </body>
@@ -675,6 +805,7 @@ export function exportQuoteToCustomerExcel(
 ) {
   const calculation = calculateQuote(quote, rows);
   const extraChargeRows = getQuoteExtraChargeLines(quote).filter((line) => line.amount > 0);
+  const scheduleRows = getQuoteScheduleWorksheetRows(quote);
   const resolvedTermsContent = terms
     ? resolveTermTemplatePlaceholders(terms.contentMd, { customer, project, quote, settings })
     : undefined;
@@ -772,6 +903,10 @@ export function exportQuoteToCustomerExcel(
 
   XLSX.utils.book_append_sheet(workbook, linesSheet, sanitizeWorksheetName('Tarjousrivit'));
 
+  if (scheduleRows.length > 0) {
+    appendWorksheet(workbook, 'Aikataulu', scheduleRows, [18, 30, 18, 80]);
+  }
+
   if (terms && resolvedTermsContent) {
     appendWorksheet(
       workbook,
@@ -804,6 +939,7 @@ export function exportQuoteToInternalExcel(
 ) {
   const calculation = calculateQuote(quote, rows);
   const extraChargeRows = getQuoteExtraChargeLines(quote).filter((line) => line.amount > 0);
+  const scheduleRows = getQuoteScheduleWorksheetRows(quote);
   const resolvedTermsContent = terms
     ? resolveTermTemplatePlaceholders(terms.contentMd, { customer, project, quote, settings })
     : undefined;
@@ -898,6 +1034,10 @@ export function exportQuoteToInternalExcel(
   }
 
   XLSX.utils.book_append_sheet(workbook, sisainenSheet, sanitizeWorksheetName('Sisainen tarjous'));
+
+  if (scheduleRows.length > 0) {
+    appendWorksheet(workbook, 'Aikataulu', scheduleRows, [18, 30, 18, 80]);
+  }
 
   if (quote.notes || quote.internalNotes || terms) {
     appendWorksheet(
