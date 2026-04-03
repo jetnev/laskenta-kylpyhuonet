@@ -55,7 +55,7 @@ export default function SettingsPage() {
       <Alert>
         <Shield className="h-4 w-4" />
         <AlertDescription>
-          Muutokset vaikuttavat kaikkiin käyttäjiin. Käyttäjien omat yritystiedot hallitaan Oma tili -sivulla, ja nämä asetukset toimivat yhteisinä oletus- ja varatietoina.
+          Muutokset vaikuttavat kaikkiin käyttäjiin. Käyttäjien omat yritystiedot hallitaan Oma tili -sivulla, ja yhteiset asetukset toimivat oletusarvoina ilman että tavallisen käyttäjän dokumentteihin tuodaan adminin sähköpostia tai puhelinta fallbackina.
         </AlertDescription>
       </Alert>
 
@@ -66,7 +66,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <h2 className="text-lg font-semibold">Yhteiset oletusyritystiedot</h2>
-            <p className="text-sm text-muted-foreground">Näitä käytetään tarjousdokumenteissa vain silloin, jos käyttäjä ei ole tallentanut omia yritystietoja Oma tili -sivulla.</p>
+            <p className="text-sm text-muted-foreground">Nimi, osoite ja muut yhteiset perustiedot voivat toimia oletuksina, mutta jokaisen käyttäjän oma dokumenteissa näkyvä sähköposti kannattaa tallentaa Oma tili -sivulla.</p>
           </div>
         </div>
 

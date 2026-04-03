@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ArrowsClockwise,
   CheckCircle,
@@ -21,10 +21,11 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { useAuth } from '../../hooks/use-auth';
-import { useQuoteTerms } from '../../hooks/use-data';
+import { useDocumentSettings, useQuoteTerms } from '../../hooks/use-data';
 import { QuoteTerms, TermTemplateCustomerSegment, TermTemplateScopeType } from '../../lib/types';
 import {
   renderTermTemplateHtml,
+  resolveTermTemplatePlaceholders,
   TERM_TEMPLATE_NOTICE,
   TERM_TEMPLATE_PLACEHOLDERS,
   TERM_TEMPLATE_SCOPE_LABELS,
@@ -88,12 +89,14 @@ export default function TermsPage() {
     terms,
     updateTerms,
   } = useQuoteTerms();
+  const { documentSettings } = useDocumentSettings();
   const { canEdit } = useAuth();
   const [filter, setFilter] = useState<TemplateFilter>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<QuoteTerms | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<QuoteTerms | null>(null);
   const [formData, setFormData] = useState<TemplateFormState>(DEFAULT_FORM);
+  const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const filteredTerms = useMemo(() => {
     return terms.filter((template) => {
@@ -105,9 +108,43 @@ export default function TermsPage() {
     });
   }, [filter, terms]);
 
+  const previewContext = useMemo(() => {
+    const createdAt = new Date();
+    const validUntil = new Date(createdAt);
+    validUntil.setDate(validUntil.getDate() + 30);
+
+    return {
+      customer: {
+        name: 'Malliasiakas Oy',
+        address: 'Esimerkkikatu 10 A 3, 00100 Helsinki',
+      },
+      project: {
+        name: 'Kylpyhuoneremontti',
+        site: 'Esimerkkikatu 10 A 3, Helsinki',
+      },
+      quote: {
+        quoteNumber: 'TAR-ESIKATSELU-001',
+        createdAt: createdAt.toISOString().slice(0, 10),
+        validUntil: validUntil.toISOString().slice(0, 10),
+        schedule: 'Asennus voidaan aloittaa 2-3 viikon sisällä tilauksesta.',
+        notes: 'Tarjoukseen sisältyvät eritellyt tuotteet, asennus, suojaus ja loppusiivous.',
+        projectCosts: 245,
+      },
+      settings: documentSettings,
+    };
+  }, [documentSettings]);
+
   const previewHtml = useMemo(
-    () => renderTermTemplateHtml(formData.contentMd || ''),
-    [formData.contentMd]
+    () => renderTermTemplateHtml(resolveTermTemplatePlaceholders(formData.contentMd || '', previewContext)),
+    [formData.contentMd, previewContext]
+  );
+
+  const previewTemplateHtml = useMemo(
+    () =>
+      previewTemplate
+        ? renderTermTemplateHtml(resolveTermTemplatePlaceholders(previewTemplate.contentMd, previewContext))
+        : '',
+    [previewContext, previewTemplate]
   );
 
   const openNewTemplateDialog = () => {
@@ -203,10 +240,36 @@ export default function TermsPage() {
   };
 
   const insertPlaceholder = (token: string) => {
+    const textarea = contentTextareaRef.current;
+
+    if (!textarea) {
+      setFormData((current) => ({
+        ...current,
+        contentMd: current.contentMd.trim().length > 0 ? `${current.contentMd}\n${token}` : token,
+      }));
+      return;
+    }
+
+    const useSelection = document.activeElement === textarea;
+    const start = useSelection ? (textarea.selectionStart ?? textarea.value.length) : textarea.value.length;
+    const end = useSelection ? (textarea.selectionEnd ?? textarea.value.length) : textarea.value.length;
+    const nextContent = `${textarea.value.slice(0, start)}${token}${textarea.value.slice(end)}`;
+    const nextCursorPosition = start + token.length;
+
     setFormData((current) => ({
       ...current,
-      contentMd: current.contentMd.trim().length > 0 ? `${current.contentMd}\n${token}` : token,
+      contentMd: nextContent,
     }));
+
+    window.requestAnimationFrame(() => {
+      const nextTextarea = contentTextareaRef.current;
+      if (!nextTextarea) {
+        return;
+      }
+
+      nextTextarea.focus();
+      nextTextarea.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
   };
 
   return (
@@ -400,14 +463,18 @@ export default function TermsPage() {
             </div>
           </Card>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
             <Card className="p-4 space-y-3">
               <div>
                 <h2 className="text-sm font-semibold">Sisältö</h2>
                 <p className="text-sm text-muted-foreground">Kirjoita ehdot tähän. Käytä otsikoita ja kappaleita paremman luettavuuden vuoksi.</p>
               </div>
+              <div className="rounded-xl border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                Klikkaa oikean reunan muuttujaa, niin se lisätään suoraan tekstikursorin kohdalle. Jos valitset tekstin ensin, muuttuja korvaa valitun kohdan.
+              </div>
               <Textarea
                 id="terms-content"
+                ref={contentTextareaRef}
                 rows={20}
                 value={formData.contentMd}
                 onChange={(event) => setFormData((current) => ({ ...current, contentMd: event.target.value }))}
@@ -418,33 +485,65 @@ export default function TermsPage() {
 
             <div className="space-y-4">
               <Card className="p-4 space-y-3">
-              <div>
-                <h2 className="text-sm font-semibold">Käytettävät muuttujat</h2>
-                <p className="text-sm text-muted-foreground">Napsauta muuttujaa lisätäksesi sen tekstin loppuun.</p>
-              </div>
-              <div className="max-h-[260px] overflow-y-auto pr-1">
-                <div className="flex flex-wrap gap-2">
-                {TERM_TEMPLATE_PLACEHOLDERS.map((item) => (
-                  <Button key={item.token} type="button" variant="outline" size="sm" onClick={() => insertPlaceholder(item.token)}>
-                    {item.token}
-                  </Button>
-                ))}
+                <div>
+                  <h2 className="text-sm font-semibold">Käytettävät muuttujat</h2>
+                  <p className="text-sm text-muted-foreground">Lisää muuttuja juuri siihen kohtaan, jossa haluat sen näkyvän valmiissa dokumentissa.</p>
                 </div>
-              </div>
-            </Card>
+                <div className="max-h-[360px] overflow-y-auto pr-1">
+                  <div className="grid gap-2">
+                    {TERM_TEMPLATE_PLACEHOLDERS.map((item) => (
+                      <Button
+                        key={item.token}
+                        type="button"
+                        variant="outline"
+                        className="h-auto items-start justify-start gap-1 px-3 py-3 text-left whitespace-normal"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => insertPlaceholder(item.token)}
+                      >
+                        <span className="font-mono text-[11px] leading-4">{item.token}</span>
+                        <span className="text-xs text-muted-foreground">{item.label}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </Card>
 
-            <Card className="p-4 space-y-3 xl:sticky xl:top-2">
-              <div>
-                <h2 className="text-sm font-semibold">Esikatselu</h2>
-                <p className="text-sm text-muted-foreground">Teksti renderöidään dokumenteissa tästä sisällöstä.</p>
-              </div>
-              <div
-                className="prose prose-sm prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-foreground prose-p:text-foreground/90 prose-p:leading-7 prose-li:leading-7 prose-li:text-foreground/90 max-w-none rounded-2xl border bg-card p-5 shadow-sm"
-                dangerouslySetInnerHTML={{ __html: previewHtml || '<p>Ei sisältöä.</p>' }}
-              />
-            </Card>
+              <Card className="p-4 space-y-3">
+                <div>
+                  <h2 className="text-sm font-semibold">Kirjoitusvinkit</h2>
+                  <p className="text-sm text-muted-foreground">Näillä ohjeilla esikatselu ja lopullinen dokumentti pysyvät selkeinä.</p>
+                </div>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p>#-otsikot toimivat hyvin pääosioissa, kuten Reklamaatiot, Maksuehto tai Työn rajaukset.</p>
+                  <p>Kirjoita jokainen asiakokonaisuus omalle kappaleelleen, niin dokumentti ei muutu yhdeksi tekstimassaksi.</p>
+                  <p>Käytä muuttujia vain niissä kohdissa, joissa tiedon pitää vaihtua tarjouksen tai asiakkaan mukaan.</p>
+                </div>
+              </Card>
             </div>
           </div>
+
+          <Card className="overflow-hidden">
+            <div className="flex flex-col gap-3 border-b bg-muted/20 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold">Esimerkkiesikatselu</h2>
+                <p className="text-sm text-muted-foreground">Muuttujat täytetään esimerkkiasiakkaan tiedoilla ja omilla dokumenttiasetuksillasi, jotta näet miltä valmis ehto näyttää.</p>
+              </div>
+              <Badge variant="outline" className="self-start sm:self-auto">Asiakasnäkymä</Badge>
+            </div>
+            <div className="bg-muted/15 p-4 sm:p-6">
+              <div className="mx-auto max-w-4xl rounded-[28px] border bg-background p-6 shadow-sm sm:p-8">
+                <div className="mb-5 flex flex-wrap gap-2">
+                  <Badge variant="secondary">Esimerkkiasiakas</Badge>
+                  <Badge variant="outline">{documentSettings.companyName || 'Yritystiedot puuttuvat'}</Badge>
+                  {documentSettings.companyEmail && <Badge variant="outline">{documentSettings.companyEmail}</Badge>}
+                </div>
+                <div
+                  className="prose prose-base prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-foreground prose-h1:mb-4 prose-h1:text-2xl prose-h2:mt-8 prose-h2:text-xl prose-h3:mt-6 prose-h3:text-lg prose-p:leading-7 prose-p:text-foreground/90 prose-li:leading-7 prose-li:text-foreground/90 max-w-none"
+                  dangerouslySetInnerHTML={{ __html: previewHtml || '<p>Ei sisältöä.</p>' }}
+                />
+              </div>
+            </div>
+          </Card>
         </div>
       </ResponsiveDialog>
 
@@ -456,7 +555,7 @@ export default function TermsPage() {
           }
         }}
         title={previewTemplate?.name || 'Esikatselu'}
-        maxWidth="2xl"
+        maxWidth="full"
         footer={(
           <Button variant="outline" onClick={() => setPreviewTemplate(null)}>
             Sulje
@@ -473,10 +572,20 @@ export default function TermsPage() {
               <Badge variant="outline">{TERM_TEMPLATE_SCOPE_LABELS[previewTemplate.scopeType]}</Badge>
             </div>
             <p className="text-sm text-muted-foreground">{previewTemplate.description || 'Ei erillistä kuvausta.'}</p>
-            <div
-              className="prose prose-sm prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-foreground prose-p:text-foreground/90 prose-p:leading-7 prose-li:leading-7 prose-li:text-foreground/90 max-w-none rounded-2xl border bg-card p-5 shadow-sm"
-              dangerouslySetInnerHTML={{ __html: renderTermTemplateHtml(previewTemplate.contentMd) }}
-            />
+            <Card className="overflow-hidden">
+              <div className="border-b bg-muted/20 px-5 py-4">
+                <div className="text-sm font-semibold">Dokumenttiesikatselu</div>
+                <p className="mt-1 text-sm text-muted-foreground">Muuttujat näytetään esimerkkitiedoilla täytettyinä, jotta rakenne on helppo arvioida.</p>
+              </div>
+              <div className="bg-muted/15 p-4 sm:p-6">
+                <div className="mx-auto max-w-4xl rounded-[28px] border bg-background p-6 shadow-sm sm:p-8">
+                  <div
+                    className="prose prose-base prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-foreground prose-h1:mb-4 prose-h1:text-2xl prose-h2:mt-8 prose-h2:text-xl prose-h3:mt-6 prose-h3:text-lg prose-p:leading-7 prose-p:text-foreground/90 prose-li:leading-7 prose-li:text-foreground/90 max-w-none"
+                    dangerouslySetInnerHTML={{ __html: previewTemplateHtml || '<p>Ei sisältöä.</p>' }}
+                  />
+                </div>
+              </div>
+            </Card>
           </div>
         )}
       </ResponsiveDialog>

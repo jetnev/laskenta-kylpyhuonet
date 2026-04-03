@@ -774,10 +774,10 @@ export function renderTermTemplatePlainText(contentMd: string) {
 }
 
 export interface TermTemplateRenderContext {
-  customer?: Customer;
-  project?: Project;
-  quote?: Quote;
-  settings?: Settings;
+  customer?: Pick<Customer, 'name' | 'address'>;
+  project?: Pick<Project, 'name' | 'site'>;
+  quote?: Pick<Quote, 'quoteNumber' | 'createdAt' | 'validUntil' | 'schedule' | 'notes' | 'projectCosts'>;
+  settings?: Pick<Settings, 'companyName' | 'companyEmail' | 'companyPhone'>;
 }
 
 function formatDate(value?: string) {

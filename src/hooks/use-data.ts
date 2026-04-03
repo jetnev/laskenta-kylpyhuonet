@@ -307,7 +307,7 @@ function createStarterWorkspaceTemplate(userId: string, settings: Settings): Sta
   };
 }
 
-function normalizeCompanyProfile(profile?: Partial<CompanyProfile>): CompanyProfile {
+export function normalizeCompanyProfile(profile?: Partial<CompanyProfile>): CompanyProfile {
   return {
     companyName: profile?.companyName?.trim() || '',
     companyAddress: profile?.companyAddress?.trim() || '',
@@ -326,14 +326,27 @@ function normalizeCompanyProfile(profile?: Partial<CompanyProfile>): CompanyProf
   };
 }
 
-function mergeDocumentSettings(settings: Settings, companyProfile?: CompanyProfile): Settings {
+export function mergeDocumentSettings(
+  settings: Settings,
+  companyProfile?: CompanyProfile,
+  options: {
+    fallbackEmail?: string;
+    allowSharedContactFallback?: boolean;
+  } = {}
+): Settings {
   const profile = normalizeCompanyProfile(companyProfile);
+  const fallbackEmail = options.fallbackEmail?.trim() || '';
+  const allowSharedContactFallback = Boolean(options.allowSharedContactFallback);
+
   return {
     ...settings,
     companyName: profile.companyName || settings.companyName,
     companyAddress: profile.companyAddress || settings.companyAddress,
-    companyPhone: profile.companyPhone || settings.companyPhone,
-    companyEmail: profile.companyEmail || settings.companyEmail,
+    companyPhone: profile.companyPhone || (allowSharedContactFallback ? settings.companyPhone : ''),
+    companyEmail:
+      profile.companyEmail ||
+      (allowSharedContactFallback ? settings.companyEmail : '') ||
+      fallbackEmail,
     companyLogo: profile.companyLogo || settings.companyLogo,
   };
 }
@@ -1278,11 +1291,16 @@ export function useCompanyProfile() {
 }
 
 export function useDocumentSettings() {
+  const { user, canManageSharedData } = useAuth();
   const { settings } = useSettings();
   const { companyProfile } = useCompanyProfile();
   const documentSettings = useMemo(
-    () => mergeDocumentSettings(settings, companyProfile),
-    [companyProfile, settings]
+    () =>
+      mergeDocumentSettings(settings, companyProfile, {
+        fallbackEmail: user?.email,
+        allowSharedContactFallback: canManageSharedData,
+      }),
+    [canManageSharedData, companyProfile, settings, user?.email]
   );
 
   return { sharedSettings: settings, documentSettings, companyProfile };
