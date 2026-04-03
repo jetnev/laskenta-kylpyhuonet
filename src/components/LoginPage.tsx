@@ -163,7 +163,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
     switch (view) {
       case 'register':
         return {
-          title: 'Käyttäjätilin luonti',
+          title: 'Luo käyttäjätili',
           description: 'Luo uusi käyttäjätili organisaation käyttöön.',
           actionLabel: 'Luo käyttäjätili',
           icon: UserPlus,
@@ -185,7 +185,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
       default:
         return {
           title: 'Kirjaudu sisään',
-          description: 'Kirjaudu sisään hallitaksesi tarjouksia, tuotteita ja projekteja yhdessä järjestelmässä.',
+          description: 'Kirjaudu sisään jatkaaksesi tarjousten, tuotteiden ja projektien hallintaa samassa työtilassa.',
           actionLabel: 'Kirjaudu sisään',
           icon: SignIn,
         };
@@ -228,17 +228,17 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
         <section className="max-w-xl pt-2">
           <div className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Tarjouslaskenta</div>
           <h1 className="mt-5 text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">
-            Tervetuloa takaisin
+            Kirjaudu tarjouslaskennan työtilaan
           </h1>
           <p className="mt-5 text-lg leading-8 text-slate-600">
-            Kirjaudu sisään hallitaksesi tarjouksia, tuotteita ja projekteja yhdessä järjestelmässä.
+            Hallinnoi tarjouksia, tuotteita ja projekteja samassa järjestelmässä ilman hajanaisia tiedostoja ja erillisiä näkymiä.
           </p>
 
           <div className="mt-10 space-y-4">
             {[
-              'Yrityskäyttöön suunniteltu',
-              'Selkeä käyttöoikeusmalli',
-              'Keskitetty tarjous- ja tuotetieto',
+              'Tarjous-, tuote- ja projektitiedot samassa työtilassa',
+              'Käyttöoikeudet hallitusti organisaation tarpeisiin',
+              'Selkeä näkymä päivittäiseen käyttöön',
             ].map((item) => (
               <div key={item} className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white/82 px-4 py-4 shadow-[0_18px_45px_-34px_rgba(15,23,42,0.3)]">
                 <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" weight="fill" />
@@ -307,7 +307,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
                       Unohtuiko salasana?
                     </button>
                     <button className="text-slate-500 transition hover:text-slate-950" onClick={() => { setError(null); setView('register'); }} type="button">
-                      Tarvitsetko käyttöoikeuden?
+                      Luo uusi käyttäjätili
                     </button>
                   </div>
                 </form>
