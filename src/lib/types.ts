@@ -2,6 +2,8 @@ export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected';
 export type QuoteDiscountType = 'none' | 'percent' | 'amount';
 export type QuotePricingMode = 'margin' | 'manual';
 export type QuoteRowMode = 'product' | 'installation' | 'product_installation' | 'section' | 'charge';
+export type TermTemplateCustomerSegment = 'consumer' | 'business';
+export type TermTemplateScopeType = 'product_only' | 'product_install' | 'installation_contract' | 'project';
 export type QuoteChargeType =
   | 'project'
   | 'delivery'
@@ -168,6 +170,8 @@ export interface Quote extends OwnedFields {
   schedule?: string;
   scheduleMilestones?: ScheduleMilestone[];
   termsId?: string;
+  termsSnapshotName?: string;
+  termsSnapshotContentMd?: string;
   discountType: QuoteDiscountType;
   discountValue: number;
   projectCosts: number;
@@ -211,8 +215,18 @@ export interface QuoteRow extends OwnedFields {
 export interface QuoteTerms extends AuditFields {
   id: string;
   name: string;
-  content: string;
+  slug: string;
+  description: string;
+  customerSegment: TermTemplateCustomerSegment;
+  scopeType: TermTemplateScopeType;
+  contentMd: string;
+  isSystem: boolean;
+  baseTemplateId?: string;
+  version: number;
+  isActive: boolean;
+  sortOrder: number;
   isDefault: boolean;
+  ownerUserId?: string;
 }
 
 export interface CompanyProfile {

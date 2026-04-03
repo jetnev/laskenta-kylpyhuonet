@@ -16,7 +16,6 @@ const REMOTE_WRITE_DEBOUNCE_MS = 600;
 
 const SHARED_KEYS = new Set<string>([
   'installation-groups',
-  'quote-terms',
   'settings',
   'catalog-products',
   'catalog-product-sources',

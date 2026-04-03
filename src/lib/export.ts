@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { calculateQuote, calculateQuoteRow, formatCurrency, formatNumber, getQuoteExtraChargeLines } from './calculations';
 import { Customer, InstallationGroup, Product, Project, Quote, QuoteRow, QuoteTerms, Settings } from './types';
+import { renderTermTemplateHtml, renderTermTemplatePlainText, resolveTermTemplatePlaceholders } from './term-templates';
 
 type ExcelCellValue = string | number;
 
@@ -198,6 +199,9 @@ function quoteDocumentHtml(
 ) {
   const calculation = calculateQuote(quote, rows);
   const extraChargeRows = getQuoteExtraChargeLines(quote).filter((line) => line.amount > 0);
+  const resolvedTermsContent = terms
+    ? resolveTermTemplatePlaceholders(terms.contentMd, { customer, project, quote, settings })
+    : undefined;
   const companyName = settings?.companyName || 'Yritys Oy';
   const companyLogo = settings?.companyLogo?.trim();
   const customerAddress = [customer.address, customer.phone, customer.email]
@@ -512,6 +516,24 @@ function quoteDocumentHtml(
             margin: 0;
             font-size: 14px;
           }
+          .terms h1,
+          .terms h3,
+          .terms h4,
+          .terms h5,
+          .terms h6 {
+            margin: 18px 0 8px;
+            font-size: 16px;
+            color: var(--ink);
+          }
+          .terms p,
+          .terms ul {
+            margin: 0 0 12px;
+            color: var(--muted);
+            font-size: 14px;
+          }
+          .terms ul {
+            padding-left: 20px;
+          }
           @media print {
             body { background: #fff; }
             .page { padding: 24px; }
@@ -621,7 +643,7 @@ function quoteDocumentHtml(
             </div>
           </div>
 
-          ${terms ? `<div class="terms"><h2>Tarjousehdot</h2><pre>${escapeHtml(terms.content)}</pre></div>` : ''}
+          ${terms && resolvedTermsContent ? `<div class="terms"><h2>Tarjousehdot</h2>${renderTermTemplateHtml(resolvedTermsContent)}</div>` : ''}
         </div>
       </body>
     </html>
@@ -652,6 +674,9 @@ export function exportQuoteToCustomerExcel(
 ) {
   const calculation = calculateQuote(quote, rows);
   const extraChargeRows = getQuoteExtraChargeLines(quote).filter((line) => line.amount > 0);
+  const resolvedTermsContent = terms
+    ? resolveTermTemplatePlaceholders(terms.contentMd, { customer, project, quote, settings })
+    : undefined;
   const workbook = XLSX.utils.book_new();
 
   const companyName = settings?.companyName || 'Yritys Oy';
@@ -746,7 +771,7 @@ export function exportQuoteToCustomerExcel(
 
   XLSX.utils.book_append_sheet(workbook, linesSheet, sanitizeWorksheetName('Tarjousrivit'));
 
-  if (terms) {
+  if (terms && resolvedTermsContent) {
     appendWorksheet(
       workbook,
       'Ehdot',
@@ -754,7 +779,7 @@ export function exportQuoteToCustomerExcel(
         ['Ehtopohja', terms.name],
         [],
         ['Sisältö'],
-        [terms.content],
+        [renderTermTemplatePlainText(resolvedTermsContent)],
       ],
       [18, 110]
     );
@@ -778,6 +803,9 @@ export function exportQuoteToInternalExcel(
 ) {
   const calculation = calculateQuote(quote, rows);
   const extraChargeRows = getQuoteExtraChargeLines(quote).filter((line) => line.amount > 0);
+  const resolvedTermsContent = terms
+    ? resolveTermTemplatePlaceholders(terms.contentMd, { customer, project, quote, settings })
+    : undefined;
   const workbook = XLSX.utils.book_new();
 
   const companyName = settings?.companyName || 'Yritys Oy';
@@ -878,7 +906,7 @@ export function exportQuoteToInternalExcel(
         ['Tarjoushuomautukset', quote.notes || ''],
         [],
         ['Sisäiset muistiinpanot', quote.internalNotes || ''],
-        ...(terms ? [[], ['Ehtopohja', terms.name], ['Ehdot', terms.content]] : []),
+        ...(terms && resolvedTermsContent ? [[], ['Ehtopohja', terms.name], ['Ehdot', renderTermTemplatePlainText(resolvedTermsContent)]] : []),
       ],
       [22, 110]
     );

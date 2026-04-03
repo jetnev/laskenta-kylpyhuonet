@@ -8,6 +8,7 @@
         "dev": "vite",
         "kill": "fuser -k 5000/tcp",
         "build": "tsc -b --noCheck && vite build",
+        "test": "vitest run",
         "desktop:start": "npm run build && electron .",
         "desktop:pack": "npm run build && electron-builder --win nsis portable",
         "desktop:publish": "npm run desktop:pack",
@@ -96,6 +97,7 @@
         "typescript": "~5.7.2",
         "typescript-eslint": "^8.38.0",
         "vite": "^7.2.6"
+        ,"vitest": "^3.2.4"
     },
     "workspaces": {
         "packages": [

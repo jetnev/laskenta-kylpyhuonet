@@ -15,6 +15,18 @@ import {
   QuoteStatus,
 } from '../lib/types';
 import { useAuth } from './use-auth';
+import {
+  cloneTermTemplateFromMaster,
+  createTermTemplate,
+  createQuoteTermsSnapshot,
+  duplicateTermTemplate,
+  getDefaultTermTemplate,
+  hydrateStoredTermTemplates,
+  listTermTemplates,
+  restoreTermTemplateFromMaster,
+  setTermTemplateArchived,
+  updateTermTemplate,
+} from '../lib/term-templates';
 
 type OwnedAuditKeys = 'id' | keyof ReturnType<typeof buildOwnedAudit>;
 type QuoteCreateInput = Pick<Quote, 'projectId'> & Partial<Omit<Quote, OwnedAuditKeys | 'projectId'>>;
@@ -987,60 +999,102 @@ export function useQuoteRows() {
 }
 
 export function useQuoteTerms() {
-  const [terms = [], setTerms] = useKV<QuoteTerms[]>('quote-terms', []);
-  const { user, canManageSharedData } = useAuth();
+  const [storedTemplates = [], setStoredTemplates] = useKV<QuoteTerms[]>('term-templates', []);
+  const { user, canEdit, canDelete } = useAuth();
+  const userId = user?.id;
 
-  const addTerms = (termsData: Omit<QuoteTerms, 'id' | keyof ReturnType<typeof buildAudit>>) => {
-    if (!canManageSharedData) {
-      throw new Error('Vain admin voi lisätä ehtopohjia.');
+  const ownTemplates = useMemo(
+    () => hydrateStoredTermTemplates(storedTemplates, userId),
+    [storedTemplates, userId]
+  );
+
+  const terms = useMemo(
+    () => listTermTemplates(storedTemplates, userId),
+    [storedTemplates, userId]
+  );
+
+  const activeTerms = useMemo(
+    () => terms.filter((template) => template.isActive),
+    [terms]
+  );
+
+  const addTerms = (input: Parameters<typeof createTermTemplate>[1]) => {
+    const currentUserId = ensureSignedIn(userId);
+    if (!canEdit) {
+      throw new Error('Sinulla ei ole oikeuksia lisätä ehtopohjia.');
     }
-    const newTerms: QuoteTerms = {
-      ...termsData,
-      id: crypto.randomUUID(),
-      ...buildAudit(user?.id),
-    };
-
-    if (newTerms.isDefault) {
-      setTerms((current = []) => current.map((term) => ({ ...term, isDefault: false })));
-    }
-
-    setTerms((current = []) => [...current, newTerms]);
-    return newTerms;
+    const result = createTermTemplate(storedTemplates, input, currentUserId);
+    setStoredTemplates(result.templates);
+    return result.template;
   };
 
-  const updateTerms = (id: string, updates: Partial<QuoteTerms>) => {
-    if (!canManageSharedData) {
-      throw new Error('Vain admin voi muokata ehtopohjia.');
+  const updateTerms = (id: string, updates: Parameters<typeof updateTermTemplate>[2]) => {
+    const currentUserId = ensureSignedIn(userId);
+    if (!canEdit) {
+      throw new Error('Sinulla ei ole oikeuksia muokata ehtopohjia.');
     }
-
-    if (updates.isDefault) {
-      setTerms((current = []) =>
-        current.map((term) => ({
-          ...term,
-          isDefault: term.id === id,
-          ...(term.id === id ? { ...updates, updatedAt: nowIso(), updatedByUserId: user?.id } : {}),
-        }))
-      );
-      return;
-    }
-
-    setTerms((current = []) =>
-      current.map((term) =>
-        term.id === id ? { ...term, ...updates, updatedAt: nowIso(), updatedByUserId: user?.id } : term
-      )
-    );
+    const result = updateTermTemplate(storedTemplates, id, updates, currentUserId);
+    setStoredTemplates(result.templates);
+    return result.template;
   };
 
-  const deleteTerms = (id: string) => {
-    if (!canManageSharedData) {
-      throw new Error('Vain admin voi poistaa ehtopohjia.');
+  const cloneTermsFromMaster = (masterId: string) => {
+    const currentUserId = ensureSignedIn(userId);
+    if (!canEdit) {
+      throw new Error('Sinulla ei ole oikeuksia luoda ehtopohjia.');
     }
-    setTerms((current = []) => current.filter((term) => term.id !== id));
+    const result = cloneTermTemplateFromMaster(storedTemplates, masterId, currentUserId);
+    setStoredTemplates(result.templates);
+    return result.template;
   };
 
-  const getDefaultTerms = () => terms.find((term) => term.isDefault);
+  const duplicateTerms = (templateId: string) => {
+    const currentUserId = ensureSignedIn(userId);
+    if (!canEdit) {
+      throw new Error('Sinulla ei ole oikeuksia monistaa ehtopohjia.');
+    }
+    const result = duplicateTermTemplate(storedTemplates, templateId, currentUserId);
+    setStoredTemplates(result.templates);
+    return result.template;
+  };
 
-  return { terms, addTerms, updateTerms, deleteTerms, getDefaultTerms };
+  const restoreTermsFromMaster = (templateId: string) => {
+    const currentUserId = ensureSignedIn(userId);
+    if (!canEdit) {
+      throw new Error('Sinulla ei ole oikeuksia palauttaa ehtopohjia.');
+    }
+    const result = restoreTermTemplateFromMaster(storedTemplates, templateId, currentUserId);
+    setStoredTemplates(result.templates);
+    return result.template;
+  };
+
+  const archiveTerms = (templateId: string, archived = true) => {
+    const currentUserId = ensureSignedIn(userId);
+    if (!canDelete) {
+      throw new Error('Sinulla ei ole oikeuksia arkistoida ehtopohjia.');
+    }
+    const result = setTermTemplateArchived(storedTemplates, templateId, archived, currentUserId);
+    setStoredTemplates(result.templates);
+    return result.template;
+  };
+
+  const getDefaultTerms = () => getDefaultTermTemplate(activeTerms);
+  const getTermById = (id: string) => terms.find((template) => template.id === id);
+
+  return {
+    terms,
+    activeTerms,
+    ownTemplates,
+    addTerms,
+    updateTerms,
+    cloneTermsFromMaster,
+    duplicateTerms,
+    restoreTermsFromMaster,
+    archiveTerms,
+    getDefaultTerms,
+    getTermById,
+    createQuoteTermsSnapshot,
+  };
 }
 
 export function useCompanyProfile() {

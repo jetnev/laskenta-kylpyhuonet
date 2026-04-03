@@ -61,6 +61,7 @@ import {
   exportQuoteToInternalExcel,
   exportQuoteToPDF,
 } from '../lib/export';
+import { resolveQuoteTermsSnapshotTemplate, resolveTermTemplatePlaceholders } from '../lib/term-templates';
 
 interface QuoteEditorProps {
   projectId: string;
@@ -161,7 +162,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const { addQuote, getQuote, getQuotesForProject, hasNewerRevision, updateQuote, updateQuoteStatus } = useQuotes();
   const { getProject } = useProjects();
   const { getCustomer } = useCustomers();
-  const { getDefaultTerms, terms } = useQuoteTerms();
+  const { activeTerms, createQuoteTermsSnapshot, getDefaultTerms, getTermById } = useQuoteTerms();
   const { sharedSettings, documentSettings } = useDocumentSettings();
   const project = getProject(projectId);
   const customer = project ? getCustomer(project.customerId) : undefined;
@@ -198,12 +199,13 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     if (!project || activeQuoteId || initializedDraftRef.current) return;
     try {
       const defaultTerms = getDefaultTerms();
+      const termsSnapshot = createQuoteTermsSnapshot(defaultTerms);
       const newQuote = addQuote({
         projectId,
         title: `${project.name} tarjous`,
         quoteNumber: '',
         revisionNumber: 1,
-        termsId: defaultTerms?.id,
+        ...termsSnapshot,
         pricingMode: 'margin',
         selectedMarginPercent: sharedSettings.defaultMarginPercent,
         vatPercent: sharedSettings.defaultVatPercent,
@@ -238,6 +240,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     }
     return getQuote(activeQuoteId) ?? (bootstrapQuote?.id === activeQuoteId ? bootstrapQuote : null);
   }, [activeQuoteId, bootstrapQuote, getQuote]);
+  const selectedTermsTemplate = quote?.termsId ? getTermById(quote.termsId) ?? null : null;
   const quoteRows = useMemo(() => (quote ? getRowsForQuote(quote.id) : []), [getRowsForQuote, quote]);
   useEffect(() => {
     setSelectedRowIds((current) => {
@@ -246,7 +249,14 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       return next.length === current.length ? current : next;
     });
   }, [quoteRows]);
-  const quoteTerms = terms.find((term) => term.id === quote?.termsId);
+  const quoteTerms = useMemo(
+    () => (quote ? resolveQuoteTermsSnapshotTemplate(quote, selectedTermsTemplate) : null),
+    [quote, selectedTermsTemplate]
+  );
+  const resolvedQuoteTermsContent = useMemo(
+    () => (quote && quoteTerms ? resolveTermTemplatePlaceholders(quoteTerms.contentMd, { customer, project, quote, settings: documentSettings }) : ''),
+    [customer, documentSettings, project, quote, quoteTerms]
+  );
   const projectQuotes = useMemo(() => getQuotesForProject(projectId), [getQuotesForProject, projectId]);
   const quoteHasNewerRevision = quote ? hasNewerRevision(quote) : false;
   const isEditable = Boolean(quote && quote.status === 'draft' && !quoteHasNewerRevision);
@@ -254,6 +264,25 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const travelCosts = quote ? calculateTravelCosts(quote) : 0;
   const extraChargeLines = quote ? getQuoteExtraChargeLines(quote) : [];
   const activeExtraChargeLines = extraChargeLines.filter((line) => line.amount > 0);
+  const applyTermsTemplateSelection = (value: string) => {
+    if (!quote) {
+      return;
+    }
+
+    if (value === 'none') {
+      updateQuote(quote.id, createQuoteTermsSnapshot(undefined));
+      return;
+    }
+
+    const template = getTermById(value);
+    if (!template) {
+      toast.error('Ehtopohjaa ei löytynyt.');
+      return;
+    }
+
+    updateQuote(quote.id, createQuoteTermsSnapshot(template));
+  };
+
   const validation = useMemo(
     () => (quote ? canSendQuote(quote, quoteRows, customer, project, quoteHasNewerRevision) : null),
     [customer, project, quote, quoteHasNewerRevision, quoteRows]
@@ -669,16 +698,38 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                 </div>
                 <div className="space-y-2">
                   <FieldHelpLabel htmlFor="terms" label="Ehtopohja" help={QUOTE_FIELD_HELP.termsId} />
-                  <Select value={quote.termsId || 'none'} onValueChange={(value) => updateQuote(quote.id, { termsId: value === 'none' ? undefined : value })} disabled={!isEditable}>
+                  <Select value={quote.termsId || 'none'} onValueChange={applyTermsTemplateSelection} disabled={!isEditable}>
                     <SelectTrigger id="terms"><SelectValue placeholder="Valitse ehtopohja" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Ei ehtopohjaa</SelectItem>
-                      {terms.map((term) => (
+                      {activeTerms.map((term) => (
                         <SelectItem key={term.id} value={term.id}>{term.name}{term.isDefault ? ' (oletus)' : ''}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <FieldHelpLabel
+                  htmlFor="terms-snapshot"
+                  label="Tarjouksen ehtoteksti"
+                  help="Valittu ehtopohja kopioidaan tarjoukselle snapshot-muotoon. Voit muokata tätä tekstiä vapaasti ilman, että alkuperäinen ehtopohja muuttuu."
+                />
+                <Textarea
+                  id="terms-snapshot"
+                  rows={10}
+                  value={quote.termsSnapshotContentMd || ''}
+                  onChange={(event) => updateQuote(quote.id, {
+                    termsSnapshotName: quote.termsSnapshotName || quoteTerms?.name || 'Tarjousehdot',
+                    termsSnapshotContentMd: event.target.value,
+                  })}
+                  placeholder="Valitse ehtopohja tai kirjoita tarjouksen oma ehtoteksti tähän."
+                  disabled={!isEditable}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Myöhemmin tehtävät ehtopohjan muutokset eivät muuta tähän tarjoukseen tallennettua ehtotekstiä.
+                </p>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -1053,7 +1104,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                 {quoteTerms && (
                   <div className="rounded-xl border bg-muted/20 p-4">
                     <div className="text-sm font-medium">Ehtopohja</div>
-                    <div className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{quoteTerms.content}</div>
+                    <div className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{resolvedQuoteTermsContent}</div>
                   </div>
                 )}
               </Card>

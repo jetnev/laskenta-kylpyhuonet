@@ -33,7 +33,7 @@ export default function ProjectsPage() {
   const { customers, addCustomer, updateCustomer, deleteCustomer, getCustomer } = useCustomers();
   const { addQuote, getQuotesForProject, deleteQuote } = useQuotes();
   const { rows, deleteRow } = useQuoteRows();
-  const { getDefaultTerms } = useQuoteTerms();
+  const { createQuoteTermsSnapshot, getDefaultTerms } = useQuoteTerms();
   const { settings } = useSettings();
   
   const [showProjectDialog, setShowProjectDialog] = useState(false);
@@ -217,12 +217,13 @@ export default function ProjectsPage() {
     }
 
     const defaultTerms = getDefaultTerms();
+    const termsSnapshot = createQuoteTermsSnapshot(defaultTerms);
     const newQuote = addQuote({
       projectId,
       title: `${project.name} tarjous`,
       quoteNumber: '',
       revisionNumber: 1,
-      termsId: defaultTerms?.id,
+      ...termsSnapshot,
       pricingMode: 'margin',
       selectedMarginPercent: settings.defaultMarginPercent,
       vatPercent: settings.defaultVatPercent,
