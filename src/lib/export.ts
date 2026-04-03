@@ -206,7 +206,7 @@ function quoteDocumentHtml(
     .join('<br />');
   const projectMeta = [
     ['Tarjousnumero', quote.quoteNumber],
-    ['Status', getQuoteStatusLabel(quote.status)],
+    ...(internal ? [['Status', getQuoteStatusLabel(quote.status)]] : []),
     ['Voimassa asti', quote.validUntil ? formatDate(quote.validUntil) : '-'],
     ['Luotu', formatDate(quote.createdAt)],
     ...(quote.sentAt ? [['Lähetetty', formatDate(quote.sentAt)]] : []),
@@ -656,38 +656,71 @@ export function exportQuoteToCustomerExcel(
 
   const companyName = settings?.companyName || 'Yritys Oy';
   const summaryRows: Array<[string, number]> = [
-    ['Rivien valisumma', roundExcelNumber(calculation.lineSubtotal)],
-    ['Lisakulut yhteensa', roundExcelNumber(calculation.extraChargesTotal)],
+    ['Rivien välisumma', roundExcelNumber(calculation.lineSubtotal)],
+    ['Lisäkulut yhteensä', roundExcelNumber(calculation.extraChargesTotal)],
     ...extraChargeRows.map((line) => [line.label, roundExcelNumber(line.amount)] as [string, number]),
     ['Alennus', roundExcelNumber(-calculation.discountAmount)],
-    ['Valisumma', roundExcelNumber(calculation.subtotal)],
+    ['Välisumma (alv 0 %)', roundExcelNumber(calculation.subtotal)],
     [`ALV ${formatNumber(quote.vatPercent, 1)} %`, roundExcelNumber(calculation.vat)],
     ['Loppusumma', roundExcelNumber(calculation.total)],
   ];
 
-  const tarjousRows: ExcelCellValue[][] = [
-    [`Tarjous - ${quote.quoteNumber}`, '', '', '', '', '', ''],
-    [companyName, '', '', '', '', '', ''],
-    ['', '', '', '', '', '', ''],
-    ['Perustiedot', '', '', '', '', '', ''],
-    ['Tarjousnumero', quote.quoteNumber, '', 'Pvm', formatDate(quote.createdAt), '', ''],
-    ['Asiakas', customer.name, '', 'Status', getQuoteStatusLabel(quote.status), '', ''],
-    ['Projekti', project.name, '', 'Voimassa asti', quote.validUntil ? formatDate(quote.validUntil) : '-', '', ''],
-    ['Tyokohde', project.site, '', '', '', '', ''],
-    ['', '', '', '', '', '', ''],
-    ['Tarjousrivit', '', '', '', '', '', ''],
-    ['Koodi', 'Rivi', 'Kuvaus', 'Maara', 'Yksikko', 'Yksikkohinta', 'Yhteensa'],
+  const overviewRows: ExcelCellValue[][] = [
+    ['TARJOUSYHTEENVETO', '', '', ''],
+    [companyName, '', '', ''],
+    ['', '', '', ''],
+    ['Tarjousnumero', quote.quoteNumber, 'Päiväys', formatDate(quote.createdAt)],
+    ['Asiakas', customer.name, 'Voimassa asti', quote.validUntil ? formatDate(quote.validUntil) : '-'],
+    ['Projekti', project.name, 'Työkohde', project.site],
+    ['', '', '', ''],
+    ['YHTEENVETO', '', '', ''],
+    ['Erä', '', '', 'Arvo (EUR)'],
+    ...summaryRows.map(([label, value]) => [label, '', '', value]),
+    ['', '', '', ''],
+    ['Huomio', '', '', ''],
+    [
+      quote.notes
+        ? quote.notes
+        : 'Tarjouksen tarkemmat rivit löytyvät välilehdeltä "Tarjousrivit". Hinnat sisältävät valitut tuotteet, mahdolliset lisäkulut, alennuksen sekä arvonlisäveron.',
+      '',
+      '',
+      '',
+    ],
+  ];
+
+  const overviewSheet = XLSX.utils.aoa_to_sheet(overviewRows);
+  overviewSheet['!cols'] = [28, 26, 18, 24].map((width) => ({ wch: width }));
+  overviewSheet['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
+    { s: { r: 7, c: 0 }, e: { r: 7, c: 3 } },
+    { s: { r: 8, c: 0 }, e: { r: 8, c: 2 } },
+    { s: { r: 11, c: 0 }, e: { r: 11, c: 3 } },
+    { s: { r: 12, c: 0 }, e: { r: 12, c: 3 } },
+  ];
+
+  const summaryStartRow = 9;
+  const summaryEndRow = summaryStartRow + summaryRows.length - 1;
+  for (let rowIndex = summaryStartRow; rowIndex <= summaryEndRow; rowIndex += 1) {
+    formatWorksheetCell(overviewSheet, rowIndex, 3, '#,##0.00');
+  }
+  formatWorksheetCell(overviewSheet, summaryEndRow, 3, '#,##0.00');
+
+  XLSX.utils.book_append_sheet(workbook, overviewSheet, sanitizeWorksheetName('Tarjous'));
+
+  const lineRows: ExcelCellValue[][] = [
+    ['Koodi', 'Rivi', 'Kuvaus', 'Määrä', 'Yksikkö', 'Yksikköhinta (EUR)', 'Yhteensä (EUR)'],
     ...rows.map((row) => {
+      if (row.mode === 'section') {
+        return ['', `${row.productName}`, row.description || '', '', '', '', ''];
+      }
+
       const calc = calculateQuoteRow(row);
       const unitPrice = row.mode === 'installation'
         ? row.installationPrice
         : row.mode === 'charge'
           ? row.salesPrice
           : row.salesPrice + row.installationPrice;
-
-      if (row.mode === 'section') {
-        return ['', row.productName, row.description || '', '', '', '', ''];
-      }
 
       return [
         row.productCode || '',
@@ -699,42 +732,19 @@ export function exportQuoteToCustomerExcel(
         roundExcelNumber(calc.rowTotal),
       ];
     }),
-    ['', '', '', '', '', '', ''],
-    ['Yhteenveto', '', '', '', '', '', ''],
-    ['Era', '', '', '', '', '', 'Arvo'],
-    ...summaryRows.map(([label, value]) => [label, '', '', '', '', '', value]),
   ];
 
-  const tarjousSheet = XLSX.utils.aoa_to_sheet(tarjousRows);
-  tarjousSheet['!cols'] = [18, 36, 42, 12, 14, 16, 16].map((width) => ({ wch: width }));
+  const linesSheet = XLSX.utils.aoa_to_sheet(lineRows);
+  linesSheet['!cols'] = [16, 34, 48, 12, 12, 18, 18].map((width) => ({ wch: width }));
+  linesSheet['!autofilter'] = { ref: 'A1:G1' };
 
-  const linesHeaderRow = 10;
-  const firstLineDataRow = linesHeaderRow + 1;
-  const lastLineDataRow = firstLineDataRow + rows.length - 1;
-  const summaryHeaderRow = lastLineDataRow + 3;
-  const summaryFirstRow = summaryHeaderRow + 1;
-  const summaryLastRow = summaryFirstRow + summaryRows.length - 1;
-
-  tarjousSheet['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
-    { s: { r: 3, c: 0 }, e: { r: 3, c: 6 } },
-    { s: { r: 9, c: 0 }, e: { r: 9, c: 6 } },
-    { s: { r: summaryHeaderRow - 1, c: 0 }, e: { r: summaryHeaderRow - 1, c: 6 } },
-    { s: { r: summaryHeaderRow, c: 0 }, e: { r: summaryHeaderRow, c: 5 } },
-  ];
-  tarjousSheet['!autofilter'] = { ref: `A${linesHeaderRow + 1}:G${linesHeaderRow + 1}` };
-
-  for (let rowIndex = firstLineDataRow; rowIndex <= lastLineDataRow; rowIndex += 1) {
-    formatWorksheetCell(tarjousSheet, rowIndex, 3, '#,##0.###');
-    formatWorksheetCell(tarjousSheet, rowIndex, 5, '#,##0.00');
-    formatWorksheetCell(tarjousSheet, rowIndex, 6, '#,##0.00');
-  }
-  for (let rowIndex = summaryFirstRow; rowIndex <= summaryLastRow; rowIndex += 1) {
-    formatWorksheetCell(tarjousSheet, rowIndex, 6, '#,##0.00');
+  for (let rowIndex = 1; rowIndex <= rows.length; rowIndex += 1) {
+    formatWorksheetCell(linesSheet, rowIndex, 3, '#,##0.###');
+    formatWorksheetCell(linesSheet, rowIndex, 5, '#,##0.00');
+    formatWorksheetCell(linesSheet, rowIndex, 6, '#,##0.00');
   }
 
-  XLSX.utils.book_append_sheet(workbook, tarjousSheet, sanitizeWorksheetName('Tarjous'));
+  XLSX.utils.book_append_sheet(workbook, linesSheet, sanitizeWorksheetName('Tarjousrivit'));
 
   if (terms) {
     appendWorksheet(
