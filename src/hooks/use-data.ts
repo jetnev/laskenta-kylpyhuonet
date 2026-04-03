@@ -1,7 +1,5 @@
 import { useMemo } from 'react';
 import { useKV } from './use-kv';
-import { useCatalog } from './use-catalog';
-import { mapCatalogProductToLegacyProduct } from '../lib/catalog';
 import {
   Product,
   InstallationGroup,
@@ -71,104 +69,170 @@ function generateQuoteNumber(prefix: string = 'TAR') {
 }
 
 export function useProducts() {
-  const catalog = useCatalog();
-  const { canManageSharedData } = useAuth();
-  const [legacyProducts = []] = useKV<Product[]>('products', []);
+  const [products = [], setProducts] = useKV<Product[]>('products', []);
+  const { user, canDelete, canEdit } = useAuth();
+  const userId = user?.id;
 
-  const products = useMemo(
+  const orderedProducts = useMemo(
     () =>
-      catalog.products
-        .filter((product) => product.active && !product.archivedAt)
-        .map((product) =>
-          mapCatalogProductToLegacyProduct(product, {
-            categories: catalog.categories,
-            productSources: catalog.productSources,
-          })
-        ),
-    [catalog.categories, catalog.productSources, catalog.products]
+      [...products].sort(
+        (left, right) =>
+          new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime() ||
+          left.name.localeCompare(right.name, 'fi')
+      ),
+    [products]
   );
 
   const addProduct = (product: Omit<Product, 'id' | keyof ReturnType<typeof buildAudit>>) => {
-    if (!canManageSharedData) {
-      throw new Error('Vain admin voi lisätä tuotteita.');
+    const currentUserId = ensureSignedIn(userId);
+    if (!canEdit) {
+      throw new Error('Sinulla ei ole oikeuksia lisätä tuotteita.');
     }
-    const nextProduct = catalog.saveCatalogProduct({
-      name: product.name,
-      internalCode: product.internalCode || product.code,
-      description: product.description,
-      brand: product.brand,
-      manufacturer: product.manufacturer,
-      manufacturerSku: product.manufacturerSku,
-      ean: product.ean,
-      normalizedName: product.normalizedName || product.name,
-      packageSize: product.packageSize,
-      packageUnit: product.packageUnit,
-      unit: product.unit,
+
+    const internalCode = product.internalCode?.trim() || product.code?.trim();
+    const code = product.code?.trim() || internalCode;
+    if (!code || !product.name.trim()) {
+      throw new Error('Anna tuotteelle vähintään koodi ja nimi.');
+    }
+
+    const newProduct: Product = {
+      ...product,
+      id: crypto.randomUUID(),
+      code,
+      internalCode,
+      name: product.name.trim(),
+      description: product.description?.trim(),
+      category: product.category?.trim(),
+      brand: product.brand?.trim(),
+      manufacturer: product.manufacturer?.trim(),
+      manufacturerSku: product.manufacturerSku?.trim(),
+      ean: product.ean?.trim(),
+      normalizedName: product.normalizedName?.trim() || product.name.trim(),
       salesUnit: product.salesUnit || product.unit,
       baseUnit: product.baseUnit || product.unit,
-      categoryId: product.categoryId,
-      subcategoryId: product.subcategoryId,
-      defaultCostPrice: product.defaultCostPrice ?? product.purchasePrice,
-      defaultSalePrice: product.defaultSalePrice,
-      defaultMarginPercent: product.defaultMarginPercent ?? product.defaultSalesMarginPercent,
-      defaultInstallPrice: product.defaultInstallPrice ?? product.defaultInstallationPrice ?? 0,
-      installationGroupId: product.installationGroupId,
+      purchasePrice: product.defaultCostPrice ?? product.purchasePrice ?? 0,
+      defaultCostPrice: product.defaultCostPrice ?? product.purchasePrice ?? 0,
+      defaultSalePrice: product.defaultSalePrice ?? product.purchasePrice ?? 0,
+      defaultSalesMarginPercent:
+        product.defaultSalesMarginPercent ?? product.defaultMarginPercent ?? 0,
+      defaultInstallationPrice:
+        product.defaultInstallationPrice ?? product.defaultInstallPrice ?? 0,
+      defaultMarginPercent:
+        product.defaultMarginPercent ?? product.defaultSalesMarginPercent ?? 0,
+      defaultInstallPrice:
+        product.defaultInstallPrice ?? product.defaultInstallationPrice ?? 0,
       active: product.active ?? product.isActive ?? true,
-    });
-    return mapCatalogProductToLegacyProduct(nextProduct, {
-      categories: catalog.categories,
-      productSources: catalog.productSources,
-    });
+      isActive: product.active ?? product.isActive ?? true,
+      searchableText:
+        product.searchableText ||
+        [
+          code,
+          internalCode,
+          product.name,
+          product.description,
+          product.category,
+          product.brand,
+          product.manufacturer,
+          product.ean,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase(),
+      ...buildAudit(currentUserId),
+    };
+
+    setProducts((current = []) => [...current, newProduct]);
+    return newProduct;
   };
 
   const updateProduct = (id: string, updates: Partial<Product>) => {
-    if (!canManageSharedData) {
-      throw new Error('Vain admin voi muokata tuotteita.');
+    const currentUserId = ensureSignedIn(userId);
+    if (!canEdit) {
+      throw new Error('Sinulla ei ole oikeuksia muokata tuotteita.');
     }
-    catalog.updateCatalogProduct(id, {
-      name: updates.name,
-      normalizedName: updates.normalizedName,
-      description: updates.description,
-      brand: updates.brand,
-      manufacturer: updates.manufacturer,
-      manufacturerSku: updates.manufacturerSku,
-      ean: updates.ean,
-      packageSize: updates.packageSize,
-      packageUnit: updates.packageUnit,
-      unit: updates.unit,
-      salesUnit: updates.salesUnit,
-      baseUnit: updates.baseUnit,
-      categoryId: updates.categoryId,
-      subcategoryId: updates.subcategoryId,
-      defaultCostPrice: updates.defaultCostPrice ?? updates.purchasePrice,
-      defaultSalePrice: updates.defaultSalePrice,
-      defaultMarginPercent: updates.defaultMarginPercent ?? updates.defaultSalesMarginPercent,
-      defaultInstallPrice: updates.defaultInstallPrice ?? updates.defaultInstallationPrice,
-      installationGroupId: updates.installationGroupId,
-      active: updates.active ?? updates.isActive,
-      searchableText: updates.searchableText,
-    });
+
+    setProducts((current = []) =>
+      current.map((product) => {
+        if (product.id !== id) {
+          return product;
+        }
+
+        const code = updates.code?.trim() || updates.internalCode?.trim() || product.code;
+        const internalCode = updates.internalCode?.trim() || updates.code?.trim() || product.internalCode || code;
+        const name = updates.name?.trim() || product.name;
+        const description = updates.description !== undefined ? updates.description?.trim() : product.description;
+        const category = updates.category !== undefined ? updates.category?.trim() : product.category;
+        const brand = updates.brand !== undefined ? updates.brand?.trim() : product.brand;
+        const manufacturer =
+          updates.manufacturer !== undefined ? updates.manufacturer?.trim() : product.manufacturer;
+        const manufacturerSku =
+          updates.manufacturerSku !== undefined
+            ? updates.manufacturerSku?.trim()
+            : product.manufacturerSku;
+        const ean = updates.ean !== undefined ? updates.ean?.trim() : product.ean;
+        const purchasePrice = updates.defaultCostPrice ?? updates.purchasePrice ?? product.purchasePrice;
+        const defaultSalePrice = updates.defaultSalePrice ?? product.defaultSalePrice ?? purchasePrice;
+        const defaultMarginPercent =
+          updates.defaultMarginPercent ??
+          updates.defaultSalesMarginPercent ??
+          product.defaultMarginPercent ??
+          product.defaultSalesMarginPercent ??
+          0;
+        const defaultInstallationPrice =
+          updates.defaultInstallPrice ??
+          updates.defaultInstallationPrice ??
+          product.defaultInstallPrice ??
+          product.defaultInstallationPrice ??
+          0;
+        const active = updates.active ?? updates.isActive ?? product.active ?? product.isActive ?? true;
+
+        return {
+          ...product,
+          ...updates,
+          code,
+          internalCode,
+          name,
+          description,
+          category,
+          brand,
+          manufacturer,
+          manufacturerSku,
+          ean,
+          salesUnit: updates.salesUnit || updates.unit || product.salesUnit || product.unit,
+          baseUnit: updates.baseUnit || updates.unit || product.baseUnit || product.unit,
+          purchasePrice,
+          defaultCostPrice: updates.defaultCostPrice ?? purchasePrice,
+          defaultSalePrice,
+          defaultSalesMarginPercent: defaultMarginPercent,
+          defaultMarginPercent,
+          defaultInstallationPrice,
+          defaultInstallPrice: defaultInstallationPrice,
+          active,
+          isActive: active,
+          normalizedName: updates.normalizedName?.trim() || name,
+          searchableText:
+            updates.searchableText ||
+            [code, internalCode, name, description, category, brand, manufacturer, ean]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase(),
+          updatedAt: nowIso(),
+          updatedByUserId: currentUserId,
+        };
+      })
+    );
   };
 
   const deleteProduct = (id: string) => {
-    if (!canManageSharedData) {
-      throw new Error('Vain admin voi poistaa tuotteita.');
+    if (!canDelete) {
+      throw new Error('Sinulla ei ole oikeuksia poistaa tuotteita.');
     }
-    catalog.archiveCatalogProduct(id);
+    setProducts((current = []) => current.filter((product) => product.id !== id));
   };
 
-  const getProduct = (id: string) => {
-    const product = catalog.getProductById(id);
-    if (product) {
-      return mapCatalogProductToLegacyProduct(product, {
-        categories: catalog.categories,
-        productSources: catalog.productSources,
-      });
-    }
-    return legacyProducts.find((item) => item.id === id);
-  };
+  const getProduct = (id: string) => orderedProducts.find((item) => item.id === id);
 
-  return { products, addProduct, updateProduct, deleteProduct, getProduct };
+  return { products: orderedProducts, addProduct, updateProduct, deleteProduct, getProduct };
 }
 
 export function useInstallationGroups() {
@@ -213,11 +277,11 @@ export function useInstallationGroups() {
 
 export function useSubstituteProducts() {
   const [substitutes = [], setSubstitutes] = useKV<SubstituteProduct[]>('substitute-products', []);
-  const { user, canManageSharedData } = useAuth();
+  const { user, canDelete, canEdit } = useAuth();
 
   const addSubstitute = (substitute: Omit<SubstituteProduct, 'id' | keyof ReturnType<typeof buildAudit>>) => {
-    if (!canManageSharedData) {
-      throw new Error('Vain admin voi lisätä korvaavia tuotteita.');
+    if (!canEdit) {
+      throw new Error('Sinulla ei ole oikeuksia lisätä korvaavia tuotteita.');
     }
     const newSubstitute: SubstituteProduct = {
       ...substitute,
@@ -229,8 +293,8 @@ export function useSubstituteProducts() {
   };
 
   const deleteSubstitute = (id: string) => {
-    if (!canManageSharedData) {
-      throw new Error('Vain admin voi poistaa korvaavia tuotteita.');
+    if (!canDelete) {
+      throw new Error('Sinulla ei ole oikeuksia poistaa korvaavia tuotteita.');
     }
     setSubstitutes((current = []) => current.filter((substitute) => substitute.id !== id));
   };

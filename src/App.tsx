@@ -10,7 +10,6 @@ import {
   House,
   List,
   Package,
-  UploadSimple,
   Shield,
   SignOut,
   User,
@@ -29,7 +28,6 @@ import { checkForDesktopUpdates, getDesktopUpdateStatus, isDesktopRuntime, resta
 import { toast } from 'sonner';
 import Dashboard from './components/pages/Dashboard';
 import ProductsPage from './components/pages/ProductsPage';
-import ImportPage from './components/pages/ImportPage';
 import InstallationGroupsPage from './components/pages/InstallationGroupsPage';
 import SubstituteProductsPage from './components/pages/SubstituteProductsPage';
 import ProjectsPage from './components/pages/ProjectsPage';
@@ -44,7 +42,6 @@ type Page =
   | 'dashboard'
   | 'projects'
   | 'products'
-  | 'import'
   | 'installation-groups'
   | 'substitutes'
   | 'terms'
@@ -118,7 +115,6 @@ function App() {
         { id: 'dashboard' as const, name: 'Etusivu', icon: House, visible: true },
         { id: 'projects' as const, name: 'Projektit', icon: Folder, visible: true },
         { id: 'products' as const, name: 'Tuoterekisteri', icon: Package, visible: true },
-        { id: 'import' as const, name: 'Tuonti', icon: UploadSimple, visible: canManageSharedData },
         { id: 'installation-groups' as const, name: 'Hintaryhmät', icon: Wrench, visible: true },
         { id: 'substitutes' as const, name: 'Korvaavat tuotteet', icon: ArrowsLeftRight, visible: true },
         { id: 'terms' as const, name: 'Ehdot', icon: FileText, visible: true },
@@ -387,7 +383,6 @@ function App() {
           {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
           {currentPage === 'projects' && <ProjectsPage />}
           {currentPage === 'products' && <ProductsPage />}
-          {currentPage === 'import' && <ImportPage />}
           {currentPage === 'installation-groups' && <InstallationGroupsPage />}
           {currentPage === 'substitutes' && <SubstituteProductsPage />}
           {currentPage === 'terms' && <TermsPage />}

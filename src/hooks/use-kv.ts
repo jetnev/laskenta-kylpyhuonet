@@ -15,9 +15,7 @@ type PendingWrite = {
 const REMOTE_WRITE_DEBOUNCE_MS = 600;
 
 const SHARED_KEYS = new Set<string>([
-  'products',
   'installation-groups',
-  'substitute-products',
   'quote-terms',
   'settings',
   'catalog-products',

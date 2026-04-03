@@ -29,7 +29,7 @@ import { ResponsiveDialog } from '../ResponsiveDialog';
 export default function SubstituteProductsPage() {
   const { substitutes, addSubstitute, deleteSubstitute } = useSubstituteProducts();
   const { products } = useProducts();
-  const { canManageSharedData } = useAuth();
+  const { canDelete, canEdit } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [originalType, setOriginalType] = useState<'existing' | 'manual'>('existing');
 
@@ -41,8 +41,8 @@ export default function SubstituteProductsPage() {
   });
 
   const handleOpenDialog = () => {
-    if (!canManageSharedData) {
-      toast.error('Vain admin voi lisätä korvaavia tuotteita');
+    if (!canEdit) {
+      toast.error('Sinulla ei ole oikeuksia lisätä korvaavia tuotteita');
       return;
     }
 
@@ -57,8 +57,8 @@ export default function SubstituteProductsPage() {
   };
 
   const handleSave = () => {
-    if (!canManageSharedData) {
-      toast.error('Vain admin voi tallentaa muutoksia');
+    if (!canEdit) {
+      toast.error('Sinulla ei ole oikeuksia tallentaa muutoksia');
       return;
     }
 
@@ -89,8 +89,8 @@ export default function SubstituteProductsPage() {
   };
 
   const handleDelete = (id: string) => {
-    if (!canManageSharedData) {
-      toast.error('Vain admin voi poistaa korvaavia tuotteita');
+    if (!canDelete) {
+      toast.error('Sinulla ei ole oikeuksia poistaa korvaavia tuotteita');
       return;
     }
 
@@ -107,7 +107,7 @@ export default function SubstituteProductsPage() {
           <h1 className="text-2xl sm:text-3xl font-semibold">Korvaavat tuotteet</h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">Määritä tuotteiden korvattavuus</p>
         </div>
-        {canManageSharedData ? (
+        {canEdit ? (
           <Button onClick={handleOpenDialog} className="gap-2">
             <Plus weight="bold" />
             Lisää korvaava tuote
@@ -115,7 +115,7 @@ export default function SubstituteProductsPage() {
         ) : (
           <Button disabled className="gap-2">
             <Lock weight="bold" />
-            Lukuoikeus
+            Ei muokkausoikeutta
           </Button>
         )}
       </div>
@@ -205,7 +205,7 @@ export default function SubstituteProductsPage() {
         </div>
       </ResponsiveDialog>
 
-      {!canManageSharedData && <ReadOnlyAlert />}
+      {!canEdit && <ReadOnlyAlert />}
 
       <Card className="p-6">
         {substitutes.length === 0 ? (
@@ -219,7 +219,7 @@ export default function SubstituteProductsPage() {
                 <TableHead>Alkuperäinen tuote</TableHead>
                 <TableHead></TableHead>
                 <TableHead>Korvaava tuote</TableHead>
-                {canManageSharedData && <TableHead className="w-24"></TableHead>}
+                {canDelete && <TableHead className="w-24"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -246,7 +246,7 @@ export default function SubstituteProductsPage() {
                     <TableCell className="font-medium">
                       {substitute ? `${substitute.code} - ${substitute.name}` : 'Tuntematon'}
                     </TableCell>
-                    {canManageSharedData && (
+                    {canDelete && (
                       <TableCell>
                         <Button
                           variant="ghost"
