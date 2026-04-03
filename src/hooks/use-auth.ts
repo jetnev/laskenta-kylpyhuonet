@@ -112,7 +112,18 @@ function isRecoverableProfileError(error: unknown) {
   const code = typeof candidate?.code === 'string' ? candidate.code : '';
   const message = extractErrorMessage(error).toLowerCase();
 
-  if (code === '42P01' || code === '42501') {
+  if (code === '42P01' || code === '42501' || code === '57014') {
+    return true;
+  }
+
+  if (
+    message.includes('statement timeout') ||
+    message.includes('canceling statement') ||
+    message.includes('timeout') ||
+    message.includes('network') ||
+    message.includes('failed to fetch') ||
+    message.includes('fetch failed')
+  ) {
     return true;
   }
 
