@@ -43,6 +43,20 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
     })
   : null;
 
+export function createIsolatedSupabaseClient() {
+  if (!isSupabaseConfigured) {
+    throw new Error(getSupabaseConfigError());
+  }
+
+  return createClient(supabaseUrl!, supabaseAnonKey!, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+  });
+}
+
 export function requireSupabase() {
   if (!supabase) {
     throw new Error(getSupabaseConfigError());

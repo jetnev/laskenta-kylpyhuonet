@@ -1,4 +1,5 @@
-import { ShieldCheck, UserCircle } from '@phosphor-icons/react';
+import { useState } from 'react';
+import { ShieldCheck, UserCircle, UserPlus } from '@phosphor-icons/react';
 import { useAuth } from '../../hooks/use-auth';
 import { Card } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -6,10 +7,22 @@ import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription } from '../ui/alert';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Label } from '../ui/label';
+import { Input } from '../ui/input';
 import { toast } from 'sonner';
 
 export default function UsersPage() {
-  const { users, canManageUsers, updateUserRole, updateUserStatus, user } = useAuth();
+  const { users, canManageUsers, createUserByAdmin, updateUserRole, updateUserStatus, user } = useAuth();
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    displayName: '',
+    email: '',
+    password: '',
+    role: 'user' as 'admin' | 'user',
+    status: 'active' as 'active' | 'disabled',
+  });
 
   if (!canManageUsers) {
     return (
@@ -26,6 +39,111 @@ export default function UsersPage() {
       <div>
         <h1 className="text-2xl sm:text-3xl font-semibold">Käyttäjähallinta</h1>
         <p className="text-muted-foreground mt-1">Hallitse käyttäjärooleja ja tilien tilaa.</p>
+      </div>
+
+      <div className="flex justify-end">
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogTrigger asChild>
+            <Button>
+              <UserPlus className="h-4 w-4" />
+              Luo käyttäjä
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Luo uusi käyttäjä</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="create-user-name">Nimi</Label>
+                <Input
+                  id="create-user-name"
+                  value={createForm.displayName}
+                  onChange={(event) => setCreateForm((current) => ({ ...current, displayName: event.target.value }))}
+                  placeholder="Etunimi Sukunimi"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-user-email">Sähköposti</Label>
+                <Input
+                  id="create-user-email"
+                  type="email"
+                  value={createForm.email}
+                  onChange={(event) => setCreateForm((current) => ({ ...current, email: event.target.value }))}
+                  placeholder="kayttaja@yritys.fi"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-user-password">Väliaikainen salasana</Label>
+                <Input
+                  id="create-user-password"
+                  type="password"
+                  value={createForm.password}
+                  onChange={(event) => setCreateForm((current) => ({ ...current, password: event.target.value }))}
+                  placeholder="Vähintään 8 merkkiä"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="create-user-role">Rooli</Label>
+                  <Select
+                    value={createForm.role}
+                    onValueChange={(value) => setCreateForm((current) => ({ ...current, role: value as 'admin' | 'user' }))}
+                  >
+                    <SelectTrigger id="create-user-role">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="user">Käyttäjä</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="create-user-status">Tila</Label>
+                  <Select
+                    value={createForm.status}
+                    onValueChange={(value) => setCreateForm((current) => ({ ...current, status: value as 'active' | 'disabled' }))}
+                  >
+                    <SelectTrigger id="create-user-status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Aktiivinen</SelectItem>
+                      <SelectItem value="disabled">Pois käytöstä</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Button
+                className="w-full"
+                disabled={creatingUser}
+                onClick={async () => {
+                  try {
+                    setCreatingUser(true);
+                    await createUserByAdmin(createForm);
+                    toast.success('Käyttäjä luotu onnistuneesti.');
+                    setShowCreateDialog(false);
+                    setCreateForm({
+                      displayName: '',
+                      email: '',
+                      password: '',
+                      role: 'user',
+                      status: 'active',
+                    });
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : 'Käyttäjän luonti epäonnistui.');
+                  } finally {
+                    setCreatingUser(false);
+                  }
+                }}
+              >
+                {creatingUser ? 'Luodaan käyttäjää...' : 'Luo käyttäjä'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Alert>

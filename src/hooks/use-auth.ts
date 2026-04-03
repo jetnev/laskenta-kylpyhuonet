@@ -1,6 +1,7 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import {
+  createIsolatedSupabaseClient,
   getSupabaseConfigError,
   isSupabaseConfigured,
   ProfileRow,
@@ -38,6 +39,14 @@ interface ProfileInput {
   email: string;
 }
 
+interface AdminCreateUserInput {
+  displayName: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  status: UserStatus;
+}
+
 interface AuthContextValue {
   user: AuthUser | null;
   users: AuthUser[];
@@ -57,6 +66,7 @@ interface AuthContextValue {
   resetPassword: (_unused: string, nextPassword: string) => Promise<void>;
   updateProfile: (input: ProfileInput) => Promise<void>;
   changePassword: (currentPassword: string, nextPassword: string) => Promise<void>;
+  createUserByAdmin: (input: AdminCreateUserInput) => Promise<void>;
   updateUserRole: (userId: string, nextRole: UserRole) => Promise<void>;
   updateUserStatus: (userId: string, nextStatus: UserStatus) => Promise<void>;
 }
@@ -161,6 +171,26 @@ function mapLoginErrorMessage(error: unknown) {
   }
   if (message.includes('network') || message.includes('failed to fetch')) {
     return 'Yhteys palveluun epäonnistui. Tarkista verkkoyhteys ja yritä uudelleen.';
+  }
+
+  return error.message;
+}
+
+function mapProvisioningErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return 'Kayttajan luonti epaonnistui.';
+  }
+
+  const message = error.message.toLowerCase();
+
+  if (message.includes('user already registered') || message.includes('already been registered')) {
+    return 'Talle sahkopostiosoitteelle on jo olemassa kayttajatili.';
+  }
+  if (message.includes('invalid email')) {
+    return 'Anna kelvollinen sahkopostiosoite.';
+  }
+  if (message.includes('password')) {
+    return 'Salasanan on oltava vahintaan 8 merkkia.';
   }
 
   return error.message;
@@ -605,6 +635,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const createUserByAdmin = async ({ displayName, email, password, role, status }: AdminCreateUserInput) => {
+    requireAdmin();
+
+    const trimmedName = displayName.trim();
+    const normalizedEmail = normalizeEmail(email);
+
+    if (trimmedName.length < 2) {
+      throw new Error('Anna vahintaan kaksimerkkinen nimi.');
+    }
+    if (!validateEmail(normalizedEmail)) {
+      throw new Error('Anna kelvollinen sahkopostiosoite.');
+    }
+    if (!validatePassword(password)) {
+      throw new Error('Salasanan on oltava vahintaan 8 merkkia.');
+    }
+
+    const authClient = createIsolatedSupabaseClient();
+    const { data, error } = await authClient.auth.signUp({
+      email: normalizedEmail,
+      password,
+      options: {
+        emailRedirectTo: getAuthRedirectUrl(),
+        data: {
+          display_name: trimmedName,
+        },
+      },
+    });
+
+    if (error) {
+      throw new Error(mapProvisioningErrorMessage(error));
+    }
+
+    const createdUser = data.user;
+    const identities = (createdUser as { identities?: unknown[] } | null)?.identities;
+    if (!createdUser?.id || (Array.isArray(identities) && identities.length === 0)) {
+      throw new Error('Talle sahkopostiosoitteelle on jo olemassa kayttajatili.');
+    }
+
+    await upsertProfile({
+      id: createdUser.id,
+      email: normalizedEmail,
+      display_name: trimmedName,
+      role,
+      status,
+      created_at: createdUser.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      last_login_at: null,
+    });
+
+    await loadUsers(user);
+  };
+
   const requireAdmin = () => {
     if (!user || user.role !== 'admin') {
       throw new Error('Toiminto vaatii admin-oikeudet.');
@@ -669,6 +751,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resetPassword,
     updateProfile,
     changePassword,
+    createUserByAdmin,
     updateUserRole,
     updateUserStatus,
   };

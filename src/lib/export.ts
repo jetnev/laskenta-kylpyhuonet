@@ -137,6 +137,20 @@ function appendWorksheet(
   XLSX.utils.book_append_sheet(workbook, worksheet, sanitizeWorksheetName(name));
 }
 
+function formatWorksheetCell(
+  worksheet: XLSX.WorkSheet,
+  row: number,
+  col: number,
+  format: string
+) {
+  const address = XLSX.utils.encode_cell({ r: row, c: col });
+  const cell = worksheet[address];
+  if (!cell || typeof cell.v !== 'number') {
+    return;
+  }
+  cell.z = format;
+}
+
 function renderQuoteRows(rows: QuoteRow[], internal: boolean) {
   return rows.map((row) => {
     if (row.mode === 'section') {
@@ -640,16 +654,29 @@ export function exportQuoteToCustomerExcel(
   const extraChargeRows = getQuoteExtraChargeLines(quote).filter((line) => line.amount > 0);
   const workbook = XLSX.utils.book_new();
 
+  const companyName = settings?.companyName || 'Yritys Oy';
+  const summaryRows: Array<[string, number]> = [
+    ['Rivien valisumma', roundExcelNumber(calculation.lineSubtotal)],
+    ['Lisakulut yhteensa', roundExcelNumber(calculation.extraChargesTotal)],
+    ...extraChargeRows.map((line) => [line.label, roundExcelNumber(line.amount)] as [string, number]),
+    ['Alennus', roundExcelNumber(-calculation.discountAmount)],
+    ['Valisumma', roundExcelNumber(calculation.subtotal)],
+    [`ALV ${formatNumber(quote.vatPercent, 1)} %`, roundExcelNumber(calculation.vat)],
+    ['Loppusumma', roundExcelNumber(calculation.total)],
+  ];
+
   const tarjousRows: ExcelCellValue[][] = [
-    ['Tarjousnumero', quote.quoteNumber],
-    ['Yritys', settings?.companyName || 'Yritys Oy'],
-    ['Asiakas', customer.name],
-    ['Projekti', project.name],
-    ['Työkohde', project.site],
-    ['Voimassa asti', quote.validUntil ? formatDate(quote.validUntil) : ''],
-    ['Status', getQuoteStatusLabel(quote.status)],
-    [],
-    ['Koodi', 'Rivi', 'Kuvaus', 'Määrä', 'Yksikkö', 'Yksikköhinta', 'Yhteensä'],
+    [`Tarjous - ${quote.quoteNumber}`, '', '', '', '', '', ''],
+    [companyName, '', '', '', '', '', ''],
+    ['', '', '', '', '', '', ''],
+    ['Perustiedot', '', '', '', '', '', ''],
+    ['Tarjousnumero', quote.quoteNumber, '', 'Pvm', formatDate(quote.createdAt), '', ''],
+    ['Asiakas', customer.name, '', 'Status', getQuoteStatusLabel(quote.status), '', ''],
+    ['Projekti', project.name, '', 'Voimassa asti', quote.validUntil ? formatDate(quote.validUntil) : '-', '', ''],
+    ['Tyokohde', project.site, '', '', '', '', ''],
+    ['', '', '', '', '', '', ''],
+    ['Tarjousrivit', '', '', '', '', '', ''],
+    ['Koodi', 'Rivi', 'Kuvaus', 'Maara', 'Yksikko', 'Yksikkohinta', 'Yhteensa'],
     ...rows.map((row) => {
       const calc = calculateQuoteRow(row);
       const unitPrice = row.mode === 'installation'
@@ -672,18 +699,42 @@ export function exportQuoteToCustomerExcel(
         roundExcelNumber(calc.rowTotal),
       ];
     }),
-    [],
-    ['Yhteenveto', 'Arvo'],
-    ['Rivien välisumma', roundExcelNumber(calculation.lineSubtotal)],
-    ['Lisäkulut yhteensä', roundExcelNumber(calculation.extraChargesTotal)],
-    ...extraChargeRows.map((line) => [line.label, roundExcelNumber(line.amount)]),
-    ['Alennus', roundExcelNumber(-calculation.discountAmount)],
-    ['Välisumma', roundExcelNumber(calculation.subtotal)],
-    [`ALV ${formatNumber(quote.vatPercent, 1)} %`, roundExcelNumber(calculation.vat)],
-    ['Loppusumma', roundExcelNumber(calculation.total)],
+    ['', '', '', '', '', '', ''],
+    ['Yhteenveto', '', '', '', '', '', ''],
+    ['Era', '', '', '', '', '', 'Arvo'],
+    ...summaryRows.map(([label, value]) => [label, '', '', '', '', '', value]),
   ];
 
-  appendWorksheet(workbook, 'Tarjous', tarjousRows, [18, 34, 44, 12, 12, 16, 16]);
+  const tarjousSheet = XLSX.utils.aoa_to_sheet(tarjousRows);
+  tarjousSheet['!cols'] = [18, 36, 42, 12, 14, 16, 16].map((width) => ({ wch: width }));
+
+  const linesHeaderRow = 10;
+  const firstLineDataRow = linesHeaderRow + 1;
+  const lastLineDataRow = firstLineDataRow + rows.length - 1;
+  const summaryHeaderRow = lastLineDataRow + 3;
+  const summaryFirstRow = summaryHeaderRow + 1;
+  const summaryLastRow = summaryFirstRow + summaryRows.length - 1;
+
+  tarjousSheet['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
+    { s: { r: 3, c: 0 }, e: { r: 3, c: 6 } },
+    { s: { r: 9, c: 0 }, e: { r: 9, c: 6 } },
+    { s: { r: summaryHeaderRow - 1, c: 0 }, e: { r: summaryHeaderRow - 1, c: 6 } },
+    { s: { r: summaryHeaderRow, c: 0 }, e: { r: summaryHeaderRow, c: 5 } },
+  ];
+  tarjousSheet['!autofilter'] = { ref: `A${linesHeaderRow + 1}:G${linesHeaderRow + 1}` };
+
+  for (let rowIndex = firstLineDataRow; rowIndex <= lastLineDataRow; rowIndex += 1) {
+    formatWorksheetCell(tarjousSheet, rowIndex, 3, '#,##0.###');
+    formatWorksheetCell(tarjousSheet, rowIndex, 5, '#,##0.00');
+    formatWorksheetCell(tarjousSheet, rowIndex, 6, '#,##0.00');
+  }
+  for (let rowIndex = summaryFirstRow; rowIndex <= summaryLastRow; rowIndex += 1) {
+    formatWorksheetCell(tarjousSheet, rowIndex, 6, '#,##0.00');
+  }
+
+  XLSX.utils.book_append_sheet(workbook, tarjousSheet, sanitizeWorksheetName('Tarjous'));
 
   if (terms) {
     appendWorksheet(
@@ -719,19 +770,34 @@ export function exportQuoteToInternalExcel(
   const extraChargeRows = getQuoteExtraChargeLines(quote).filter((line) => line.amount > 0);
   const workbook = XLSX.utils.book_new();
 
+  const companyName = settings?.companyName || 'Yritys Oy';
+  const summaryRows: Array<[string, number]> = [
+    ['Rivien valisumma', roundExcelNumber(calculation.lineSubtotal)],
+    ['Lisakulut yhteensa', roundExcelNumber(calculation.extraChargesTotal)],
+    ...extraChargeRows.map((line) => [line.label, roundExcelNumber(line.amount)] as [string, number]),
+    ['Alennus', roundExcelNumber(-calculation.discountAmount)],
+    ['Valisumma', roundExcelNumber(calculation.subtotal)],
+    [`ALV ${formatNumber(quote.vatPercent, 1)} %`, roundExcelNumber(calculation.vat)],
+    ['Loppusumma', roundExcelNumber(calculation.total)],
+    ['Kokonaiskate', roundExcelNumber(calculation.totalMargin)],
+    ['Kokonaiskate %', roundExcelNumber(calculation.marginPercent, 1)],
+  ];
+
   const sisainenRows: ExcelCellValue[][] = [
-    ['Tarjousnumero', quote.quoteNumber],
-    ['Yritys', settings?.companyName || 'Yritys Oy'],
-    ['Asiakas', customer.name],
-    ['Projekti', project.name],
-    ['Työkohde', project.site],
-    [],
-    ['Koodi', 'Rivi', 'Kuvaus', 'Tyyppi', 'Määrä', 'Yks.', 'Ostohinta', 'Myyntihinta', 'Asennushinta', 'Kate €', 'Kate %', 'Yhteensä'],
+    [`Sisainen tarjous - ${quote.quoteNumber}`, '', '', '', '', '', '', '', '', '', '', ''],
+    [companyName, '', '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', ''],
+    ['Perustiedot', '', '', '', '', '', '', '', '', '', '', ''],
+    ['Tarjousnumero', quote.quoteNumber, '', 'Pvm', formatDate(quote.createdAt), '', 'Asiakas', customer.name, '', 'Status', getQuoteStatusLabel(quote.status), ''],
+    ['Projekti', project.name, '', 'Tyokohde', project.site, '', 'Voimassa asti', quote.validUntil ? formatDate(quote.validUntil) : '-', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', ''],
+    ['Tarjousrivit', '', '', '', '', '', '', '', '', '', '', ''],
+    ['Koodi', 'Rivi', 'Kuvaus', 'Tyyppi', 'Maara', 'Yks', 'Ostohinta', 'Myyntihinta', 'Asennushinta', 'Kate euroa', 'Kate %', 'Yhteensa'],
     ...rows.map((row) => {
       const calc = calculateQuoteRow(row);
 
       if (row.mode === 'section') {
-        return ['', row.productName, row.description || '', 'Väliotsikko', '', '', '', '', '', '', '', ''];
+        return ['', row.productName, row.description || '', 'Valiotsikko', '', '', '', '', '', '', '', ''];
       }
 
       return [
@@ -749,20 +815,50 @@ export function exportQuoteToInternalExcel(
         roundExcelNumber(calc.rowTotal),
       ];
     }),
-    [],
-    ['Yhteenveto', 'Arvo'],
-    ['Rivien välisumma', roundExcelNumber(calculation.lineSubtotal)],
-    ['Lisäkulut yhteensä', roundExcelNumber(calculation.extraChargesTotal)],
-    ...extraChargeRows.map((line) => [line.label, roundExcelNumber(line.amount)]),
-    ['Alennus', roundExcelNumber(-calculation.discountAmount)],
-    ['Välisumma', roundExcelNumber(calculation.subtotal)],
-    [`ALV ${formatNumber(quote.vatPercent, 1)} %`, roundExcelNumber(calculation.vat)],
-    ['Loppusumma', roundExcelNumber(calculation.total)],
-    ['Kokonaiskate €', roundExcelNumber(calculation.totalMargin)],
-    ['Kokonaiskate %', roundExcelNumber(calculation.marginPercent, 1)],
+    ['', '', '', '', '', '', '', '', '', '', '', ''],
+    ['Yhteenveto', '', '', '', '', '', '', '', '', '', '', ''],
+    ['Era', '', '', '', '', '', '', '', '', '', '', 'Arvo'],
+    ...summaryRows.map(([label, value]) => [label, '', '', '', '', '', '', '', '', '', '', value]),
   ];
 
-  appendWorksheet(workbook, 'Sisäinen tarjous', sisainenRows, [18, 28, 36, 16, 10, 10, 14, 14, 14, 14, 12, 14]);
+  const sisainenSheet = XLSX.utils.aoa_to_sheet(sisainenRows);
+  sisainenSheet['!cols'] = [16, 26, 36, 14, 10, 8, 13, 13, 13, 13, 10, 14].map((width) => ({ wch: width }));
+
+  const linesHeaderRow = 8;
+  const firstLineDataRow = linesHeaderRow + 1;
+  const lastLineDataRow = firstLineDataRow + rows.length - 1;
+  const summaryHeaderRow = lastLineDataRow + 3;
+  const summaryFirstRow = summaryHeaderRow + 1;
+  const summaryLastRow = summaryFirstRow + summaryRows.length - 1;
+
+  sisainenSheet['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 11 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 11 } },
+    { s: { r: 3, c: 0 }, e: { r: 3, c: 11 } },
+    { s: { r: 7, c: 0 }, e: { r: 7, c: 11 } },
+    { s: { r: summaryHeaderRow - 1, c: 0 }, e: { r: summaryHeaderRow - 1, c: 11 } },
+    { s: { r: summaryHeaderRow, c: 0 }, e: { r: summaryHeaderRow, c: 10 } },
+  ];
+  sisainenSheet['!autofilter'] = { ref: `A${linesHeaderRow + 1}:L${linesHeaderRow + 1}` };
+
+  for (let rowIndex = firstLineDataRow; rowIndex <= lastLineDataRow; rowIndex += 1) {
+    formatWorksheetCell(sisainenSheet, rowIndex, 4, '#,##0.###');
+    formatWorksheetCell(sisainenSheet, rowIndex, 6, '#,##0.00');
+    formatWorksheetCell(sisainenSheet, rowIndex, 7, '#,##0.00');
+    formatWorksheetCell(sisainenSheet, rowIndex, 8, '#,##0.00');
+    formatWorksheetCell(sisainenSheet, rowIndex, 9, '#,##0.00');
+    formatWorksheetCell(sisainenSheet, rowIndex, 10, '#,##0.0');
+    formatWorksheetCell(sisainenSheet, rowIndex, 11, '#,##0.00');
+  }
+  for (let rowIndex = summaryFirstRow; rowIndex <= summaryLastRow; rowIndex += 1) {
+    const isPercentRow = (sisainenSheet[XLSX.utils.encode_cell({ r: rowIndex, c: 0 })]?.v || '')
+      .toString()
+      .toLowerCase()
+      .includes('%');
+    formatWorksheetCell(sisainenSheet, rowIndex, 11, isPercentRow ? '#,##0.0' : '#,##0.00');
+  }
+
+  XLSX.utils.book_append_sheet(workbook, sisainenSheet, sanitizeWorksheetName('Sisainen tarjous'));
 
   if (quote.notes || quote.internalNotes || terms) {
     appendWorksheet(
