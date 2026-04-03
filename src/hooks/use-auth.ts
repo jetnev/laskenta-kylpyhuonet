@@ -91,6 +91,8 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+let profileSchemaCompatibility: 'unknown' | 'legacy' | 'organization' = 'unknown';
+let adminBootstrapFunctionState: 'unknown' | 'available' | 'missing' = 'unknown';
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -133,6 +135,57 @@ function extractErrorMessage(error: unknown) {
 
 function toError(error: unknown, fallbackMessage = 'Toiminto epäonnistui.') {
   return new Error(extractErrorMessage(error) || fallbackMessage);
+}
+
+function isLegacyOrganizationSchemaError(error: unknown) {
+  const candidate = error && typeof error === 'object' ? (error as { code?: unknown }) : null;
+  const code = typeof candidate?.code === 'string' ? candidate.code : '';
+  const message = extractErrorMessage(error).toLowerCase();
+
+  if (code === '42703' || code === 'PGRST204') {
+    return true;
+  }
+
+  return (
+    (message.includes('organization_id') || message.includes('organization_role')) &&
+    (message.includes('column') || message.includes('schema cache') || message.includes('does not exist'))
+  );
+}
+
+function isMissingFunctionError(error: unknown, functionName: string) {
+  const candidate = error && typeof error === 'object' ? (error as { code?: unknown }) : null;
+  const code = typeof candidate?.code === 'string' ? candidate.code.toUpperCase() : '';
+  const message = extractErrorMessage(error).toLowerCase();
+
+  if (code === '42883' || code === 'PGRST202') {
+    return true;
+  }
+
+  return message.includes(functionName.toLowerCase()) && (message.includes('does not exist') || message.includes('could not find'));
+}
+
+function normalizeProfileRow(profile: Partial<ProfileRow>): ProfileRow {
+  return {
+    id: typeof profile.id === 'string' ? profile.id : '',
+    email: normalizeEmail(typeof profile.email === 'string' ? profile.email : ''),
+    display_name: typeof profile.display_name === 'string' ? profile.display_name : 'Käyttäjä',
+    role: profile.role === 'admin' ? 'admin' : 'user',
+    organization_id: typeof profile.organization_id === 'string' ? profile.organization_id : null,
+    organization_role:
+      profile.organization_role === 'owner' || profile.organization_role === 'employee'
+        ? profile.organization_role
+        : null,
+    status: profile.status === 'disabled' ? 'disabled' : 'active',
+    created_at:
+      typeof profile.created_at === 'string' && profile.created_at.trim().length > 0
+        ? profile.created_at
+        : new Date().toISOString(),
+    updated_at:
+      typeof profile.updated_at === 'string' && profile.updated_at.trim().length > 0
+        ? profile.updated_at
+        : new Date().toISOString(),
+    last_login_at: typeof profile.last_login_at === 'string' ? profile.last_login_at : null,
+  };
 }
 
 function isRecoverableProfileError(error: unknown) {
@@ -379,7 +432,7 @@ async function getProfile(userId: string) {
     throw toError(error, 'Käyttäjäprofiilin haku epäonnistui.');
   }
 
-  return data as ProfileRow | null;
+  return data ? normalizeProfileRow(data as Partial<ProfileRow>) : null;
 }
 
 async function getOrganization(organizationId: string) {
@@ -415,13 +468,51 @@ async function getOrganizationsByIds(organizationIds: string[]) {
 
 async function upsertProfile(row: ProfileRow) {
   const client = requireSupabase();
-  const { data, error } = await client.from('profiles').upsert(row, { onConflict: 'id' }).select('*').single();
+  const basePayload = {
+    id: row.id,
+    email: row.email,
+    display_name: row.display_name,
+    role: row.role,
+    status: row.status,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    last_login_at: row.last_login_at ?? null,
+  };
 
-  if (error) {
-    throw toError(error, 'Käyttäjäprofiilin tallennus epäonnistui.');
+  const runUpsert = async (payload: typeof basePayload | ProfileRow) => {
+    const { data, error } = await client.from('profiles').upsert(payload, { onConflict: 'id' }).select('*').single();
+    if (error) {
+      throw error;
+    }
+
+    return normalizeProfileRow(data as Partial<ProfileRow>);
+  };
+
+  if (profileSchemaCompatibility === 'legacy') {
+    try {
+      return await runUpsert(basePayload);
+    } catch (error) {
+      throw toError(error, 'Käyttäjäprofiilin tallennus epäonnistui.');
+    }
   }
 
-  return data as ProfileRow;
+  try {
+    const nextProfile = await runUpsert(row);
+    profileSchemaCompatibility = 'organization';
+    return nextProfile;
+  } catch (error) {
+    if (!isLegacyOrganizationSchemaError(error)) {
+      throw toError(error, 'Käyttäjäprofiilin tallennus epäonnistui.');
+    }
+
+    profileSchemaCompatibility = 'legacy';
+
+    try {
+      return await runUpsert(basePayload);
+    } catch (fallbackError) {
+      throw toError(fallbackError, 'Käyttäjäprofiilin tallennus epäonnistui.');
+    }
+  }
 }
 
 async function ensureProfile(user: User, fallbackDisplayName?: string) {
@@ -467,6 +558,27 @@ async function createOrganizationForCurrentUser(organizationName: string) {
   }
 
   return data as OrganizationRow | null;
+}
+
+async function ensureCurrentUserAdminIfNoAdminExists() {
+  if (adminBootstrapFunctionState === 'missing') {
+    return null;
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('ensure_current_user_admin_if_no_admin_exists');
+
+  if (error) {
+    if (isMissingFunctionError(error, 'ensure_current_user_admin_if_no_admin_exists')) {
+      adminBootstrapFunctionState = 'missing';
+      return null;
+    }
+
+    throw toError(error, 'Pääkäyttäjän bootstrap epäonnistui.');
+  }
+
+  adminBootstrapFunctionState = 'available';
+  return data ? normalizeProfileRow(data as Partial<ProfileRow>) : null;
 }
 
 async function assignEmployeeToCurrentOrganization(userId: string, status: UserStatus) {
@@ -572,6 +684,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let profile = await ensureProfile(session.user);
         profile = await refreshProfileFromAuthUser(session.user, profile, options?.markLogin);
 
+        if (profile.role !== 'admin' && profile.status === 'active') {
+          try {
+            profile = (await ensureCurrentUserAdminIfNoAdminExists()) ?? profile;
+          } catch (error) {
+            if (!isRecoverableProfileError(error)) {
+              throw error;
+            }
+
+            console.error('Admin bootstrap check failed, continuing with current role.', error);
+          }
+        }
+
         if (profile.status === 'disabled') {
           await requireSupabase().auth.signOut();
           throw new Error('Käyttäjätili on poistettu käytöstä.');
@@ -579,7 +703,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         let currentOrganization: OrganizationRow | null = null;
 
-        if (profile.organization_id) {
+        if (profileSchemaCompatibility !== 'legacy' && profile.organization_id) {
           try {
             currentOrganization = await getOrganization(profile.organization_id);
           } catch (error) {
@@ -591,7 +715,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        if (!currentOrganization && !profile.organization_id) {
+        if (profileSchemaCompatibility !== 'legacy' && !currentOrganization && !profile.organization_id) {
           try {
             currentOrganization = await createOrganizationForCurrentUser(resolveSeedOrganizationName(session.user, profile));
             profile = (await getProfile(session.user.id)) ?? profile;

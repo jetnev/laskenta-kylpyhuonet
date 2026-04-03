@@ -83,6 +83,51 @@ as $$
   );
 $$;
 
+create or replace function public.ensure_current_user_admin_if_no_admin_exists()
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_profile public.profiles;
+begin
+  select *
+  into current_profile
+  from public.profiles
+  where id = auth.uid();
+
+  if current_profile.id is null then
+    raise exception 'Käyttäjäprofiilia ei löytynyt.';
+  end if;
+
+  if current_profile.status <> 'active' then
+    return current_profile;
+  end if;
+
+  if current_profile.role = 'admin' then
+    return current_profile;
+  end if;
+
+  if not exists (
+    select 1
+    from public.profiles
+    where role = 'admin'
+      and status = 'active'
+  ) then
+    update public.profiles
+    set role = 'admin',
+        updated_at = timezone('utc', now())
+    where id = current_profile.id
+    returning * into current_profile;
+  end if;
+
+  return current_profile;
+end;
+$$;
+
+grant execute on function public.ensure_current_user_admin_if_no_admin_exists() to authenticated;
+
 create or replace function public.is_organization_member(target_organization_id uuid)
 returns boolean
 language sql
