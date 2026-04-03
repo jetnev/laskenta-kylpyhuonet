@@ -13,6 +13,77 @@ interface LoginPageProps {
   onNavigateHome: () => void;
 }
 
+function readAuthFeedbackFromLocation() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const url = new URL(window.location.href);
+  const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+  const hashParams = new URLSearchParams(hash);
+  const searchParams = url.searchParams;
+
+  const type = searchParams.get('type') ?? hashParams.get('type');
+  const errorCode = searchParams.get('error_code') ?? hashParams.get('error_code');
+  const errorDescription =
+    searchParams.get('error_description') ??
+    hashParams.get('error_description') ??
+    searchParams.get('error') ??
+    hashParams.get('error');
+  const hasAccessToken = Boolean(hashParams.get('access_token') || hashParams.get('refresh_token'));
+  const hasTokenHash = Boolean(searchParams.get('token_hash'));
+
+  const hasAuthFeedback =
+    Boolean(type) ||
+    Boolean(errorCode) ||
+    Boolean(errorDescription) ||
+    hasAccessToken ||
+    hasTokenHash;
+
+  if (!hasAuthFeedback) {
+    return null;
+  }
+
+  const cleanedUrl = new URL(window.location.href);
+  [
+    'type',
+    'error',
+    'error_code',
+    'error_description',
+    'error_description_code',
+    'token',
+    'token_hash',
+    'code',
+  ].forEach((key) => cleanedUrl.searchParams.delete(key));
+  cleanedUrl.hash = '';
+  window.history.replaceState({}, document.title, cleanedUrl.toString());
+
+  if (errorDescription) {
+    const normalizedError = decodeURIComponent(errorDescription).replace(/\+/g, ' ');
+
+    if (errorCode === 'otp_expired') {
+      return {
+        kind: 'error' as const,
+        message: 'Vahvistuslinkki on vanhentunut. Pyydä uusi vahvistusviesti ja yritä uudelleen.',
+      };
+    }
+
+    return {
+      kind: 'error' as const,
+      message: `Sähköpostin vahvistus epäonnistui: ${normalizedError}`,
+    };
+  }
+
+  if (type === 'signup' || hasTokenHash || hasAccessToken) {
+    return {
+      kind: 'success' as const,
+      message: 'Sähköpostiosoite vahvistettiin onnistuneesti. Voit nyt kirjautua sisään.',
+    };
+  }
+
+  return null;
+}
+
 export default function LoginPage({ onNavigateHome }: LoginPageProps) {
   const {
     login,
@@ -42,6 +113,24 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
       setView('reset');
     }
   }, [requiresPasswordReset]);
+
+  useEffect(() => {
+    const feedback = readAuthFeedbackFromLocation();
+    if (!feedback) {
+      return;
+    }
+
+    if (feedback.kind === 'error') {
+      setError(feedback.message);
+      setInfoMessage(null);
+      setView('login');
+      return;
+    }
+
+    setInfoMessage(feedback.message);
+    setError(null);
+    setView('login');
+  }, []);
 
   const heading = useMemo(() => {
     switch (view) {
