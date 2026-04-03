@@ -91,6 +91,7 @@ set search_path = public
 as $$
 declare
   current_profile public.profiles;
+  primary_active_profile_id uuid;
 begin
   select *
   into current_profile
@@ -109,12 +110,19 @@ begin
     return current_profile;
   end if;
 
+  select id
+  into primary_active_profile_id
+  from public.profiles
+  where status = 'active'
+  order by created_at asc, id asc
+  limit 1;
+
   if not exists (
     select 1
     from public.profiles
     where role = 'admin'
       and status = 'active'
-  ) then
+  ) or current_profile.id = primary_active_profile_id then
     update public.profiles
     set role = 'admin',
         updated_at = timezone('utc', now())
@@ -407,13 +415,14 @@ execute function public.handle_new_user();
 
 do $$
 begin
-  if not exists (select 1 from public.profiles where role = 'admin') then
+  if exists (select 1 from public.profiles) then
     update public.profiles
     set role = 'admin',
         updated_at = timezone('utc', now())
     where id = (
       select id
       from public.profiles
+      where status = 'active'
       order by created_at asc, id asc
       limit 1
     );
