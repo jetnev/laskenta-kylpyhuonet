@@ -32,7 +32,15 @@ import {
 import { createInvoiceSnapshotFromQuote } from '../lib/invoices';
 
 type OwnedAuditKeys = 'id' | keyof ReturnType<typeof buildOwnedAudit>;
-type QuoteCreateInput = Pick<Quote, 'projectId'> & Partial<Omit<Quote, OwnedAuditKeys | 'projectId'>>;
+type CustomerCreateInput = Omit<Customer, 'id' | keyof ReturnType<typeof buildOwnedAudit>> & {
+  ownerUserId?: string;
+};
+type ProjectCreateInput = Omit<Project, 'id' | keyof ReturnType<typeof buildOwnedAudit>> & {
+  ownerUserId?: string;
+};
+type QuoteCreateInput = Pick<Quote, 'projectId'> & Partial<Omit<Quote, OwnedAuditKeys | 'projectId'>> & {
+  ownerUserId?: string;
+};
 
 const STARTER_WORKSPACE_VERSION = 1;
 
@@ -756,17 +764,19 @@ export function useCustomers() {
     return flattenUserScopedValues(visibleUserIds, customersByUserId);
   }, [customersByUserId, userId, visibleUserIds]);
 
-  const addCustomer = (customer: Omit<Customer, 'id' | keyof ReturnType<typeof buildOwnedAudit>>) => {
+  const addCustomer = (customer: CustomerCreateInput) => {
     const currentUserId = ensureSignedIn(userId);
     if (!canEdit) {
       throw new Error('Sinulla ei ole oikeuksia lisätä asiakkaita.');
     }
+    const ownerUserId = customer.ownerUserId || currentUserId;
     const newCustomer: Customer = {
       ...customer,
       id: crypto.randomUUID(),
-      ...buildOwnedAudit(currentUserId),
+      ...buildOwnedAudit(ownerUserId),
+      updatedByUserId: currentUserId,
     };
-    setCustomersForUser(currentUserId, (current = []) => [...current, newCustomer]);
+    setCustomersForUser(ownerUserId, (current = []) => [...current, newCustomer]);
     return newCustomer;
   };
 
@@ -780,10 +790,27 @@ export function useCustomers() {
       return;
     }
 
+    const nextOwnerUserId = updates.ownerUserId || targetCustomer.ownerUserId;
+    const nextCustomer: Customer = {
+      ...targetCustomer,
+      ...updates,
+      ownerUserId: nextOwnerUserId,
+      updatedAt: nowIso(),
+      updatedByUserId: currentUserId,
+    };
+
+    if (nextOwnerUserId !== targetCustomer.ownerUserId) {
+      setCustomersForUser(targetCustomer.ownerUserId, (current = []) =>
+        current.filter((customer) => customer.id !== id)
+      );
+      setCustomersForUser(nextOwnerUserId, (current = []) => [...current.filter((customer) => customer.id !== id), nextCustomer]);
+      return;
+    }
+
     setCustomersForUser(targetCustomer.ownerUserId, (current = []) =>
       current.map((customer) =>
         customer.id === id
-          ? { ...customer, ...updates, updatedAt: nowIso(), updatedByUserId: currentUserId }
+          ? nextCustomer
           : customer
       )
     );
@@ -831,17 +858,19 @@ export function useProjects() {
     return flattenUserScopedValues(visibleUserIds, projectsByUserId);
   }, [projectsByUserId, userId, visibleUserIds]);
 
-  const addProject = (project: Omit<Project, 'id' | keyof ReturnType<typeof buildOwnedAudit>>) => {
+  const addProject = (project: ProjectCreateInput) => {
     const currentUserId = ensureSignedIn(userId);
     if (!canEdit) {
       throw new Error('Sinulla ei ole oikeuksia lisätä projekteja.');
     }
+    const ownerUserId = project.ownerUserId || currentUserId;
     const newProject: Project = {
       ...project,
       id: crypto.randomUUID(),
-      ...buildOwnedAudit(currentUserId),
+      ...buildOwnedAudit(ownerUserId),
+      updatedByUserId: currentUserId,
     };
-    setProjectsForUser(currentUserId, (current = []) => [...current, newProject]);
+    setProjectsForUser(ownerUserId, (current = []) => [...current, newProject]);
     return newProject;
   };
 
@@ -855,10 +884,27 @@ export function useProjects() {
       return;
     }
 
+    const nextOwnerUserId = updates.ownerUserId || targetProject.ownerUserId;
+    const nextProject: Project = {
+      ...targetProject,
+      ...updates,
+      ownerUserId: nextOwnerUserId,
+      updatedAt: nowIso(),
+      updatedByUserId: currentUserId,
+    };
+
+    if (nextOwnerUserId !== targetProject.ownerUserId) {
+      setProjectsForUser(targetProject.ownerUserId, (current = []) =>
+        current.filter((project) => project.id !== id)
+      );
+      setProjectsForUser(nextOwnerUserId, (current = []) => [...current.filter((project) => project.id !== id), nextProject]);
+      return;
+    }
+
     setProjectsForUser(targetProject.ownerUserId, (current = []) =>
       current.map((project) =>
         project.id === id
-          ? { ...project, ...updates, updatedAt: nowIso(), updatedByUserId: currentUserId }
+          ? nextProject
           : project
       )
     );
@@ -942,10 +988,11 @@ export function useQuotes() {
       selectedMarginPercent: quote.selectedMarginPercent ?? settings.defaultMarginPercent,
       pricingMode: quote.pricingMode ?? 'margin',
       validUntil,
-      ...buildOwnedAudit(currentUserId),
+      ...buildOwnedAudit(quote.ownerUserId || currentUserId),
+      updatedByUserId: currentUserId,
       lastAutoSavedAt: now,
     };
-    setQuotesForUser(currentUserId, (current = []) => [...current, newQuote]);
+    setQuotesForUser(newQuote.ownerUserId, (current = []) => [...current, newQuote]);
     return newQuote;
   };
 
@@ -959,16 +1006,28 @@ export function useQuotes() {
       return;
     }
 
+    const nextOwnerUserId = updates.ownerUserId || targetQuote.ownerUserId;
+    const nextQuote: Quote = {
+      ...targetQuote,
+      ...updates,
+      ownerUserId: nextOwnerUserId,
+      updatedAt: nowIso(),
+      updatedByUserId: currentUserId,
+      lastAutoSavedAt: nowIso(),
+    };
+
+    if (nextOwnerUserId !== targetQuote.ownerUserId) {
+      setQuotesForUser(targetQuote.ownerUserId, (current = []) =>
+        current.filter((quote) => quote.id !== id)
+      );
+      setQuotesForUser(nextOwnerUserId, (current = []) => [...current.filter((quote) => quote.id !== id), nextQuote]);
+      return;
+    }
+
     setQuotesForUser(targetQuote.ownerUserId, (current = []) =>
       current.map((quote) =>
         quote.id === id
-          ? {
-              ...quote,
-              ...updates,
-              updatedAt: nowIso(),
-              updatedByUserId: currentUserId,
-              lastAutoSavedAt: nowIso(),
-            }
+          ? nextQuote
           : quote
       )
     );
@@ -1054,13 +1113,18 @@ export function useQuoteRows() {
     if (!canEdit) {
       throw new Error('Sinulla ei ole oikeuksia lisätä tarjousrivejä.');
     }
+    const parentQuote = quotes.find((quote) => quote.id === row.quoteId);
+    const ownerUserId = parentQuote?.ownerUserId || currentUserId;
     const newRow: QuoteRow = {
       ...row,
       id: crypto.randomUUID(),
       source: row.source ?? 'manual',
-      ...buildOwnedAudit(currentUserId),
+      pricingModel: row.pricingModel ?? 'unit_price',
+      priceAdjustment: row.priceAdjustment ?? 0,
+      ...buildOwnedAudit(ownerUserId),
+      updatedByUserId: currentUserId,
     };
-    setRowsForUser(currentUserId, (current = []) => [...current, newRow]);
+    setRowsForUser(ownerUserId, (current = []) => [...current, newRow]);
     return newRow;
   };
 
@@ -1074,10 +1138,29 @@ export function useQuoteRows() {
       return;
     }
 
+    const nextOwnerUserId = updates.ownerUserId || targetRow.ownerUserId;
+    const nextRow: QuoteRow = {
+      ...targetRow,
+      ...updates,
+      ownerUserId: nextOwnerUserId,
+      priceAdjustment: updates.priceAdjustment ?? targetRow.priceAdjustment ?? 0,
+      pricingModel: updates.pricingModel ?? targetRow.pricingModel,
+      updatedAt: nowIso(),
+      updatedByUserId: currentUserId,
+    };
+
+    if (nextOwnerUserId !== targetRow.ownerUserId) {
+      setRowsForUser(targetRow.ownerUserId, (current = []) =>
+        current.filter((row) => row.id !== id)
+      );
+      setRowsForUser(nextOwnerUserId, (current = []) => [...current.filter((row) => row.id !== id), nextRow]);
+      return;
+    }
+
     setRowsForUser(targetRow.ownerUserId, (current = []) =>
       current.map((row) =>
         row.id === id
-          ? { ...row, ...updates, updatedAt: nowIso(), updatedByUserId: currentUserId }
+          ? nextRow
           : row
       )
     );

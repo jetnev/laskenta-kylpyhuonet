@@ -3,6 +3,7 @@ export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'cancelled';
 export type QuoteDiscountType = 'none' | 'percent' | 'amount';
 export type QuotePricingMode = 'margin' | 'manual';
 export type QuoteRowMode = 'product' | 'installation' | 'product_installation' | 'section' | 'charge';
+export type QuoteRowPricingModel = 'unit_price' | 'line_total';
 export type TermTemplateCustomerSegment = 'consumer' | 'business';
 export type TermTemplateScopeType = 'product_only' | 'product_install' | 'installation_contract' | 'project';
 export type QuoteChargeType =
@@ -194,6 +195,7 @@ export interface QuoteRow extends OwnedFields {
   quoteId: string;
   sortOrder: number;
   mode: QuoteRowMode;
+  pricingModel?: QuoteRowPricingModel;
   chargeType?: QuoteChargeType;
   source?: 'manual' | 'catalog';
   productId?: string;
@@ -207,6 +209,7 @@ export interface QuoteRow extends OwnedFields {
   installationPrice: number;
   marginPercent: number;
   overridePrice?: number;
+  priceAdjustment?: number;
   regionMultiplier: number;
   installationGroupId?: string;
   notes?: string;

@@ -1,12 +1,32 @@
-import { Quote, QuoteRow, Customer, Project } from './types';
+import { Customer, Project, Quote, QuoteRow, type QuoteRowPricingModel } from './types';
 
 export interface QuoteRowCalculation {
-  productTotal: number;
-  installationTotal: number;
+  pricingModel: QuoteRowPricingModel;
+  enteredUnitPrice: number | null;
+  enteredLineTotal: number | null;
+  derivedUnitPrice: number;
+  baseTotal: number;
+  adjustmentTotal: number;
   rowTotal: number;
   costTotal: number;
   marginAmount: number;
   marginPercent: number;
+  isUnitPriceDerived: boolean;
+  usesLegacyPricing: boolean;
+}
+
+export interface QuoteRowPricingDetails {
+  pricingModel: QuoteRowPricingModel;
+  enteredUnitPrice: number | null;
+  enteredLineTotal: number | null;
+  derivedUnitPrice: number;
+  baseTotal: number;
+  adjustmentTotal: number;
+  netTotal: number;
+  vatAmount: number;
+  grossTotal: number;
+  isUnitPriceDerived: boolean;
+  usesLegacyPricing: boolean;
 }
 
 export interface QuoteCalculation {
@@ -51,6 +71,119 @@ function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+function normalizeNonNegativeNumber(value: number, fallback = 0) {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(0, value);
+}
+
+function normalizeAdjustment(value?: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return value as number;
+}
+
+function normalizeRegionMultiplier(row: QuoteRow) {
+  return Number.isFinite(row.regionMultiplier) && row.regionMultiplier > 0 ? row.regionMultiplier : 1;
+}
+
+export function getQuoteRowPricingModel(row: QuoteRow): QuoteRowPricingModel {
+  return row.pricingModel === 'line_total' ? 'line_total' : 'unit_price';
+}
+
+export function getLegacyQuoteRowUnitPrice(row: QuoteRow) {
+  if (row.mode === 'section') {
+    return 0;
+  }
+
+  const salesUnitPrice = row.mode !== 'installation'
+    ? normalizeNonNegativeNumber(row.salesPrice)
+    : 0;
+  const installationUnitPrice = row.mode !== 'product'
+    ? roundCurrency(normalizeNonNegativeNumber(row.installationPrice) * normalizeRegionMultiplier(row))
+    : 0;
+
+  return roundCurrency(salesUnitPrice + installationUnitPrice);
+}
+
+export function getQuoteRowPricingDetails(
+  row: QuoteRow,
+  vatPercent: number = 0
+): QuoteRowPricingDetails {
+  const quantity = Number.isFinite(row.quantity) ? Math.max(0, row.quantity) : 0;
+  const pricingModel = getQuoteRowPricingModel(row);
+  const usesLegacyPricing = row.pricingModel !== 'unit_price' && row.pricingModel !== 'line_total';
+  const adjustmentTotal = roundCurrency(normalizeAdjustment(row.priceAdjustment));
+  const normalizedVatPercent = normalizeNonNegativeNumber(vatPercent);
+
+  if (row.mode === 'section') {
+    return {
+      pricingModel,
+      enteredUnitPrice: null,
+      enteredLineTotal: null,
+      derivedUnitPrice: 0,
+      baseTotal: 0,
+      adjustmentTotal: 0,
+      netTotal: 0,
+      vatAmount: 0,
+      grossTotal: 0,
+      isUnitPriceDerived: false,
+      usesLegacyPricing,
+    };
+  }
+
+  const storedOrLegacyUnitPrice = usesLegacyPricing
+    ? getLegacyQuoteRowUnitPrice(row)
+    : roundCurrency(normalizeNonNegativeNumber(row.salesPrice));
+
+  if (pricingModel === 'line_total') {
+    const enteredLineTotal = roundCurrency(
+      normalizeNonNegativeNumber(
+        row.overridePrice ?? (usesLegacyPricing ? roundCurrency(storedOrLegacyUnitPrice * quantity) : 0)
+      )
+    );
+    const derivedUnitPrice = quantity > 0 ? roundCurrency(enteredLineTotal / quantity) : 0;
+    const netTotal = roundCurrency(Math.max(0, enteredLineTotal + adjustmentTotal));
+
+    return {
+      pricingModel,
+      enteredUnitPrice: null,
+      enteredLineTotal,
+      derivedUnitPrice,
+      baseTotal: enteredLineTotal,
+      adjustmentTotal,
+      netTotal,
+      vatAmount: roundCurrency(netTotal * (normalizedVatPercent / 100)),
+      grossTotal: roundCurrency(netTotal + roundCurrency(netTotal * (normalizedVatPercent / 100))),
+      isUnitPriceDerived: true,
+      usesLegacyPricing,
+    };
+  }
+
+  const enteredUnitPrice = storedOrLegacyUnitPrice;
+  const baseTotal = roundCurrency(enteredUnitPrice * quantity);
+  const netTotal = roundCurrency(Math.max(0, baseTotal + adjustmentTotal));
+  const vatAmount = roundCurrency(netTotal * (normalizedVatPercent / 100));
+
+  return {
+    pricingModel,
+    enteredUnitPrice,
+    enteredLineTotal: null,
+    derivedUnitPrice: enteredUnitPrice,
+    baseTotal,
+    adjustmentTotal,
+    netTotal,
+    vatAmount,
+    grossTotal: roundCurrency(netTotal + vatAmount),
+    isUnitPriceDerived: false,
+    usesLegacyPricing,
+  };
+}
+
 export function calculateTravelCosts(quote: Pick<Quote, 'travelKilometers' | 'travelRatePerKm'>) {
   return roundCurrency((quote.travelKilometers || 0) * (quote.travelRatePerKm || 0));
 }
@@ -70,42 +203,27 @@ export function getQuoteExtraChargeLines(quote: Quote): QuoteExtraChargeLine[] {
 }
 
 export function calculateQuoteRow(row: QuoteRow): QuoteRowCalculation {
-  if (row.mode === 'section') {
-    return {
-      productTotal: 0,
-      installationTotal: 0,
-      rowTotal: 0,
-      costTotal: 0,
-      marginAmount: 0,
-      marginPercent: 0,
-    };
-  }
-
-  const quantity = Number.isFinite(row.quantity) ? row.quantity : 0;
-  const regionMultiplier = Number.isFinite(row.regionMultiplier) && row.regionMultiplier > 0 ? row.regionMultiplier : 1;
-  const productTotal = row.mode !== 'installation' ? roundCurrency(row.salesPrice * quantity) : 0;
-  const installationTotal = row.mode !== 'product'
-    ? roundCurrency(row.installationPrice * quantity * regionMultiplier)
-    : 0;
-
+  const quantity = Number.isFinite(row.quantity) ? Math.max(0, row.quantity) : 0;
+  const pricing = getQuoteRowPricingDetails(row);
   const costTotal = row.mode !== 'installation'
-    ? roundCurrency(row.purchasePrice * quantity)
+    ? roundCurrency(normalizeNonNegativeNumber(row.purchasePrice) * quantity)
     : 0;
-
-  const rowTotal = row.overridePrice !== undefined
-    ? roundCurrency(row.overridePrice)
-    : roundCurrency(productTotal + installationTotal);
-
-  const marginAmount = roundCurrency(rowTotal - costTotal);
-  const marginPercent = rowTotal > 0 ? roundCurrency((marginAmount / rowTotal) * 100) : 0;
+  const marginAmount = roundCurrency(pricing.netTotal - costTotal);
+  const marginPercent = pricing.netTotal > 0 ? roundCurrency((marginAmount / pricing.netTotal) * 100) : 0;
 
   return {
-    productTotal,
-    installationTotal,
-    rowTotal,
+    pricingModel: pricing.pricingModel,
+    enteredUnitPrice: pricing.enteredUnitPrice,
+    enteredLineTotal: pricing.enteredLineTotal,
+    derivedUnitPrice: pricing.derivedUnitPrice,
+    baseTotal: pricing.baseTotal,
+    adjustmentTotal: pricing.adjustmentTotal,
+    rowTotal: pricing.netTotal,
     costTotal,
     marginAmount,
     marginPercent,
+    isUnitPriceDerived: pricing.isUnitPriceDerived,
+    usesLegacyPricing: pricing.usesLegacyPricing,
   };
 }
 
@@ -194,6 +312,12 @@ export function canSendQuote(
     }
     if (row.quantity <= 0) {
       errors.push({ field: `row-${index}`, message: `Rivin ${index + 1} määrä on virheellinen.` });
+    }
+    if (getQuoteRowPricingModel(row) === 'unit_price' && normalizeNonNegativeNumber(row.salesPrice) <= 0) {
+      errors.push({ field: `row-${index}`, message: `Rivin ${index + 1} yksikköhinta puuttuu tai on virheellinen.` });
+    }
+    if (getQuoteRowPricingModel(row) === 'line_total' && normalizeNonNegativeNumber(row.overridePrice ?? 0) <= 0) {
+      errors.push({ field: `row-${index}`, message: `Rivin ${index + 1} kokonaishinta puuttuu tai on virheellinen.` });
     }
     if (calculateQuoteRow(row).marginAmount < 0) {
       warnings.push({ field: `row-${index}`, message: `Rivin ${index + 1} kate on negatiivinen.` });

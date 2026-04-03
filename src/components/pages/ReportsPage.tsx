@@ -15,6 +15,8 @@ import { fi } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { calculateQuote, calculateQuoteRow } from '../../lib/calculations';
+import { useAuth } from '../../hooks/use-auth';
+import { buildSalesOwnershipSummary, filterOwnedRecords, getResponsibleUserLabel } from '../../lib/ownership';
 import { exportReportsToPDF } from '../../lib/export';
 import { useDocumentSettings } from '../../hooks/use-data';
 
@@ -27,13 +29,40 @@ type DateRange = {
 export default function ReportsPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>('3m');
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
+  const [ownerFilter, setOwnerFilter] = useState('all');
+  const { user, users, canManageUsers } = useAuth();
   const { projects } = useProjects();
   const { quotes } = useQuotes();
   const { rows } = useQuoteRows();
   const { customers } = useCustomers();
   const { documentSettings } = useDocumentSettings();
 
-  const filteredQuotes = useMemo(() => {
+  const responsibleUsers = useMemo(
+    () =>
+      [user, ...users]
+        .filter((candidate): candidate is NonNullable<typeof user> => Boolean(candidate))
+        .filter((candidate, index, collection) => collection.findIndex((item) => item.id === candidate.id) === index)
+        .map((candidate) => ({ id: candidate.id, displayName: candidate.displayName }))
+        .sort((left, right) => left.displayName.localeCompare(right.displayName, 'fi')),
+    [user, users]
+  );
+
+  const filteredProjects = useMemo(
+    () => filterOwnedRecords(projects, ownerFilter),
+    [ownerFilter, projects]
+  );
+
+  const filteredCustomers = useMemo(
+    () => filterOwnedRecords(customers, ownerFilter),
+    [customers, ownerFilter]
+  );
+
+  const ownerScopedQuotes = useMemo(
+    () => filterOwnedRecords(quotes, ownerFilter),
+    [ownerFilter, quotes]
+  );
+
+  const timeFilteredQuotes = useMemo(() => {
     if (timeRange === 'custom' && dateRange.from && dateRange.to) {
       return quotes.filter(q => {
         const date = new Date(q.createdAt);
@@ -58,8 +87,29 @@ export default function ReportsPage() {
     return quotes.filter(q => new Date(q.createdAt) >= startDate);
   }, [quotes, timeRange, dateRange]);
 
+  const filteredQuotes = useMemo(
+    () => filterOwnedRecords(timeFilteredQuotes, ownerFilter),
+    [ownerFilter, timeFilteredQuotes]
+  );
+
+  const quoteAnalytics = useMemo(() => {
+    const analytics = new Map<string, { rows: typeof rows; subtotal: number; margin: number }>();
+
+    filteredQuotes.forEach((quote) => {
+      const quoteRows = rows.filter((row) => row.quoteId === quote.id);
+      const calculation = calculateQuote(quote, quoteRows);
+      analytics.set(quote.id, {
+        rows: quoteRows,
+        subtotal: calculation.subtotal,
+        margin: calculation.totalMargin,
+      });
+    });
+
+    return analytics;
+  }, [filteredQuotes, rows]);
+
   const kpiData = useMemo(() => {
-    const totalProjects = projects.length;
+    const totalProjects = filteredProjects.length;
     const totalQuotes = filteredQuotes.length;
     const sentQuotes = filteredQuotes.filter(q => q.status === 'sent').length;
     const acceptedQuotes = filteredQuotes.filter(q => q.status === 'accepted').length;
@@ -72,10 +122,8 @@ export default function ReportsPage() {
     let totalMargin = 0;
 
     filteredQuotes.forEach(quote => {
-      const quoteRows = rows.filter(r => r.quoteId === quote.id);
-      const calculation = calculateQuote(quote, quoteRows);
-      totalValue += calculation.subtotal;
-      totalMargin += calculation.totalMargin;
+      totalValue += quoteAnalytics.get(quote.id)?.subtotal || 0;
+      totalMargin += quoteAnalytics.get(quote.id)?.margin || 0;
     });
     
     const marginPercent = totalValue > 0 ? (totalMargin / totalValue) * 100 : 0;
@@ -92,7 +140,7 @@ export default function ReportsPage() {
       totalMargin,
       marginPercent,
     };
-  }, [projects, filteredQuotes, rows]);
+  }, [filteredProjects.length, filteredQuotes, quoteAnalytics]);
 
   const statusData = useMemo(() => [
     { name: 'Luonnos', value: kpiData.draftQuotes, color: 'oklch(0.65 0.02 250)' },
@@ -110,11 +158,9 @@ export default function ReportsPage() {
         months[monthKey] = { quotes: 0, value: 0, margin: 0 };
       }
       months[monthKey].quotes += 1;
-      
-      const quoteRows = rows.filter(r => r.quoteId === quote.id);
-      const calculation = calculateQuote(quote, quoteRows);
-      months[monthKey].value += calculation.subtotal;
-      months[monthKey].margin += calculation.totalMargin;
+
+      months[monthKey].value += quoteAnalytics.get(quote.id)?.subtotal || 0;
+      months[monthKey].margin += quoteAnalytics.get(quote.id)?.margin || 0;
     });
 
     return Object.keys(months)
@@ -125,13 +171,13 @@ export default function ReportsPage() {
         value: Math.round(months[key].value),
         margin: Math.round(months[key].margin),
       }));
-  }, [filteredQuotes, rows]);
+  }, [filteredQuotes, quoteAnalytics]);
 
   const topProducts = useMemo(() => {
     const productStats: { [key: string]: { name: string; code: string; quantity: number; value: number; count: number } } = {};
     
     filteredQuotes.forEach(quote => {
-      const quoteRows = rows.filter(r => r.quoteId === quote.id);
+      const quoteRows = quoteAnalytics.get(quote.id)?.rows || [];
       quoteRows.forEach(row => {
         if (!row.productId) return;
         
@@ -156,12 +202,15 @@ export default function ReportsPage() {
     return Object.values(productStats)
       .sort((a, b) => b.value - a.value)
       .slice(0, 15);
-  }, [filteredQuotes, rows]);
+  }, [filteredQuotes, quoteAnalytics]);
 
   const customerAnalysis = useMemo(() => {
+    const customerById = new Map(filteredCustomers.map((customer) => [customer.id, customer]));
     const customerStats: { 
       [key: string]: { 
+        id: string;
         name: string; 
+        ownerUserId?: string | null;
         projectCount: number; 
         quoteCount: number; 
         totalValue: number; 
@@ -171,15 +220,17 @@ export default function ReportsPage() {
       } 
     } = {};
     
-    projects.forEach(project => {
+    filteredProjects.forEach(project => {
       if (!project.customerId) return;
       
-      const customer = customers.find(c => c.id === project.customerId);
+      const customer = customerById.get(project.customerId);
       if (!customer) return;
       
       if (!customerStats[project.customerId]) {
         customerStats[project.customerId] = {
+          id: customer.id,
           name: customer.name,
+          ownerUserId: customer.ownerUserId,
           projectCount: 0,
           quoteCount: 0,
           totalValue: 0,
@@ -195,8 +246,7 @@ export default function ReportsPage() {
       customerStats[project.customerId].quoteCount += projectQuotes.length;
       
       projectQuotes.forEach(quote => {
-        const quoteRows = rows.filter(r => r.quoteId === quote.id);
-        const quoteValue = calculateQuote(quote, quoteRows).subtotal;
+        const quoteValue = quoteAnalytics.get(quote.id)?.subtotal || 0;
         
         customerStats[project.customerId].totalValue += quoteValue;
         
@@ -215,29 +265,45 @@ export default function ReportsPage() {
       .sort((a, b) => b.totalValue - a.totalValue)
       .map(stat => ({
         ...stat,
+        responsibleUserLabel: getResponsibleUserLabel(stat.ownerUserId, responsibleUsers),
         acceptanceRate: stat.sentCount > 0 ? (stat.acceptedCount / stat.sentCount) * 100 : 0,
       }));
-  }, [projects, customers, filteredQuotes, rows]);
+  }, [filteredCustomers, filteredProjects, filteredQuotes, quoteAnalytics, responsibleUsers]);
 
   const recentProjects = useMemo(() => {
-    return [...projects]
+    return [...filteredProjects]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 10)
       .map(project => {
-        const customer = customers.find(c => c.id === project.customerId);
-        const projectQuotes = quotes.filter(q => q.projectId === project.id);
-        const latestQuote = projectQuotes.sort((a, b) => 
+        const customer = filteredCustomers.find(c => c.id === project.customerId) || customers.find(c => c.id === project.customerId);
+        const projectQuotes = ownerScopedQuotes.filter(q => q.projectId === project.id);
+        const latestQuote = [...projectQuotes].sort((a, b) => 
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         )[0];
         
         return {
           ...project,
           customerName: customer?.name || 'Ei asiakasta',
+          responsibleUserLabel: getResponsibleUserLabel(project.ownerUserId || customer?.ownerUserId, responsibleUsers),
           quoteCount: projectQuotes.length,
           latestStatus: latestQuote?.status,
         };
       });
-  }, [projects, customers, quotes]);
+  }, [customers, filteredCustomers, filteredProjects, ownerScopedQuotes, responsibleUsers]);
+
+  const ownershipSummary = useMemo(
+    () =>
+      buildSalesOwnershipSummary({
+        customers: filteredCustomers,
+        projects: filteredProjects,
+        quotes: filteredQuotes.map((quote) => ({
+          ownerUserId: quote.ownerUserId,
+          subtotal: quoteAnalytics.get(quote.id)?.subtotal || 0,
+        })),
+        users: responsibleUsers,
+      }),
+    [filteredCustomers, filteredProjects, filteredQuotes, quoteAnalytics, responsibleUsers]
+  );
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('fi-FI', {
@@ -277,6 +343,14 @@ export default function ReportsPage() {
               ? 'Viimeiset 6 kk'
               : 'Viimeinen vuosi';
 
+  const ownerFilterLabel = ownerFilter === 'all'
+    ? 'Kaikki vastuuhenkilöt'
+    : getResponsibleUserLabel(ownerFilter, responsibleUsers);
+
+  const exportScopeLabel = ownerFilter === 'all'
+    ? periodLabel
+    : `${periodLabel} • ${ownerFilterLabel}`;
+
   const exportToPDF = () => {
     if (timeRange === 'custom' && (!dateRange.from || !dateRange.to)) {
       toast.error('Valitse päivämääräväli ennen PDF-vientiä');
@@ -285,7 +359,7 @@ export default function ReportsPage() {
 
     try {
       exportReportsToPDF({
-        periodLabel,
+        periodLabel: exportScopeLabel,
         generatedAt: format(new Date(), 'dd.MM.yyyy HH:mm', { locale: fi }),
         kpiData,
         statusData,
@@ -313,6 +387,7 @@ export default function ReportsPage() {
       ['Raportti', 'Laskenta Tarjouslaskenta'],
       ['Luontipäivä', format(new Date(), 'dd.MM.yyyy HH:mm', { locale: fi })],
       ['Aikaväli', periodLabel],
+      ['Vastuuhenkilö', ownerFilterLabel],
       [],
       ['Avainluvut'],
       ['Projektit yhteensä', kpiData.totalProjects],
@@ -348,6 +423,20 @@ export default function ReportsPage() {
         </div>
         
         <div className="flex gap-3">
+          {canManageUsers && responsibleUsers.length > 0 && (
+            <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Vastuuhenkilö" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Kaikki vastuuhenkilöt</SelectItem>
+                {responsibleUsers.map((responsibleUser) => (
+                  <SelectItem key={responsibleUser.id} value={responsibleUser.id}>{responsibleUser.displayName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className={cn(timeRange === 'custom' && 'border-primary')}>
@@ -457,6 +546,39 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {canManageUsers && ownershipSummary.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Vastuuhenkilöittäin</CardTitle>
+            <CardDescription>Asiakkaat, projektit ja tarjousten arvo vastuuhenkilön mukaan</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Vastuuhenkilö</TableHead>
+                  <TableHead className="text-right">Asiakkaat</TableHead>
+                  <TableHead className="text-right">Projektit</TableHead>
+                  <TableHead className="text-right">Tarjoukset</TableHead>
+                  <TableHead className="text-right">Tarjousarvo</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {ownershipSummary.map((summary) => (
+                  <TableRow key={summary.userId}>
+                    <TableCell className="font-medium">{summary.displayName}</TableCell>
+                    <TableCell className="text-right">{summary.customerCount}</TableCell>
+                    <TableCell className="text-right">{summary.projectCount}</TableCell>
+                    <TableCell className="text-right">{summary.quoteCount}</TableCell>
+                    <TableCell className="text-right font-mono">{formatCurrency(summary.totalQuoteValue)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList>
@@ -692,6 +814,7 @@ export default function ReportsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Asiakas</TableHead>
+                      <TableHead>Vastuuhenkilö</TableHead>
                       <TableHead className="text-right">Projektit</TableHead>
                       <TableHead className="text-right">Tarjoukset</TableHead>
                       <TableHead className="text-right">Kokonaisarvo</TableHead>
@@ -703,6 +826,7 @@ export default function ReportsPage() {
                     {customerAnalysis.map((customer, index) => (
                       <TableRow key={index}>
                         <TableCell className="font-medium">{customer.name}</TableCell>
+                        <TableCell>{customer.responsibleUserLabel}</TableCell>
                         <TableCell className="text-right">{customer.projectCount}</TableCell>
                         <TableCell className="text-right">{customer.quoteCount}</TableCell>
                         <TableCell className="text-right font-mono">{formatCurrency(customer.totalValue)}</TableCell>
@@ -741,6 +865,7 @@ export default function ReportsPage() {
                     <TableRow>
                       <TableHead>Projekti</TableHead>
                       <TableHead>Asiakas</TableHead>
+                      <TableHead>Vastuuhenkilö</TableHead>
                       <TableHead>Alue</TableHead>
                       <TableHead className="text-right">Tarjouksia</TableHead>
                       <TableHead>Viimeisin tila</TableHead>
@@ -752,6 +877,7 @@ export default function ReportsPage() {
                       <TableRow key={project.id}>
                         <TableCell className="font-medium">{project.name}</TableCell>
                         <TableCell>{project.customerName}</TableCell>
+                        <TableCell>{project.responsibleUserLabel}</TableCell>
                         <TableCell>{project.region || '-'}</TableCell>
                         <TableCell className="text-right">{project.quoteCount}</TableCell>
                         <TableCell>

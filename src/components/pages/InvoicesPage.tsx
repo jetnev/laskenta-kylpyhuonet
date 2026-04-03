@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle, Clock, Eye, FilePdf, Plus, Receipt, Trash, XCircle } from '@phosphor-icons/react';
+import { Eye, FilePdf, Plus, Trash } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import InvoiceEditor from '../InvoiceEditor';
 import { Badge } from '../ui/badge';

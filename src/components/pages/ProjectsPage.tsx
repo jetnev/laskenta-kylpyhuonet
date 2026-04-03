@@ -7,8 +7,10 @@ import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
 import { useProjects, useCustomers, useQuotes, useQuoteRows, useQuoteTerms, useSettings, useStarterWorkspaceTemplate } from '../../hooks/use-data';
+import { useAuth } from '../../hooks/use-auth';
 import { toast } from 'sonner';
 import { Project, Customer } from '../../lib/types';
+import { filterOwnedRecords, getResponsibleUserLabel } from '../../lib/ownership';
 import QuoteEditor from '../QuoteEditor';
 import FieldHelpLabel from '../FieldHelpLabel';
 
@@ -17,6 +19,7 @@ const PROJECT_FIELD_HELP = {
   name: 'Projektin nimi on sisäinen otsikko, jonka perusteella löydät kohteen myöhemmin nopeasti.',
   site: 'Työkohde kertoo missä työ tehdään. Lisää osoite tai selkeä kohteen nimi, jotta se näkyy oikein tarjouksilla.',
   regionCoefficient: 'Aluekerroin auttaa korottamaan tai laskemaan hintoja alueen mukaan. Jätä arvoksi 1, jos et käytä aluekohtaista hinnoittelua.',
+  ownerUserId: 'Vastuuhenkilö määrittää kenelle projekti kuuluu. Uudet tarjoukset perivät projektin tai asiakkaan vastuuhenkilön oletuksena.',
 } as const;
 
 const CUSTOMER_FIELD_HELP = {
@@ -25,10 +28,16 @@ const CUSTOMER_FIELD_HELP = {
   email: 'Sähköpostia voidaan käyttää tarjouksiin, yhteydenpitoon ja myöhemmin automatisoituihin viesteihin.',
   phone: 'Puhelinnumero auttaa nopeassa yhteydenotossa työmaan tai tarjousvaiheen aikana.',
   address: 'Osoite on hyödyllinen laskutuksessa, dokumenteissa ja asiakkaan tunnistamisessa.',
+  ownerUserId: 'Vastuuhenkilö näkyy asiakaslistassa, projekteilla ja tarjouksilla. Omistaja tai admin voi vaihtaa vastuuhenkilön tästä.',
+} as const;
+
+const PAGE_FIELD_HELP = {
+  ownerFilter: 'Rajaa näkyviin vain tietyn vastuuhenkilön asiakkaat, projektit ja tarjoukset. Omistaja tai admin voi vaihtaa näkymää tästä.',
 } as const;
 
 export default function ProjectsPage() {
   const starterWorkspace = useStarterWorkspaceTemplate();
+  const { user, users, canManageUsers } = useAuth();
   const { projects, addProject, updateProject, deleteProject } = useProjects();
   const { customers, addCustomer, updateCustomer, deleteCustomer, getCustomer } = useCustomers();
   const { addQuote, getQuotesForProject, deleteQuote } = useQuotes();
@@ -46,12 +55,35 @@ export default function ProjectsPage() {
   const [selectedQuotes, setSelectedQuotes] = useState<Set<string>>(new Set());
   const [searchProjects, setSearchProjects] = useState('');
   const [searchCustomers, setSearchCustomers] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState('all');
+
+  const responsibleUsers = [user, ...users]
+    .filter((candidate): candidate is NonNullable<typeof user> => Boolean(candidate))
+    .filter((candidate, index, collection) => collection.findIndex((item) => item.id === candidate.id) === index)
+    .map((candidate) => ({ id: candidate.id, displayName: candidate.displayName }))
+    .sort((left, right) => left.displayName.localeCompare(right.displayName, 'fi'));
+
+  const resolveDefaultOwnerUserId = (fallback?: string | null) => {
+    if (fallback) {
+      return fallback;
+    }
+
+    if (canManageUsers && ownerFilter !== 'all') {
+      return ownerFilter;
+    }
+
+    return user?.id || '';
+  };
+
+  const resolveResponsibleUserLabel = (ownerUserId?: string | null) =>
+    getResponsibleUserLabel(ownerUserId, responsibleUsers);
   
   const [projectForm, setProjectForm] = useState({
     customerId: '',
     name: '',
     site: '',
     regionCoefficient: 1.0,
+    ownerUserId: '',
     customOptions: [] as { id: string; label: string; value: string }[],
   });
   
@@ -61,12 +93,14 @@ export default function ProjectsPage() {
     email: '',
     phone: '',
     address: '',
+    ownerUserId: '',
   });
 
-  const filteredProjects = projects.filter(project => {
+  const filteredProjects = filterOwnedRecords(projects, ownerFilter).filter(project => {
     const customer = getCustomer(project.customerId);
-    const projectQuotes = getQuotesForProject(project.id);
+    const projectQuotes = filterOwnedRecords(getQuotesForProject(project.id), ownerFilter);
     const searchLower = searchProjects.trim().toLowerCase();
+    const projectResponsibleLabel = resolveResponsibleUserLabel(project.ownerUserId || customer?.ownerUserId).toLowerCase();
 
     if (!searchLower) {
       return true;
@@ -75,11 +109,13 @@ export default function ProjectsPage() {
     return (
       project.name.toLowerCase().includes(searchLower) ||
       project.site.toLowerCase().includes(searchLower) ||
+      projectResponsibleLabel.includes(searchLower) ||
       (customer && customer.name.toLowerCase().includes(searchLower)) ||
       projectQuotes.some((quote) =>
         [
           quote.title,
           quote.quoteNumber,
+          resolveResponsibleUserLabel(quote.ownerUserId || project.ownerUserId || customer?.ownerUserId),
           quote.status === 'draft' ? 'luonnos' :
           quote.status === 'sent' ? 'lähetetty' :
           quote.status === 'accepted' ? 'hyväksytty' :
@@ -91,11 +127,19 @@ export default function ProjectsPage() {
     );
   });
 
-  const filteredCustomers = customers.filter(c =>
-    c.name.toLowerCase().includes(searchCustomers.toLowerCase()) ||
-    (c.contactPerson && c.contactPerson.toLowerCase().includes(searchCustomers.toLowerCase())) ||
-    (c.email && c.email.toLowerCase().includes(searchCustomers.toLowerCase()))
-  );
+  const filteredCustomers = filterOwnedRecords(customers, ownerFilter).filter((customer) => {
+    const searchLower = searchCustomers.trim().toLowerCase();
+    if (!searchLower) {
+      return true;
+    }
+
+    return (
+      customer.name.toLowerCase().includes(searchLower) ||
+      (customer.contactPerson && customer.contactPerson.toLowerCase().includes(searchLower)) ||
+      (customer.email && customer.email.toLowerCase().includes(searchLower)) ||
+      resolveResponsibleUserLabel(customer.ownerUserId).toLowerCase().includes(searchLower)
+    );
+  });
 
   useEffect(() => {
     if (!starterWorkspace) {
@@ -111,17 +155,29 @@ export default function ProjectsPage() {
       return;
     }
 
+    const selectedCustomer = customers.find((customer) => customer.id === projectForm.customerId);
+    const ownerUserId = projectForm.ownerUserId || selectedCustomer?.ownerUserId || user?.id;
+    if (!ownerUserId) {
+      toast.error('Valitse projektille vastuuhenkilö');
+      return;
+    }
+
+    const nextProject = {
+      ...projectForm,
+      ownerUserId,
+    };
+
     if (editingProject) {
-      updateProject(editingProject.id, projectForm);
+      updateProject(editingProject.id, nextProject);
       toast.success('Projekti päivitetty');
     } else {
-      addProject(projectForm);
+      addProject(nextProject);
       toast.success('Projekti luotu');
     }
     
     setShowProjectDialog(false);
     setEditingProject(null);
-    setProjectForm({ customerId: '', name: '', site: '', regionCoefficient: 1.0, customOptions: [] });
+    setProjectForm({ customerId: '', name: '', site: '', regionCoefficient: 1.0, ownerUserId: resolveDefaultOwnerUserId(), customOptions: [] });
   };
 
   const handleSaveCustomer = () => {
@@ -130,26 +186,39 @@ export default function ProjectsPage() {
       return;
     }
 
+    const ownerUserId = customerForm.ownerUserId || user?.id;
+    if (!ownerUserId) {
+      toast.error('Valitse asiakkaalle vastuuhenkilö');
+      return;
+    }
+
+    const nextCustomer = {
+      ...customerForm,
+      ownerUserId,
+    };
+
     if (editingCustomer) {
-      updateCustomer(editingCustomer.id, customerForm);
+      updateCustomer(editingCustomer.id, nextCustomer);
       toast.success('Asiakas päivitetty');
     } else {
-      addCustomer(customerForm);
+      addCustomer(nextCustomer);
       toast.success('Asiakas luotu');
     }
     
     setShowCustomerDialog(false);
     setEditingCustomer(null);
-    setCustomerForm({ name: '', contactPerson: '', email: '', phone: '', address: '' });
+    setCustomerForm({ name: '', contactPerson: '', email: '', phone: '', address: '', ownerUserId: resolveDefaultOwnerUserId() });
   };
 
   const handleEditProject = (project: Project) => {
+    const customer = getCustomer(project.customerId);
     setEditingProject(project);
     setProjectForm({
       customerId: project.customerId,
       name: project.name,
       site: project.site,
       regionCoefficient: project.regionCoefficient,
+      ownerUserId: project.ownerUserId || customer?.ownerUserId || resolveDefaultOwnerUserId(customer?.ownerUserId),
       customOptions: project.customOptions || [],
     });
     setShowProjectDialog(true);
@@ -163,6 +232,7 @@ export default function ProjectsPage() {
       email: customer.email || '',
       phone: customer.phone || '',
       address: customer.address || '',
+      ownerUserId: customer.ownerUserId || resolveDefaultOwnerUserId(customer.ownerUserId),
     });
     setShowCustomerDialog(true);
   };
@@ -216,6 +286,8 @@ export default function ProjectsPage() {
       return;
     }
 
+    const customer = customers.find((candidate) => candidate.id === project.customerId);
+
     const defaultTerms = getDefaultTerms();
     const termsSnapshot = createQuoteTermsSnapshot(defaultTerms);
     const newQuote = addQuote({
@@ -234,6 +306,7 @@ export default function ProjectsPage() {
       installationCosts: 0,
       notes: '',
       internalNotes: '',
+      ownerUserId: project.ownerUserId || customer?.ownerUserId || user?.id,
       scheduleMilestones: [],
     });
 
@@ -299,6 +372,27 @@ export default function ProjectsPage() {
           <h1 className="text-2xl sm:text-3xl font-semibold">Projektit ja Asiakkaat</h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">Hallinnoi projekteja, asiakkaita ja tarjouksia</p>
         </div>
+        {canManageUsers && responsibleUsers.length > 0 && (
+          <div className="w-full sm:w-80">
+            <FieldHelpLabel
+              htmlFor="owner-filter"
+              label="Vastuuhenkilö"
+              help={PAGE_FIELD_HELP.ownerFilter}
+              className="mb-2"
+            />
+            <select
+              id="owner-filter"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={ownerFilter}
+              onChange={(event) => setOwnerFilter(event.target.value)}
+            >
+              <option value="all">Kaikki vastuuhenkilöt</option>
+              {responsibleUsers.map((responsibleUser) => (
+                <option key={responsibleUser.id} value={responsibleUser.id}>{responsibleUser.displayName}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {selectedQuotes.size > 0 && (
@@ -333,7 +427,14 @@ export default function ProjectsPage() {
                   size="sm"
                   onClick={() => {
                     setEditingProject(null);
-                    setProjectForm({ customerId: '', name: '', site: '', regionCoefficient: 1.0, customOptions: [] });
+                    setProjectForm({
+                      customerId: '',
+                      name: '',
+                      site: '',
+                      regionCoefficient: 1.0,
+                      ownerUserId: resolveDefaultOwnerUserId(),
+                      customOptions: [],
+                    });
                   }}
                 >
                   <Plus className="h-4 w-4" />
@@ -351,7 +452,15 @@ export default function ProjectsPage() {
                       id="customer"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={projectForm.customerId}
-                      onChange={(e) => setProjectForm({ ...projectForm, customerId: e.target.value })}
+                      onChange={(event) => {
+                        const nextCustomerId = event.target.value;
+                        const nextCustomer = customers.find((customer) => customer.id === nextCustomerId);
+                        setProjectForm((current) => ({
+                          ...current,
+                          customerId: nextCustomerId,
+                          ownerUserId: current.ownerUserId || nextCustomer?.ownerUserId || current.ownerUserId,
+                        }));
+                      }}
                     >
                       <option value="">Valitse asiakas...</option>
                       {customers.map(c => (
@@ -387,6 +496,21 @@ export default function ProjectsPage() {
                       onChange={(e) => setProjectForm({ ...projectForm, regionCoefficient: parseFloat(e.target.value) || 1.0 })}
                     />
                   </div>
+                  {canManageUsers && responsibleUsers.length > 0 && (
+                    <div>
+                      <FieldHelpLabel htmlFor="project-owner" label="Vastuuhenkilö" required help={PROJECT_FIELD_HELP.ownerUserId} className="mb-2" />
+                      <select
+                        id="project-owner"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={projectForm.ownerUserId || resolveDefaultOwnerUserId()}
+                        onChange={(event) => setProjectForm({ ...projectForm, ownerUserId: event.target.value })}
+                      >
+                        {responsibleUsers.map((responsibleUser) => (
+                          <option key={responsibleUser.id} value={responsibleUser.id}>{responsibleUser.displayName}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <Button onClick={handleSaveProject} className="w-full">
                     {editingProject ? 'Päivitä' : 'Luo projekti'}
                   </Button>
@@ -416,7 +540,8 @@ export default function ProjectsPage() {
             <div className="space-y-3 max-h-[600px] overflow-y-auto">
               {filteredProjects.map(project => {
                 const customer = getCustomer(project.customerId);
-                const projectQuotes = getQuotesForProject(project.id);
+                const projectQuotes = filterOwnedRecords(getQuotesForProject(project.id), ownerFilter);
+                const projectResponsibleLabel = resolveResponsibleUserLabel(project.ownerUserId || customer?.ownerUserId);
                 
                 return (
                   <div key={project.id} className="border rounded-lg p-4 space-y-2">
@@ -425,6 +550,7 @@ export default function ProjectsPage() {
                         <h3 className="font-medium">{project.name}</h3>
                         <p className="text-sm text-muted-foreground">{customer?.name}</p>
                         <p className="text-sm text-muted-foreground">{project.site}</p>
+                        <p className="text-xs text-muted-foreground mt-2">Vastuuhenkilö: {projectResponsibleLabel}</p>
                       </div>
                       <div className="flex gap-1">
                         <Button
@@ -473,6 +599,9 @@ export default function ProjectsPage() {
                               className="flex-1 cursor-pointer hover:underline"
                               onClick={() => handleEditQuote(project.id, quote.id)}
                             >
+                              <div className="text-xs text-muted-foreground mb-1">
+                                Vastuuhenkilö: {resolveResponsibleUserLabel(quote.ownerUserId || project.ownerUserId || customer?.ownerUserId)}
+                              </div>
                               <div className="flex items-center gap-2">
                                 <span>{quote.title}</span>
                                 {quote.quoteNumber && (
@@ -527,7 +656,14 @@ export default function ProjectsPage() {
                   size="sm"
                   onClick={() => {
                     setEditingCustomer(null);
-                    setCustomerForm({ name: '', contactPerson: '', email: '', phone: '', address: '' });
+                    setCustomerForm({
+                      name: '',
+                      contactPerson: '',
+                      email: '',
+                      phone: '',
+                      address: '',
+                      ownerUserId: resolveDefaultOwnerUserId(),
+                    });
                   }}
                 >
                   <Plus className="h-4 w-4" />
@@ -585,6 +721,21 @@ export default function ProjectsPage() {
                       placeholder="Mannerheimintie 1, 00100 Helsinki"
                     />
                   </div>
+                  {canManageUsers && responsibleUsers.length > 0 && (
+                    <div>
+                      <FieldHelpLabel htmlFor="customer-owner" label="Vastuuhenkilö" required help={CUSTOMER_FIELD_HELP.ownerUserId} className="mb-2" />
+                      <select
+                        id="customer-owner"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={customerForm.ownerUserId || resolveDefaultOwnerUserId()}
+                        onChange={(event) => setCustomerForm({ ...customerForm, ownerUserId: event.target.value })}
+                      >
+                        {responsibleUsers.map((responsibleUser) => (
+                          <option key={responsibleUser.id} value={responsibleUser.id}>{responsibleUser.displayName}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <Button onClick={handleSaveCustomer} className="w-full">
                     {editingCustomer ? 'Päivitä' : 'Luo asiakas'}
                   </Button>
@@ -599,7 +750,7 @@ export default function ProjectsPage() {
               <Input
                 value={searchCustomers}
                 onChange={(e) => setSearchCustomers(e.target.value)}
-                placeholder="Hae asiakkaita..."
+                placeholder="Hae asiakasta tai vastuuhenkilöä..."
                 className="pl-10"
               />
             </div>
@@ -620,6 +771,7 @@ export default function ProjectsPage() {
                     <div className="flex items-start justify-between">
                       <div>
                         <h3 className="font-medium">{customer.name}</h3>
+                        <p className="text-xs text-muted-foreground mt-1">Vastuuhenkilö: {resolveResponsibleUserLabel(customer.ownerUserId)}</p>
                         {customer.contactPerson && (
                           <p className="text-sm text-muted-foreground">{customer.contactPerson}</p>
                         )}
