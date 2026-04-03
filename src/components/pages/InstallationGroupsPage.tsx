@@ -227,6 +227,9 @@ export default function InstallationGroupsPage() {
 
   const hasCategoryConfiguration =
     Boolean(categorySettings.industryPreset) || categorySettings.preferences.length > 0;
+  const visibleCategoryCount = visibleCategoryItems.length;
+  const favoriteCategoryCount = categoryItems.filter((item) => item.favorite && item.visible).length;
+  const hiddenCategoryCount = categoryItems.filter((item) => !item.visible).length;
 
   const openDialog = (group?: InstallationGroup) => {
     if (!canManageSharedData) {
@@ -740,7 +743,7 @@ export default function InstallationGroupsPage() {
         open={settingsDialogOpen}
         onOpenChange={setSettingsDialogOpen}
         title="Muokkaa näkyviä kategorioita"
-        maxWidth="lg"
+        maxWidth="2xl"
         footer={
           <Button onClick={() => setSettingsDialogOpen(false)} className="w-full sm:w-auto">
             Valmis
@@ -748,188 +751,269 @@ export default function InstallationGroupsPage() {
         }
       >
         <div className="space-y-6">
-          <Alert>
-            <AlertDescription>
-              Täällä päätät, mitä kategorioita näytetään hintaryhmien yläpinnassa. Muutos vaikuttaa vain omaan näkymääsi, ei muiden käyttäjien näkymiin eikä itse hintaryhmädataan.
-            </AlertDescription>
-          </Alert>
-
-          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <FieldHelpLabel
-                  label="Toimialapohja"
-                  help="Valitse lähtöpohja, jonka mukaan kategoriat ehdotetaan yläpinnan suodattimiin. Voit muokata näkyvyyttä tämän jälkeen vapaasti."
-                />
-                <Select
-                  value={categorySettings.industryPreset ?? 'custom'}
-                  onValueChange={(value) => applyIndustryPreset(value as InstallationGroupIndustryPreset)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Valitse toimialapohja" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {INDUSTRY_PRESETS.map((preset) => (
-                      <SelectItem key={preset.value} value={preset.value}>
-                        {preset.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {presetMeta && (
-                  <p className="text-sm leading-6 text-muted-foreground">{presetMeta.description}</p>
-                )}
+          <div className="rounded-[28px] border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100/80 p-5 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+              <div className="max-w-2xl space-y-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  Hintaryhmien näkymä
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-950 sm:text-xl">
+                    Rakenna näkymä oman toimialan ja työnkulun mukaan
+                  </h3>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                    Valitse, mitkä kategoriat näkyvät yläpinnan suodattimissa, missä järjestyksessä ne esitetään ja
+                    mitkä niistä haluat pitää jatkuvasti esillä. Muutos vaikuttaa vain omaan näkymääsi.
+                  </p>
+                </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 p-4">
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-sm font-medium text-slate-950">Piilota tyhjät kategoriat</div>
-                      <div className="text-sm text-muted-foreground">
-                        Näytä yläpinnassa vain kategoriat, joissa on oikeasti hintaryhmiä.
-                      </div>
+              <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[420px]">
+                <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Näkyvissä</div>
+                  <div className="mt-2 text-2xl font-semibold text-slate-950">{visibleCategoryCount}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Kategoriaa suodatinpalkissa</div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Suosikit</div>
+                  <div className="mt-2 text-2xl font-semibold text-slate-950">{favoriteCategoryCount}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Merkitty tärkeiksi</div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Piilotettu</div>
+                  <div className="mt-2 text-2xl font-semibold text-slate-950">{hiddenCategoryCount}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Poissa nykyisestä näkymästä</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+            <div className="space-y-4">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold text-slate-950">Toimialapohja</div>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Valitse lähtöpohja, joka sopii parhaiten yrityksen arkeen. Tämän jälkeen voit hienosäätää näkyvyyttä vapaasti.
+                  </p>
+                </div>
+                <div className="mt-4 space-y-2">
+                  <FieldHelpLabel
+                    htmlFor="installation-group-industry-preset"
+                    label="Toimialapohja"
+                    help="Valitse lähtöpohja, jonka mukaan kategoriat ehdotetaan yläpinnan suodattimiin. Voit muokata näkyvyyttä tämän jälkeen vapaasti."
+                  />
+                  <Select
+                    value={categorySettings.industryPreset ?? 'custom'}
+                    onValueChange={(value) => applyIndustryPreset(value as InstallationGroupIndustryPreset)}
+                  >
+                    <SelectTrigger id="installation-group-industry-preset" className="w-full bg-white">
+                      <SelectValue placeholder="Valitse toimialapohja" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INDUSTRY_PRESETS.map((preset) => (
+                        <SelectItem key={preset.value} value={preset.value}>
+                          {preset.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {presetMeta && (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-muted-foreground">
+                      {presetMeta.description}
                     </div>
-                    <Switch
-                      checked={categorySettings.hideEmptyCategories}
-                      onCheckedChange={(checked) =>
-                        updateCategorySettings((currentSettings: InstallationGroupCategorySettings) => ({
-                          ...currentSettings,
-                          hideEmptyCategories: checked,
-                        }))
-                      }
-                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold text-slate-950">Näkymän säännöt</div>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Pidä suodatinrivi siistinä näyttämällä vain olennaiset kategoriat.
+                  </p>
+                </div>
+                <div className="mt-4 space-y-3">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-slate-950">Piilota tyhjät kategoriat</div>
+                        <div className="mt-1 text-sm leading-6 text-muted-foreground">
+                          Näytä yläpinnassa vain kategoriat, joissa on oikeasti hintaryhmiä.
+                        </div>
+                      </div>
+                      <Switch
+                        checked={categorySettings.hideEmptyCategories}
+                        onCheckedChange={(checked) =>
+                          updateCategorySettings((currentSettings: InstallationGroupCategorySettings) => ({
+                            ...currentSettings,
+                            hideEmptyCategories: checked,
+                          }))
+                        }
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-sm font-medium text-slate-950">Näytä vain suosikit</div>
-                      <div className="text-sm text-muted-foreground">
-                        Rajaa suodatinpalkki vain niihin kategorioihin, jotka olet merkinnyt tärkeiksi.
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-slate-950">Näytä vain suosikit</div>
+                        <div className="mt-1 text-sm leading-6 text-muted-foreground">
+                          Rajaa suodatinpalkki vain niihin kategorioihin, jotka olet merkinnyt tärkeiksi.
+                        </div>
                       </div>
+                      <Switch
+                        checked={categorySettings.showFavoritesOnly}
+                        onCheckedChange={(checked) =>
+                          updateCategorySettings((currentSettings: InstallationGroupCategorySettings) => ({
+                            ...currentSettings,
+                            showFavoritesOnly: checked,
+                          }))
+                        }
+                      />
                     </div>
-                    <Switch
-                      checked={categorySettings.showFavoritesOnly}
-                      onCheckedChange={(checked) =>
-                        updateCategorySettings((currentSettings: InstallationGroupCategorySettings) => ({
-                          ...currentSettings,
-                          showFavoritesOnly: checked,
-                        }))
-                      }
-                    />
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <FieldHelpLabel
-                  htmlFor="new-category-name"
-                  label="Lisää oma kategoria"
-                  help="Voit lisätä oman kategorian myös ennen kuin siihen kuuluu yhtään hintaryhmää. Tämä on hyödyllinen, jos rakennat näkymää uudelle toimialalle etukäteen."
-                />
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    id="new-category-name"
-                    value={newCategoryName}
-                    onChange={(event) => setNewCategoryName(event.target.value)}
-                    placeholder="Esim. Huoltosopimukset"
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold text-slate-950">Lisää oma kategoria</div>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Voit rakentaa näkymän valmiiksi myös tulevaa käyttöönottoa varten, vaikka hintaryhmiä ei olisi vielä lisätty.
+                  </p>
+                </div>
+                <div className="mt-4 space-y-2">
+                  <FieldHelpLabel
+                    htmlFor="new-category-name"
+                    label="Uuden kategorian nimi"
+                    help="Voit lisätä oman kategorian myös ennen kuin siihen kuuluu yhtään hintaryhmää. Tämä on hyödyllinen, jos rakennat näkymää uudelle toimialalle etukäteen."
                   />
-                  <Button type="button" onClick={handleAddCustomCategory} className="gap-2">
-                    <Plus weight="bold" />
-                    Lisää
-                  </Button>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      id="new-category-name"
+                      value={newCategoryName}
+                      onChange={(event) => setNewCategoryName(event.target.value)}
+                      placeholder="Esim. Huoltosopimukset"
+                      className="bg-white"
+                    />
+                    <Button type="button" onClick={handleAddCustomCategory} className="gap-2 sm:min-w-[116px]">
+                      <Plus weight="bold" />
+                      Lisää
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200">
-              <div className="border-b border-slate-200 px-4 py-3">
-                <div className="text-sm font-semibold text-slate-950">Kategorioiden näkyvyys ja järjestys</div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  Valitse, mitkä kategoriat näkyvät suodattimissa ja missä järjestyksessä ne esitetään.
+            <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-200 px-5 py-4 sm:px-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="text-base font-semibold text-slate-950">Kategorioiden näkyvyys ja järjestys</div>
+                    <div className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                      Valitse, mitkä kategoriat näkyvät suodattimissa, merkitse tärkeimmät suosikeiksi ja järjestä ne omaa työnkulkua tukevaksi.
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline" className="rounded-full px-3 py-1">
+                      {categoryItems.length} yhteensä
+                    </Badge>
+                    <Badge variant="secondary" className="rounded-full px-3 py-1">
+                      {visibleCategoryCount} näkyy
+                    </Badge>
+                  </div>
                 </div>
               </div>
-              <div className="divide-y divide-slate-200">
+              <div className="px-5 py-5 sm:px-6">
                 {categoryItems.length === 0 ? (
-                  <div className="px-4 py-8 text-sm text-muted-foreground">
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-10 text-center text-sm leading-6 text-muted-foreground">
                     Ei kategorioita vielä. Valitse toimialapohja tai lisää ensimmäinen oma kategoria.
                   </div>
                 ) : (
-                  categoryItems.map((item, index) => (
-                    <div key={item.name} className="space-y-3 px-4 py-4">
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="font-medium text-slate-950">{item.name}</div>
-                            {item.isPresetCategory && (
-                              <Badge variant="outline" className="rounded-full px-2 py-0.5 text-[11px]">
-                                Pohjassa mukana
-                              </Badge>
-                            )}
-                            {item.count > 0 && (
-                              <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[11px]">
-                                {item.count} ryhmää
-                              </Badge>
-                            )}
+                  <div className="space-y-3">
+                    {categoryItems.map((item, index) => (
+                      <div
+                        key={item.name}
+                        className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm transition hover:border-slate-300"
+                      >
+                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+                          <div className="min-w-0 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="min-w-0 break-words text-sm font-semibold text-slate-950 sm:text-base">
+                                {item.name}
+                              </div>
+                              {item.isPresetCategory && (
+                                <Badge variant="outline" className="rounded-full px-2 py-0.5 text-[11px]">
+                                  Pohjassa mukana
+                                </Badge>
+                              )}
+                              {item.count > 0 && (
+                                <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[11px]">
+                                  {item.count} ryhmää
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-sm leading-6 text-muted-foreground">
+                              {item.count > 0
+                                ? 'Kategoria on käytössä vähintään yhdellä hintaryhmällä. Voit silti piilottaa sen omasta näkymästäsi.'
+                                : 'Kategoria on valmis näkymään, vaikka siihen ei vielä kuulu hintaryhmiä.'}
+                            </div>
                           </div>
-                          <div className="mt-1 text-sm text-muted-foreground">
-                            {item.count > 0
-                              ? 'Kategoria on käytössä vähintään yhdellä hintaryhmällä.'
-                              : 'Kategoria on valmis näkymään, vaikka siihen ei vielä kuulu hintaryhmiä.'}
-                          </div>
-                        </div>
 
-                        <div className="flex flex-wrap items-center gap-3">
-                          <label className="flex items-center gap-2 text-sm text-slate-700">
-                            <Checkbox
-                              checked={item.visible}
-                              onCheckedChange={(checked) =>
-                                upsertCategoryPreference(item.name, { visible: Boolean(checked) })
-                              }
-                            />
-                            Näytä
-                          </label>
-                          <label className="flex items-center gap-2 text-sm text-slate-700">
-                            <Checkbox
-                              checked={item.favorite}
-                              onCheckedChange={(checked) =>
-                                upsertCategoryPreference(item.name, { favorite: Boolean(checked) })
-                              }
-                            />
-                            Suosikki
-                          </label>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8"
-                              onClick={() => moveCategory(item.name, -1)}
-                              disabled={index === 0}
-                            >
-                              <ArrowUp className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8"
-                              onClick={() => moveCategory(item.name, 1)}
-                              disabled={index === categoryItems.length - 1}
-                            >
-                              <ArrowDown className="h-4 w-4" />
-                            </Button>
+                          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                            <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700">
+                              <Checkbox
+                                checked={item.visible}
+                                onCheckedChange={(checked) =>
+                                  upsertCategoryPreference(item.name, { visible: Boolean(checked) })
+                                }
+                              />
+                              Näytä
+                            </label>
+                            <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700">
+                              <Checkbox
+                                checked={item.favorite}
+                                onCheckedChange={(checked) =>
+                                  upsertCategoryPreference(item.name, { favorite: Boolean(checked) })
+                                }
+                              />
+                              Suosikki
+                            </label>
+                            <div className="flex items-center rounded-full border border-slate-200 bg-white p-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 rounded-full"
+                                onClick={() => moveCategory(item.name, -1)}
+                                disabled={index === 0}
+                              >
+                                <ArrowUp className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 rounded-full"
+                                onClick={() => moveCategory(item.name, 1)}
+                                disabled={index === categoryItems.length - 1}
+                              >
+                                <ArrowDown className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            {!item.isDynamicCategory && !item.isPresetCategory && item.name !== UNCATEGORIZED_CATEGORY && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="rounded-full"
+                                onClick={() => handleRemoveCategoryFromView(item.name)}
+                              >
+                                Poista
+                              </Button>
+                            )}
                           </div>
-                          {!item.isDynamicCategory && !item.isPresetCategory && item.name !== UNCATEGORIZED_CATEGORY && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleRemoveCategoryFromView(item.name)}
-                            >
-                              Poista
-                            </Button>
-                          )}
                         </div>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
