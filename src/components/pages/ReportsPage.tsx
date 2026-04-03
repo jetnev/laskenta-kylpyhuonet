@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import { CheckCircle, XCircle, Clock, ChartBar, CalendarBlank, FilePdf, FileText, FileXls, Folder, Users } from '@phosphor-icons/react';
 import { useProjects, useQuotes, useQuoteRows, useCustomers } from '../../hooks/use-data';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, subMonths } from 'date-fns';
 import { fi } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -246,6 +246,20 @@ export default function ReportsPage() {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(value);
+  };
+
+  const formatCurrencyAxisTick = (value: number) => {
+    const absoluteValue = Math.abs(value);
+
+    if (absoluteValue >= 1000) {
+      const compactValue = absoluteValue >= 10000 ? Math.round(value / 1000) : Math.round(value / 100) / 10;
+      return `${new Intl.NumberFormat('fi-FI', {
+        minimumFractionDigits: Number.isInteger(compactValue) ? 0 : 1,
+        maximumFractionDigits: 1,
+      }).format(compactValue)} k€`;
+    }
+
+    return formatCurrency(value);
   };
 
   const periodLabel =
@@ -552,9 +566,21 @@ export default function ReportsPage() {
           </div>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Kuukausittainen kehitys</CardTitle>
-              <CardDescription>Tarjousten arvo ja kate kuukausittain</CardDescription>
+            <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle>Kuukausittainen kehitys</CardTitle>
+                <CardDescription>Tarjousten arvo ja kate kuukausittain</CardDescription>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary" className="gap-2 px-3 py-1 text-xs font-medium">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.45_0.12_250)]" />
+                  Arvo
+                </Badge>
+                <Badge variant="secondary" className="gap-2 px-3 py-1 text-xs font-medium">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.65_0.15_200)]" />
+                  Kate
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent>
               {monthlyData.length > 0 ? (
@@ -562,12 +588,11 @@ export default function ReportsPage() {
                   <BarChart data={monthlyData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.88 0.005 250)" />
                     <XAxis dataKey="month" />
-                    <YAxis tickFormatter={(value) => `${(value / 1000).toFixed(0)}k €`} />
+                    <YAxis tickFormatter={formatCurrencyAxisTick} width={72} />
                     <Tooltip 
                       formatter={(value: number) => formatCurrency(value)}
                       contentStyle={{ backgroundColor: 'oklch(1 0 0)', border: '1px solid oklch(0.88 0.005 250)' }}
                     />
-                    <Legend />
                     <Bar dataKey="value" name="Arvo" fill="oklch(0.45 0.12 250)" />
                     <Bar dataKey="margin" name="Kate" fill="oklch(0.65 0.15 200)" />
                   </BarChart>
@@ -581,9 +606,15 @@ export default function ReportsPage() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Tarjousmäärät kuukausittain</CardTitle>
-              <CardDescription>Luotujen tarjousten lukumäärä</CardDescription>
+            <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle>Tarjousmäärät kuukausittain</CardTitle>
+                <CardDescription>Luotujen tarjousten lukumäärä</CardDescription>
+              </div>
+              <Badge variant="secondary" className="gap-2 self-start px-3 py-1 text-xs font-medium">
+                <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.65_0.15_200)]" />
+                Tarjousten määrä
+              </Badge>
             </CardHeader>
             <CardContent>
               {monthlyData.length > 0 ? (
@@ -593,10 +624,10 @@ export default function ReportsPage() {
                     <XAxis dataKey="month" />
                     <YAxis />
                     <Tooltip 
+                      formatter={(value: number) => [value, 'Tarjousten määrä']}
                       contentStyle={{ backgroundColor: 'oklch(1 0 0)', border: '1px solid oklch(0.88 0.005 250)' }}
                     />
-                    <Legend />
-                    <Line type="monotone" dataKey="quotes" name="Tarjoukset" stroke="oklch(0.65 0.15 200)" strokeWidth={2} />
+                    <Line type="monotone" dataKey="quotes" name="Tarjousten määrä" stroke="oklch(0.65 0.15 200)" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (

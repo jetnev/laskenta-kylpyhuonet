@@ -38,6 +38,25 @@ const reminders = [
   'Sisäinen Excel sisältää enemmän tietoa kuin asiakkaalle tarkoitettu vienti.',
 ];
 
+const quickLinks = [
+  {
+    title: 'Oma tili',
+    description: 'Yritystiedot, yhteystiedot ja salasana.',
+  },
+  {
+    title: 'Projektit',
+    description: 'Asiakkaat, projektit, tarjoukset ja revisiot.',
+  },
+  {
+    title: 'Tuotteet',
+    description: 'Tuotekatalogi, hinnat ja valikoiman ylläpito.',
+  },
+  {
+    title: 'Raportointi',
+    description: 'Myynnin kehitys, kate ja tarjousmäärät yhdestä näkymästä.',
+  },
+];
+
 const faqSections = [
   {
     title: 'Aloittaminen',
@@ -144,7 +163,7 @@ export default function HelpPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid items-start gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <Card className="overflow-hidden">
           <CardHeader className="border-b bg-muted/30">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -153,7 +172,7 @@ export default function HelpPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
               {quickStartSteps.map((step, index) => (
                 <div key={step.title} className="rounded-xl border bg-background p-4 space-y-3">
                   <div className="flex items-center gap-3">
@@ -176,18 +195,35 @@ export default function HelpPage() {
               Hyvä muistaa
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-6 space-y-4">
+          <CardContent className="pt-6 space-y-6">
             {reminders.map((item) => (
               <div key={item} className="flex items-start gap-3 rounded-xl border bg-background p-4">
                 <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" weight="fill" />
                 <p className="text-sm text-muted-foreground leading-6">{item}</p>
               </div>
             ))}
+
+            <div className="space-y-3">
+              <div>
+                <h2 className="text-sm font-semibold">Missä mikäkin tehdään?</h2>
+                <p className="text-sm text-muted-foreground">
+                  Kun näkymät ovat selvät, ensimmäinen tarjous syntyy huomattavasti nopeammin.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {quickLinks.map((item) => (
+                  <div key={item.title} className="rounded-xl border bg-background p-4 space-y-1">
+                    <div className="text-sm font-semibold">{item.title}</div>
+                    <p className="text-sm text-muted-foreground leading-6">{item.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid items-start gap-6 xl:grid-cols-2">
         {faqSections.map((section) => (
           <Card key={section.title} className="overflow-hidden">
             <CardHeader className="border-b bg-muted/30">
