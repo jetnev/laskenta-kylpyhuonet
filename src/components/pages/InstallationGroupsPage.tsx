@@ -87,6 +87,45 @@ const GROUP_FIELD_HELP = {
   defaultInstallationPrice: 'Oletusasennus tuo valmiin asennushinnan tuotteille, joille tämä hintaryhmä on valittu.',
 } as const;
 
+const CATEGORY_NAME_PLACEHOLDERS: Record<string, string> = {
+  [UNCATEGORIZED_CATEGORY]: 'Esim. Perustyö',
+  purku: 'Esim. Purkutyö',
+  laatoitus: 'Esim. Laatoitustyö',
+  maalaus: 'Esim. Maalaustyö',
+  kalusteasennus: 'Esim. Kalusteasennus',
+  viimeistely: 'Esim. Viimeistelytyö',
+  tuotteet: 'Esim. Vakiotuotteet',
+  työ: 'Esim. Asennustyö',
+  asennus: 'Esim. Perusasennus',
+  huolto: 'Esim. Huoltotyö',
+  muut: 'Esim. Erikoistyö',
+  kaapelointi: 'Esim. Kaapelointityö',
+  keskukset: 'Esim. Keskusasennus',
+  valaisimet: 'Esim. Valaisinasennus',
+  kytkimet: 'Esim. Kytkinasennus',
+  vikakorjaukset: 'Esim. Vikakorjaus',
+  putket: 'Esim. Putkityö',
+  liittimet: 'Esim. Liitintyö',
+  hanat: 'Esim. Hana-asennus',
+  kalusteet: 'Esim. Kalusteiden asennus',
+  pintamateriaalit: 'Esim. Pintamateriaalit',
+  varusteet: 'Esim. Varusteasennus',
+  toimitus: 'Esim. Toimitus ja nosto',
+};
+
+function getGroupNamePlaceholder(category?: string) {
+  const normalized = normalizeCategory(category).toLowerCase();
+  return CATEGORY_NAME_PLACEHOLDERS[normalized] ?? 'Esim. Työvaiheen oletushinta';
+}
+
+function getGroupDescriptionPlaceholder(category?: string) {
+  const normalized = normalizeCategory(category);
+  if (normalized === UNCATEGORIZED_CATEGORY) {
+    return 'Esim. Käytetään yleisiin töihin tai tuotteisiin, joille ei ole omaa ryhmää.';
+  }
+  return `Esim. Käytetään ${normalized.toLowerCase()}-töihin tai vastaaviin tuotteisiin.`;
+}
+
 function normalizeCategory(value?: string) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : UNCATEGORIZED_CATEGORY;
@@ -620,7 +659,7 @@ export default function InstallationGroupsPage() {
               id="group-name"
               value={formData.name}
               onChange={(event) => setFormData((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Esim. Laatan asennus"
+              placeholder={getGroupNamePlaceholder(formData.category)}
             />
           </div>
           <div className="space-y-2">
@@ -644,6 +683,7 @@ export default function InstallationGroupsPage() {
               id="group-description"
               value={formData.description}
               onChange={(event) => setFormData((current) => ({ ...current, description: event.target.value }))}
+              placeholder={getGroupDescriptionPlaceholder(formData.category)}
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
