@@ -170,9 +170,11 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
   const runAction = async (action: () => Promise<void>) => {
     setSubmitting(true);
     setError(null);
+    setInfoMessage((current) => (view === 'login' ? 'Kirjaudutaan sisään...' : current));
     try {
       await action();
     } catch (err) {
+      setInfoMessage(null);
       setError(err instanceof Error ? err.message : 'Toiminto epäonnistui.');
     } finally {
       setSubmitting(false);
@@ -271,7 +273,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
                     />
                   </div>
                   <Button className="h-11 w-full" disabled={submitting} type="submit">
-                    {heading.actionLabel}
+                    {submitting ? 'Kirjaudutaan sisään...' : heading.actionLabel}
                   </Button>
                   <div className="flex items-center justify-between gap-4 text-sm">
                     <button className="text-primary hover:underline" onClick={() => { setError(null); setView('forgot'); }} type="button">

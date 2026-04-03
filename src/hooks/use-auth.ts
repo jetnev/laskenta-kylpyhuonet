@@ -75,6 +75,32 @@ function validatePassword(password: string) {
   return password.length >= 8;
 }
 
+function mapLoginErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return 'Kirjautuminen epäonnistui. Yritä uudelleen.';
+  }
+
+  const message = error.message.toLowerCase();
+
+  if (message.includes('email not confirmed')) {
+    return 'Vahvista sähköpostiosoite ennen kirjautumista.';
+  }
+  if (message.includes('invalid login credentials')) {
+    return 'Virheellinen sähköposti tai salasana.';
+  }
+  if (message.includes('user already registered')) {
+    return 'Tälle sähköpostiosoitteelle on jo olemassa käyttäjätili.';
+  }
+  if (message.includes('too many requests') || message.includes('over_email_send_rate_limit')) {
+    return 'Liian monta yritystä lyhyessä ajassa. Odota hetki ja yritä uudelleen.';
+  }
+  if (message.includes('network') || message.includes('failed to fetch')) {
+    return 'Yhteys palveluun epäonnistui. Tarkista verkkoyhteys ja yritä uudelleen.';
+  }
+
+  return error.message;
+}
+
 function getInitials(displayName: string) {
   const parts = displayName.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return 'US';
@@ -357,7 +383,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (error) {
-      throw new Error('Virheellinen sähköposti tai salasana.');
+      throw new Error(mapLoginErrorMessage(error));
     }
 
     const nextUser = await hydrateSession(data.session, { markLogin: true });
