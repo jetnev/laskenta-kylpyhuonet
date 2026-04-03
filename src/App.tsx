@@ -20,6 +20,7 @@ import {
 import { cn } from './lib/utils';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './hooks/use-auth';
+import RouteLoadingFallback from './components/RouteLoadingFallback';
 import { Avatar, AvatarFallback } from './components/ui/avatar';
 import { Badge } from './components/ui/badge';
 import { useIsMobile } from './hooks/use-mobile';
@@ -37,7 +38,6 @@ const TermsPage = lazy(() => import('./components/pages/TermsPage'));
 const SettingsPage = lazy(() => import('./components/pages/SettingsPage'));
 const ReportsPage = lazy(() => import('./components/pages/ReportsPage'));
 const LoginPage = lazy(() => import('./components/LoginPage'));
-const LandingPage = lazy(() => import('./components/LandingPage'));
 const AccountPage = lazy(() => import('./components/pages/AccountPage'));
 const UsersPage = lazy(() => import('./components/pages/UsersPage'));
 
@@ -54,7 +54,7 @@ type Page =
   | 'settings'
   | 'account';
 
-type AppRoute = 'landing' | 'login' | 'app';
+type AppRoute = 'login' | 'app';
 
 function normalizePathname(pathname: string) {
   if (!pathname || pathname === '/') {
@@ -67,26 +67,11 @@ function normalizePathname(pathname: string) {
 function resolveAppRoute(pathname: string): AppRoute {
   const normalizedPath = normalizePathname(pathname);
 
-  if (normalizedPath === '/login') {
-    return 'login';
-  }
-
   if (normalizedPath === '/app') {
     return 'app';
   }
 
-  return 'landing';
-}
-
-function RouteLoadingFallback() {
-  return (
-    <div className="flex h-screen items-center justify-center bg-background">
-      <div className="text-center space-y-4">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-muted-foreground">Ladataan...</p>
-      </div>
-    </div>
-  );
+  return 'login';
 }
 
 function App() {
@@ -278,15 +263,10 @@ function App() {
   }
 
   if (!user) {
-    const showLogin = currentRoute === 'login' || currentRoute === 'app' || requiresPasswordReset;
     return (
       <>
         <Suspense fallback={<RouteLoadingFallback />}>
-          {showLogin ? (
-            <LoginPage onNavigateHome={() => navigateTo('/')} />
-          ) : (
-            <LandingPage onNavigateToLogin={() => navigateTo('/login')} />
-          )}
+          <LoginPage onNavigateHome={() => window.location.assign('/')} />
         </Suspense>
         <Toaster />
       </>
