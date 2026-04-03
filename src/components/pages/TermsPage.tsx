@@ -13,6 +13,16 @@ import {
 import { toast } from 'sonner';
 import { ResponsiveDialog } from '../ResponsiveDialog';
 import { ReadOnlyAlert } from '../ReadOnlyAlert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/alert-dialog';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -32,7 +42,13 @@ import {
   TERM_TEMPLATE_SEGMENT_LABELS,
 } from '../../lib/term-templates';
 
-type TemplateFilter = 'all' | 'master' | 'own' | 'consumer' | 'business';
+type TemplateFilter = 'all' | 'ready' | 'own' | 'consumer' | 'business';
+
+type TemplateGuide = {
+  summary: string;
+  difference: string;
+  example: string;
+};
 
 type TemplateFormState = {
   name: string;
@@ -56,11 +72,142 @@ const DEFAULT_FORM: TemplateFormState = {
 
 const FILTERS: Array<{ value: TemplateFilter; label: string }> = [
   { value: 'all', label: 'Kaikki' },
-  { value: 'master', label: 'Master' },
+  { value: 'ready', label: 'Valmiit' },
   { value: 'own', label: 'Omat' },
   { value: 'consumer', label: 'Kuluttaja' },
   { value: 'business', label: 'B2B' },
 ];
+
+const SEGMENT_GUIDES: Array<{ segment: TermTemplateCustomerSegment; title: string; description: string }> = [
+  {
+    segment: 'consumer',
+    title: 'Kuluttaja',
+    description: 'Tarkoitettu yksityisasiakkaalle. Kielen kannattaa olla selkeää ja vastuiden helposti ymmärrettäviä.',
+  },
+  {
+    segment: 'business',
+    title: 'B2B',
+    description: 'Tarkoitettu yrityksille, työmaille ja urakoitsijoille. Painottaa rajauksia, työmaan valmiutta ja lisätöitä.',
+  },
+];
+
+const SCOPE_GUIDES: Array<{ scopeType: TermTemplateScopeType; title: string; difference: string; example: string }> = [
+  {
+    scopeType: 'product_only',
+    title: 'Tuotetoimitus',
+    difference: 'Pelkkä toimitus ilman asennusvastuuta tai työmaalla tehtävää suoritusta.',
+    example: 'Esim. peilien, kalusteiden tai varusteiden toimitus ilman asennusta.',
+  },
+  {
+    scopeType: 'product_install',
+    title: 'Tuotetoimitus + asennus',
+    difference: 'Sisältää nimetyt tuotteet ja rajatun asennustyön, mutta ei vielä täyttä urakkarakennetta.',
+    example: 'Esim. allaskaapin, peilikaapin tai suihkuseinän toimitus ja asennus.',
+  },
+  {
+    scopeType: 'installation_contract',
+    title: 'Asennusurakka',
+    difference: 'Korostaa työmaan valmiutta, kiinnitysoletuksia, lisätöitä ja urakkarajauksia.',
+    example: 'Esim. hotellin, taloyhtiön tai usean asunnon varusteasennukset.',
+  },
+  {
+    scopeType: 'project',
+    title: 'Projektitoimitus',
+    difference: 'Laajin vaihtoehto, kun määrät, aikataulu tai sisältö voivat muuttua projektin aikana.',
+    example: 'Esim. linjasaneeraus, laaja kalustetoimitus tai toimitusurakka useaan tilaan.',
+  },
+];
+
+const TEMPLATE_GUIDES: Record<TermTemplateCustomerSegment, Record<TermTemplateScopeType, TemplateGuide>> = {
+  consumer: {
+    product_only: {
+      summary: 'Yksityisasiakkaalle tehtävä pelkkä tavaratoimitus ilman asennusvastuuta.',
+      difference: 'Kevyin vaihtoehto. Rajaa työn pois ja keskittyy toimitukseen, vastaanottoon ja reklamaatioihin.',
+      example: 'Sopii esimerkiksi peilien, kalusteiden tai varusteiden toimitukseen asuntoon ilman asennusta.',
+    },
+    product_install: {
+      summary: 'Yksityisasiakkaalle tehtävä toimitus, jossa mukana on selvästi rajattu asennustyö.',
+      difference: 'Laajempi kuin pelkkä tuotetoimitus, mutta kevyempi kuin urakka- tai projektipohja.',
+      example: 'Sopii esimerkiksi allaskaapin, peilikaapin tai suihkuseinän toimitukseen ja asennukseen.',
+    },
+    installation_contract: {
+      summary: 'Kuluttajakohteen asennuspainotteinen kokonaisuus, jossa työmaan valmius ja rajaukset pitää avata tarkasti.',
+      difference: 'Korostaa asennusvastuita, työmaan edellytyksiä ja lisätöiden käsittelyä enemmän kuin tavallinen toimitus + asennus.',
+      example: 'Sopii esimerkiksi saunan, kylpyhuoneen tai usean tilan varusteasennuksiin omakotitalossa.',
+    },
+    project: {
+      summary: 'Laajempi kuluttajakohde, jossa toimitus tai asennus koskee useampaa tilaa tai vaihetta.',
+      difference: 'Joustavin kuluttajavaihtoehto, kun aikataulu, määrät tai sisältö voivat täsmentyä projektin aikana.',
+      example: 'Sopii esimerkiksi omakotitalon kylpyhuone- ja kodinhoitohuonekokonaisuuteen.',
+    },
+  },
+  business: {
+    product_only: {
+      summary: 'Yritysasiakkaan pelkkä tuotetoimitus ilman työmaalle tehtävää suoritusta.',
+      difference: 'Painottaa toimitusta, vastaanottoa ja vastuunrajausta ilman asennus- tai työmaavelvoitteita.',
+      example: 'Sopii esimerkiksi rakennusliikkeelle tai urakoitsijalle tehtävään kaluste- tai varustetoimitukseen.',
+    },
+    product_install: {
+      summary: 'Yritysasiakkaan toimitus, jossa mukana on rajattu asennuskokonaisuus.',
+      difference: 'Yhdistää toimituksen ja asennuksen, mutta on edelleen selvästi rajatumpi kuin urakka- tai projektipohja.',
+      example: 'Sopii esimerkiksi taloyhtiön tai uudiskohteen kaluste- ja varustetoimitukseen asennettuna.',
+    },
+    installation_contract: {
+      summary: 'Asennusurakka, jossa työmaan valmius, lisätyöt ja urakkarajaukset pitää kirjata tarkasti.',
+      difference: 'Asennuspainotteisin vaihtoehto. Mukana ovat työmaan edellytykset, kiinnitysoletukset ja lisätöiden laskutus.',
+      example: 'Sopii esimerkiksi hotellin, taloyhtiön tai usean asunnon varusteasennuksiin.',
+    },
+    project: {
+      summary: 'Laaja projekti- tai urakkakohde, jossa määrät, aikataulu tai sisältö voivat elää projektin aikana.',
+      difference: 'Laajin vaihtoehto. Sopii tilanteisiin, joissa sopimusasiakirjojen järjestys, muutoshallinta ja projektivastuut pitää kirjata selvästi.',
+      example: 'Sopii esimerkiksi linjasaneeraukseen, kerrostalokohteen kalustetoimitukseen tai laajaan toimitusurakkaan.',
+    },
+  },
+};
+
+function getTemplateGuide(customerSegment: TermTemplateCustomerSegment, scopeType: TermTemplateScopeType) {
+  return TEMPLATE_GUIDES[customerSegment][scopeType];
+}
+
+function getTemplateSurface(template: QuoteTerms) {
+  if (template.isSystem && template.customerSegment === 'consumer') {
+    return {
+      shell: 'border-amber-200/70 bg-white shadow-sm',
+      header: 'border-b border-amber-200/80 bg-gradient-to-br from-amber-50 via-white to-orange-50',
+      meta: 'border-amber-200/70 bg-white/85',
+      panel: 'border-amber-100 bg-amber-50/50',
+      excerpt: 'border-amber-100 bg-white/90',
+    };
+  }
+
+  if (template.isSystem) {
+    return {
+      shell: 'border-sky-200/70 bg-white shadow-sm',
+      header: 'border-b border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-cyan-50',
+      meta: 'border-sky-200/70 bg-white/85',
+      panel: 'border-sky-100 bg-sky-50/50',
+      excerpt: 'border-sky-100 bg-white/90',
+    };
+  }
+
+  if (template.customerSegment === 'consumer') {
+    return {
+      shell: 'border-emerald-200/70 bg-white shadow-sm',
+      header: 'border-b border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-white to-lime-50',
+      meta: 'border-emerald-200/70 bg-white/85',
+      panel: 'border-emerald-100 bg-emerald-50/50',
+      excerpt: 'border-emerald-100 bg-white/90',
+    };
+  }
+
+  return {
+    shell: 'border-primary/20 bg-white shadow-sm',
+    header: 'border-b border-primary/15 bg-gradient-to-br from-primary/5 via-white to-primary/10',
+    meta: 'border-primary/15 bg-white/85',
+    panel: 'border-primary/10 bg-primary/5',
+    excerpt: 'border-primary/10 bg-white/90',
+  };
+}
 
 function toFormState(template?: QuoteTerms | null): TemplateFormState {
   if (!template) {
@@ -83,6 +230,7 @@ export default function TermsPage() {
     addTerms,
     archiveTerms,
     cloneTermsFromMaster,
+    deleteTerms,
     duplicateTerms,
     ownTemplates,
     restoreTermsFromMaster,
@@ -90,17 +238,18 @@ export default function TermsPage() {
     updateTerms,
   } = useQuoteTerms();
   const { documentSettings } = useDocumentSettings();
-  const { canEdit } = useAuth();
+  const { canDelete, canEdit } = useAuth();
   const [filter, setFilter] = useState<TemplateFilter>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<QuoteTerms | null>(null);
+  const [templateToDelete, setTemplateToDelete] = useState<QuoteTerms | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<QuoteTerms | null>(null);
   const [formData, setFormData] = useState<TemplateFormState>(DEFAULT_FORM);
   const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const filteredTerms = useMemo(() => {
     return terms.filter((template) => {
-      if (filter === 'master') return template.isSystem;
+      if (filter === 'ready') return template.isSystem;
       if (filter === 'own') return !template.isSystem;
       if (filter === 'consumer') return template.customerSegment === 'consumer';
       if (filter === 'business') return template.customerSegment === 'business';
@@ -147,6 +296,8 @@ export default function TermsPage() {
     [previewContext, previewTemplate]
   );
 
+  const selectedTemplateGuide = getTemplateGuide(formData.customerSegment, formData.scopeType);
+
   const openNewTemplateDialog = () => {
     if (!canEdit) {
       toast.error('Sinulla ei ole oikeuksia luoda omia ehtopohjia.');
@@ -163,7 +314,7 @@ export default function TermsPage() {
 
   const openEditDialog = (template: QuoteTerms) => {
     if (template.isSystem) {
-      toast.error('Master-pohjaa ei voi muokata suoraan. Luo siitä oma kopio.');
+      toast.error('Valmista pohjaa ei voi muokata suoraan. Luo siitä oma versio.');
       return;
     }
     if (!canEdit) {
@@ -199,7 +350,7 @@ export default function TermsPage() {
       setEditingTemplate(created);
       setFormData(toFormState(created));
       setDialogOpen(true);
-      toast.success('Master-pohjasta luotiin oma kopio.');
+      toast.success('Valmiista pohjasta luotiin oma versio.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Kopion luonti epäonnistui.');
     }
@@ -224,7 +375,7 @@ export default function TermsPage() {
         setEditingTemplate(restored);
         setFormData(toFormState(restored));
       }
-      toast.success('Ehtopohjan sisältö palautettiin masterista.');
+      toast.success('Ehtopohjan alkuperäinen sisältö palautettiin.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Palautus epäonnistui.');
     }
@@ -236,6 +387,30 @@ export default function TermsPage() {
       toast.success(template.isActive ? 'Ehtopohja arkistoitiin.' : 'Ehtopohja palautettiin käyttöön.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Tilamuutos epäonnistui.');
+    }
+  };
+
+  const handleDeleteTemplate = () => {
+    if (!templateToDelete) {
+      return;
+    }
+
+    try {
+      const deletedTemplate = deleteTerms(templateToDelete.id);
+
+      if (editingTemplate?.id === deletedTemplate.id) {
+        setEditingTemplate(null);
+        setFormData(DEFAULT_FORM);
+        setDialogOpen(false);
+      }
+      if (previewTemplate?.id === deletedTemplate.id) {
+        setPreviewTemplate(null);
+      }
+
+      setTemplateToDelete(null);
+      toast.success('Oma ehtopohja poistettiin.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Poistaminen epäonnistui.');
     }
   };
 
@@ -278,7 +453,7 @@ export default function TermsPage() {
         <div className="space-y-2">
           <h1 className="text-2xl sm:text-3xl font-semibold">Ehtopohjat</h1>
           <p className="text-muted-foreground text-sm sm:text-base max-w-3xl">
-            Käytä valmiita master-pohjia lähtökohtana tai luo täysin omia ehtopohjia. Masterit ovat vain luettavia, mutta omat kopiot ovat vapaasti muokattavia.
+            Käytä valmiita pohjia lähtökohtana tai tee niistä omia versioita. Omia ehtopohjia voit muokata, arkistoida ja poistaa, kun niitä ei enää tarvita.
           </p>
         </div>
         {canEdit ? (
@@ -299,95 +474,194 @@ export default function TermsPage() {
       <Card className="border-muted bg-muted/40 p-4 sm:p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1">
-            <div className="text-sm font-medium">Master-pohjat ja omat versiot</div>
+            <div className="text-sm font-medium">Valmiit pohjat ja omat versiot</div>
             <p className="text-sm text-muted-foreground">{TERM_TEMPLATE_NOTICE}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {FILTERS.map((item) => (
-              <Button
-                key={item.value}
-                type="button"
-                size="sm"
-                variant={filter === item.value ? 'default' : 'outline'}
-                onClick={() => setFilter(item.value)}
-              >
-                {item.label}
-              </Button>
-            ))}
+          <div className="flex flex-col gap-3 lg:items-end">
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Näytetään {filteredTerms.length} {filteredTerms.length === 1 ? 'pohja' : 'pohjaa'}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {FILTERS.map((item) => (
+                <Button
+                  key={item.value}
+                  type="button"
+                  size="sm"
+                  variant={filter === item.value ? 'default' : 'outline'}
+                  onClick={() => setFilter(item.value)}
+                >
+                  {item.label}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        {filteredTerms.map((template) => (
-          <Card key={template.id} className={`p-6 space-y-4 ${!template.isActive ? 'opacity-70' : ''}`}>
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-semibold">{template.name}</h2>
-                  <Badge variant={template.isSystem ? 'secondary' : 'default'} className="gap-1">
-                    {template.isSystem ? <ShieldCheck className="h-3.5 w-3.5" weight="fill" /> : <User className="h-3.5 w-3.5" weight="fill" />}
-                    {template.isSystem ? 'Master' : 'Oma'}
-                  </Badge>
-                  <Badge variant="outline">{TERM_TEMPLATE_SEGMENT_LABELS[template.customerSegment]}</Badge>
-                  <Badge variant="outline">{TERM_TEMPLATE_SCOPE_LABELS[template.scopeType]}</Badge>
-                  {template.isDefault && (
-                    <Badge className="gap-1">
-                      <CheckCircle className="h-3.5 w-3.5" weight="fill" />
-                      Oletus
-                    </Badge>
-                  )}
-                  {!template.isActive && <Badge variant="outline">Arkistoitu</Badge>}
+      <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+        <Card className="p-4 sm:p-5">
+          <div className="space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold">Kuluttaja vai B2B?</h2>
+              <p className="text-sm text-muted-foreground">Valitse segmentti sen mukaan kenelle tarjous tehdään.</p>
+            </div>
+            <div className="space-y-3">
+              {SEGMENT_GUIDES.map((guide) => (
+                <div key={guide.segment} className="rounded-xl border bg-muted/15 p-3">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{guide.title}</Badge>
+                    <div className="text-sm font-medium">{TERM_TEMPLATE_SEGMENT_LABELS[guide.segment]}</div>
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">{guide.description}</p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {template.description || 'Ei erillistä kuvausta.'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Päivitetty {new Date(template.updatedAt).toLocaleString('fi-FI')}
-                </p>
+              ))}
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4 sm:p-5">
+          <div className="space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold">Mikä ero pohjatyypeillä on?</h2>
+              <p className="text-sm text-muted-foreground">Pohjatyyppi määrittää kuinka laajaa toimitusta tai urakkaa ehdot kattavat.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {SCOPE_GUIDES.map((guide) => (
+                <div key={guide.scopeType} className="rounded-xl border bg-muted/15 p-3">
+                  <div className="text-sm font-semibold">{guide.title}</div>
+                  <p className="mt-2 text-sm text-muted-foreground">{guide.difference}</p>
+                  <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Sopii esim.</div>
+                  <p className="mt-1 text-sm text-foreground/80">{guide.example}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {filteredTerms.map((template) => {
+          const templateGuide = getTemplateGuide(template.customerSegment, template.scopeType);
+          const surface = getTemplateSurface(template);
+
+          return (
+            <Card key={template.id} className={`overflow-hidden p-0 ${surface.shell} ${!template.isActive ? 'opacity-70' : ''}`}>
+              <div className={`px-5 py-5 sm:px-6 ${surface.header}`}>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={template.isSystem ? 'secondary' : 'default'} className="gap-1">
+                        {template.isSystem ? <ShieldCheck className="h-3.5 w-3.5" weight="fill" /> : <User className="h-3.5 w-3.5" weight="fill" />}
+                        {template.isSystem ? 'Valmis pohja' : 'Oma versio'}
+                      </Badge>
+                      <Badge variant="outline">{TERM_TEMPLATE_SEGMENT_LABELS[template.customerSegment]}</Badge>
+                      <Badge variant="outline">{TERM_TEMPLATE_SCOPE_LABELS[template.scopeType]}</Badge>
+                      {template.isDefault && (
+                        <Badge className="gap-1">
+                          <CheckCircle className="h-3.5 w-3.5" weight="fill" />
+                          Oletuspohja
+                        </Badge>
+                      )}
+                      {!template.isActive && <Badge variant="outline">Arkistoitu</Badge>}
+                    </div>
+
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        {template.isSystem ? 'Valmis lähtökohta' : 'Muokattava oma versio'}
+                      </div>
+                      <h2 className="mt-1 text-xl font-semibold leading-tight text-foreground">{template.name}</h2>
+                    </div>
+
+                    <p className="max-w-3xl text-sm leading-6 text-foreground/80">
+                      {template.description || templateGuide.summary}
+                    </p>
+                  </div>
+
+                  <div className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${surface.meta}`}>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Päivitetty</div>
+                    <div className="mt-1 font-medium text-foreground">{new Date(template.updatedAt).toLocaleString('fi-FI')}</div>
+                    <div className="mt-3 text-xs text-muted-foreground">
+                      {template.isDefault
+                        ? 'Tämä on valittuna uusille tarjouksille oletuksena.'
+                        : template.isSystem
+                          ? 'Voit ottaa tästä oman version ja muokata sitä vapaasti.'
+                          : 'Voit muokata, monistaa, arkistoida tai poistaa tämän version.'}
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex flex-wrap gap-2 lg:justify-end">
-                <Button variant="outline" size="sm" onClick={() => setPreviewTemplate(template)} className="gap-2">
-                  <Eye className="h-4 w-4" />
-                  Esikatsele
-                </Button>
-                {template.isSystem ? (
-                  <Button variant="default" size="sm" onClick={() => handleCloneFromMaster(template)} className="gap-2" disabled={!canEdit}>
-                    <Copy className="h-4 w-4" />
-                    Luo oma kopio
-                  </Button>
-                ) : (
-                  <>
-                    <Button variant="outline" size="sm" onClick={() => openEditDialog(template)} className="gap-2" disabled={!canEdit}>
-                      <NotePencil className="h-4 w-4" />
-                      Muokkaa
+              <div className="grid gap-4 p-5 sm:p-6 xl:grid-cols-[minmax(0,1fr)_220px]">
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className={`rounded-2xl border p-4 ${surface.panel}`}>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Ero muihin</div>
+                      <p className="mt-2 text-sm leading-6 text-foreground/85">{templateGuide.difference}</p>
+                    </div>
+                    <div className={`rounded-2xl border p-4 ${surface.panel}`}>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Sopii esimerkiksi</div>
+                      <p className="mt-2 text-sm leading-6 text-foreground/85">{templateGuide.example}</p>
+                    </div>
+                  </div>
+
+                  <div className={`rounded-2xl border p-4 ${surface.panel}`}>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Sisällönosto</div>
+                        <p className="mt-1 text-sm text-muted-foreground">Tältä pohjan rakenne näyttää ennen koko dokumentin avaamista.</p>
+                      </div>
+                      <Badge variant="outline" className="self-start sm:self-auto">Esikatselu kortissa</Badge>
+                    </div>
+
+                    <div className={`mt-4 rounded-2xl border p-4 ${surface.excerpt}`}>
+                      <div className="line-clamp-6 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                        {template.contentMd}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`rounded-2xl border p-4 ${surface.panel}`}>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Toiminnot</div>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setPreviewTemplate(template)} className="w-full justify-start gap-2">
+                      <Eye className="h-4 w-4" />
+                      Esikatsele
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleDuplicate(template)} className="gap-2" disabled={!canEdit}>
-                      <Copy className="h-4 w-4" />
-                      Monista
-                    </Button>
-                    {template.baseTemplateId && (
-                      <Button variant="outline" size="sm" onClick={() => handleRestore(template)} className="gap-2" disabled={!canEdit}>
-                        <ArrowsClockwise className="h-4 w-4" />
-                        Palauta masterista
+                    {template.isSystem ? (
+                      <Button variant="default" size="sm" onClick={() => handleCloneFromMaster(template)} className="w-full justify-start gap-2" disabled={!canEdit}>
+                        <Copy className="h-4 w-4" />
+                        Ota oma versio
                       </Button>
+                    ) : (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => openEditDialog(template)} className="w-full justify-start gap-2" disabled={!canEdit}>
+                          <NotePencil className="h-4 w-4" />
+                          Muokkaa
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleDuplicate(template)} className="w-full justify-start gap-2" disabled={!canEdit}>
+                          <Copy className="h-4 w-4" />
+                          Monista
+                        </Button>
+                        {template.baseTemplateId && (
+                          <Button variant="outline" size="sm" onClick={() => handleRestore(template)} className="w-full justify-start gap-2" disabled={!canEdit}>
+                            <ArrowsClockwise className="h-4 w-4" />
+                            Palauta alkuperäinen
+                          </Button>
+                        )}
+                        <Button variant="outline" size="sm" onClick={() => handleArchiveToggle(template)} className="w-full justify-start" disabled={!canEdit}>
+                          {template.isActive ? 'Arkistoi' : 'Palauta käyttöön'}
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => setTemplateToDelete(template)} className="w-full justify-start" disabled={!canDelete}>
+                          Poista
+                        </Button>
+                      </>
                     )}
-                    <Button variant="outline" size="sm" onClick={() => handleArchiveToggle(template)} disabled={!canEdit}>
-                      {template.isActive ? 'Arkistoi' : 'Palauta käyttöön'}
-                    </Button>
-                  </>
-                )}
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div className="rounded-xl border bg-muted/20 p-4">
-              <div className="line-clamp-6 whitespace-pre-wrap text-sm text-muted-foreground">
-                {template.contentMd}
-              </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+        )})}
       </div>
 
       {filteredTerms.length === 0 && (
@@ -460,6 +734,29 @@ export default function TermsPage() {
               <Button type="button" variant={formData.isActive ? 'default' : 'outline'} onClick={() => setFormData((current) => ({ ...current, isActive: !current.isActive }))}>
                 {formData.isActive ? 'Aktiivinen' : 'Arkistoitu'}
               </Button>
+            </div>
+
+            <div className="mt-4 rounded-2xl border bg-muted/15 p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="text-sm font-semibold">Valittu pohjatyyppi</div>
+                  <p className="mt-1 text-sm text-muted-foreground">{selectedTemplateGuide.summary}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline">{TERM_TEMPLATE_SEGMENT_LABELS[formData.customerSegment]}</Badge>
+                  <Badge variant="outline">{TERM_TEMPLATE_SCOPE_LABELS[formData.scopeType]}</Badge>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Ero muihin</div>
+                  <p className="mt-1 text-sm text-foreground/80">{selectedTemplateGuide.difference}</p>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Sopii esimerkiksi</div>
+                  <p className="mt-1 text-sm text-foreground/80">{selectedTemplateGuide.example}</p>
+                </div>
+              </div>
             </div>
           </Card>
 
@@ -564,14 +861,29 @@ export default function TermsPage() {
       >
         {previewTemplate && (
           <div className="space-y-4">
+            {(() => {
+              const previewGuide = getTemplateGuide(previewTemplate.customerSegment, previewTemplate.scopeType);
+
+              return (
+                <>
             <div className="flex flex-wrap gap-2">
               <Badge variant={previewTemplate.isSystem ? 'secondary' : 'default'}>
-                {previewTemplate.isSystem ? 'Master' : 'Oma'}
+                {previewTemplate.isSystem ? 'Valmis pohja' : 'Oma versio'}
               </Badge>
               <Badge variant="outline">{TERM_TEMPLATE_SEGMENT_LABELS[previewTemplate.customerSegment]}</Badge>
               <Badge variant="outline">{TERM_TEMPLATE_SCOPE_LABELS[previewTemplate.scopeType]}</Badge>
             </div>
-            <p className="text-sm text-muted-foreground">{previewTemplate.description || 'Ei erillistä kuvausta.'}</p>
+            <p className="text-sm text-muted-foreground">{previewTemplate.description || previewGuide.summary}</p>
+            <div className="grid gap-3 rounded-xl border bg-muted/15 p-3 sm:grid-cols-2">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Ero muihin</div>
+                <p className="mt-1 text-sm text-foreground/80">{previewGuide.difference}</p>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Sopii esimerkiksi</div>
+                <p className="mt-1 text-sm text-foreground/80">{previewGuide.example}</p>
+              </div>
+            </div>
             <Card className="overflow-hidden">
               <div className="border-b bg-muted/20 px-5 py-4">
                 <div className="text-sm font-semibold">Dokumenttiesikatselu</div>
@@ -586,9 +898,31 @@ export default function TermsPage() {
                 </div>
               </div>
             </Card>
+                </>
+              );
+            })()}
           </div>
         )}
       </ResponsiveDialog>
+
+      <AlertDialog open={Boolean(templateToDelete)} onOpenChange={(open) => !open && setTemplateToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Poistetaanko oma ehtopohja?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {templateToDelete
+                ? `Poistat ehtopohjan "${templateToDelete.name}" pysyvästi. Jos pohja on käytössä tarjouksella, poisto estetään kunnes ehtopohja irrotetaan tarjoukselta.`
+                : 'Poistetaanko ehtopohja pysyvästi?'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Peruuta</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteTemplate} className="bg-destructive text-white hover:bg-destructive/90">
+              Poista pysyvästi
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

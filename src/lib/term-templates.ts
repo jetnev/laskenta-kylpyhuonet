@@ -468,7 +468,7 @@ export function createTermTemplate(storedTemplates: LegacyQuoteTerms[] | undefin
 
 export function updateTermTemplate(storedTemplates: LegacyQuoteTerms[] | undefined, templateId: string, updates: Partial<TermTemplateInput>, ownerUserId: string) {
   if (getSystemTermTemplates().some((template) => template.id === templateId)) {
-    throw new Error('Master-pohjaa ei voi muokata suoraan. Luo siitä oma kopio.');
+    throw new Error('Valmista pohjaa ei voi muokata suoraan. Luo siitä oma versio.');
   }
 
   const userTemplates = hydrateStoredTermTemplates(storedTemplates, ownerUserId);
@@ -478,7 +478,7 @@ export function updateTermTemplate(storedTemplates: LegacyQuoteTerms[] | undefin
     throw new Error('Ehtopohjaa ei löytynyt.');
   }
   if (currentTemplate.isSystem) {
-    throw new Error('Master-pohjaa ei voi muokata suoraan. Luo siitä oma kopio.');
+    throw new Error('Valmista pohjaa ei voi muokata suoraan. Luo siitä oma versio.');
   }
 
   const nextName = typeof updates.name === 'string' ? updates.name.trim() : currentTemplate.name;
@@ -526,7 +526,7 @@ export function cloneTermTemplateFromMaster(storedTemplates: LegacyQuoteTerms[] 
   const masterTemplate = getSystemTermTemplates().find((template) => template.id === masterId);
 
   if (!masterTemplate) {
-    throw new Error('Master-pohjaa ei löytynyt.');
+    throw new Error('Valmista pohjaa ei löytynyt.');
   }
 
   const desiredName = ensureUniqueName(userTemplates, `${masterTemplate.name} (oma versio)`);
@@ -599,12 +599,12 @@ export function restoreTermTemplateFromMaster(storedTemplates: LegacyQuoteTerms[
     throw new Error('Ehtopohjaa ei löytynyt.');
   }
   if (!template.baseTemplateId) {
-    throw new Error('Palautus masterista on mahdollinen vain masterista luoduille kopioille.');
+    throw new Error('Palautus alkuperäisestä pohjasta on mahdollinen vain valmiista pohjasta luoduille omille versioille.');
   }
 
   const masterTemplate = getSystemTermTemplates().find((entry) => entry.id === template.baseTemplateId);
   if (!masterTemplate) {
-    throw new Error('Master-pohjaa ei löytynyt.');
+    throw new Error('Alkuperäistä pohjaa ei löytynyt.');
   }
 
   const now = nowIso();
@@ -637,7 +637,7 @@ export function setTermTemplateArchived(storedTemplates: LegacyQuoteTerms[] | un
     throw new Error('Ehtopohjaa ei löytynyt.');
   }
   if (template.isSystem) {
-    throw new Error('Master-pohjaa ei voi arkistoida.');
+    throw new Error('Valmista pohjaa ei voi arkistoida.');
   }
 
   const now = nowIso();
@@ -656,6 +656,42 @@ export function setTermTemplateArchived(storedTemplates: LegacyQuoteTerms[] | un
   return {
     templates: nextTemplates,
     template: nextTemplates.find((entry) => entry.id === templateId)!,
+  };
+}
+
+export function deleteTermTemplate(storedTemplates: LegacyQuoteTerms[] | undefined, templateId: string, ownerUserId: string) {
+  const userTemplates = hydrateStoredTermTemplates(storedTemplates, ownerUserId);
+  const template = userTemplates.find((entry) => entry.id === templateId);
+
+  if (!template) {
+    throw new Error('Ehtopohjaa ei löytynyt.');
+  }
+  if (template.isSystem) {
+    throw new Error('Valmista pohjaa ei voi poistaa.');
+  }
+
+  const remainingTemplates = userTemplates.filter((entry) => entry.id !== templateId);
+  const fallbackDefault = template.isDefault
+    ? [...remainingTemplates]
+        .filter((entry) => entry.isActive)
+        .sort((left, right) => {
+          if (left.sortOrder !== right.sortOrder) {
+            return left.sortOrder - right.sortOrder;
+          }
+          return left.name.localeCompare(right.name, 'fi');
+        })[0]
+    : undefined;
+
+  const nextTemplates = template.isDefault
+    ? remainingTemplates.map((entry) => ({
+        ...entry,
+        isDefault: fallbackDefault ? entry.id === fallbackDefault.id : false,
+      }))
+    : remainingTemplates;
+
+  return {
+    templates: nextTemplates,
+    template,
   };
 }
 

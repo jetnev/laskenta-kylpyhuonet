@@ -20,6 +20,7 @@ import {
   cloneTermTemplateFromMaster,
   createTermTemplate,
   createQuoteTermsSnapshot,
+  deleteTermTemplate,
   duplicateTermTemplate,
   getDefaultTermTemplate,
   hydrateStoredTermTemplates,
@@ -1031,6 +1032,7 @@ export function useQuoteRows() {
 
 export function useQuoteTerms() {
   const [storedTemplates = [], setStoredTemplates] = useKV<QuoteTerms[]>('term-templates', []);
+  const [allQuotes = []] = useKV<Quote[]>('quotes', []);
   const { user, canEdit, canDelete } = useAuth();
   const userId = user?.id;
 
@@ -1109,6 +1111,20 @@ export function useQuoteTerms() {
     return result.template;
   };
 
+  const deleteTerms = (templateId: string) => {
+    const currentUserId = ensureSignedIn(userId);
+    if (!canDelete) {
+      throw new Error('Sinulla ei ole oikeuksia poistaa ehtopohjia.');
+    }
+    if (allQuotes.some((quote) => quote.termsId === templateId)) {
+      throw new Error('Ehtopohja on valittuna tarjoukselle. Poista ehtopohja tarjoukselta ennen poistamista.');
+    }
+
+    const result = deleteTermTemplate(storedTemplates, templateId, currentUserId);
+    setStoredTemplates(result.templates);
+    return result.template;
+  };
+
   const getDefaultTerms = () => getDefaultTermTemplate(activeTerms);
   const getTermById = (id: string) => terms.find((template) => template.id === id);
 
@@ -1122,6 +1138,7 @@ export function useQuoteTerms() {
     duplicateTerms,
     restoreTermsFromMaster,
     archiveTerms,
+    deleteTerms,
     getDefaultTerms,
     getTermById,
     createQuoteTermsSnapshot,

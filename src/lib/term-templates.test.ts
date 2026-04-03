@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cloneTermTemplateFromMaster,
   createQuoteTermsSnapshot,
+  deleteTermTemplate,
   getSystemTermTemplates,
   listTermTemplates,
   resolveQuoteTermsSnapshotTemplate,
@@ -29,7 +30,7 @@ describe('term templates', () => {
   it('does not allow direct master template updates', () => {
     expect(() =>
       updateTermTemplate([], 'master-business-project', { name: 'Muokattu master' }, 'user-1')
-    ).toThrow('Master-pohjaa ei voi muokata suoraan. Luo siitä oma kopio.');
+    ).toThrow('Valmista pohjaa ei voi muokata suoraan. Luo siitä oma versio.');
   });
 
   it('can create an editable user copy from a master template', () => {
@@ -108,5 +109,22 @@ describe('term templates', () => {
 
     expect(resolved?.contentMd).toBe(snapshot.termsSnapshotContentMd);
     expect(resolved?.contentMd).not.toBe(updated.template.contentMd);
+  });
+
+  it('can delete a user template and move the default flag to the next active template', () => {
+    const firstClone = cloneTermTemplateFromMaster([], 'master-consumer-product-only', 'user-1');
+    const firstAsDefault = updateTermTemplate(
+      firstClone.templates,
+      firstClone.template.id,
+      { isDefault: true },
+      'user-1'
+    );
+    const secondClone = cloneTermTemplateFromMaster(firstAsDefault.templates, 'master-business-project', 'user-1');
+
+    const deleted = deleteTermTemplate(secondClone.templates, firstAsDefault.template.id, 'user-1');
+    const remainingTemplate = deleted.templates.find((template) => template.id === secondClone.template.id);
+
+    expect(deleted.templates.find((template) => template.id === firstAsDefault.template.id)).toBeUndefined();
+    expect(remainingTemplate?.isDefault).toBe(true);
   });
 });
