@@ -84,6 +84,33 @@ function readAuthFeedbackFromLocation() {
   return null;
 }
 
+function getActionErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message || 'Toiminto epäonnistui.';
+  }
+
+  if (typeof error === 'string' && error.trim()) {
+    return error.trim();
+  }
+
+  if (error && typeof error === 'object') {
+    const candidate = error as {
+      message?: unknown;
+      details?: unknown;
+      hint?: unknown;
+    };
+    const parts = [candidate.message, candidate.details, candidate.hint].filter(
+      (part): part is string => typeof part === 'string' && part.trim().length > 0
+    );
+
+    if (parts.length > 0) {
+      return Array.from(new Set(parts)).join(' ');
+    }
+  }
+
+  return 'Toiminto epäonnistui.';
+}
+
 export default function LoginPage({ onNavigateHome }: LoginPageProps) {
   const {
     login,
@@ -175,7 +202,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
       await action();
     } catch (err) {
       setInfoMessage(null);
-      setError(err instanceof Error ? err.message : 'Toiminto epäonnistui.');
+      setError(getActionErrorMessage(err));
     } finally {
       setSubmitting(false);
     }

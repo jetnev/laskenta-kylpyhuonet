@@ -75,6 +75,59 @@ function validatePassword(password: string) {
   return password.length >= 8;
 }
 
+function extractErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message.trim();
+  }
+
+  if (typeof error === 'string') {
+    return error.trim();
+  }
+
+  if (error && typeof error === 'object') {
+    const candidate = error as {
+      message?: unknown;
+      details?: unknown;
+      hint?: unknown;
+    };
+    const parts = [candidate.message, candidate.details, candidate.hint].filter(
+      (part): part is string => typeof part === 'string' && part.trim().length > 0
+    );
+
+    if (parts.length > 0) {
+      return Array.from(new Set(parts)).join(' ').trim();
+    }
+  }
+
+  return '';
+}
+
+function toError(error: unknown, fallbackMessage = 'Toiminto epäonnistui.') {
+  return new Error(extractErrorMessage(error) || fallbackMessage);
+}
+
+function isRecoverableProfileError(error: unknown) {
+  const candidate =
+    error && typeof error === 'object' ? (error as { code?: unknown }) : null;
+  const code = typeof candidate?.code === 'string' ? candidate.code : '';
+  const message = extractErrorMessage(error).toLowerCase();
+
+  if (code === '42P01' || code === '42501') {
+    return true;
+  }
+
+  return (
+    message.includes('profiles') &&
+    (
+      message.includes('does not exist') ||
+      message.includes('permission denied') ||
+      message.includes('row-level security') ||
+      message.includes('policy') ||
+      message.includes('schema cache')
+    )
+  );
+}
+
 function mapLoginErrorMessage(error: unknown) {
   if (!(error instanceof Error)) {
     return 'Kirjautuminen epäonnistui. Yritä uudelleen.';
@@ -139,6 +192,20 @@ function toAuthUser(profile: ProfileRow): AuthUser {
   };
 }
 
+function buildFallbackAuthUser(user: User, markLogin = false): AuthUser {
+  const displayName = toDisplayName(user);
+  return {
+    id: user.id,
+    email: normalizeEmail(user.email || ''),
+    displayName,
+    role: 'user',
+    initials: getInitials(displayName),
+    createdAt: user.created_at || new Date().toISOString(),
+    lastLoginAt: markLogin ? new Date().toISOString() : undefined,
+    status: 'active',
+  };
+}
+
 async function getProfile(userId: string) {
   const client = requireSupabase();
   const { data, error } = await client
@@ -148,7 +215,7 @@ async function getProfile(userId: string) {
     .maybeSingle();
 
   if (error) {
-    throw error;
+    throw toError(error, 'Käyttäjäprofiilin haku epäonnistui.');
   }
 
   return data as ProfileRow | null;
@@ -161,7 +228,7 @@ async function countProfiles() {
     .select('id', { count: 'exact', head: true });
 
   if (error) {
-    throw error;
+    throw toError(error, 'Käyttäjäprofiilien lataus epäonnistui.');
   }
 
   return count ?? 0;
@@ -176,7 +243,7 @@ async function upsertProfile(row: ProfileRow) {
     .single();
 
   if (error) {
-    throw error;
+    throw toError(error, 'Käyttäjäprofiilin tallennus epäonnistui.');
   }
 
   return data as ProfileRow;
@@ -244,7 +311,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .order('created_at', { ascending: true });
 
     if (error) {
-      throw error;
+      throw toError(error, 'Käyttäjälistan lataus epäonnistui.');
     }
 
     setUsers((data as ProfileRow[]).map(toAuthUser));
@@ -258,18 +325,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      let profile = await ensureProfile(session.user);
-      profile = await refreshProfileFromAuthUser(session.user, profile, options?.markLogin);
+      try {
+        let profile = await ensureProfile(session.user);
+        profile = await refreshProfileFromAuthUser(session.user, profile, options?.markLogin);
 
-      if (profile.status === 'disabled') {
-        await requireSupabase().auth.signOut();
-        throw new Error('Käyttäjätili on poistettu käytöstä.');
+        if (profile.status === 'disabled') {
+          await requireSupabase().auth.signOut();
+          throw new Error('Käyttäjätili on poistettu käytöstä.');
+        }
+
+        const nextUser = toAuthUser(profile);
+        setUser(nextUser);
+        await loadUsers(nextUser);
+        return nextUser;
+      } catch (error) {
+        if (!isRecoverableProfileError(error)) {
+          throw toError(error, 'Kirjautuminen epäonnistui.');
+        }
+
+        console.error('Supabase profile bootstrap failed, continuing with auth fallback.', error);
+        const nextUser = buildFallbackAuthUser(session.user, options?.markLogin);
+        setUser(nextUser);
+        setUsers([nextUser]);
+        return nextUser;
       }
-
-      const nextUser = toAuthUser(profile);
-      setUser(nextUser);
-      await loadUsers(nextUser);
-      return nextUser;
     },
     [loadUsers]
   );
@@ -289,7 +368,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       try {
         if (error) {
-          throw error;
+          throw toError(error, 'Kirjautumistilan tarkistus epäonnistui.');
         }
         await hydrateSession(data.session);
       } catch (authError) {
