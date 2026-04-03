@@ -538,7 +538,7 @@ using (
   (select public.is_admin())
   or scope = 'shared'
   or (scope = 'organization' and organization_id is not null and (select public.is_organization_member(organization_id)))
-  or (scope = 'user' and owner_user_id is not null and (select public.can_manage_user_record(owner_user_id)))
+  or (scope = 'user' and owner_user_id = (select auth.uid()))
 );
 
 drop policy if exists app_kv_insert_shared_admin_or_own on public.app_kv;
@@ -550,7 +550,7 @@ to authenticated
 with check (
   (select public.is_admin())
   or (scope = 'organization' and organization_id is not null and (select public.is_organization_owner(organization_id)))
-  or (scope = 'user' and owner_user_id is not null and (select public.can_manage_user_record(owner_user_id)))
+  or (scope = 'user' and owner_user_id = (select auth.uid()))
 );
 
 drop policy if exists app_kv_update_shared_admin_or_own on public.app_kv;
@@ -562,12 +562,12 @@ to authenticated
 using (
   (select public.is_admin())
   or (scope = 'organization' and organization_id is not null and (select public.is_organization_owner(organization_id)))
-  or (scope = 'user' and owner_user_id is not null and (select public.can_manage_user_record(owner_user_id)))
+  or (scope = 'user' and owner_user_id = (select auth.uid()))
 )
 with check (
   (select public.is_admin())
   or (scope = 'organization' and organization_id is not null and (select public.is_organization_owner(organization_id)))
-  or (scope = 'user' and owner_user_id is not null and (select public.can_manage_user_record(owner_user_id)))
+  or (scope = 'user' and owner_user_id = (select auth.uid()))
 );
 
 drop policy if exists app_kv_delete_shared_admin_or_own on public.app_kv;
@@ -579,6 +579,6 @@ to authenticated
 using (
   (select public.is_admin())
   or (scope = 'organization' and organization_id is not null and (select public.is_organization_owner(organization_id)))
-  or (scope = 'user' and owner_user_id is not null and (select public.can_manage_user_record(owner_user_id)))
+  or (scope = 'user' and owner_user_id = (select auth.uid()))
 );
 

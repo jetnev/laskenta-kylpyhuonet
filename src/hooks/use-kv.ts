@@ -21,7 +21,7 @@ type UseKVOptions = {
   organizationId?: string | null;
 };
 
-const REMOTE_WRITE_DEBOUNCE_MS = 600;
+const REMOTE_WRITE_DEBOUNCE_MS = 2000;
 
 const ORGANIZATION_KEYS = new Set<string>([
   'installation-groups',
@@ -286,6 +286,11 @@ function scheduleRemoteWrite(write: PendingWrite) {
 
   if (!isSupabaseConfigured) {
     persistedSnapshots.set(write.recordId, write.snapshot);
+    return;
+  }
+
+  // Skip remote write if value hasn't changed since last persisted snapshot
+  if (write.snapshot !== null && write.snapshot === persistedSnapshots.get(write.recordId)) {
     return;
   }
 
