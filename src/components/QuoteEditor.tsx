@@ -837,8 +837,11 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                       const rowCalculation = calculateQuoteRow(row);
                       const substitutes = row.productId
                         ? getSubstitutesForProduct(row.productId)
-                            .map((item) => products.find((product) => product.id === item.substituteProductId))
-                            .filter((item): item is Product => Boolean(item))
+                            .map((item) => {
+                              const product = products.find((candidate) => candidate.id === item.substituteProductId);
+                              return product ? { product, notes: item.notes } : null;
+                            })
+                            .filter((item): item is { product: Product; notes?: string } => Boolean(item))
                         : [];
 
                       return (
@@ -967,18 +970,23 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
 
                                 {substitutes.length > 0 && (
                                   <div className="rounded-xl border bg-muted/20 p-3">
-                                    <div className="mb-2 text-sm font-medium">Korvaavat tuotteet</div>
+                                    <div className="mb-1 text-sm font-medium">Ehdotettavat vaihtoehtotuotteet</div>
+                                    <div className="mb-3 text-xs text-muted-foreground">
+                                      Käytä tätä, kun suunnitelmissa tai asiakkaan pyynnössä on toinen tuote ja haluat ehdottaa tilalle omaa vaihtoehtoasi.
+                                    </div>
                                     <div className="flex flex-wrap gap-2">
-                                      {substitutes.map((product) => (
-                                        <Button
-                                          key={product.id}
-                                          variant="outline"
-                                          size="sm"
-                                          disabled={!isEditable}
-                                          onClick={() => patchRow(row, { ...buildProductRow(product), quantity: row.quantity, sortOrder: row.sortOrder })}
-                                        >
-                                          {product.code} • {product.name}
-                                        </Button>
+                                      {substitutes.map(({ product, notes }) => (
+                                        <div key={product.id} className="space-y-1">
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={!isEditable}
+                                            onClick={() => patchRow(row, { ...buildProductRow(product), quantity: row.quantity, sortOrder: row.sortOrder })}
+                                          >
+                                            Ehdota: {product.code} • {product.name}
+                                          </Button>
+                                          {notes && <div className="max-w-80 text-xs text-muted-foreground">{notes}</div>}
+                                        </div>
                                       ))}
                                     </div>
                                   </div>
