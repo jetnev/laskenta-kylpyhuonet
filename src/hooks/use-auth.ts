@@ -356,6 +356,52 @@ function getCachedAuthUserStorageKey(userId: string) {
   return `laskenta:auth-user:${userId}`;
 }
 
+function getPinnedAdminIdsStorageKey() {
+  return 'laskenta:known-admin-user-ids';
+}
+
+function readPinnedAdminUserIds() {
+  if (typeof window === 'undefined') {
+    return new Set<string>();
+  }
+
+  try {
+    const raw = window.localStorage.getItem(getPinnedAdminIdsStorageKey());
+    if (!raw) {
+      return new Set<string>();
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return new Set<string>();
+    }
+
+    return new Set(
+      parsed.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    );
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function hasPinnedAdminRole(userId: string) {
+  if (!userId) {
+    return false;
+  }
+
+  return readPinnedAdminUserIds().has(userId);
+}
+
+function pinAdminRole(userId: string) {
+  if (typeof window === 'undefined' || !userId) {
+    return;
+  }
+
+  const nextIds = readPinnedAdminUserIds();
+  nextIds.add(userId);
+  window.localStorage.setItem(getPinnedAdminIdsStorageKey(), JSON.stringify(Array.from(nextIds)));
+}
+
 function readCachedAuthUser(userId: string) {
   if (typeof window === 'undefined' || !userId) {
     return null;
@@ -372,11 +418,13 @@ function readCachedAuthUser(userId: string) {
       return null;
     }
 
+    const preserveAdminRole = hasPinnedAdminRole(userId);
+
     return {
       id: parsed.id,
       email: normalizeEmail(parsed.email),
       displayName: parsed.displayName,
-      role: parsed.role === 'admin' ? 'admin' : 'user',
+      role: parsed.role === 'admin' || preserveAdminRole ? 'admin' : 'user',
       organizationId: parsed.organizationId ?? null,
       organizationRole:
         parsed.organizationRole === 'owner' || parsed.organizationRole === 'employee'
@@ -402,6 +450,10 @@ function readCachedAuthUser(userId: string) {
 function writeCachedAuthUser(user: AuthUser) {
   if (typeof window === 'undefined') {
     return;
+  }
+
+  if (user.role === 'admin') {
+    pinAdminRole(user.id);
   }
 
   window.localStorage.setItem(getCachedAuthUserStorageKey(user.id), JSON.stringify(user));
@@ -521,11 +573,13 @@ async function ensureProfile(user: User, fallbackDisplayName?: string) {
     return existing;
   }
 
+  const preferredRole: UserRole = hasPinnedAdminRole(user.id) ? 'admin' : 'user';
+
   return upsertProfile({
     id: user.id,
     email: normalizeEmail(user.email || ''),
     display_name: toDisplayName(user, fallbackDisplayName),
-    role: 'user',
+    role: preferredRole,
     organization_id: null,
     organization_role: null,
     status: 'active',
@@ -579,6 +633,27 @@ async function ensureCurrentUserAdminIfNoAdminExists() {
 
   adminBootstrapFunctionState = 'available';
   return data ? normalizeProfileRow(data as Partial<ProfileRow>) : null;
+}
+
+async function repairProfileRoleFromLocalHints(profile: ProfileRow) {
+  if (profile.role === 'admin' || !hasPinnedAdminRole(profile.id)) {
+    return profile;
+  }
+
+  try {
+    return await upsertProfile({
+      ...profile,
+      role: 'admin',
+      updated_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (!isRecoverableProfileError(error)) {
+      throw error;
+    }
+
+    console.error('Local admin role recovery failed, continuing with current role.', error);
+    return profile;
+  }
 }
 
 async function assignEmployeeToCurrentOrganization(userId: string, status: UserStatus) {
@@ -683,6 +758,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         let profile = await ensureProfile(session.user);
         profile = await refreshProfileFromAuthUser(session.user, profile, options?.markLogin);
+        profile = await repairProfileRoleFromLocalHints(profile);
 
         if (profile.role !== 'admin' && profile.status === 'active') {
           try {
