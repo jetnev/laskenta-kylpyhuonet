@@ -705,8 +705,62 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;');
 }
 
+function looksLikeMarkdown(content: string) {
+  return /(^|\n)\s*(#{1,6}\s|[-*+]\s|\d+\.\s|>|```|\|)/m.test(content);
+}
+
+function shouldPromoteToHeading(line: string, nextLine?: string) {
+  if (!nextLine || !nextLine.trim()) {
+    return false;
+  }
+  if (line.includes('{{') || line.includes('}}')) {
+    return false;
+  }
+  if (line.length > 48) {
+    return false;
+  }
+  if (/[.:;!?]$/.test(line)) {
+    return false;
+  }
+
+  const words = line.trim().split(/\s+/).filter(Boolean);
+  return words.length >= 1 && words.length <= 4;
+}
+
+function normalizeTermTemplateMarkdown(content: string) {
+  if (looksLikeMarkdown(content)) {
+    return content;
+  }
+
+  const lines = content.split(/\r?\n/);
+  const normalized: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const currentLine = lines[index].trim();
+    const nextLine = lines[index + 1]?.trim();
+
+    if (!currentLine) {
+      normalized.push('');
+      continue;
+    }
+
+    if (shouldPromoteToHeading(currentLine, nextLine)) {
+      if (normalized.length > 0 && normalized[normalized.length - 1] !== '') {
+        normalized.push('');
+      }
+      normalized.push(`### ${currentLine}`);
+      continue;
+    }
+
+    normalized.push(currentLine);
+  }
+
+  return normalized.join('\n');
+}
+
 export function renderTermTemplateHtml(contentMd: string) {
-  return marked.parse(escapeHtml(contentMd), {
+  const normalizedContent = normalizeTermTemplateMarkdown(contentMd);
+  return marked.parse(escapeHtml(normalizedContent), {
     breaks: true,
   }) as string;
 }

@@ -343,7 +343,7 @@ export default function TermsPage() {
           }
         }}
         title={editingTemplate ? 'Muokkaa omaa ehtopohjaa' : 'Uusi ehtopohja'}
-        maxWidth="3xl"
+        maxWidth="full"
         footer={(
           <>
             <Button variant="outline" onClick={() => setDialogOpen(false)} className="flex-1 sm:flex-initial">
@@ -355,16 +355,16 @@ export default function TermsPage() {
           </>
         )}
       >
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <div className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
+        <div className="space-y-5">
+          <Card className="p-4 sm:p-5">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2 lg:col-span-2">
                 <Label htmlFor="terms-name">Pohjan nimi</Label>
                 <Input id="terms-name" value={formData.name} onChange={(event) => setFormData((current) => ({ ...current, name: event.target.value }))} />
               </div>
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2 lg:col-span-2">
                 <Label htmlFor="terms-description">Kuvaus</Label>
-                <Textarea id="terms-description" rows={3} value={formData.description} onChange={(event) => setFormData((current) => ({ ...current, description: event.target.value }))} />
+                <Textarea id="terms-description" rows={2} value={formData.description} onChange={(event) => setFormData((current) => ({ ...current, description: event.target.value }))} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="terms-segment">Asiakassegmentti</Label>
@@ -390,7 +390,7 @@ export default function TermsPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               <Button type="button" variant={formData.isDefault ? 'default' : 'outline'} onClick={() => setFormData((current) => ({ ...current, isDefault: !current.isDefault }))}>
                 {formData.isDefault ? 'Oletuspohja käytössä' : 'Merkitse oletukseksi'}
               </Button>
@@ -398,44 +398,52 @@ export default function TermsPage() {
                 {formData.isActive ? 'Aktiivinen' : 'Arkistoitu'}
               </Button>
             </div>
+          </Card>
 
-            <div className="space-y-2">
-              <Label htmlFor="terms-content">Sisältö</Label>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <Card className="p-4 space-y-3">
+              <div>
+                <h2 className="text-sm font-semibold">Sisältö</h2>
+                <p className="text-sm text-muted-foreground">Kirjoita ehdot tähän. Käytä otsikoita ja kappaleita paremman luettavuuden vuoksi.</p>
+              </div>
               <Textarea
                 id="terms-content"
                 rows={20}
                 value={formData.contentMd}
                 onChange={(event) => setFormData((current) => ({ ...current, contentMd: event.target.value }))}
                 placeholder="Kirjoita ehtopohjan sisältö tähän. Voit käyttää otsikoita ja muuttujia, kuten {{asiakas_nimi}}."
+                className="min-h-[460px] resize-y text-[15px] leading-7"
               />
-            </div>
-          </div>
+            </Card>
 
-          <div className="space-y-4">
-            <Card className="p-4 space-y-3">
+            <div className="space-y-4">
+              <Card className="p-4 space-y-3">
               <div>
                 <h2 className="text-sm font-semibold">Käytettävät muuttujat</h2>
                 <p className="text-sm text-muted-foreground">Napsauta muuttujaa lisätäksesi sen tekstin loppuun.</p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="max-h-[260px] overflow-y-auto pr-1">
+                <div className="flex flex-wrap gap-2">
                 {TERM_TEMPLATE_PLACEHOLDERS.map((item) => (
                   <Button key={item.token} type="button" variant="outline" size="sm" onClick={() => insertPlaceholder(item.token)}>
                     {item.token}
                   </Button>
                 ))}
+                </div>
               </div>
             </Card>
 
-            <Card className="p-4 space-y-3">
+            <Card className="p-4 space-y-3 xl:sticky xl:top-2">
               <div>
                 <h2 className="text-sm font-semibold">Esikatselu</h2>
                 <p className="text-sm text-muted-foreground">Teksti renderöidään dokumenteissa tästä sisällöstä.</p>
               </div>
               <div
-                className="prose prose-sm max-w-none rounded-xl border bg-muted/20 p-4 text-sm"
+                className="prose prose-sm prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-foreground prose-p:text-foreground/90 prose-p:leading-7 prose-li:leading-7 prose-li:text-foreground/90 max-w-none rounded-2xl border bg-card p-5 shadow-sm"
                 dangerouslySetInnerHTML={{ __html: previewHtml || '<p>Ei sisältöä.</p>' }}
               />
             </Card>
+            </div>
           </div>
         </div>
       </ResponsiveDialog>
@@ -466,7 +474,7 @@ export default function TermsPage() {
             </div>
             <p className="text-sm text-muted-foreground">{previewTemplate.description || 'Ei erillistä kuvausta.'}</p>
             <div
-              className="prose prose-sm max-w-none rounded-xl border bg-muted/20 p-4 text-sm"
+              className="prose prose-sm prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-foreground prose-p:text-foreground/90 prose-p:leading-7 prose-li:leading-7 prose-li:text-foreground/90 max-w-none rounded-2xl border bg-card p-5 shadow-sm"
               dangerouslySetInnerHTML={{ __html: renderTermTemplateHtml(previewTemplate.contentMd) }}
             />
           </div>
