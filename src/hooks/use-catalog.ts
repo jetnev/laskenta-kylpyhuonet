@@ -245,6 +245,12 @@ export function useCatalog() {
   const [legacyProducts = []] = useKV<LegacyProduct[]>('products', []);
   const autoSeedStartedRef = useRef(false);
   const migrationStartedRef = useRef(false);
+  const updateBootstrapState = useCallback(
+    (updates: Partial<CatalogBootstrapState>) => {
+      setBootstrapState((current = DEFAULT_BOOTSTRAP_STATE) => ({ ...current, ...updates }));
+    },
+    [setBootstrapState]
+  );
 
   useEffect(() => {
     if (categories.length === 0) {
@@ -620,13 +626,6 @@ export function useCatalog() {
       setSourceCategoryMappings((current = []) => current.filter((mapping) => mapping.id !== mappingId));
     },
     [setSourceCategoryMappings]
-  );
-
-  const updateBootstrapState = useCallback(
-    (updates: Partial<CatalogBootstrapState>) => {
-      setBootstrapState((current = DEFAULT_BOOTSTRAP_STATE) => ({ ...current, ...updates }));
-    },
-    [setBootstrapState]
   );
 
   useEffect(() => {
