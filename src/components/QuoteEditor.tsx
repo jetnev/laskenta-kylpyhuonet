@@ -1193,7 +1193,15 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                 <div className="rounded-xl border bg-background p-4 space-y-4">
                                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                     <div>
-                                      <div className="text-sm font-medium">Asiakashinta</div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <div className="text-sm font-medium">Asiakashinta</div>
+                                        <Badge
+                                          variant="outline"
+                                          className="rounded-full border-primary/25 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary"
+                                        >
+                                          Näkyy asiakkaalle
+                                        </Badge>
+                                      </div>
                                       <p className="mt-1 text-xs text-muted-foreground">
                                         Valitse ensin syötätkö riville verottoman yksikköhinnan vai koko rivin verottoman kokonaishinnan.
                                         Järjestelmä näyttää erikseen syötetyn arvon, johdetun arvon ja valmiin summan.
@@ -1277,10 +1285,18 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                   </div>
                                 </div>
 
-                                <div className="rounded-xl border bg-muted/20 p-4 space-y-4">
+                                <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 p-4 space-y-4">
                                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                                     <div>
-                                      <div className="text-sm font-medium">Sisäinen kannattavuus</div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <div className="text-sm font-medium text-slate-950">Sisäinen kannattavuus</div>
+                                        <Badge
+                                          variant="outline"
+                                          className="rounded-full border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950"
+                                        >
+                                          Vain yrityksen sisällä
+                                        </Badge>
+                                      </div>
                                       <p className="mt-1 text-xs text-muted-foreground">
                                         Nämä kentät ovat yrityksen sisäistä kustannus- ja kateseurantaa varten. Asiakkaalle näkyvä laskutus tulee aina yllä olevasta asiakashinnasta.
                                       </p>
@@ -1288,6 +1304,16 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                     <Badge variant="outline">
                                       {quote.pricingMode === 'margin' ? 'Oletus: kateohjattu yksikköhinta' : 'Oletus: manuaalinen yksikköhinta'}
                                     </Badge>
+                                  </div>
+
+                                  <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-white/80 px-4 py-3">
+                                    <Warning className="mt-0.5 h-4 w-4 flex-none text-amber-700" weight="fill" />
+                                    <div className="space-y-1">
+                                      <div className="text-sm font-medium text-amber-950">Tämä osio ei näy asiakkaalle</div>
+                                      <p className="text-xs leading-5 text-amber-900/80">
+                                        Näitä arvoja käytetään vain oman yrityksen kustannus- ja kateseurantaan. Tietoja ei viedä asiakas-PDF:ään, asiakas-Exceliin tai tarjouksen asiakasnäkymään.
+                                      </p>
+                                    </div>
                                   </div>
 
                                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
