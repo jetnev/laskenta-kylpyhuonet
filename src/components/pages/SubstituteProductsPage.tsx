@@ -25,6 +25,15 @@ import { useAuth } from '../../hooks/use-auth';
 import { toast } from 'sonner';
 import { ReadOnlyAlert } from '../ReadOnlyAlert';
 import { ResponsiveDialog } from '../ResponsiveDialog';
+import FieldHelpLabel from '../FieldHelpLabel';
+
+const SUBSTITUTE_FIELD_HELP = {
+  originalType: 'Valitse haetaanko alkuperäinen tuote omasta tuoterekisteristä vai syötetäänkö se käsin. Käsinsyöttö sopii tilanteisiin, joissa alkuperäistä tuotetta ei enää haluta pitää rekisterissä.',
+  originalProductId: 'Tämä on tuote, jolle haluat määrittää vaihtoehdon. Valitse alkuperäinen tuote omasta rekisteristäsi.',
+  manualOriginalCode: 'Syötä alkuperäisen tuotteen koodi, jos tuotetta ei ole enää rekisterissä mutta haluat silti säilyttää korvaustiedon.',
+  manualOriginalName: 'Syötä alkuperäisen tuotteen nimi mahdollisimman tunnistettavasti, jotta käyttäjät ymmärtävät mitä tuotetta tämä korvaus koskee.',
+  substituteProductId: 'Korvaava tuote on vaihtoehto, jota voit ehdottaa tai vaihtaa tarjoukselle alkuperäisen tilalle.',
+} as const;
 
 export default function SubstituteProductsPage() {
   const { substitutes, addSubstitute, deleteSubstitute } = useSubstituteProducts();
@@ -136,7 +145,7 @@ export default function SubstituteProductsPage() {
       >
         <div className="space-y-4">
           <div className="space-y-3">
-            <Label>Alkuperäinen tuote</Label>
+            <FieldHelpLabel label="Alkuperäinen tuote" help={SUBSTITUTE_FIELD_HELP.originalType} />
             <RadioGroup value={originalType} onValueChange={(value: 'existing' | 'manual') => setOriginalType(value)}>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="existing" id="existing" />
@@ -149,35 +158,44 @@ export default function SubstituteProductsPage() {
             </RadioGroup>
             
             {originalType === 'existing' ? (
-              <Select
-                value={formData.originalProductId}
-                onValueChange={(value) => setFormData({ ...formData, originalProductId: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Valitse tuote" />
-                </SelectTrigger>
-                <SelectContent>
-                  {products.map((product) => (
-                    <SelectItem key={product.id} value={product.id}>
-                      {product.code} - {product.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="space-y-2">
+                <FieldHelpLabel label="Valitse alkuperäinen tuote" help={SUBSTITUTE_FIELD_HELP.originalProductId} />
+                <Select
+                  value={formData.originalProductId}
+                  onValueChange={(value) => setFormData({ ...formData, originalProductId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Valitse tuote" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {products.map((product) => (
+                      <SelectItem key={product.id} value={product.id}>
+                        {product.code} - {product.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             ) : (
               <div className="space-y-2">
-                <Input
-                  id="manual-code"
-                  placeholder="Tuotekoodi"
-                  value={formData.manualOriginalCode}
-                  onChange={(e) => setFormData({ ...formData, manualOriginalCode: e.target.value })}
-                />
-                <Input
-                  id="manual-name"
-                  placeholder="Tuotteen nimi"
-                  value={formData.manualOriginalName}
-                  onChange={(e) => setFormData({ ...formData, manualOriginalName: e.target.value })}
-                />
+                <div className="space-y-2">
+                  <FieldHelpLabel htmlFor="manual-code" label="Tuotekoodi" help={SUBSTITUTE_FIELD_HELP.manualOriginalCode} />
+                  <Input
+                    id="manual-code"
+                    placeholder="Tuotekoodi"
+                    value={formData.manualOriginalCode}
+                    onChange={(e) => setFormData({ ...formData, manualOriginalCode: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FieldHelpLabel htmlFor="manual-name" label="Tuotteen nimi" help={SUBSTITUTE_FIELD_HELP.manualOriginalName} />
+                  <Input
+                    id="manual-name"
+                    placeholder="Tuotteen nimi"
+                    value={formData.manualOriginalName}
+                    onChange={(e) => setFormData({ ...formData, manualOriginalName: e.target.value })}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -185,7 +203,7 @@ export default function SubstituteProductsPage() {
             <ArrowsLeftRight className="h-6 w-6 text-muted-foreground" />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="substitute">Korvaava tuote</Label>
+            <FieldHelpLabel htmlFor="substitute" label="Korvaava tuote" help={SUBSTITUTE_FIELD_HELP.substituteProductId} />
             <Select
               value={formData.substituteProductId}
               onValueChange={(value) => setFormData({ ...formData, substituteProductId: value })}

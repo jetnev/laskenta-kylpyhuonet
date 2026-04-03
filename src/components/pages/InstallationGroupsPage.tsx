@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { ResponsiveDialog } from '../ResponsiveDialog';
@@ -13,6 +12,7 @@ import { useAuth } from '../../hooks/use-auth';
 import { InstallationGroup } from '../../lib/types';
 import { formatCurrency } from '../../lib/calculations';
 import { ReadOnlyAlert } from '../ReadOnlyAlert';
+import FieldHelpLabel from '../FieldHelpLabel';
 
 const DEFAULT_CATEGORIES = [
   'Lattiatyöt',
@@ -33,6 +33,15 @@ const EMPTY_FORM = {
   defaultMarginPercent: 0,
   defaultInstallationPrice: 0,
 };
+
+const GROUP_FIELD_HELP = {
+  name: 'Hintaryhmän nimi kertoo, mihin töihin tai tuotteisiin tätä oletusta käytetään. Valitse nimi, jonka henkilöstö tunnistaa nopeasti.',
+  category: 'Kategoria auttaa ryhmittelemään hintaryhmiä. Tämä helpottaa ylläpitoa, kun hintaryhmiä alkaa olla useita.',
+  description: 'Kuvaus on sisäinen selvennys siitä, mihin tilanteisiin tai tuoteluokkaan hintaryhmä on tarkoitettu.',
+  defaultPrice: 'Oletushinta on ryhmän perushinta, jota voidaan käyttää tuotteilla tai asennuksissa valmiina lähtöarvona.',
+  defaultMarginPercent: 'Oletuskate määrittää suositellun katetason tälle ryhmälle, jos tuotekohtaista katetta ei ole annettu erikseen.',
+  defaultInstallationPrice: 'Oletusasennus tuo valmiin asennushinnan tuotteille, joille tämä hintaryhmä on valittu.',
+} as const;
 
 export default function InstallationGroupsPage() {
   const { groups, addGroup, updateGroup, deleteGroup } = useInstallationGroups();
@@ -247,7 +256,7 @@ export default function InstallationGroupsPage() {
       >
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="group-name">Nimi *</Label>
+            <FieldHelpLabel htmlFor="group-name" label="Nimi" required help={GROUP_FIELD_HELP.name} />
             <Input
               id="group-name"
               value={formData.name}
@@ -256,7 +265,7 @@ export default function InstallationGroupsPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="group-category">Kategoria</Label>
+            <FieldHelpLabel htmlFor="group-category" label="Kategoria" help={GROUP_FIELD_HELP.category} />
             <Input
               id="group-category"
               list="installation-group-categories"
@@ -271,7 +280,7 @@ export default function InstallationGroupsPage() {
             </datalist>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="group-description">Kuvaus</Label>
+            <FieldHelpLabel htmlFor="group-description" label="Kuvaus" help={GROUP_FIELD_HELP.description} />
             <Input
               id="group-description"
               value={formData.description}
@@ -280,7 +289,7 @@ export default function InstallationGroupsPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="group-price">Oletushinta</Label>
+              <FieldHelpLabel htmlFor="group-price" label="Oletushinta" help={GROUP_FIELD_HELP.defaultPrice} />
               <Input
                 id="group-price"
                 type="number"
@@ -290,7 +299,7 @@ export default function InstallationGroupsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="group-margin">Oletuskate %</Label>
+              <FieldHelpLabel htmlFor="group-margin" label="Oletuskate %" help={GROUP_FIELD_HELP.defaultMarginPercent} />
               <Input
                 id="group-margin"
                 type="number"
@@ -300,7 +309,7 @@ export default function InstallationGroupsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="group-installation">Oletusasennus</Label>
+              <FieldHelpLabel htmlFor="group-installation" label="Oletusasennus" help={GROUP_FIELD_HELP.defaultInstallationPrice} />
               <Input
                 id="group-installation"
                 type="number"
@@ -315,4 +324,3 @@ export default function InstallationGroupsPage() {
     </div>
   );
 }
-

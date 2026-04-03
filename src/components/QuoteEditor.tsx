@@ -19,7 +19,6 @@ import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
 import { Alert, AlertDescription } from './ui/alert';
@@ -34,6 +33,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Separator } from './ui/separator';
 import { ResponsiveDialog } from './ResponsiveDialog';
 import ScheduleSection from './ScheduleSection';
+import FieldHelpLabel from './FieldHelpLabel';
 import {
   useCustomers,
   useInstallationGroups,
@@ -93,6 +93,49 @@ const CHARGE_TYPE_LABELS: Record<QuoteChargeType, string> = {
   permit: 'Lupamaksu',
   other: 'Muu veloitus',
 };
+
+const QUOTE_FIELD_HELP = {
+  quoteNumber: 'Tarjousnumero on yksilöllinen tunnus, jolla tarjous löytyy myöhemmin nopeasti. Käytä yrityksellesi tuttua numerointitapaa.',
+  validUntil: 'Voimassaoloaika kertoo asiakkaalle, mihin saakka tarjous on hyväksyttävissä tällä hinnalla.',
+  pricingMode: 'Kateohjattu hinnoittelu laskee myyntihintaa ostohinnan ja katteen perusteella. Manuaalinen tila sopii, kun haluat syöttää myyntihinnat itse.',
+  selectedMarginPercent: 'Oletuskate toimii uusien rivien lähtötasona. Se auttaa pitämään tarjouksen hinnoittelun tasaisena.',
+  vatPercent: 'ALV-prosentti vaikuttaa tarjouksen loppusummaan. Käytä arvoa, joka vastaa kyseisen työn verokohtelua.',
+  termsId: 'Ehtopohja lisää tarjoukselle valmiit toimitus- ja sopimusehdot, jotta niitä ei tarvitse kirjoittaa joka kerta uudelleen.',
+  discountType: 'Valitse annetaanko alennus prosentteina vai euromääräisenä vähennyksenä. Jos alennusta ei ole, jätä asetus pois päältä.',
+  discountValue: 'Anna alennuksen määrä valitun tavan mukaisesti. Prosentti lasketaan välisummasta, euromäärä vähennetään sellaisenaan.',
+  projectCosts: 'Muut projektikulut ovat sellaisia yhteiskuluja, joita ei haluta sitoa yksittäiseen tarjousriviin.',
+  deliveryCosts: 'Toimituskulut kattavat tavaran kuljetukset, noudot tai muut logistiikkakulut.',
+  installationCosts: 'Tähän tulee erillinen asennuskulu, jos sitä ei haluta jakaa tuotekohtaisille riveille.',
+  travelKilometers: 'Kirjaa työmaahan liittyvä ajo kilometreinä, jos matkakulut veloitetaan erikseen.',
+  travelRatePerKm: 'Km-hinta kertoo paljonko yhdestä ajokilometristä veloitetaan. Järjestelmä laskee kokonaissumman automaattisesti.',
+  travelCosts: 'Ajokulu yhteensä lasketaan kilometreistä ja km-hinnasta. Tämä kenttä on vain yhteenveto.',
+  disposalCosts: 'Kaatopaikka- ja jätemaksuihin voit kirjata purkujätteen, lajittelun tai vastaanottomaksut.',
+  demolitionCosts: 'Purkutyön lisäkulut sopivat esimerkiksi piikkaukselle, purkusuojaukselle tai ylimääräiselle purkutyölle.',
+  protectionCosts: 'Suojaus- ja peittokuluihin voit kirjata esimerkiksi pölysuojauksen, lattiasuojat ja muut suojausmateriaalit.',
+  permitCosts: 'Lupa- ja käsittelymaksut sopivat esimerkiksi taloyhtiön, kaupungin tai muun tahon veloituksiin.',
+  notes: 'Tarjoushuomautukset näkyvät asiakkaalle. Tähän kannattaa kirjata rajaukset, oletukset ja tärkeät lisätiedot.',
+  internalNotes: 'Sisäiset muistiinpanot ovat vain omalle tiimille. Niitä ei näytetä asiakkaalle dokumenteissa.',
+  productSearch: 'Hae tuotteita omasta tuoterekisteristä koodilla, nimellä tai kuvauksella ja lisää ne tarjoukselle yhdellä klikkauksella.',
+} as const;
+
+const QUOTE_ROW_FIELD_HELP = {
+  mode: 'Rivin tyyppi määrää onko kyse tuotteesta, asennuksesta, väliotsikosta vai erillisestä veloituksesta.',
+  chargeType: 'Veloituksen tyyppi helpottaa lisäkulujen erottelua raportoinnissa ja yhteenvedossa.',
+  productCode: 'Tuotekoodi helpottaa rivin tunnistusta ja pitää tarjouksen linjassa oman tuoterekisterin kanssa.',
+  productName: 'Tuotenimi on näkyvin tieto asiakkaalle. Kirjoita se selkeästi ja asiakkaan näkökulmasta ymmärrettävästi.',
+  description: 'Kuvaus tarkentaa mitä rivi sisältää, esimerkiksi koon, mallin tai työn sisällön.',
+  notes: 'Rivihuomautus tuo lisätietoa juuri tälle riville, esimerkiksi rajauksia tai tarkennuksia asiakkaalle.',
+  quantity: 'Määrä kertoo kuinka monta kappaletta, metriä tai muuta yksikköä tarjotaan tällä rivillä.',
+  unit: 'Yksikkö kertoo millä tavalla määrä lasketaan, kuten kpl, m2 tai erä.',
+  purchasePrice: 'Ostohinta on oma kustannuksesi kyseisellä rivillä. Sen avulla järjestelmä laskee katteen.',
+  marginPercent: 'Kate prosentteina kertoo tavoitellun marginaalin tälle riville, jos myyntihintaa ei anneta käsin.',
+  salesPrice: 'Myyntihinta on asiakkaalle tarjottu hinta ilman mahdollisia erillisiä asennuskuluja.',
+  installationPrice: 'Asennushinta on rivin työosuus. Voit käyttää tätä, jos haluat erottaa tuotteen ja työn toisistaan.',
+  installationGroupId: 'Hintaryhmä tuo valmiita oletuksia asennukseen ja katteeseen. Se nopeuttaa vastaavien rivien luontia.',
+  regionMultiplier: 'Aluekerroin nostaa tai laskee rivin hintatasoa alueen mukaan. Käytä arvoa 1, jos et tarvitse aluekorjausta.',
+  marginAmount: 'Todellinen kate näyttää euroina, paljonko rivistä jää katetta nykyisillä hinnoilla.',
+  realizedMarginPercent: 'Kate % toteuma näyttää prosentteina, kuinka kannattava rivi on tällä hetkellä.',
+} as const;
 
 function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -585,15 +628,15 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
             <div className="grid gap-4 xl:grid-cols-2">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="quote-number">Tarjousnumero</Label>
+                  <FieldHelpLabel htmlFor="quote-number" label="Tarjousnumero" help={QUOTE_FIELD_HELP.quoteNumber} />
                   <Input id="quote-number" value={quote.quoteNumber} onChange={(event) => updateQuote(quote.id, { quoteNumber: event.target.value })} disabled={!isEditable} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="valid-until">Voimassa asti</Label>
+                  <FieldHelpLabel htmlFor="valid-until" label="Voimassa asti" help={QUOTE_FIELD_HELP.validUntil} />
                   <Input id="valid-until" type="date" value={quote.validUntil || ''} onChange={(event) => updateQuote(quote.id, { validUntil: event.target.value })} disabled={!isEditable} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="pricing-mode">Hinnoittelutapa</Label>
+                  <FieldHelpLabel htmlFor="pricing-mode" label="Hinnoittelutapa" help={QUOTE_FIELD_HELP.pricingMode} />
                   <Select
                     value={quote.pricingMode}
                     onValueChange={(value) => {
@@ -616,15 +659,15 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="quote-margin">Oletuskate %</Label>
+                  <FieldHelpLabel htmlFor="quote-margin" label="Oletuskate %" help={QUOTE_FIELD_HELP.selectedMarginPercent} />
                   <Input id="quote-margin" type="number" min="0" step="0.1" value={quote.selectedMarginPercent} onChange={(event) => applyQuoteMargin(parseFloat(event.target.value) || 0)} disabled={!isEditable} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="vat">ALV %</Label>
+                  <FieldHelpLabel htmlFor="vat" label="ALV %" help={QUOTE_FIELD_HELP.vatPercent} />
                   <Input id="vat" type="number" min="0" step="0.1" value={quote.vatPercent} onChange={(event) => updateQuote(quote.id, { vatPercent: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="terms">Ehtopohja</Label>
+                  <FieldHelpLabel htmlFor="terms" label="Ehtopohja" help={QUOTE_FIELD_HELP.termsId} />
                   <Select value={quote.termsId || 'none'} onValueChange={(value) => updateQuote(quote.id, { termsId: value === 'none' ? undefined : value })} disabled={!isEditable}>
                     <SelectTrigger id="terms"><SelectValue placeholder="Valitse ehtopohja" /></SelectTrigger>
                     <SelectContent>
@@ -639,7 +682,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="discount-type">Alennus</Label>
+                  <FieldHelpLabel htmlFor="discount-type" label="Alennus" help={QUOTE_FIELD_HELP.discountType} />
                   <Select value={quote.discountType} onValueChange={(value) => updateQuote(quote.id, { discountType: value as Quote['discountType'] })} disabled={!isEditable}>
                     <SelectTrigger id="discount-type"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -650,7 +693,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="discount-value">Alennuksen arvo</Label>
+                  <FieldHelpLabel htmlFor="discount-value" label="Alennuksen arvo" help={QUOTE_FIELD_HELP.discountValue} />
                   <Input id="discount-value" type="number" min="0" step="0.01" value={quote.discountValue} onChange={(event) => updateQuote(quote.id, { discountValue: parseFloat(event.target.value) || 0 })} disabled={!isEditable || quote.discountType === 'none'} />
                 </div>
               </div>
@@ -672,46 +715,46 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
 
               <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <div className="space-y-2">
-                  <Label htmlFor="project-costs">Muut projektikulut</Label>
+                  <FieldHelpLabel htmlFor="project-costs" label="Muut projektikulut" help={QUOTE_FIELD_HELP.projectCosts} />
                   <Input id="project-costs" type="number" min="0" step="0.01" value={quote.projectCosts} onChange={(event) => updateQuote(quote.id, { projectCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="delivery-costs">Toimituskulut</Label>
+                  <FieldHelpLabel htmlFor="delivery-costs" label="Toimituskulut" help={QUOTE_FIELD_HELP.deliveryCosts} />
                   <Input id="delivery-costs" type="number" min="0" step="0.01" value={quote.deliveryCosts} onChange={(event) => updateQuote(quote.id, { deliveryCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="installation-costs">Asennuskulut erillisenä rivinä</Label>
+                  <FieldHelpLabel htmlFor="installation-costs" label="Asennuskulut erillisenä rivinä" help={QUOTE_FIELD_HELP.installationCosts} />
                   <Input id="installation-costs" type="number" min="0" step="0.01" value={quote.installationCosts} onChange={(event) => updateQuote(quote.id, { installationCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="travel-kilometers">Kilometrit</Label>
+                  <FieldHelpLabel htmlFor="travel-kilometers" label="Kilometrit" help={QUOTE_FIELD_HELP.travelKilometers} />
                   <Input id="travel-kilometers" type="number" min="0" step="1" value={quote.travelKilometers ?? 0} onChange={(event) => updateQuote(quote.id, { travelKilometers: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="travel-rate">Km-hinta</Label>
+                  <FieldHelpLabel htmlFor="travel-rate" label="Km-hinta" help={QUOTE_FIELD_HELP.travelRatePerKm} />
                   <Input id="travel-rate" type="number" min="0" step="0.01" value={quote.travelRatePerKm ?? 0} onChange={(event) => updateQuote(quote.id, { travelRatePerKm: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Ajokulu yhteensä</Label>
+                  <FieldHelpLabel label="Ajokulu yhteensä" help={QUOTE_FIELD_HELP.travelCosts} />
                   <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(travelCosts)}</div>
                 </div>
               </div>
 
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <div className="space-y-2">
-                  <Label htmlFor="disposal-costs">Kaatopaikka- ja jätemaksut</Label>
+                  <FieldHelpLabel htmlFor="disposal-costs" label="Kaatopaikka- ja jätemaksut" help={QUOTE_FIELD_HELP.disposalCosts} />
                   <Input id="disposal-costs" type="number" min="0" step="0.01" value={quote.disposalCosts ?? 0} onChange={(event) => updateQuote(quote.id, { disposalCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="demolition-costs">Purkutyön lisäkulut</Label>
+                  <FieldHelpLabel htmlFor="demolition-costs" label="Purkutyön lisäkulut" help={QUOTE_FIELD_HELP.demolitionCosts} />
                   <Input id="demolition-costs" type="number" min="0" step="0.01" value={quote.demolitionCosts ?? 0} onChange={(event) => updateQuote(quote.id, { demolitionCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="protection-costs">Suojaus- ja peittokulut</Label>
+                  <FieldHelpLabel htmlFor="protection-costs" label="Suojaus- ja peittokulut" help={QUOTE_FIELD_HELP.protectionCosts} />
                   <Input id="protection-costs" type="number" min="0" step="0.01" value={quote.protectionCosts ?? 0} onChange={(event) => updateQuote(quote.id, { protectionCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="permit-costs">Lupa- ja käsittelymaksut</Label>
+                  <FieldHelpLabel htmlFor="permit-costs" label="Lupa- ja käsittelymaksut" help={QUOTE_FIELD_HELP.permitCosts} />
                   <Input id="permit-costs" type="number" min="0" step="0.01" value={quote.permitCosts ?? 0} onChange={(event) => updateQuote(quote.id, { permitCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                 </div>
               </div>
@@ -719,11 +762,11 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
 
             <div className="grid gap-4 xl:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="quote-notes">Tarjoushuomautukset</Label>
+                <FieldHelpLabel htmlFor="quote-notes" label="Tarjoushuomautukset" help={QUOTE_FIELD_HELP.notes} />
                 <Textarea id="quote-notes" value={quote.notes || ''} onChange={(event) => updateQuote(quote.id, { notes: event.target.value })} disabled={!isEditable} rows={4} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="internal-notes">Sisäiset muistiinpanot</Label>
+                <FieldHelpLabel htmlFor="internal-notes" label="Sisäiset muistiinpanot" help={QUOTE_FIELD_HELP.internalNotes} />
                 <Textarea id="internal-notes" value={quote.internalNotes || ''} onChange={(event) => updateQuote(quote.id, { internalNotes: event.target.value })} disabled={!isEditable} rows={4} />
               </div>
             </div>
@@ -734,7 +777,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
               <Card className="p-6 space-y-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div className="space-y-2">
-                    <Label htmlFor="product-search">Lisää tuotteita tarjoukselle</Label>
+                    <FieldHelpLabel htmlFor="product-search" label="Lisää tuotteita tarjoukselle" help={QUOTE_FIELD_HELP.productSearch} />
                     <div className="relative">
                       <MagnifyingGlass className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input id="product-search" value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Hae koodilla, nimellä tai kuvauksella" className="pl-10" disabled={!isEditable} />
@@ -822,7 +865,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                             </div>
                             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                               <div className="space-y-2">
-                                <Label>Tyyppi</Label>
+                                <FieldHelpLabel label="Tyyppi" help={QUOTE_ROW_FIELD_HELP.mode} />
                                 <Select value={row.mode} onValueChange={(value) => patchRow(row, { mode: value as QuoteRowMode })} disabled={!isEditable}>
                                   <SelectTrigger><SelectValue /></SelectTrigger>
                                   <SelectContent>
@@ -834,7 +877,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                               </div>
                               {row.mode === 'charge' && (
                                 <div className="space-y-2">
-                                  <Label>Veloituksen tyyppi</Label>
+                                  <FieldHelpLabel label="Veloituksen tyyppi" help={QUOTE_ROW_FIELD_HELP.chargeType} />
                                   <Select value={row.chargeType || 'other'} onValueChange={(value) => patchRow(row, { chargeType: value as QuoteChargeType })} disabled={!isEditable}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
@@ -846,22 +889,22 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                 </div>
                               )}
                               <div className="space-y-2">
-                                <Label>Tuotekoodi</Label>
+                                <FieldHelpLabel label="Tuotekoodi" help={QUOTE_ROW_FIELD_HELP.productCode} />
                                 <Input value={row.productCode || ''} onChange={(event) => patchRow(row, { productCode: event.target.value })} disabled={!isEditable || row.mode === 'section'} />
                               </div>
                               <div className="space-y-2 md:col-span-2">
-                                <Label>{row.mode === 'section' ? 'Väliotsikko' : 'Tuotenimi'}</Label>
+                                <FieldHelpLabel label={row.mode === 'section' ? 'Väliotsikko' : 'Tuotenimi'} help={QUOTE_ROW_FIELD_HELP.productName} />
                                 <Input value={row.productName} onChange={(event) => patchRow(row, { productName: event.target.value })} disabled={!isEditable} />
                               </div>
                             </div>
 
                             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                               <div className="space-y-2 xl:col-span-2">
-                                <Label>Kuvaus</Label>
+                                <FieldHelpLabel label="Kuvaus" help={QUOTE_ROW_FIELD_HELP.description} />
                                 <Textarea value={row.description || ''} onChange={(event) => patchRow(row, { description: event.target.value })} disabled={!isEditable || row.mode === 'section'} rows={2} />
                               </div>
                               <div className="space-y-2 xl:col-span-2">
-                                <Label>Rivihuomautus</Label>
+                                <FieldHelpLabel label="Rivihuomautus" help={QUOTE_ROW_FIELD_HELP.notes} />
                                 <Textarea value={row.notes || ''} onChange={(event) => patchRow(row, { notes: event.target.value })} disabled={!isEditable || row.mode === 'section'} rows={2} />
                               </div>
                             </div>
@@ -870,34 +913,34 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                               <>
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                                   <div className="space-y-2">
-                                    <Label>Määrä</Label>
+                                    <FieldHelpLabel label="Määrä" help={QUOTE_ROW_FIELD_HELP.quantity} />
                                     <Input type="number" min="0" step="0.01" value={row.quantity} onChange={(event) => patchRow(row, { quantity: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
                                   </div>
                                   <div className="space-y-2">
-                                    <Label>Yksikkö</Label>
+                                    <FieldHelpLabel label="Yksikkö" help={QUOTE_ROW_FIELD_HELP.unit} />
                                     <Input value={row.unit} onChange={(event) => patchRow(row, { unit: event.target.value })} disabled={!isEditable} />
                                   </div>
                                   <div className="space-y-2">
-                                    <Label>Ostohinta</Label>
+                                    <FieldHelpLabel label="Ostohinta" help={QUOTE_ROW_FIELD_HELP.purchasePrice} />
                                     <Input type="number" min="0" step="0.01" value={row.purchasePrice} onChange={(event) => patchRow(row, { purchasePrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'charge'} />
                                   </div>
                                   <div className="space-y-2">
-                                    <Label>Kate %</Label>
+                                    <FieldHelpLabel label="Kate %" help={QUOTE_ROW_FIELD_HELP.marginPercent} />
                                     <Input type="number" min="0" step="0.1" value={row.marginPercent} onChange={(event) => patchRow(row, { marginPercent: parseFloat(event.target.value) || 0, manualSalesPrice: false })} disabled={!isEditable || row.mode === 'charge' || quote.pricingMode === 'manual'} />
                                   </div>
                                   <div className="space-y-2">
-                                    <Label>Myyntihinta</Label>
+                                    <FieldHelpLabel label="Myyntihinta" help={QUOTE_ROW_FIELD_HELP.salesPrice} />
                                     <Input type="number" min="0" step="0.01" value={row.salesPrice} onChange={(event) => patchRow(row, { salesPrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'installation'} />
                                   </div>
                                   <div className="space-y-2">
-                                    <Label>Asennushinta</Label>
+                                    <FieldHelpLabel label="Asennushinta" help={QUOTE_ROW_FIELD_HELP.installationPrice} />
                                     <Input type="number" min="0" step="0.01" value={row.installationPrice} onChange={(event) => patchRow(row, { installationPrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'charge'} />
                                   </div>
                                 </div>
 
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                                   <div className="space-y-2">
-                                    <Label>Hintaryhmä</Label>
+                                    <FieldHelpLabel label="Hintaryhmä" help={QUOTE_ROW_FIELD_HELP.installationGroupId} />
                                     <Select value={row.installationGroupId || 'none'} onValueChange={(value) => patchRow(row, { installationGroupId: value === 'none' ? undefined : value })} disabled={!isEditable || row.mode === 'charge'}>
                                       <SelectTrigger><SelectValue placeholder="Ei hintaryhmää" /></SelectTrigger>
                                       <SelectContent>
@@ -909,15 +952,15 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                     </Select>
                                   </div>
                                   <div className="space-y-2">
-                                    <Label>Aluekerroin</Label>
+                                    <FieldHelpLabel label="Aluekerroin" help={QUOTE_ROW_FIELD_HELP.regionMultiplier} />
                                     <Input type="number" min="0" step="0.01" value={row.regionMultiplier} onChange={(event) => patchRow(row, { regionMultiplier: parseFloat(event.target.value) || 1 })} disabled={!isEditable} />
                                   </div>
                                   <div className="space-y-2">
-                                    <Label>Todellinen kate</Label>
+                                    <FieldHelpLabel label="Todellinen kate" help={QUOTE_ROW_FIELD_HELP.marginAmount} />
                                     <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(rowCalculation.marginAmount)}</div>
                                   </div>
                                   <div className="space-y-2">
-                                    <Label>Kate % toteuma</Label>
+                                    <FieldHelpLabel label="Kate % toteuma" help={QUOTE_ROW_FIELD_HELP.realizedMarginPercent} />
                                     <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatNumber(rowCalculation.marginPercent, 1)} %</div>
                                   </div>
                                 </div>

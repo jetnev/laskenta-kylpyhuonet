@@ -4,13 +4,28 @@ import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
 import { useProjects, useCustomers, useQuotes, useQuoteRows, useQuoteTerms, useSettings } from '../../hooks/use-data';
 import { toast } from 'sonner';
 import { Project, Customer } from '../../lib/types';
 import QuoteEditor from '../QuoteEditor';
+import FieldHelpLabel from '../FieldHelpLabel';
+
+const PROJECT_FIELD_HELP = {
+  customerId: 'Valitse asiakas, jolle projekti kuuluu. Näin tarjoukset ja yhteystiedot pysyvät oikean asiakkaan alla.',
+  name: 'Projektin nimi on sisäinen otsikko, jonka perusteella löydät kohteen myöhemmin nopeasti.',
+  site: 'Työkohde kertoo missä työ tehdään. Lisää osoite tai selkeä kohteen nimi, jotta se näkyy oikein tarjouksilla.',
+  regionCoefficient: 'Aluekerroin auttaa korottamaan tai laskemaan hintoja alueen mukaan. Jätä arvoksi 1, jos et käytä aluekohtaista hinnoittelua.',
+} as const;
+
+const CUSTOMER_FIELD_HELP = {
+  name: 'Asiakkaan nimi näkyy projekteilla, tarjouksilla ja dokumenteissa. Kirjoita nimi siinä muodossa kuin haluat sen näkyvän ulospäin.',
+  contactPerson: 'Yhteyshenkilö helpottaa oikean henkilön tavoittamista, jos asiakkaalla on useita päätöksentekijöitä.',
+  email: 'Sähköpostia voidaan käyttää tarjouksiin, yhteydenpitoon ja myöhemmin automatisoituihin viesteihin.',
+  phone: 'Puhelinnumero auttaa nopeassa yhteydenotossa työmaan tai tarjousvaiheen aikana.',
+  address: 'Osoite on hyödyllinen laskutuksessa, dokumenteissa ja asiakkaan tunnistamisessa.',
+} as const;
 
 export default function ProjectsPage() {
   const { projects, addProject, updateProject, deleteProject } = useProjects();
@@ -321,7 +336,7 @@ export default function ProjectsPage() {
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="customer">Asiakas *</Label>
+                    <FieldHelpLabel htmlFor="customer" label="Asiakas" required help={PROJECT_FIELD_HELP.customerId} className="mb-2" />
                     <select
                       id="customer"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -335,7 +350,7 @@ export default function ProjectsPage() {
                     </select>
                   </div>
                   <div>
-                    <Label htmlFor="project-name">Projektin nimi *</Label>
+                    <FieldHelpLabel htmlFor="project-name" label="Projektin nimi" required help={PROJECT_FIELD_HELP.name} className="mb-2" />
                     <Input
                       id="project-name"
                       value={projectForm.name}
@@ -344,7 +359,7 @@ export default function ProjectsPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="site">Työkohde *</Label>
+                    <FieldHelpLabel htmlFor="site" label="Työkohde" required help={PROJECT_FIELD_HELP.site} className="mb-2" />
                     <Input
                       id="site"
                       value={projectForm.site}
@@ -353,7 +368,7 @@ export default function ProjectsPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="coefficient">Aluekohtainen kerroin</Label>
+                    <FieldHelpLabel htmlFor="coefficient" label="Aluekohtainen kerroin" help={PROJECT_FIELD_HELP.regionCoefficient} className="mb-2" />
                     <Input
                       id="coefficient"
                       type="number"
@@ -515,7 +530,7 @@ export default function ProjectsPage() {
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="customer-name">Nimi *</Label>
+                    <FieldHelpLabel htmlFor="customer-name" label="Nimi" required help={CUSTOMER_FIELD_HELP.name} className="mb-2" />
                     <Input
                       id="customer-name"
                       value={customerForm.name}
@@ -524,7 +539,7 @@ export default function ProjectsPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="contact-person">Yhteyshenkilö</Label>
+                    <FieldHelpLabel htmlFor="contact-person" label="Yhteyshenkilö" help={CUSTOMER_FIELD_HELP.contactPerson} className="mb-2" />
                     <Input
                       id="contact-person"
                       value={customerForm.contactPerson}
@@ -533,7 +548,7 @@ export default function ProjectsPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="email">Sähköposti</Label>
+                    <FieldHelpLabel htmlFor="email" label="Sähköposti" help={CUSTOMER_FIELD_HELP.email} className="mb-2" />
                     <Input
                       id="email"
                       type="email"
@@ -543,7 +558,7 @@ export default function ProjectsPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="phone">Puhelin</Label>
+                    <FieldHelpLabel htmlFor="phone" label="Puhelin" help={CUSTOMER_FIELD_HELP.phone} className="mb-2" />
                     <Input
                       id="phone"
                       value={customerForm.phone}
@@ -552,7 +567,7 @@ export default function ProjectsPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="address">Osoite</Label>
+                    <FieldHelpLabel htmlFor="address" label="Osoite" help={CUSTOMER_FIELD_HELP.address} className="mb-2" />
                     <Input
                       id="address"
                       value={customerForm.address}

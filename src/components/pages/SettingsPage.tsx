@@ -2,12 +2,24 @@ import { useEffect, useState } from 'react';
 import { Gear, Shield } from '@phosphor-icons/react';
 import { Card } from '../ui/card';
 import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription } from '../ui/alert';
 import { useSettings } from '../../hooks/use-data';
 import { useAuth } from '../../hooks/use-auth';
 import { toast } from 'sonner';
+import FieldHelpLabel from '../FieldHelpLabel';
+
+const SETTINGS_FIELD_HELP = {
+  companyName: 'Yrityksen nimi näkyy tarjouksissa, PDF:issä ja muissa dokumenteissa. Kirjoita se siinä muodossa kuin haluat sen näkyvän asiakkaalle.',
+  companyEmail: 'Yrityksen sähköpostiosoite näkyy dokumenteissa ja sitä voidaan käyttää yhteydenottoon tai myöhemmin viestien lähettämiseen.',
+  companyPhone: 'Puhelinnumero helpottaa asiakkaan yhteydenottoa ja tekee tarjouksesta uskottavamman.',
+  companyAddress: 'Osoite näytetään yritystiedoissa ja auttaa tunnistamaan tarjouksen lähettäjän selkeästi.',
+  defaultVatPercent: 'Tätä ALV-prosenttia käytetään uusilla tarjouksilla oletuksena. Muuta arvoa vain, jos haluat uuden normaalitason kaikkiin uusiin tarjouksiin.',
+  defaultMarginPercent: 'Oletuskate on tarjouslaskennan lähtötaso uusille tuotteille ja riveille. Se auttaa pitämään hinnoittelun tasaisena.',
+  defaultValidityDays: 'Voimassaolopäivät kertovat kuinka monta päivää uusi tarjous on oletuksena voimassa.',
+  quoteNumberPrefix: 'Etuliite näkyy jokaisen uuden tarjousnumeron alussa. Käytä lyhyttä tunnusta, jonka henkilöstö tunnistaa heti.',
+  updateFeedUrl: 'Päivitysfeedin osoite kertoo desktop-sovellukselle mistä uudet versiot haetaan. Jos käytät vain verkkoversiota, kentän voi jättää tyhjäksi.',
+} as const;
 
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings();
@@ -60,19 +72,19 @@ export default function SettingsPage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="settings-company-name">Yrityksen nimi</Label>
+            <FieldHelpLabel htmlFor="settings-company-name" label="Yrityksen nimi" help={SETTINGS_FIELD_HELP.companyName} />
             <Input id="settings-company-name" value={formData.companyName} onChange={(event) => setFormData((current) => ({ ...current, companyName: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="settings-company-email">Sähköposti</Label>
+            <FieldHelpLabel htmlFor="settings-company-email" label="Sähköposti" help={SETTINGS_FIELD_HELP.companyEmail} />
             <Input id="settings-company-email" type="email" value={formData.companyEmail} onChange={(event) => setFormData((current) => ({ ...current, companyEmail: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="settings-company-phone">Puhelin</Label>
+            <FieldHelpLabel htmlFor="settings-company-phone" label="Puhelin" help={SETTINGS_FIELD_HELP.companyPhone} />
             <Input id="settings-company-phone" value={formData.companyPhone} onChange={(event) => setFormData((current) => ({ ...current, companyPhone: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="settings-company-address">Osoite</Label>
+            <FieldHelpLabel htmlFor="settings-company-address" label="Osoite" help={SETTINGS_FIELD_HELP.companyAddress} />
             <Input id="settings-company-address" value={formData.companyAddress} onChange={(event) => setFormData((current) => ({ ...current, companyAddress: event.target.value }))} />
           </div>
         </div>
@@ -85,19 +97,19 @@ export default function SettingsPage() {
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-2">
-            <Label htmlFor="settings-vat">ALV %</Label>
+            <FieldHelpLabel htmlFor="settings-vat" label="ALV %" help={SETTINGS_FIELD_HELP.defaultVatPercent} />
             <Input id="settings-vat" type="number" step="0.1" value={formData.defaultVatPercent} onChange={(event) => setFormData((current) => ({ ...current, defaultVatPercent: parseFloat(event.target.value) || 0 }))} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="settings-margin">Oletuskate %</Label>
+            <FieldHelpLabel htmlFor="settings-margin" label="Oletuskate %" help={SETTINGS_FIELD_HELP.defaultMarginPercent} />
             <Input id="settings-margin" type="number" step="0.1" value={formData.defaultMarginPercent} onChange={(event) => setFormData((current) => ({ ...current, defaultMarginPercent: parseFloat(event.target.value) || 0 }))} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="settings-validity">Voimassaolopäivät</Label>
+            <FieldHelpLabel htmlFor="settings-validity" label="Voimassaolopäivät" help={SETTINGS_FIELD_HELP.defaultValidityDays} />
             <Input id="settings-validity" type="number" value={formData.defaultValidityDays} onChange={(event) => setFormData((current) => ({ ...current, defaultValidityDays: parseInt(event.target.value, 10) || 0 }))} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="settings-prefix">Tarjousnumeroiden etuliite</Label>
+            <FieldHelpLabel htmlFor="settings-prefix" label="Tarjousnumeroiden etuliite" help={SETTINGS_FIELD_HELP.quoteNumberPrefix} />
             <Input id="settings-prefix" value={formData.quoteNumberPrefix} onChange={(event) => setFormData((current) => ({ ...current, quoteNumberPrefix: event.target.value.toUpperCase() }))} />
           </div>
         </div>
@@ -112,7 +124,7 @@ export default function SettingsPage() {
           </p>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="settings-update-feed-url">Päivitysfeedin URL</Label>
+          <FieldHelpLabel htmlFor="settings-update-feed-url" label="Päivitysfeedin URL" help={SETTINGS_FIELD_HELP.updateFeedUrl} />
           <Input
             id="settings-update-feed-url"
             type="url"

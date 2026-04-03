@@ -12,11 +12,11 @@ import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 import { ResponsiveDialog } from '../ResponsiveDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
+import FieldHelpLabel from '../FieldHelpLabel';
 import { useAuth } from '../../hooks/use-auth';
 import { useInstallationGroups, useProducts } from '../../hooks/use-data';
 import { Product } from '../../lib/types';
@@ -59,6 +59,24 @@ const EMPTY_FORM: ProductFormState = {
   installationGroupId: 'none',
   active: true,
 };
+
+const PRODUCT_FIELD_HELP = {
+  code: 'Tuotekoodi on oma tunnisteesi tuotteelle. Käytä sellaista koodia, jonka tunnistat nopeasti tarjousta tehdessä.',
+  name: 'Tuotteen nimi näkyy tarjousriveillä ja hauissa. Kirjoita nimi sellaisena kuin haluat sen näkyvän asiakkaalle ja omassa käytössäsi.',
+  description: 'Kuvaus auttaa tunnistamaan tuotteen sisällön, koon tai käyttökohteen. Se voidaan näyttää myös tarjousrivillä.',
+  category: 'Kategoria helpottaa hakua ja pitää tuoterekisterin selkeänä. Esimerkkejä ovat Hanat, Laatat ja Kalusteet.',
+  brand: 'Brändi auttaa erottamaan samankaltaiset tuotteet toisistaan ja nopeuttaa hakua valmistajan mukaan.',
+  manufacturer: 'Valmistaja on hyödyllinen etenkin silloin, kun brändi ja varsinainen valmistaja eivät ole sama asia.',
+  manufacturerSku: 'Valmistajan koodi auttaa vertaamaan tuotetta toimittajan tietoihin, tilauksiin ja tuotekortteihin.',
+  ean: 'EAN-koodi on tuotteen viivakooditunnus. Lisää se, jos haluat varmistaa tarkan tunnistuksen myöhemmin.',
+  unit: 'Yksikkö kertoo miten tuotetta myydään ja lasketaan tarjouksella, esimerkiksi kpl, m2 tai erä.',
+  installationGroupId: 'Hintaryhmä tuo tuotteelle oletuksia asennukseen ja katteeseen. Jätä tyhjäksi, jos tuotteella ei ole valmista ryhmittelyä.',
+  purchasePrice: 'Ostohinta on oma hankintahintasi ilman myyntikatetta. Tätä käytetään katteen ja myyntihinnan laskennan pohjana.',
+  defaultSalePrice: 'Myyntihinta on tuotteen oletushinta tarjoukselle. Voit antaa sen valmiiksi tai antaa järjestelmän laskea sen katteen perusteella.',
+  defaultMarginPercent: 'Kate kertoo, kuinka paljon myyntihintaa nostetaan ostohinnan päälle. Tämä auttaa pitämään hinnoittelun yhtenäisenä.',
+  defaultInstallPrice: 'Asennushinta on tuotteen oletus asennustyö tarjouksella. Käytä tätä, jos tuotteeseen liittyy lähes aina vakioasennus.',
+  active: 'Aktiivinen tuote näkyy normaalisti tarjoushaussa. Inaktiivinen tuote säilyy rekisterissä, mutta ei tule oletuksena käyttöön.',
+} as const;
 
 function parseNumber(value: string) {
   if (!value.trim()) return 0;
@@ -644,43 +662,43 @@ export default function ProductsPage() {
       >
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label>Tuotekoodi *</Label>
+            <FieldHelpLabel label="Tuotekoodi" required help={PRODUCT_FIELD_HELP.code} />
             <Input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label>Nimi *</Label>
+            <FieldHelpLabel label="Nimi" required help={PRODUCT_FIELD_HELP.name} />
             <Input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label>Kuvaus</Label>
+            <FieldHelpLabel label="Kuvaus" help={PRODUCT_FIELD_HELP.description} />
             <Input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label>Kategoria</Label>
+            <FieldHelpLabel label="Kategoria" help={PRODUCT_FIELD_HELP.category} />
             <Input value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} placeholder="Esim. Hanat, Laatat, Kalusteet" />
           </div>
           <div className="space-y-2">
-            <Label>Brändi</Label>
+            <FieldHelpLabel label="Brändi" help={PRODUCT_FIELD_HELP.brand} />
             <Input value={form.brand} onChange={(event) => setForm((current) => ({ ...current, brand: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label>Valmistaja</Label>
+            <FieldHelpLabel label="Valmistaja" help={PRODUCT_FIELD_HELP.manufacturer} />
             <Input value={form.manufacturer} onChange={(event) => setForm((current) => ({ ...current, manufacturer: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label>Valmistajan koodi</Label>
+            <FieldHelpLabel label="Valmistajan koodi" help={PRODUCT_FIELD_HELP.manufacturerSku} />
             <Input value={form.manufacturerSku} onChange={(event) => setForm((current) => ({ ...current, manufacturerSku: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label>EAN</Label>
+            <FieldHelpLabel label="EAN" help={PRODUCT_FIELD_HELP.ean} />
             <Input value={form.ean} onChange={(event) => setForm((current) => ({ ...current, ean: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label>Yksikkö</Label>
+            <FieldHelpLabel label="Yksikkö" help={PRODUCT_FIELD_HELP.unit} />
             <Input value={form.unit} onChange={(event) => setForm((current) => ({ ...current, unit: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label>Hintaryhmä</Label>
+            <FieldHelpLabel label="Hintaryhmä" help={PRODUCT_FIELD_HELP.installationGroupId} />
             <Select value={form.installationGroupId} onValueChange={(value) => setForm((current) => ({ ...current, installationGroupId: value }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -692,24 +710,24 @@ export default function ProductsPage() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Ostohinta</Label>
+            <FieldHelpLabel label="Ostohinta" help={PRODUCT_FIELD_HELP.purchasePrice} />
             <Input type="number" min="0" step="0.01" value={form.purchasePrice} onChange={(event) => setForm((current) => ({ ...current, purchasePrice: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label>Myyntihinta</Label>
+            <FieldHelpLabel label="Myyntihinta" help={PRODUCT_FIELD_HELP.defaultSalePrice} />
             <Input type="number" min="0" step="0.01" value={form.defaultSalePrice} onChange={(event) => setForm((current) => ({ ...current, defaultSalePrice: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label>Kate %</Label>
+            <FieldHelpLabel label="Kate %" help={PRODUCT_FIELD_HELP.defaultMarginPercent} />
             <Input type="number" min="0" step="0.1" value={form.defaultMarginPercent} onChange={(event) => setForm((current) => ({ ...current, defaultMarginPercent: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label>Asennushinta</Label>
+            <FieldHelpLabel label="Asennushinta" help={PRODUCT_FIELD_HELP.defaultInstallPrice} />
             <Input type="number" min="0" step="0.01" value={form.defaultInstallPrice} onChange={(event) => setForm((current) => ({ ...current, defaultInstallPrice: event.target.value }))} />
           </div>
           <div className="flex items-center justify-between rounded-xl border bg-muted/20 px-4 py-3 md:col-span-2">
             <div>
-              <div className="text-sm font-medium">Aktiivinen</div>
+              <FieldHelpLabel label="Aktiivinen" help={PRODUCT_FIELD_HELP.active} />
               <div className="text-xs text-muted-foreground">
                 Inaktiiviset tuotteet eivät tule oletuksena käyttöön tarjoushaussa.
               </div>
