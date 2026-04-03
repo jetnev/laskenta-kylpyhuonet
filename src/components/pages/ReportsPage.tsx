@@ -15,6 +15,8 @@ import { fi } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { calculateQuote, calculateQuoteRow } from '../../lib/calculations';
+import { exportReportsToPDF } from '../../lib/export';
+import { useSettings } from '../../hooks/use-data';
 
 type TimeRange = '1m' | '3m' | '6m' | '12m' | 'all' | 'custom';
 type DateRange = {
@@ -29,6 +31,7 @@ export default function ReportsPage() {
   const { quotes } = useQuotes();
   const { rows } = useQuoteRows();
   const { customers } = useCustomers();
+  const { settings } = useSettings();
 
   const filteredQuotes = useMemo(() => {
     if (timeRange === 'custom' && dateRange.from && dateRange.to) {
@@ -245,10 +248,45 @@ export default function ReportsPage() {
     }).format(value);
   };
 
+  const periodLabel =
+    timeRange === 'custom'
+      ? dateRange.from && dateRange.to
+        ? `${format(dateRange.from, 'dd.MM.yyyy')} - ${format(dateRange.to, 'dd.MM.yyyy')}`
+        : 'Mukautettu aikaväli'
+      : timeRange === 'all'
+        ? 'Kaikki'
+        : timeRange === '1m'
+          ? 'Viimeinen kuukausi'
+          : timeRange === '3m'
+            ? 'Viimeiset 3 kk'
+            : timeRange === '6m'
+              ? 'Viimeiset 6 kk'
+              : 'Viimeinen vuosi';
+
   const exportToPDF = () => {
-    toast.info('PDF-vienti tulossa pian', {
-      description: 'Tämä ominaisuus on kehitteillä',
-    });
+    if (timeRange === 'custom' && (!dateRange.from || !dateRange.to)) {
+      toast.error('Valitse päivämääräväli ennen PDF-vientiä');
+      return;
+    }
+
+    try {
+      exportReportsToPDF({
+        periodLabel,
+        generatedAt: format(new Date(), 'dd.MM.yyyy HH:mm', { locale: fi }),
+        kpiData,
+        statusData,
+        monthlyData,
+        topProducts,
+        customerAnalysis,
+        recentProjects,
+        settings,
+      });
+      toast.success('Raportin PDF-näkymä avattu', {
+        description: 'Voit tallentaa raportin PDF-muotoon selaimen tulostusikkunasta.',
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'PDF-vienti epäonnistui.');
+    }
   };
 
   const exportToExcel = () => {
@@ -260,10 +298,7 @@ export default function ReportsPage() {
     const data = [
       ['Raportti', 'Laskenta Tarjouslaskenta'],
       ['Luontipäivä', format(new Date(), 'dd.MM.yyyy HH:mm', { locale: fi })],
-      ['Aikaväli', timeRange === 'custom' 
-        ? `${format(dateRange.from!, 'dd.MM.yyyy')} - ${format(dateRange.to!, 'dd.MM.yyyy')}`
-        : timeRange === 'all' ? 'Kaikki' : `Viimeiset ${timeRange}`
-      ],
+      ['Aikaväli', periodLabel],
       [],
       ['Avainluvut'],
       ['Projektit yhteensä', kpiData.totalProjects],

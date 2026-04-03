@@ -4,6 +4,58 @@ import { Customer, InstallationGroup, Product, Project, Quote, QuoteRow, QuoteTe
 
 type ExcelCellValue = string | number;
 
+export interface ReportExportKpis {
+  totalProjects: number;
+  totalQuotes: number;
+  sentQuotes: number;
+  acceptedQuotes: number;
+  rejectedQuotes: number;
+  draftQuotes: number;
+  acceptanceRate: number;
+  totalValue: number;
+  totalMargin: number;
+  marginPercent: number;
+}
+
+export interface ReportExportStatusItem {
+  name: string;
+  value: number;
+}
+
+export interface ReportExportMonthlyItem {
+  month: string;
+  quotes: number;
+  value: number;
+  margin: number;
+}
+
+export interface ReportExportTopProductItem {
+  name: string;
+  code: string;
+  quantity: number;
+  value: number;
+  count: number;
+}
+
+export interface ReportExportCustomerItem {
+  name: string;
+  projectCount: number;
+  quoteCount: number;
+  totalValue: number;
+  acceptedValue: number;
+  acceptanceRate: number;
+}
+
+export interface ReportExportProjectItem {
+  id: string;
+  name: string;
+  customerName: string;
+  region?: string;
+  quoteCount: number;
+  latestStatus?: Quote['status'];
+  createdAt: string;
+}
+
 function csvEscape(value: unknown) {
   const normalized = `${value ?? ''}`.replace(/"/g, '""');
   return `"${normalized}"`;
@@ -732,6 +784,484 @@ export function exportQuoteToInternalExcel(
     `tarjous-sisainen-${quote.quoteNumber}.xlsx`,
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   );
+}
+
+interface ReportPdfExportInput {
+  periodLabel: string;
+  generatedAt: string;
+  kpiData: ReportExportKpis;
+  statusData: ReportExportStatusItem[];
+  monthlyData: ReportExportMonthlyItem[];
+  topProducts: ReportExportTopProductItem[];
+  customerAnalysis: ReportExportCustomerItem[];
+  recentProjects: ReportExportProjectItem[];
+  settings?: Settings;
+}
+
+function reportDocumentHtml(input: ReportPdfExportInput) {
+  const companyName = input.settings?.companyName?.trim() || 'Tarjouslaskenta';
+
+  return `
+    <!DOCTYPE html>
+    <html lang="fi">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Raportointi ${escapeHtml(input.periodLabel)}</title>
+        <style>
+          :root {
+            --ink: #0f172a;
+            --muted: #475569;
+            --line: #dbe4ee;
+            --panel: #f8fbff;
+            --panel-strong: #eef4fb;
+            --accent: #1d4ed8;
+            --accent-soft: #dbeafe;
+            --good: #15803d;
+            --bad: #b91c1c;
+          }
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            background: #edf2f7;
+            color: var(--ink);
+            font-family: "Inter", "Segoe UI", Arial, sans-serif;
+            line-height: 1.45;
+          }
+          .page {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 36px 32px 48px;
+            background: #fff;
+          }
+          .topband {
+            height: 10px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #0f172a 0%, #1d4ed8 55%, #60a5fa 100%);
+            margin-bottom: 28px;
+          }
+          .hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+            gap: 20px;
+            margin-bottom: 20px;
+            align-items: start;
+          }
+          .hero h1 {
+            margin: 0;
+            font-size: 34px;
+            line-height: 1.05;
+            letter-spacing: -0.03em;
+          }
+          .eyebrow {
+            margin: 0 0 8px;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 11px;
+            font-weight: 700;
+          }
+          .hero p {
+            margin: 12px 0 0;
+            color: var(--muted);
+            font-size: 14px;
+            max-width: 56ch;
+          }
+          .meta-card {
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 18px 20px;
+            background: linear-gradient(180deg, #ffffff 0%, var(--panel) 100%);
+          }
+          .meta-grid {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px 14px;
+            font-size: 13px;
+          }
+          .meta-label { color: var(--muted); }
+          .meta-value { font-weight: 600; text-align: right; }
+          .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 22px;
+          }
+          .kpi-card {
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 16px 18px;
+            background: #fff;
+          }
+          .kpi-card h2 {
+            margin: 0 0 10px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--muted);
+          }
+          .kpi-value {
+            font-size: 28px;
+            line-height: 1;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin-bottom: 6px;
+          }
+          .kpi-meta {
+            font-size: 13px;
+            color: var(--muted);
+          }
+          .section {
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            background: #fff;
+            margin-bottom: 18px;
+            overflow: hidden;
+          }
+          .section-head {
+            padding: 18px 20px 10px;
+            border-bottom: 1px solid var(--line);
+            background: var(--panel);
+          }
+          .section-head h2 {
+            margin: 0;
+            font-size: 18px;
+            letter-spacing: -0.02em;
+          }
+          .section-head p {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+          }
+          .table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          .table th,
+          .table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--line);
+            text-align: left;
+            vertical-align: top;
+          }
+          .table th {
+            background: #fff;
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 700;
+          }
+          .table tbody tr:last-child td { border-bottom: 0; }
+          .mono { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+          .summary-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
+            gap: 18px;
+            margin-bottom: 18px;
+          }
+          .status-list {
+            display: grid;
+            gap: 10px;
+            padding: 18px 20px 20px;
+          }
+          .status-row {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 12px;
+            align-items: center;
+            font-size: 14px;
+          }
+          .pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            padding: 3px 8px;
+            background: var(--accent-soft);
+            color: var(--accent);
+            font-size: 11px;
+            font-weight: 700;
+          }
+          .muted-box {
+            padding: 18px 20px 20px;
+            color: var(--muted);
+            font-size: 14px;
+          }
+          .status-accepted { color: var(--good); font-weight: 700; }
+          .status-rejected { color: var(--bad); font-weight: 700; }
+          .status-sent { color: var(--accent); font-weight: 700; }
+          .status-draft { color: var(--muted); font-weight: 700; }
+          @media print {
+            body { background: #fff; }
+            .page { padding: 24px; }
+          }
+          @media (max-width: 920px) {
+            .hero,
+            .summary-grid,
+            .kpi-grid {
+              grid-template-columns: 1fr;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="page">
+          <div class="topband"></div>
+
+          <div class="hero">
+            <div>
+              <p class="eyebrow">Raportointi</p>
+              <h1>${escapeHtml(companyName)}</h1>
+              <p>Tarjouslaskennan ja projektiseurannan yhteenveto valitulta ajanjaksolta. Raportti kokoaa avainluvut, statukset, kehityksen sekä tärkeimmät asiakkaat, tuotteet ja projektit yhteen dokumenttiin.</p>
+            </div>
+            <div class="meta-card">
+              <div class="meta-grid">
+                <div class="meta-label">Aikaväli</div>
+                <div class="meta-value">${escapeHtml(input.periodLabel)}</div>
+                <div class="meta-label">Luotu</div>
+                <div class="meta-value">${escapeHtml(input.generatedAt)}</div>
+                <div class="meta-label">Tarjouksia</div>
+                <div class="meta-value">${input.kpiData.totalQuotes}</div>
+                <div class="meta-label">Projekteja</div>
+                <div class="meta-value">${input.kpiData.totalProjects}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <h2>Kokonaisarvo</h2>
+              <div class="kpi-value">${formatCurrency(input.kpiData.totalValue)}</div>
+              <div class="kpi-meta">Kate ${formatNumber(input.kpiData.marginPercent, 1)} %</div>
+            </div>
+            <div class="kpi-card">
+              <h2>Kokonaiskate</h2>
+              <div class="kpi-value">${formatCurrency(input.kpiData.totalMargin)}</div>
+              <div class="kpi-meta">Laskettu koko raporttijaksolta</div>
+            </div>
+            <div class="kpi-card">
+              <h2>Hyväksymisaste</h2>
+              <div class="kpi-value">${formatNumber(input.kpiData.acceptanceRate, 1)} %</div>
+              <div class="kpi-meta">${input.kpiData.acceptedQuotes} / ${input.kpiData.sentQuotes} lähetetyistä</div>
+            </div>
+            <div class="kpi-card">
+              <h2>Luonnokset</h2>
+              <div class="kpi-value">${input.kpiData.draftQuotes}</div>
+              <div class="kpi-meta">Avoimet keskeneräiset tarjoukset</div>
+            </div>
+          </div>
+
+          <div class="summary-grid">
+            <div class="section">
+              <div class="section-head">
+                <h2>Tilastoyhteenveto</h2>
+                <p>Tarjousten jakauma tiloittain.</p>
+              </div>
+              <div class="status-list">
+                ${[
+                  ['Luonnos', input.kpiData.draftQuotes, 'status-draft'],
+                  ['Lähetetty', input.kpiData.sentQuotes, 'status-sent'],
+                  ['Hyväksytty', input.kpiData.acceptedQuotes, 'status-accepted'],
+                  ['Hylätty', input.kpiData.rejectedQuotes, 'status-rejected'],
+                ]
+                  .map(
+                    ([label, value, className]) => `
+                      <div class="status-row">
+                        <span>${escapeHtml(label)}</span>
+                        <strong class="${className}">${value}</strong>
+                        <span class="pill">${input.kpiData.totalQuotes > 0 ? formatNumber((Number(value) / input.kpiData.totalQuotes) * 100, 0) : '0'} %</span>
+                      </div>
+                    `
+                  )
+                  .join('')}
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-head">
+                <h2>Kuukausittainen kehitys</h2>
+                <p>Tarjousten määrä, arvo ja kate kuukausitasolla.</p>
+              </div>
+              ${
+                input.monthlyData.length > 0
+                  ? `
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Kuukausi</th>
+                      <th class="mono">Tarjoukset</th>
+                      <th class="mono">Arvo</th>
+                      <th class="mono">Kate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${input.monthlyData
+                      .map(
+                        (row) => `
+                          <tr>
+                            <td>${escapeHtml(row.month)}</td>
+                            <td class="mono">${row.quotes}</td>
+                            <td class="mono">${formatCurrency(row.value)}</td>
+                            <td class="mono">${formatCurrency(row.margin)}</td>
+                          </tr>
+                        `
+                      )
+                      .join('')}
+                  </tbody>
+                </table>
+              `
+                  : `<div class="muted-box">Ei kuukausittaista dataa valitulla ajanjaksolla.</div>`
+              }
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <h2>Top tuotteet</h2>
+              <p>Eniten arvoa tuottaneet tuotteet raporttijaksolla.</p>
+            </div>
+            ${
+              input.topProducts.length > 0
+                ? `
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Koodi</th>
+                    <th>Tuote</th>
+                    <th class="mono">Määrä</th>
+                    <th class="mono">Esiintymät</th>
+                    <th class="mono">Arvo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${input.topProducts
+                    .slice(0, 15)
+                    .map(
+                      (product, index) => `
+                        <tr>
+                          <td>${index + 1}</td>
+                          <td>${escapeHtml(product.code || '-')}</td>
+                          <td>${escapeHtml(product.name)}</td>
+                          <td class="mono">${formatNumber(product.quantity)}</td>
+                          <td class="mono">${product.count}</td>
+                          <td class="mono">${formatCurrency(product.value)}</td>
+                        </tr>
+                      `
+                    )
+                    .join('')}
+                </tbody>
+              </table>
+            `
+                : `<div class="muted-box">Ei tuotedataa raporttijaksolla.</div>`
+            }
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <h2>Asiakasanalyysi</h2>
+              <p>Asiakkaat, projektimäärät ja hyväksytty arvo.</p>
+            </div>
+            ${
+              input.customerAnalysis.length > 0
+                ? `
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Asiakas</th>
+                    <th class="mono">Projektit</th>
+                    <th class="mono">Tarjoukset</th>
+                    <th class="mono">Kokonaisarvo</th>
+                    <th class="mono">Hyväksytty arvo</th>
+                    <th class="mono">Hyväksymisaste</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${input.customerAnalysis
+                    .slice(0, 20)
+                    .map(
+                      (customer) => `
+                        <tr>
+                          <td>${escapeHtml(customer.name)}</td>
+                          <td class="mono">${customer.projectCount}</td>
+                          <td class="mono">${customer.quoteCount}</td>
+                          <td class="mono">${formatCurrency(customer.totalValue)}</td>
+                          <td class="mono">${formatCurrency(customer.acceptedValue)}</td>
+                          <td class="mono">${formatNumber(customer.acceptanceRate, 0)} %</td>
+                        </tr>
+                      `
+                    )
+                    .join('')}
+                </tbody>
+              </table>
+            `
+                : `<div class="muted-box">Ei asiakasdataa raporttijaksolla.</div>`
+            }
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <h2>Viimeisimmät projektit</h2>
+              <p>Tuoreimmat projektit ja niiden tarjousstatus.</p>
+            </div>
+            ${
+              input.recentProjects.length > 0
+                ? `
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Projekti</th>
+                    <th>Asiakas</th>
+                    <th>Alue</th>
+                    <th class="mono">Tarjouksia</th>
+                    <th>Status</th>
+                    <th>Luotu</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${input.recentProjects
+                    .slice(0, 10)
+                    .map(
+                      (project) => `
+                        <tr>
+                          <td>${escapeHtml(project.name)}</td>
+                          <td>${escapeHtml(project.customerName)}</td>
+                          <td>${escapeHtml(project.region || '-')}</td>
+                          <td class="mono">${project.quoteCount}</td>
+                          <td>${escapeHtml(project.latestStatus ? getQuoteStatusLabel(project.latestStatus) : 'Ei tarjouksia')}</td>
+                          <td>${escapeHtml(formatDate(project.createdAt))}</td>
+                        </tr>
+                      `
+                    )
+                    .join('')}
+                </tbody>
+              </table>
+            `
+                : `<div class="muted-box">Ei projektidataa raporttijaksolla.</div>`
+            }
+          </div>
+        </div>
+        <script>
+          window.addEventListener('load', () => {
+            window.setTimeout(() => window.print(), 150);
+          });
+        </script>
+      </body>
+    </html>
+  `;
+}
+
+export function exportReportsToPDF(input: ReportPdfExportInput) {
+  const html = reportDocumentHtml(input);
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const popup = window.open(url, '_blank');
+
+  if (!popup) {
+    throw new Error('Salli ponnahdusikkunat PDF-vientiä varten.');
+  }
+
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export interface ExcelColumn {
