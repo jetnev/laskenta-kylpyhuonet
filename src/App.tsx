@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowsLeftRight,
   ArrowsClockwise,
@@ -50,6 +50,7 @@ import {
   listPublicActiveLegalDocuments,
   type LegalAcceptanceState,
 } from './lib/legal';
+import { getLegalAcceptanceSubjectKey, shouldBlockAppForLegalState } from './lib/legal-state-ux';
 import {
   buildAppUrl,
   DEFAULT_APP_PAGE,
@@ -73,6 +74,7 @@ function App() {
   const [legalStateError, setLegalStateError] = useState<string | null>(null);
   const [legalAcceptanceError, setLegalAcceptanceError] = useState<string | null>(null);
   const [acceptingLegalDocuments, setAcceptingLegalDocuments] = useState(false);
+  const [hasResolvedLegalState, setHasResolvedLegalState] = useState(false);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateSnapshot | null>(null);
   const {
     user,
@@ -89,6 +91,19 @@ function App() {
   const currentRoute = useMemo(() => resolveAppRoute(currentPathname), [currentPathname]);
   const currentLocation = useMemo(() => resolveAppLocation(currentPathname, currentSearch), [currentPathname, currentSearch]);
   const currentPage = currentLocation.page;
+  const legalAcceptanceUserId = user?.id ?? null;
+  const legalAcceptanceOrganizationRole = user?.organizationRole ?? null;
+  const legalAcceptanceSubjectKey = useMemo(
+    () =>
+      legalAcceptanceUserId
+        ? getLegalAcceptanceSubjectKey({
+            id: legalAcceptanceUserId,
+            organizationRole: legalAcceptanceOrganizationRole,
+          })
+        : null,
+    [legalAcceptanceOrganizationRole, legalAcceptanceUserId]
+  );
+  const hasResolvedLegalStateRef = useRef(false);
 
   const navigateTo = useCallback(
     (
@@ -137,17 +152,27 @@ function App() {
     [navigateTo]
   );
 
-  const loadLegalState = useCallback(async () => {
-    if (!user) {
+  useEffect(() => {
+    hasResolvedLegalStateRef.current = hasResolvedLegalState;
+  }, [hasResolvedLegalState]);
+
+  const loadLegalState = useCallback(async (options?: { background?: boolean }) => {
+    if (!legalAcceptanceUserId) {
       setLegalState(null);
       setLegalStateError(null);
       setLegalAcceptanceError(null);
       setLegalStateLoading(false);
+      setHasResolvedLegalState(false);
       return;
     }
 
-    setLegalStateLoading(true);
-    setLegalStateError(null);
+    const isBackgroundRefresh = Boolean(options?.background && hasResolvedLegalStateRef.current);
+
+    if (!isBackgroundRefresh) {
+      setLegalStateLoading(true);
+      setLegalStateError(null);
+    }
+
     try {
       const [documents, acceptances] = await Promise.all([
         listPublicActiveLegalDocuments(),
@@ -156,17 +181,27 @@ function App() {
 
       setLegalState(
         evaluateLegalAcceptanceState(documents, acceptances, {
-          organizationRole: user.organizationRole,
+          organizationRole: legalAcceptanceOrganizationRole,
         })
       );
+      setLegalStateError(null);
       setLegalAcceptanceError(null);
+      setHasResolvedLegalState(true);
     } catch (error) {
+      if (isBackgroundRefresh && hasResolvedLegalStateRef.current) {
+        console.error('Legal acceptance state refresh failed, preserving visible view.', error);
+        return;
+      }
+
       setLegalState(null);
       setLegalStateError(error instanceof Error ? error.message : 'Sopimusasiakirjojen tarkistus epäonnistui.');
+      setHasResolvedLegalState(false);
     } finally {
-      setLegalStateLoading(false);
+      if (!isBackgroundRefresh) {
+        setLegalStateLoading(false);
+      }
     }
-  }, [user]);
+  }, [legalAcceptanceOrganizationRole, legalAcceptanceUserId]);
 
   const navigation = useMemo(
     () =>
@@ -199,8 +234,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    void loadLegalState();
-  }, [loadLegalState]);
+    void loadLegalState({ background: hasResolvedLegalStateRef.current });
+  }, [legalAcceptanceSubjectKey, loadLegalState]);
 
   useEffect(() => {
     if (loading) {
@@ -329,6 +364,12 @@ function App() {
     }
   };
 
+  const shouldBlockForLegalState = shouldBlockAppForLegalState({
+    hasResolvedState: hasResolvedLegalState,
+    loading: legalStateLoading,
+    error: legalStateError,
+  });
+
   if (loading) {
     return <RouteLoadingFallback />;
   }
@@ -342,7 +383,7 @@ function App() {
     );
   }
 
-  if (legalStateLoading) {
+  if (legalStateLoading && shouldBlockForLegalState) {
     return (
       <>
         <RouteLoadingFallback />
@@ -351,7 +392,7 @@ function App() {
     );
   }
 
-  if (legalStateError) {
+  if (legalStateError && shouldBlockForLegalState) {
     return (
       <>
         <div className="min-h-screen bg-[#f5f7fb] px-6 py-10 text-slate-950 sm:py-16">
@@ -367,7 +408,7 @@ function App() {
               <Button variant="outline" onClick={() => void handleLogout()} disabled={signingOut}>
                 {signingOut ? 'Kirjaudutaan ulos...' : 'Kirjaudu ulos'}
               </Button>
-              <Button onClick={() => void loadLegalState()}>
+              <Button onClick={() => void loadLegalState({ background: false })}>
                 Yritä uudelleen
               </Button>
             </div>
@@ -399,7 +440,7 @@ function App() {
                 userAgent: navigator.userAgent || 'Tuntematon selain',
                 acceptOnBehalfOfOrganization,
               });
-              await loadLegalState();
+              await loadLegalState({ background: true });
               toast.success('Hyväksyntä tallennettu. Voit jatkaa palvelun käyttöä.');
             } catch (error) {
               setLegalAcceptanceError(error instanceof Error ? error.message : 'Hyväksyntää ei voitu tallentaa.');
