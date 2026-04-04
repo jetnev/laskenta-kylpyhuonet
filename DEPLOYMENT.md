@@ -10,7 +10,7 @@ Tämä Spark-sovellus on kehitetty GitHub Sparkin ympäristössä. Spark-sovellu
 
 Spark-sovelluksesi on automaattisesti saatavilla GitHub Sparkin kautta. Jokaisella Spark-sovelluksella on oma URL-osoite, joka seuraa muotoa:
 
-```
+```text
 https://spark.github.com/{käyttäjänimi}/{sovelluksen-nimi}
 ```
 
@@ -41,6 +41,7 @@ GitHub Spark ei tällä hetkellä tue suoraan omien domainien liittämistä. Jos
    - Seuraa Vercelin ohjeita DNS-asetusten määrittämiseen
 
 **Huomio Spark API:sta:** Vercel-deploymentti ei tue suoraan `spark.kv` tai `spark.user()` API:a. Nämä pitää korvata:
+
 - `spark.kv` → Vercel KV tai Supabase
 - `spark.user()` → GitHub OAuth tai muu autentikointi
 
@@ -72,6 +73,7 @@ GitHub Spark ei tällä hetkellä tue suoraan omien domainien liittämistä. Jos
 #### Vaihtoehto C: GitHub Pages
 
 1. **Muokkaa vite.config.ts:**
+
 ```typescript
 export default defineConfig({
   base: '/repo-nimi/',
@@ -79,7 +81,8 @@ export default defineConfig({
 })
 ```
 
-2. **Lisää deploy-skripti package.json:**
+1. **Lisää deploy-skripti package.json:**
+
 ```json
 {
   "scripts": {
@@ -88,17 +91,20 @@ export default defineConfig({
 }
 ```
 
-3. **Asenna gh-pages:**
+1. **Asenna gh-pages:**
+
 ```bash
 npm install --save-dev gh-pages
 ```
 
-4. **Julkaise:**
+1. **Julkaise:**
+
 ```bash
 npm run deploy
 ```
 
-5. **Oma domain:**
+1. **Oma domain:**
+
    - Lisää `CNAME`-tiedosto `/public` -kansioon domainillasi
    - Aseta DNS-asetukset osoittamaan GitHub Pagesiin
 
@@ -109,6 +115,7 @@ Jos viet sovelluksen pois Sparkista, korvaa seuraavat:
 #### KV Storage (spark.kv)
 
 **Supabase:**
+
 ```typescript
 // Asenna: npm install @supabase/supabase-js
 import { createClient } from '@supabase/supabase-js'
@@ -121,6 +128,7 @@ const { data } = await supabase.from('kv_store').select('value').eq('key', 'avai
 ```
 
 **Vercel KV:**
+
 ```typescript
 import { kv } from '@vercel/kv'
 
@@ -131,6 +139,7 @@ const data = await kv.get('avain')
 #### User Authentication (spark.user)
 
 **GitHub OAuth:**
+
 ```typescript
 // Käytä NextAuth.js tai Auth.js
 import { signIn, useSession } from 'next-auth/react'
@@ -142,6 +151,7 @@ const { data: session } = useSession()
 ## Suositeltava ratkaisu
 
 **Spark-sovelluksena:**
+
 - Yksinkertaisin vaihtoehto
 - Ei vaadi ylimääräistä konfiguraatiota
 - Automaattinen hosting
@@ -149,6 +159,7 @@ const { data: session } = useSession()
 - Rajoitus: ei omaa domainia
 
 **Vercel + Supabase:**
+
 - Oma domain mahdollinen
 - Ilmainen tier useimmille käyttötarkoituksille
 - Helppo deployment
@@ -159,9 +170,9 @@ const { data: session } = useSession()
 Jos sinulla ei ole vielä domainia:
 
 1. **Namecheap** (namecheap.com)
-2. **Cloudflare Registrar** (cloudflare.com)
-3. **Google Domains / Squarespace Domains** (domains.squarespace.com)
-4. **Suomalainen: Louhi** (louhi.fi)
+1. **Cloudflare Registrar** (cloudflare.com)
+1. **Google Domains / Squarespace Domains** (domains.squarespace.com)
+1. **Suomalainen: Louhi** (louhi.fi)
 
 Hinnat noin 10-15€/vuosi .com-domaineille, .fi-domainit noin 15-20€/vuosi.
 
@@ -170,14 +181,17 @@ Hinnat noin 10-15€/vuosi .com-domaineille, .fi-domainit noin 15-20€/vuosi.
 Kun olet ostanut domainin, aseta DNS-tietueet:
 
 **Vercel:**
+
 - A-tietue: `76.76.21.21`
 - CNAME-tietue: `cname.vercel-dns.com`
 
 **Netlify:**
+
 - A-tietue: `75.2.60.5`
 - CNAME-tietue: `<sitename>.netlify.app`
 
 **GitHub Pages:**
+
 - A-tietueet: `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
 - CNAME-tietue: `<käyttäjä>.github.io`
 

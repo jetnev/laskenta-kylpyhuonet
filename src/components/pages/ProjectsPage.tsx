@@ -177,15 +177,6 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   const selectedProjectQuotes = selectedProject
     ? sortByUpdatedAtDesc(filterOwnedRecords(getQuotesForProject(selectedProject.id), ownerFilter))
     : [];
-  const selectedProjectInvoices = selectedProject ? sortByUpdatedAtDesc(getInvoicesForProject(selectedProject.id)) : [];
-  const projectQuoteStats = {
-    draft: selectedProjectQuotes.filter((quote) => quote.status === 'draft').length,
-    sent: selectedProjectQuotes.filter((quote) => quote.status === 'sent').length,
-    accepted: selectedProjectQuotes.filter((quote) => quote.status === 'accepted').length,
-    rejected: selectedProjectQuotes.filter((quote) => quote.status === 'rejected').length,
-  };
-  const latestSelectedQuote = selectedProjectQuotes[0];
-  const draftQuotes = visibleQuotes.filter((quote) => quote.status === 'draft');
   const projectContext = useMemo(
     () =>
       selectedProject
@@ -200,6 +191,16 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
         : null,
     [customers, invoices, projects, quotes, rows, selectedProject]
   );
+  const selectedProjectInvoices = selectedProject ? sortByUpdatedAtDesc(getInvoicesForProject(selectedProject.id)) : [];
+  const projectQuoteStats = {
+    draft: selectedProjectQuotes.filter((quote) => quote.status === 'draft').length,
+    sent: selectedProjectQuotes.filter((quote) => quote.status === 'sent').length,
+    accepted: selectedProjectQuotes.filter((quote) => quote.status === 'accepted').length,
+    rejected: selectedProjectQuotes.filter((quote) => quote.status === 'rejected').length,
+  };
+  const latestSelectedQuote = selectedProjectQuotes[0];
+  const draftQuotes = visibleQuotes.filter((quote) => quote.status === 'draft');
+  const nextProjectAction = projectContext?.nextAction ?? null;
   const latestProjectInvoice = projectContext?.latestInvoice ?? null;
 
   useEffect(() => {
@@ -904,12 +905,12 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
                 <div className="mt-6 grid gap-3 xl:grid-cols-3">
                   <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Seuraava työ</p>
-                    {projectContext?.nextAction ? (
+                    {nextProjectAction ? (
                       <>
-                        <p className="mt-3 font-medium text-slate-950">{projectContext.nextAction.title}</p>
-                        <p className="mt-2 text-sm leading-6 text-muted-foreground">{projectContext.nextAction.reason}</p>
-                        <Button className="mt-4 w-full justify-between" variant="outline" onClick={() => onNavigate?.(projectContext.nextAction.target)}>
-                          {projectContext.nextAction.ctaLabel}
+                        <p className="mt-3 font-medium text-slate-950">{nextProjectAction.title}</p>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">{nextProjectAction.reason}</p>
+                        <Button className="mt-4 w-full justify-between" variant="outline" onClick={() => onNavigate?.(nextProjectAction.target)}>
+                          {nextProjectAction.ctaLabel}
                           <FileText className="h-4 w-4" />
                         </Button>
                       </>
