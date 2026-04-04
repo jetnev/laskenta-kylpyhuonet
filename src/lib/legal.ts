@@ -96,6 +96,45 @@ function normalizeDocumentContent(value: string) {
   return value.replace(/\r\n/g, '\n').trim();
 }
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[äå]/g, 'a')
+    .replace(/[öø]/g, 'o')
+    .replace(/[ü]/g, 'u')
+    .replace(/&amp;/g, 'ja')
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 80);
+}
+
+function addHeadingIds(html: string): string {
+  const usedIds = new Set<string>();
+  return html.replace(/<h([1-4])>(.*?)<\/h\1>/gs, (_, level, innerHtml) => {
+    const textForSlug = innerHtml
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, 'ja')
+      .replace(/&[a-z]+;|&#\d+;/g, '');
+    let id = slugify(textForSlug);
+    if (!id) {
+      id = `section-${level}`;
+    }
+    if (usedIds.has(id)) {
+      let n = 2;
+      while (usedIds.has(`${id}-${n}`)) n++;
+      id = `${id}-${n}`;
+    }
+    usedIds.add(id);
+    return `<h${level} id="${id}">${innerHtml}</h${level}>`;
+  });
+}
+
+function highlightPlaceholders(html: string): string {
+  return html.replace(/\[([A-ZÄÖÅ][A-ZÄÖÅ0-9_]{1,})\]/g, '<mark class="legal-placeholder">[$1]</mark>');
+}
+
 function normalizePathname(pathname: string) {
   if (!pathname || pathname === '/') {
     return '/';
@@ -190,10 +229,38 @@ export function resolveLegalDocumentTypeFromPath(pathname: string) {
   return LEGAL_DOCUMENT_TYPE_BY_PATH[normalizePathname(pathname)] ?? null;
 }
 
+export interface LegalTocEntry {
+  id: string;
+  text: string;
+  depth: number;
+}
+
+export function extractLegalToc(contentMd: string): LegalTocEntry[] {
+  const normalized = normalizeDocumentContent(contentMd);
+  const usedIds = new Set<string>();
+  return normalized
+    .split('\n')
+    .flatMap<LegalTocEntry>((line) => {
+      const match = /^(#{1,4})\s+(.+)$/.exec(line);
+      if (!match) return [];
+      const depth = match[1].length;
+      const text = match[2].trim();
+      let id = slugify(text);
+      if (!id) id = `section-${depth}`;
+      if (usedIds.has(id)) {
+        let n = 2;
+        while (usedIds.has(`${id}-${n}`)) n++;
+        id = `${id}-${n}`;
+      }
+      usedIds.add(id);
+      return [{ id, text, depth }];
+    });
+}
+
 export function renderLegalDocumentHtml(contentMd: string) {
-  return marked.parse(escapeHtml(normalizeDocumentContent(contentMd)), {
-    breaks: true,
-  }) as string;
+  const escaped = escapeHtml(normalizeDocumentContent(contentMd));
+  const rawHtml = marked.parse(escaped, { breaks: true }) as string;
+  return highlightPlaceholders(addHeadingIds(rawHtml));
 }
 
 export function formatLegalHash(hash?: string | null) {
