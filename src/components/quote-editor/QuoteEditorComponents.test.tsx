@@ -101,6 +101,18 @@ describe('quote editor workflow components', () => {
     expect(markup).toContain('disabled');
   });
 
+  it('keeps pricing workflow cards wrapped and the selected mode visible on narrower desktop widths', () => {
+    const markup = renderToStaticMarkup(
+      <QuotePricingModeSelector value="line_total" onChange={() => undefined} />
+    );
+
+    expect(markup).toContain('md:grid-cols-2 2xl:grid-cols-3');
+    expect(markup).toContain('w-full min-w-0 whitespace-normal');
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).toContain('self-stretch rounded-2xl');
+    expect(markup).not.toContain('disabled=""');
+  });
+
   it('keeps additional costs collapsed by default while still showing active totals', () => {
     const quote = createQuote({
       projectCosts: 100,

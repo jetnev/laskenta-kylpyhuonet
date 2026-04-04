@@ -3,6 +3,7 @@ import {
   calculateQuote,
   calculateQuoteRow,
   calculateQuoteRowTargetUnitPrice,
+  getQuoteSummaryBreakdown,
   getQuoteRowPricingDetails,
 } from './calculations';
 import type { Quote, QuoteRow } from './types';
@@ -148,6 +149,42 @@ describe('calculateQuoteRow', () => {
     expect(calculation.subtotal).toBe(300);
     expect(calculation.vat).toBe(76.5);
     expect(calculation.total).toBe(376.5);
+  });
+
+  it('builds a shared summary breakdown with the selected VAT label and amount', () => {
+    const quote = createBaseQuote({ vatPercent: 25.5 });
+    const rows = [
+      createBaseRow({
+        quantity: 2,
+        salesPrice: 100,
+      }),
+    ];
+
+    const summary = getQuoteSummaryBreakdown(quote, rows);
+
+    expect(summary.subtotalLabel).toBe('Veroton välisumma');
+    expect(summary.vatLabel).toBe('ALV 25,5 %');
+    expect(summary.calculation.subtotal).toBe(200);
+    expect(summary.calculation.vat).toBe(51);
+    expect(summary.calculation.total).toBe(251);
+  });
+
+  it('keeps an intentionally tax-free quote at ALV 0 % without forcing a decimal tail', () => {
+    const quote = createBaseQuote({ vatPercent: 0 });
+    const rows = [
+      createBaseRow({
+        quantity: 3,
+        salesPrice: 50,
+      }),
+    ];
+
+    const summary = getQuoteSummaryBreakdown(quote, rows);
+
+    expect(summary.vatPercent).toBe(0);
+    expect(summary.vatLabel).toBe('ALV 0 %');
+    expect(summary.calculation.subtotal).toBe(150);
+    expect(summary.calculation.vat).toBe(0);
+    expect(summary.calculation.total).toBe(150);
   });
 
   it('derives customer price and margin from the combined internal unit cost', () => {

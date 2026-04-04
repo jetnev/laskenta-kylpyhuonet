@@ -2,9 +2,12 @@ import * as XLSX from 'xlsx';
 import {
   calculateQuote,
   calculateQuoteRow,
+  formatVatPercent,
   formatCurrency,
   formatNumber,
   getQuoteExtraChargeLines,
+  getQuoteSummaryBreakdown,
+  getQuoteVatLabel,
   getQuoteRowPricingDetails,
   type QuoteRowPricingDetails,
 } from './calculations';
@@ -67,6 +70,14 @@ export interface ReportExportProjectItem {
   createdAt: string;
 }
 
+export interface QuoteCustomerExcelData {
+  overviewRows: ExcelCellValue[][];
+  lineRows: ExcelCellValue[][];
+  scheduleRows: ExcelCellValue[][];
+  summaryRowCount: number;
+  termsRows: ExcelCellValue[][] | null;
+}
+
 function csvEscape(value: unknown) {
   const normalized = `${value ?? ''}`.replace(/"/g, '""');
   return `"${normalized}"`;
@@ -94,9 +105,13 @@ function formatDate(value?: string) {
   return date.toLocaleDateString('fi-FI');
 }
 
-function getQuoteRowPricingLabel(pricing: QuoteRowPricingDetails) {
+function getQuoteRowPricingLabel(pricing: QuoteRowPricingDetails, customerFacing = false) {
   if (pricing.pricingModel === 'line_total') {
     return 'Rivin kokonaishinta';
+  }
+
+  if (customerFacing) {
+    return 'Yksikköhinta';
   }
 
   if (pricing.usesLegacyPricing) {
@@ -106,13 +121,17 @@ function getQuoteRowPricingLabel(pricing: QuoteRowPricingDetails) {
   return 'Yksikköhinta';
 }
 
+function getQuoteRowCustomerUnitPrice(pricing: QuoteRowPricingDetails) {
+  return pricing.derivedUnitPrice;
+}
+
 function getQuoteRowEnteredPrice(pricing: QuoteRowPricingDetails) {
   return pricing.pricingModel === 'line_total' ? pricing.enteredLineTotal : pricing.enteredUnitPrice;
 }
 
-function getQuoteRowPricingMeta(pricing: QuoteRowPricingDetails) {
+function getQuoteRowPricingMeta(pricing: QuoteRowPricingDetails, customerFacing = false) {
   const parts = [
-    pricing.isUnitPriceDerived ? `Johdettu yksikköhinta ${formatCurrency(pricing.derivedUnitPrice)}` : '',
+    !customerFacing && pricing.isUnitPriceDerived ? `Johdettu yksikköhinta ${formatCurrency(pricing.derivedUnitPrice)}` : '',
     pricing.adjustmentTotal !== 0 ? `Säätö ${formatCurrency(pricing.adjustmentTotal)}` : '',
   ].filter(Boolean);
 
@@ -259,20 +278,21 @@ function formatWorksheetCell(
   cell.z = format;
 }
 
-function renderQuoteRows(rows: QuoteRow[], internal: boolean) {
+function renderQuoteRows(rows: QuoteRow[], options: { internal: boolean; vatPercent: number }) {
   return rows.map((row) => {
     if (row.mode === 'section') {
       return `
         <tr class="section-row">
-          <td colspan="${internal ? 10 : 7}">${escapeHtml(row.productName)}</td>
+          <td colspan="${options.internal ? 10 : 7}">${escapeHtml(row.productName)}</td>
         </tr>
       `;
     }
 
     const calc = calculateQuoteRow(row);
-    const pricing = getQuoteRowPricingDetails(row);
+    const pricing = getQuoteRowPricingDetails(row, options.vatPercent);
     const enteredPrice = getQuoteRowEnteredPrice(pricing);
-    const pricingMeta = getQuoteRowPricingMeta(pricing);
+    const pricingMeta = getQuoteRowPricingMeta(pricing, !options.internal);
+    const customerUnitPrice = getQuoteRowCustomerUnitPrice(pricing);
 
     return `
       <tr>
@@ -284,13 +304,43 @@ function renderQuoteRows(rows: QuoteRow[], internal: boolean) {
         </td>
         <td class="number-cell">${formatNumber(row.quantity)}</td>
         <td class="number-cell">${escapeHtml(row.unit)}</td>
-        ${internal ? `<td class="number-cell">${formatCurrency(row.purchasePrice)}</td>` : ''}
+        ${options.internal ? `<td class="number-cell">${formatCurrency(row.purchasePrice)}</td>` : ''}
         <td>
-          <div>${escapeHtml(getQuoteRowPricingLabel(pricing))}</div>
+          <div>${escapeHtml(getQuoteRowPricingLabel(pricing, !options.internal))}</div>
           ${pricingMeta ? `<div class="subtle">${escapeHtml(pricingMeta)}</div>` : ''}
         </td>
-        <td class="number-cell">${formatCurrency(enteredPrice ?? 0)}</td>
-        ${internal ? `<td class="number-cell">${formatCurrency(calc.marginAmount)}</td><td class="number-cell">${formatNumber(calc.marginPercent, 1)} %</td>` : ''}
+        <td class="number-cell">${formatCurrency(options.internal ? (enteredPrice ?? 0) : customerUnitPrice)}</td>
+        ${options.internal ? `<td class="number-cell">${formatCurrency(calc.marginAmount)}</td><td class="number-cell">${formatNumber(calc.marginPercent, 1)} %</td>` : ''}
+        <td class="number-cell total-cell">${formatCurrency(calc.rowTotal)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderInvoiceRows(rows: QuoteRow[], vatPercent: number) {
+  return rows.map((row) => {
+    if (row.mode === 'section') {
+      return `
+        <tr class="section-row">
+          <td colspan="6">${escapeHtml(row.productName)}</td>
+        </tr>
+      `;
+    }
+
+    const calc = calculateQuoteRow(row);
+    const pricing = getQuoteRowPricingDetails(row, vatPercent);
+
+    return `
+      <tr>
+        <td class="code-cell">${escapeHtml(row.productCode || '')}</td>
+        <td class="description-cell">
+          <strong>${escapeHtml(row.productName)}</strong>
+          ${row.description ? `<div class="subtle">${escapeHtml(row.description)}</div>` : ''}
+          ${row.notes ? `<div class="subtle">Huomio: ${escapeHtml(row.notes)}</div>` : ''}
+        </td>
+        <td class="number-cell">${formatNumber(row.quantity)}</td>
+        <td class="number-cell">${escapeHtml(row.unit)}</td>
+        <td class="number-cell">${formatCurrency(getQuoteRowCustomerUnitPrice(pricing))}</td>
         <td class="number-cell total-cell">${formatCurrency(calc.rowTotal)}</td>
       </tr>
     `;
@@ -306,8 +356,9 @@ function quoteDocumentHtml(
   settings?: Settings,
   internal: boolean = false
 ) {
-  const calculation = calculateQuote(quote, rows);
-  const extraChargeRows = getQuoteExtraChargeLines(quote).filter((line) => line.amount > 0);
+  const summary = getQuoteSummaryBreakdown(quote, rows);
+  const calculation = summary.calculation;
+  const extraChargeRows = summary.extraChargeLines;
   const scheduleMilestones = getVisibleScheduleMilestones(quote);
   const resolvedTermsContent = terms
     ? resolveTermTemplatePlaceholders(terms.contentMd, { customer, project, quote, settings })
@@ -773,12 +824,12 @@ function quoteDocumentHtml(
                   <th class="number-cell">Yks.</th>
                   ${internal ? '<th class="number-cell">Osto</th>' : ''}
                   <th>Hinnoittelu</th>
-                  <th class="number-cell">Syötetty hinta</th>
+                  <th class="number-cell">${internal ? 'Veroton asiakashinta' : 'Yksikköhinta'}</th>
                   ${internal ? '<th class="number-cell">Kate €</th><th class="number-cell">Kate %</th>' : ''}
                   <th class="number-cell">Yhteensä</th>
                 </tr>
               </thead>
-              <tbody>${renderQuoteRows(rows, internal)}</tbody>
+              <tbody>${renderQuoteRows(rows, { internal, vatPercent: summary.vatPercent })}</tbody>
             </table>
           </div>
 
@@ -802,8 +853,8 @@ function quoteDocumentHtml(
                 )
                 .join('')}
               <div class="summary-row"><span>Alennus</span><strong>-${formatCurrency(calculation.discountAmount)}</strong></div>
-              <div class="summary-row"><span>Välisumma</span><strong>${formatCurrency(calculation.subtotal)}</strong></div>
-              <div class="summary-row"><span>ALV ${formatNumber(quote.vatPercent, 1)} %</span><strong>${formatCurrency(calculation.vat)}</strong></div>
+              <div class="summary-row"><span>${summary.subtotalLabel}</span><strong>${formatCurrency(calculation.subtotal)}</strong></div>
+              <div class="summary-row"><span>${summary.vatLabel}</span><strong>${formatCurrency(calculation.vat)}</strong></div>
               <div class="summary-row total"><span>Loppusumma</span><span>${formatCurrency(calculation.total)}</span></div>
               ${internal ? `<div class="summary-row internal"><span>Kokonaiskate</span><strong>${formatCurrency(calculation.totalMargin)} (${formatNumber(calculation.marginPercent, 1)} %)</strong></div>` : ''}
             </div>
@@ -818,6 +869,17 @@ function quoteDocumentHtml(
   `;
 }
 
+export function buildQuoteCustomerDocumentHtml(
+  quote: Quote,
+  rows: QuoteRow[],
+  customer: Customer,
+  project: Project,
+  terms?: QuoteTerms,
+  settings?: Settings
+) {
+  return quoteDocumentHtml(quote, rows, customer, project, terms, settings, false);
+}
+
 export function exportQuoteToPDF(
   quote: Quote,
   rows: QuoteRow[],
@@ -826,36 +888,35 @@ export function exportQuoteToPDF(
   terms?: QuoteTerms,
   settings?: Settings
 ) {
-  const html = quoteDocumentHtml(quote, rows, customer, project, terms, settings, false);
+  const html = buildQuoteCustomerDocumentHtml(quote, rows, customer, project, terms, settings);
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');
 }
 
-export function exportQuoteToCustomerExcel(
+export function buildQuoteCustomerExcelData(
   quote: Quote,
   rows: QuoteRow[],
   customer: Customer,
   project: Project,
   terms?: QuoteTerms,
   settings?: Settings
-) {
-  const calculation = calculateQuote(quote, rows);
-  const extraChargeRows = getQuoteExtraChargeLines(quote).filter((line) => line.amount > 0);
+): QuoteCustomerExcelData {
+  const summary = getQuoteSummaryBreakdown(quote, rows);
+  const calculation = summary.calculation;
   const scheduleRows = getQuoteScheduleWorksheetRows(quote);
   const resolvedTermsContent = terms
     ? resolveTermTemplatePlaceholders(terms.contentMd, { customer, project, quote, settings })
     : undefined;
-  const workbook = XLSX.utils.book_new();
-
   const companyName = settings?.companyName || 'Yritys Oy';
+
   const summaryRows: Array<[string, number]> = [
     ['Rivien välisumma', roundExcelNumber(calculation.lineSubtotal)],
     ['Lisäkulut yhteensä', roundExcelNumber(calculation.extraChargesTotal)],
-    ...extraChargeRows.map((line) => [line.label, roundExcelNumber(line.amount)] as [string, number]),
+    ...summary.extraChargeLines.map((line) => [line.label, roundExcelNumber(line.amount)] as [string, number]),
     ['Alennus', roundExcelNumber(-calculation.discountAmount)],
-    ['Välisumma (alv 0 %)', roundExcelNumber(calculation.subtotal)],
-    [`ALV ${formatNumber(quote.vatPercent, 1)} %`, roundExcelNumber(calculation.vat)],
+    [summary.subtotalLabel, roundExcelNumber(calculation.subtotal)],
+    [summary.vatLabel, roundExcelNumber(calculation.vat)],
     ['Loppusumma', roundExcelNumber(calculation.total)],
   ];
 
@@ -882,6 +943,78 @@ export function exportQuoteToCustomerExcel(
     ],
   ];
 
+  const lineRows: ExcelCellValue[][] = [
+    [
+      'Koodi',
+      'Rivi',
+      'Kuvaus',
+      'Määrä',
+      'Yksikkö',
+      'Hinnoittelutapa',
+      'Yksikköhinta (EUR)',
+      'Säätö (EUR)',
+      'Yhteensä (EUR)',
+    ],
+    ...rows.map((row) => {
+      if (row.mode === 'section') {
+        return ['', `${row.productName}`, row.description || '', '', '', '', '', '', ''];
+      }
+
+      const calc = calculateQuoteRow(row);
+      const pricing = getQuoteRowPricingDetails(row, summary.vatPercent);
+
+      return [
+        row.productCode || '',
+        row.productName,
+        row.description || row.notes || '',
+        roundExcelNumber(row.quantity, 3),
+        row.unit,
+        getQuoteRowPricingLabel(pricing, true),
+        roundExcelNumber(getQuoteRowCustomerUnitPrice(pricing)),
+        pricing.adjustmentTotal !== 0 ? roundExcelNumber(pricing.adjustmentTotal) : '',
+        roundExcelNumber(calc.rowTotal),
+      ];
+    }),
+  ];
+
+  const termsRows = terms && resolvedTermsContent
+    ? [
+        ['Ehtopohja', terms.name],
+        [],
+        ['Sisältö'],
+        [renderTermTemplatePlainText(resolvedTermsContent)],
+      ]
+    : null;
+
+  return {
+    overviewRows,
+    lineRows,
+    scheduleRows,
+    summaryRowCount: summaryRows.length,
+    termsRows,
+  };
+}
+
+export function exportQuoteToCustomerExcel(
+  quote: Quote,
+  rows: QuoteRow[],
+  customer: Customer,
+  project: Project,
+  terms?: QuoteTerms,
+  settings?: Settings
+) {
+  const workbook = XLSX.utils.book_new();
+  const { overviewRows, lineRows, scheduleRows, summaryRowCount, termsRows } = buildQuoteCustomerExcelData(
+    quote,
+    rows,
+    customer,
+    project,
+    terms,
+    settings
+  );
+  const summaryStartRow = 9;
+  const summaryEndRow = summaryStartRow + summaryRowCount - 1;
+
   const overviewSheet = XLSX.utils.aoa_to_sheet(overviewRows);
   overviewSheet['!cols'] = [28, 26, 18, 24].map((width) => ({ wch: width }));
   overviewSheet['!merges'] = [
@@ -892,9 +1025,6 @@ export function exportQuoteToCustomerExcel(
     { s: { r: 11, c: 0 }, e: { r: 11, c: 3 } },
     { s: { r: 12, c: 0 }, e: { r: 12, c: 3 } },
   ];
-
-  const summaryStartRow = 9;
-  const summaryEndRow = summaryStartRow + summaryRows.length - 1;
   for (let rowIndex = summaryStartRow; rowIndex <= summaryEndRow; rowIndex += 1) {
     formatWorksheetCell(overviewSheet, rowIndex, 3, '#,##0.00');
   }
@@ -902,53 +1032,15 @@ export function exportQuoteToCustomerExcel(
 
   XLSX.utils.book_append_sheet(workbook, overviewSheet, sanitizeWorksheetName('Tarjous'));
 
-  const lineRows: ExcelCellValue[][] = [
-    [
-      'Koodi',
-      'Rivi',
-      'Kuvaus',
-      'Määrä',
-      'Yksikkö',
-      'Hinnoittelutapa',
-      'Syötetty hinta (EUR)',
-      'Johdettu yksikköhinta (EUR)',
-      'Säätö (EUR)',
-      'Yhteensä (EUR)',
-    ],
-    ...rows.map((row) => {
-      if (row.mode === 'section') {
-        return ['', `${row.productName}`, row.description || '', '', '', '', '', '', '', ''];
-      }
-
-      const calc = calculateQuoteRow(row);
-      const pricing = getQuoteRowPricingDetails(row);
-      const enteredPrice = getQuoteRowEnteredPrice(pricing);
-
-      return [
-        row.productCode || '',
-        row.productName,
-        row.description || row.notes || '',
-        roundExcelNumber(row.quantity, 3),
-        row.unit,
-        getQuoteRowPricingLabel(pricing),
-        enteredPrice != null ? roundExcelNumber(enteredPrice) : '',
-        pricing.isUnitPriceDerived ? roundExcelNumber(pricing.derivedUnitPrice) : '',
-        pricing.adjustmentTotal !== 0 ? roundExcelNumber(pricing.adjustmentTotal) : '',
-        roundExcelNumber(calc.rowTotal),
-      ];
-    }),
-  ];
-
   const linesSheet = XLSX.utils.aoa_to_sheet(lineRows);
-  linesSheet['!cols'] = [16, 34, 48, 12, 12, 20, 18, 20, 14, 18].map((width) => ({ wch: width }));
-  linesSheet['!autofilter'] = { ref: 'A1:J1' };
+  linesSheet['!cols'] = [16, 34, 48, 12, 12, 20, 18, 14, 18].map((width) => ({ wch: width }));
+  linesSheet['!autofilter'] = { ref: 'A1:I1' };
 
   for (let rowIndex = 1; rowIndex <= rows.length; rowIndex += 1) {
     formatWorksheetCell(linesSheet, rowIndex, 3, '#,##0.###');
     formatWorksheetCell(linesSheet, rowIndex, 6, '#,##0.00');
     formatWorksheetCell(linesSheet, rowIndex, 7, '#,##0.00');
     formatWorksheetCell(linesSheet, rowIndex, 8, '#,##0.00');
-    formatWorksheetCell(linesSheet, rowIndex, 9, '#,##0.00');
   }
 
   XLSX.utils.book_append_sheet(workbook, linesSheet, sanitizeWorksheetName('Tarjousrivit'));
@@ -957,16 +1049,11 @@ export function exportQuoteToCustomerExcel(
     appendWorksheet(workbook, 'Aikataulu', scheduleRows, [18, 30, 18, 80]);
   }
 
-  if (terms && resolvedTermsContent) {
+  if (termsRows) {
     appendWorksheet(
       workbook,
       'Ehdot',
-      [
-        ['Ehtopohja', terms.name],
-        [],
-        ['Sisältö'],
-        [renderTermTemplatePlainText(resolvedTermsContent)],
-      ],
+      termsRows,
       [18, 110]
     );
   }
@@ -987,8 +1074,8 @@ export function exportQuoteToInternalExcel(
   terms?: QuoteTerms,
   settings?: Settings
 ) {
-  const calculation = calculateQuote(quote, rows);
-  const extraChargeRows = getQuoteExtraChargeLines(quote).filter((line) => line.amount > 0);
+  const summary = getQuoteSummaryBreakdown(quote, rows);
+  const calculation = summary.calculation;
   const scheduleRows = getQuoteScheduleWorksheetRows(quote);
   const resolvedTermsContent = terms
     ? resolveTermTemplatePlaceholders(terms.contentMd, { customer, project, quote, settings })
@@ -999,10 +1086,10 @@ export function exportQuoteToInternalExcel(
   const summaryRows: Array<[string, number]> = [
     ['Rivien valisumma', roundExcelNumber(calculation.lineSubtotal)],
     ['Lisakulut yhteensa', roundExcelNumber(calculation.extraChargesTotal)],
-    ...extraChargeRows.map((line) => [line.label, roundExcelNumber(line.amount)] as [string, number]),
+    ...summary.extraChargeLines.map((line) => [line.label, roundExcelNumber(line.amount)] as [string, number]),
     ['Alennus', roundExcelNumber(-calculation.discountAmount)],
-    ['Valisumma', roundExcelNumber(calculation.subtotal)],
-    [`ALV ${formatNumber(quote.vatPercent, 1)} %`, roundExcelNumber(calculation.vat)],
+    ['Veroton valisumma', roundExcelNumber(calculation.subtotal)],
+    [getQuoteVatLabel(quote), roundExcelNumber(calculation.vat)],
     ['Loppusumma', roundExcelNumber(calculation.total)],
     ['Kokonaiskate', roundExcelNumber(calculation.totalMargin)],
     ['Kokonaiskate %', roundExcelNumber(calculation.marginPercent, 1)],
@@ -1028,7 +1115,7 @@ export function exportQuoteToInternalExcel(
       'Tuotteen hinta',
       'Asennuksen hinta',
       'Hinnoittelutapa',
-      'Syotetty asiakashinta',
+      'Veroton asiakashinta',
       'Johdettu yksikkohinta',
       'Saato',
       'Kate euroa',
@@ -1042,7 +1129,7 @@ export function exportQuoteToInternalExcel(
         return ['', row.productName, row.description || '', 'Valiotsikko', '', '', '', '', '', '', '', '', '', '', '', ''];
       }
 
-      const pricing = getQuoteRowPricingDetails(row);
+  const pricing = getQuoteRowPricingDetails(row, summary.vatPercent);
       const enteredPrice = getQuoteRowEnteredPrice(pricing);
 
       return [
@@ -1497,11 +1584,11 @@ function invoiceDocumentHtml(invoice: Invoice) {
                   <th>Rivi</th>
                   <th class="number-cell">Määrä</th>
                   <th class="number-cell">Yks.</th>
-                  <th class="number-cell">Yks. hinta</th>
+                  <th class="number-cell">Yksikköhinta</th>
                   <th class="number-cell">Yhteensä</th>
                 </tr>
               </thead>
-              <tbody>${renderQuoteRows(invoice.rows, false)}</tbody>
+              <tbody>${renderInvoiceRows(invoice.rows, invoice.vatPercent)}</tbody>
             </table>
           </div>
 
@@ -1522,7 +1609,7 @@ function invoiceDocumentHtml(invoice: Invoice) {
                 .join('')}
               <div class="summary-row"><span>Alennus</span><strong>-${formatCurrency(calculation.discountAmount)}</strong></div>
               <div class="summary-row"><span>Veroton yhteensä</span><strong>${formatCurrency(calculation.subtotal)}</strong></div>
-              <div class="summary-row"><span>ALV ${formatNumber(invoice.vatPercent, 1)} %</span><strong>${formatCurrency(calculation.vat)}</strong></div>
+              <div class="summary-row"><span>ALV ${formatVatPercent(invoice.vatPercent)} %</span><strong>${formatCurrency(calculation.vat)}</strong></div>
               <div class="summary-row total"><span>Laskun loppusumma</span><span>${formatCurrency(calculation.total)}</span></div>
             </div>
           </div>

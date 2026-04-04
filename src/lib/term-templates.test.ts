@@ -5,6 +5,7 @@ import {
   deleteTermTemplate,
   getSystemTermTemplates,
   listTermTemplates,
+  resolveTermTemplatePlaceholders,
   resolveQuoteTermsSnapshotTemplate,
   restoreTermTemplateFromMaster,
   updateTermTemplate,
@@ -109,6 +110,26 @@ describe('term templates', () => {
 
     expect(resolved?.contentMd).toBe(snapshot.termsSnapshotContentMd);
     expect(resolved?.contentMd).not.toBe(updated.template.contentMd);
+  });
+
+  it('migrates legacy ALV 0 % snapshot copy to the current quote VAT during rendering', () => {
+    const resolved = resolveTermTemplatePlaceholders(
+      'Yksikköhinnat ja kokonaishinnat määräytyvät tarjouksen mukaan. Ellei toisin ilmoiteta, hinnat ovat ALV 0 %.',
+      {
+        quote: {
+          quoteNumber: 'TAR-1',
+          createdAt: '2026-04-04T08:00:00.000Z',
+          validUntil: '2026-05-01',
+          schedule: '',
+          notes: '',
+          projectCosts: 0,
+          vatPercent: 25.5,
+        },
+      }
+    );
+
+    expect(resolved).toContain('25,5 %');
+    expect(resolved).not.toContain('ALV 0 %');
   });
 
   it('can delete a user template and move the default flag to the next active template', () => {

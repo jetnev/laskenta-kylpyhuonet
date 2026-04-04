@@ -60,14 +60,16 @@ import {
 import { Product, Quote, QuoteChargeType, QuotePricingMode, QuoteRow, QuoteRowMode, ScheduleMilestone } from '../lib/types';
 import {
   calculateQuoteRowTargetUnitPrice,
-  calculateQuote,
   calculateQuoteRow,
   calculateTravelCosts,
   canSendQuote,
   formatCurrency,
   formatNumber,
+  formatVatPercent,
   getQuoteRowInternalUnitCost,
-  getQuoteExtraChargeLines,
+  getQuoteSummaryBreakdown,
+  getQuoteVatLabel,
+  getQuoteVatPercent,
   getQuoteRowPricingDetails,
   getQuoteRowPricingModel,
   getQuoteRowUnitPricingMode,
@@ -418,11 +420,13 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const quoteInvoices = useMemo(() => (quote ? getInvoicesForQuote(quote.id) : []), [getInvoicesForQuote, quote]);
   const quoteHasNewerRevision = quote ? hasNewerRevision(quote) : false;
   const isEditable = Boolean(quote && quote.status === 'draft' && !quoteHasNewerRevision);
-  const calculation = quote ? calculateQuote(quote, quoteRows) : null;
+  const quoteVatPercent = quote ? getQuoteVatPercent(quote) : 0;
+  const quoteVatLabel = quote ? getQuoteVatLabel(quote) : 'ALV -';
+  const quoteSummary = useMemo(() => (quote ? getQuoteSummaryBreakdown(quote, quoteRows) : null), [quote, quoteRows]);
+  const calculation = quoteSummary?.calculation ?? null;
   const quoteOwnerLabel = quote ? getResponsibleUserLabel(quote.ownerUserId, responsibleUsers) : 'Ei vastuuhenkilöä';
   const travelCosts = quote ? calculateTravelCosts(quote) : 0;
-  const extraChargeLines = quote ? getQuoteExtraChargeLines(quote) : [];
-  const activeExtraChargeLines = extraChargeLines.filter((line) => line.amount > 0);
+  const activeExtraChargeLines = quoteSummary?.extraChargeLines ?? [];
   const visibleScheduleMilestones = quote ? (quote.scheduleMilestones || []).filter(hasScheduleMilestoneContent) : [];
   const applyTermsTemplateSelection = (value: string) => {
     if (!quote) {
@@ -706,7 +710,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   };
 
   const patchRow = (row: QuoteRow, updates: Partial<QuoteRow>) => {
-    const currentPricing = getQuoteRowPricingDetails(row, quote.vatPercent);
+    const currentPricing = getQuoteRowPricingDetails(row, quoteVatPercent);
     const nextRow = {
       ...row,
       ...updates,
@@ -903,7 +907,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       revisionNumber: nextRevision,
       parentQuoteId: familyId,
       status: 'draft',
-      vatPercent: quote.vatPercent,
+      vatPercent: quoteVatPercent,
       validUntil: quote.validUntil,
       notes: quote.notes,
       internalNotes: quote.internalNotes,
@@ -1233,7 +1237,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                         </div>
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">ALV</div>
-                          <div className="mt-1 text-sm font-medium text-slate-950">{formatNumber(quote.vatPercent, 1)} %</div>
+                          <div className="mt-1 text-sm font-medium text-slate-950">{formatVatPercent(quoteVatPercent)} %</div>
                         </div>
                       </div>
                     </div>
@@ -1334,7 +1338,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   <div className="space-y-4">
                     {quoteRows.map((row, index) => {
                       const rowCalculation = calculateQuoteRow(row);
-                      const pricingDetails = getQuoteRowPricingDetails(row, quote.vatPercent);
+                      const pricingDetails = getQuoteRowPricingDetails(row, quoteVatPercent);
                       const pricingWorkflow = getRowPricingWorkflow(row);
                       const priceSource = getRowPriceSource(row);
                       const isMarginWorkflow = pricingWorkflow === 'margin';
@@ -1639,7 +1643,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
 
                                         <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm">
                                           <div className="text-xs uppercase tracking-wide text-muted-foreground">Laskentakaava</div>
-                                          <div className="mt-1 font-medium text-foreground">{formatQuoteRowFormula(row, quote.vatPercent)}</div>
+                                          <div className="mt-1 font-medium text-foreground">{formatQuoteRowFormula(row, quoteVatPercent)}</div>
                                         </div>
 
                                         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1652,7 +1656,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                             <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.netTotal)}</div>
                                           </div>
                                           <div className="space-y-2">
-                                            <FieldHelpLabel label={`ALV ${formatNumber(quote.vatPercent, 1)} %`} help={QUOTE_ROW_FIELD_HELP.vatAmount} />
+                                            <FieldHelpLabel label={quoteVatLabel} help={QUOTE_ROW_FIELD_HELP.vatAmount} />
                                             <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.vatAmount)}</div>
                                           </div>
                                           <div className="space-y-2">
@@ -1690,7 +1694,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
 
                                         <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm">
                                           <div className="text-xs uppercase tracking-wide text-muted-foreground">Laskentakaava</div>
-                                          <div className="mt-1 font-medium text-foreground">{formatQuoteRowFormula(row, quote.vatPercent)}</div>
+                                          <div className="mt-1 font-medium text-foreground">{formatQuoteRowFormula(row, quoteVatPercent)}</div>
                                         </div>
 
                                         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1703,7 +1707,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                             <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.netTotal)}</div>
                                           </div>
                                           <div className="space-y-2">
-                                            <FieldHelpLabel label={`ALV ${formatNumber(quote.vatPercent, 1)} %`} help={QUOTE_ROW_FIELD_HELP.vatAmount} />
+                                            <FieldHelpLabel label={quoteVatLabel} help={QUOTE_ROW_FIELD_HELP.vatAmount} />
                                             <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.vatAmount)}</div>
                                           </div>
                                           <div className="space-y-2">
@@ -1845,7 +1849,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                             <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.netTotal)}</div>
                                           </div>
                                           <div className="space-y-2">
-                                            <FieldHelpLabel label={`ALV ${formatNumber(quote.vatPercent, 1)} %`} help={QUOTE_ROW_FIELD_HELP.vatAmount} />
+                                              <FieldHelpLabel label={quoteVatLabel} help={QUOTE_ROW_FIELD_HELP.vatAmount} />
                                             <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.vatAmount)}</div>
                                           </div>
                                           <div className="space-y-2">
@@ -2254,7 +2258,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   )}
                   <div className="flex justify-between"><span>Alennus</span><span className="font-medium">-{formatCurrency(calculation.discountAmount)}</span></div>
                   <div className="flex justify-between"><span>Välisumma</span><span className="font-medium">{formatCurrency(calculation.subtotal)}</span></div>
-                  <div className="flex justify-between"><span>ALV {formatNumber(quote.vatPercent, 1)} %</span><span className="font-medium">{formatCurrency(calculation.vat)}</span></div>
+                  <div className="flex justify-between"><span>{quoteVatLabel}</span><span className="font-medium">{formatCurrency(calculation.vat)}</span></div>
                   <div className="flex justify-between border-t pt-3 text-lg font-semibold"><span>Loppusumma</span><span>{formatCurrency(calculation.total)}</span></div>
                   <div className="flex justify-between text-muted-foreground"><span>Kokonaiskate</span><span>{formatCurrency(calculation.totalMargin)} ({formatNumber(calculation.marginPercent, 1)} %)</span></div>
                 </div>

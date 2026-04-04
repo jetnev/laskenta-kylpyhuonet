@@ -44,6 +44,14 @@ export interface QuoteCalculation {
   marginPercent: number;
 }
 
+export interface QuoteSummaryBreakdown {
+  calculation: QuoteCalculation;
+  extraChargeLines: QuoteExtraChargeLine[];
+  subtotalLabel: string;
+  vatPercent: number;
+  vatLabel: string;
+}
+
 export interface QuoteExtraChargeLine {
   key:
     | 'projectCosts'
@@ -71,6 +79,14 @@ export interface ValidationResult {
 
 function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function normalizeVatPercent(value: number | null | undefined, fallback = 0) {
+  if (!Number.isFinite(value)) {
+    return Math.max(0, fallback);
+  }
+
+  return Math.max(0, value as number);
 }
 
 function normalizeNonNegativeNumber(value: number, fallback = 0) {
@@ -164,7 +180,7 @@ export function getQuoteRowPricingDetails(
   const pricingModel = getQuoteRowPricingModel(row);
   const usesLegacyPricing = row.pricingModel !== 'unit_price' && row.pricingModel !== 'line_total';
   const adjustmentTotal = roundCurrency(normalizeAdjustment(row.priceAdjustment));
-  const normalizedVatPercent = normalizeNonNegativeNumber(vatPercent);
+  const normalizedVatPercent = normalizeVatPercent(vatPercent);
 
   if (row.mode === 'section') {
     return {
@@ -295,7 +311,8 @@ export function calculateQuote(quote: Quote, rows: QuoteRow[]): QuoteCalculation
 
   const discountAmount = roundCurrency(Math.min(beforeDiscountSubtotal, Math.max(0, rawDiscountAmount)));
   const subtotal = roundCurrency(Math.max(0, beforeDiscountSubtotal - discountAmount));
-  const vat = roundCurrency(subtotal * ((quote.vatPercent || 0) / 100));
+  const vatPercent = getQuoteVatPercent(quote);
+  const vat = roundCurrency(subtotal * (vatPercent / 100));
   const total = roundCurrency(subtotal + vat);
   const totalMargin = roundCurrency(subtotal - totalCost);
   const marginPercent = subtotal > 0 ? roundCurrency((totalMargin / subtotal) * 100) : 0;
@@ -311,6 +328,38 @@ export function calculateQuote(quote: Quote, rows: QuoteRow[]): QuoteCalculation
     totalCost,
     totalMargin,
     marginPercent,
+  };
+}
+
+export function getQuoteVatPercent(
+  quote: Pick<Quote, 'vatPercent'> | null | undefined,
+  fallback = 0
+) {
+  return normalizeVatPercent(quote?.vatPercent, fallback);
+}
+
+export function formatVatPercent(value: number | null | undefined) {
+  return new Intl.NumberFormat('fi-FI', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(normalizeVatPercent(value));
+}
+
+export function getQuoteVatLabel(quote: Pick<Quote, 'vatPercent'> | null | undefined) {
+  return `ALV ${formatVatPercent(getQuoteVatPercent(quote))} %`;
+}
+
+export function getQuoteSummaryBreakdown(quote: Quote, rows: QuoteRow[]): QuoteSummaryBreakdown {
+  const calculation = calculateQuote(quote, rows);
+  const extraChargeLines = getQuoteExtraChargeLines(quote).filter((line) => line.amount > 0);
+  const vatPercent = getQuoteVatPercent(quote);
+
+  return {
+    calculation,
+    extraChargeLines,
+    subtotalLabel: 'Veroton välisumma',
+    vatPercent,
+    vatLabel: `ALV ${formatVatPercent(vatPercent)} %`,
   };
 }
 

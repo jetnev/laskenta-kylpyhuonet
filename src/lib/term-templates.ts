@@ -1,4 +1,5 @@
 import { marked } from 'marked';
+import { formatVatPercent, getQuoteVatPercent } from './calculations';
 import type {
   Customer,
   Project,
@@ -38,6 +39,7 @@ export const TERM_TEMPLATE_PLACEHOLDERS = [
   { token: '{{asennuksen_sisalto}}', label: 'Asennuksen sisältö' },
   { token: '{{ei_sisally}}', label: 'Rajaukset' },
   { token: '{{projektikulut}}', label: 'Projektikulut' },
+  { token: '{{tarjous_alv}}', label: 'Tarjouksen ALV-kanta' },
   { token: '{{reklamaatio_yhteystieto}}', label: 'Reklamaatioyhteystieto' },
 ] as const;
 
@@ -58,6 +60,8 @@ type LegacyQuoteTerms = Partial<QuoteTerms> & {
 };
 
 const MASTER_CREATED_AT = '2026-04-03T00:00:00.000Z';
+const LEGACY_ALV_ZERO_COPY = 'Yksikköhinnat ja kokonaishinnat määräytyvät tarjouksen mukaan. Ellei toisin ilmoiteta, hinnat ovat ALV 0 %.';
+const QUOTE_VAT_COPY = 'Yksikköhinnat ja kokonaishinnat määräytyvät tarjouksen mukaan. Hinnat ovat verottomia ja tarjouksen ALV-kanta on {{tarjous_alv}}.';
 
 function nowIso() {
   return new Date().toISOString();
@@ -71,6 +75,10 @@ function slugify(value: string) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'ehtopohja';
+}
+
+function migrateLegacyVatCopy(contentMd: string) {
+  return contentMd.replace(LEGACY_ALV_ZERO_COPY, QUOTE_VAT_COPY);
 }
 
 function ensureUniqueName(existing: QuoteTerms[], baseName: string) {
@@ -301,7 +309,7 @@ Tarjous koskee tarjouksessa eriteltyjen tuotteiden asennusurakkaa sekä mahdolli
 Asennustarjous on voimassa vain yhdessä tarjotun varustetoimituksen kanssa, ellei toisin erikseen kirjallisesti sovita.
 
 # Hinnat
-Yksikköhinnat ja kokonaishinnat määräytyvät tarjouksen mukaan. Ellei toisin ilmoiteta, hinnat ovat ALV 0 %.
+Yksikköhinnat ja kokonaishinnat määräytyvät tarjouksen mukaan. Hinnat ovat verottomia ja tarjouksen ALV-kanta on {{tarjous_alv}}.
 Maksuehto: {{maksuehto}}
 
 # Urakan sisältö
@@ -812,7 +820,7 @@ export function renderTermTemplatePlainText(contentMd: string) {
 export interface TermTemplateRenderContext {
   customer?: Pick<Customer, 'name' | 'address'>;
   project?: Pick<Project, 'name' | 'site'>;
-  quote?: Pick<Quote, 'quoteNumber' | 'createdAt' | 'validUntil' | 'schedule' | 'notes' | 'projectCosts'>;
+  quote?: Pick<Quote, 'quoteNumber' | 'createdAt' | 'validUntil' | 'schedule' | 'notes' | 'projectCosts' | 'vatPercent'>;
   settings?: Pick<Settings, 'companyName' | 'companyEmail' | 'companyPhone'>;
 }
 
@@ -843,6 +851,8 @@ function formatCurrency(value?: number) {
 }
 
 export function resolveTermTemplatePlaceholders(contentMd: string, context: TermTemplateRenderContext) {
+  const normalizedContentMd = migrateLegacyVatCopy(contentMd);
+  const quoteVatPercent = getQuoteVatPercent(context.quote);
   const replacementMap: Record<string, string> = {
     '{{yritys_nimi}}': context.settings?.companyName || '-',
     '{{yritys_y_tunnus}}': '-',
@@ -858,8 +868,9 @@ export function resolveTermTemplatePlaceholders(contentMd: string, context: Term
     '{{asennuksen_sisalto}}': context.quote?.notes || '-',
     '{{ei_sisally}}': '-',
     '{{projektikulut}}': formatCurrency(context.quote?.projectCosts),
+    '{{tarjous_alv}}': `${formatVatPercent(quoteVatPercent)} %`,
     '{{reklamaatio_yhteystieto}}': context.settings?.companyEmail || context.settings?.companyPhone || '-',
   };
 
-  return contentMd.replace(/\{\{[a-z_]+\}\}/g, (token) => replacementMap[token] ?? token);
+  return normalizedContentMd.replace(/\{\{[a-z_]+\}\}/g, (token) => replacementMap[token] ?? token);
 }

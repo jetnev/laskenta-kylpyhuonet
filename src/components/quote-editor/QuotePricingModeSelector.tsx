@@ -32,7 +32,7 @@ export default function QuotePricingModeSelector({
   canUseMargin = true,
 }: QuotePricingModeSelectorProps) {
   return (
-    <div className="grid gap-3 lg:grid-cols-3">
+    <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
       {(Object.keys(WORKFLOW_COPY) as QuoteRowWorkflowOption[]).map((workflow) => {
         const config = WORKFLOW_COPY[workflow];
         const isActive = value === workflow;
@@ -44,7 +44,7 @@ export default function QuotePricingModeSelector({
             type="button"
             variant={isActive ? 'default' : 'outline'}
             className={cn(
-              'h-auto min-h-28 flex-col items-start rounded-2xl px-4 py-4 text-left',
+              'h-full min-h-32 w-full min-w-0 whitespace-normal justify-start self-stretch rounded-2xl px-4 py-4 text-left',
               !isActive && 'border-slate-200 bg-white text-slate-950 hover:bg-slate-50',
               isDisabled && 'cursor-not-allowed opacity-50'
             )}
@@ -52,8 +52,8 @@ export default function QuotePricingModeSelector({
             disabled={isDisabled}
             aria-pressed={isActive}
           >
-            <span className="text-sm font-semibold">{config.title}</span>
-            <span className={cn('mt-2 text-xs leading-6', isActive ? 'text-white/85' : 'text-slate-600')}>
+            <span className="block w-full text-sm font-semibold leading-5">{config.title}</span>
+            <span className={cn('mt-2 block w-full text-xs leading-6', isActive ? 'text-white/85' : 'text-slate-600')}>
               {config.description}
             </span>
           </Button>

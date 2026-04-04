@@ -31,6 +31,7 @@ import {
 } from '../lib/term-templates';
 import { createInvoiceSnapshotFromQuote } from '../lib/invoices';
 import { APP_DEFAULT_UPDATE_FEED_URL } from '../lib/site-brand';
+import { getQuoteVatPercent } from '../lib/calculations';
 
 type OwnedAuditKeys = 'id' | keyof ReturnType<typeof buildOwnedAudit>;
 type CustomerCreateInput = Omit<Customer, 'id' | keyof ReturnType<typeof buildOwnedAudit>> & {
@@ -152,6 +153,13 @@ function generateQuoteNumber(prefix: string = 'TAR') {
     String(date.getDate()).padStart(2, '0'),
   ].join('');
   return `${prefix}-${parts}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+}
+
+function normalizeStoredQuote(quote: Quote, settings: Settings): Quote {
+  return {
+    ...quote,
+    vatPercent: getQuoteVatPercent(quote, settings.defaultVatPercent),
+  };
 }
 
 function createStarterWorkspaceTemplate(userId: string, settings: Settings): StarterWorkspaceTemplate {
@@ -953,8 +961,8 @@ export function useQuotes() {
       return [];
     }
 
-    return flattenUserScopedValues(visibleUserIds, quotesByUserId);
-  }, [quotesByUserId, userId, visibleUserIds]);
+    return flattenUserScopedValues(visibleUserIds, quotesByUserId).map((quote) => normalizeStoredQuote(quote, settings));
+  }, [quotesByUserId, settings, userId, visibleUserIds]);
 
   const addQuote = (quote: QuoteCreateInput) => {
     const currentUserId = ensureSignedIn(userId);
@@ -974,7 +982,7 @@ export function useQuotes() {
       quoteNumber: quote.quoteNumber || generateQuoteNumber(settings.quoteNumberPrefix),
       revisionNumber: quote.revisionNumber ?? 1,
       status: quote.status ?? 'draft',
-      vatPercent: quote.vatPercent ?? settings.defaultVatPercent,
+      vatPercent: getQuoteVatPercent(quote, settings.defaultVatPercent),
       discountType: quote.discountType ?? 'none',
       discountValue: quote.discountValue ?? 0,
       projectCosts: quote.projectCosts ?? 0,
@@ -1008,10 +1016,14 @@ export function useQuotes() {
     }
 
     const nextOwnerUserId = updates.ownerUserId || targetQuote.ownerUserId;
+    const nextVatPercent = Object.prototype.hasOwnProperty.call(updates, 'vatPercent')
+      ? getQuoteVatPercent({ vatPercent: updates.vatPercent }, settings.defaultVatPercent)
+      : getQuoteVatPercent(targetQuote, settings.defaultVatPercent);
     const nextQuote: Quote = {
       ...targetQuote,
       ...updates,
       ownerUserId: nextOwnerUserId,
+      vatPercent: nextVatPercent,
       updatedAt: nowIso(),
       updatedByUserId: currentUserId,
       lastAutoSavedAt: nowIso(),
