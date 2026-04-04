@@ -47,6 +47,7 @@ import { cn } from '../../lib/utils';
 import { useAuth } from '../../hooks/use-auth';
 import { getResponsibleUserLabel } from '../../lib/ownership';
 import { exportReportsToPDF } from '../../lib/export';
+import ReportingDrilldownContent, { getReportingDrilldownDescription } from './reporting/ReportingDrilldownContent';
 import {
   buildReportingModel,
   resolveReportingFilters,
@@ -689,45 +690,24 @@ export default function ReportsPage() {
       </Tabs>
 
       {/* DRILL-DOWN DIALOG */}
-      <Dialog open={drill !== null} onOpenChange={(open) => { if (!open) setDrill(null); }}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
-          <DialogHeader>
+      <Dialog open={drill !== null} onOpenChange={(open) => { if (!open) closeDrill(); }}>
+        <DialogContent className="max-h-[85vh] max-w-[1100px] overflow-hidden p-0">
+          <DialogHeader className="border-b px-6 pb-4 pt-6 pr-14">
             <DialogTitle>{drill?.title ?? 'Tarkasteluikkuna'}</DialogTitle>
+            <DialogDescription>{getReportingDrilldownDescription(drill?.kind ?? null)}</DialogDescription>
           </DialogHeader>
-          <ScrollArea className="max-h-[65vh] pr-4">
-            {drill?.kind === 'families' && drillFamilies.length > 0 && (
-              <Table><TableHeader><TableRow><TableHead>Tarjous</TableHead><TableHead>Asiakas</TableHead><TableHead>Tila</TableHead><TableHead className="text-right">Arvo €</TableHead><TableHead className="text-right">Kate %</TableHead><TableHead className="text-right">Rev.</TableHead><TableHead>Vastuuhenkilö</TableHead><TableHead>Päivitetty</TableHead></TableRow></TableHeader>
-              <TableBody>{drillFamilies.map((f) => (
-                <TableRow key={f.id}><TableCell className="font-medium max-w-[180px] truncate">{f.latestQuoteTitle || f.projectName}</TableCell><TableCell className="text-sm">{f.customerName}</TableCell>
-                  <TableCell><Badge variant={badgeVariant(f.latestStatusVariant)}>{f.latestStatusLabel}</Badge></TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{fc(f.latestSubtotal)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fp(f.latestMarginPercent)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{f.revisionCount}</TableCell>
-                  <TableCell className="text-sm">{f.ownerLabel}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{fd(f.lastActivityAt)}</TableCell>
-                </TableRow>))}</TableBody></Table>
-            )}
-            {drill?.kind === 'customers' && drillCustomers.length > 0 && (
-              <Table><TableHeader><TableRow><TableHead>Asiakas</TableHead><TableHead className="text-right">Tarjouksia</TableHead><TableHead className="text-right">Arvo €</TableHead><TableHead className="text-right">Kate %</TableHead><TableHead className="text-right">Hyväksymisaste</TableHead></TableRow></TableHeader>
-              <TableBody>{drillCustomers.map((c) => (
-                <TableRow key={c.id}><TableCell className="font-medium">{c.name}</TableCell><TableCell className="text-right tabular-nums">{c.quoteCount}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{fc(c.totalValue)}</TableCell><TableCell className="text-right tabular-nums">{fp(c.marginPercent)}</TableCell>
-                  <TableCell className="text-right"><Badge variant={c.acceptanceRatePercent >= 50 ? 'default' : 'secondary'}>{fp(c.acceptanceRatePercent)}</Badge></TableCell>
-                </TableRow>))}</TableBody></Table>
-            )}
-            {drill?.kind === 'projects' && drillProjects.length > 0 && (
-              <Table><TableHeader><TableRow><TableHead>Projekti</TableHead><TableHead>Asiakas</TableHead><TableHead className="text-right">Tarjous €</TableHead><TableHead className="text-right">Toteutunut €</TableHead><TableHead className="text-right">Poikkeama %</TableHead><TableHead>Vaihe</TableHead></TableRow></TableHeader>
-              <TableBody>{drillProjects.map((p) => (
-                <TableRow key={p.id}><TableCell className="font-medium">{p.name}</TableCell><TableCell className="text-sm">{p.customerName}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{fc(p.quoteValue)}</TableCell><TableCell className="text-right font-mono tabular-nums">{fc(p.actualValue ?? 0)}</TableCell>
-                  <TableCell className={cn('text-right tabular-nums', (p.quoteToActualDeltaPercent ?? 0) > 0 ? 'text-green-600 dark:text-green-400' : (p.quoteToActualDeltaPercent ?? 0) < 0 ? 'text-red-600 dark:text-red-400' : '')}>{(p.quoteToActualDeltaPercent ?? 0) > 0 ? '+' : ''}{fp(p.quoteToActualDeltaPercent ?? 0)}</TableCell>
-                  <TableCell><Badge variant={badgeVariant(p.projectStageVariant)}>{p.projectStage}</Badge></TableCell>
-                </TableRow>))}</TableBody></Table>
-            )}
-            {drill !== null && drillFamilies.length === 0 && drillCustomers.length === 0 && drillProjects.length === 0 && (
-              <div className="py-12 text-center text-muted-foreground">Ei tietoja tälle rajaukselle</div>
-            )}
-          </ScrollArea>
+          <div className="px-6 pb-6 pt-4">
+            <ScrollArea className="max-h-[68vh] w-full">
+              <div className="pr-4">
+                <ReportingDrilldownContent
+                  kind={drill?.kind ?? null}
+                  families={drillFamilies}
+                  customers={drillCustomers}
+                  projects={drillProjects}
+                />
+              </div>
+            </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
