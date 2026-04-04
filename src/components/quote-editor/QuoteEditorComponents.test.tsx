@@ -105,11 +105,21 @@ describe('quote editor workflow components', () => {
     const markup = renderToStaticMarkup(
       <QuotePricingModeSelector value="line_total" onChange={() => undefined} />
     );
+    const buttonClassNames = Array.from(markup.matchAll(/<button[^>]*class="([^"]+)"/g), (match) => match[1]);
 
     expect(markup).toContain('md:grid-cols-2 2xl:grid-cols-3');
-    expect(markup).toContain('w-full min-w-0 whitespace-normal');
+    expect(buttonClassNames).toHaveLength(3);
+    buttonClassNames.forEach((className) => {
+      expect(className).toContain('h-full');
+      expect(className).toContain('w-full');
+      expect(className).toContain('min-w-0');
+      expect(className).toContain('whitespace-normal');
+      expect(className).toContain('justify-start');
+      expect(className).toContain('self-stretch');
+    });
+    expect(markup).toContain('block w-full text-sm font-semibold');
+    expect(markup).toContain('block w-full text-xs leading-6');
     expect(markup).toContain('aria-pressed="true"');
-    expect(markup).toContain('self-stretch rounded-2xl');
     expect(markup).not.toContain('disabled=""');
   });
 
