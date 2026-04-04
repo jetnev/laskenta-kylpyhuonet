@@ -7,8 +7,8 @@ import path from 'node:path';
 const { autoUpdater } = electronUpdater;
 
 const HOST = '127.0.0.1';
-const APP_ID = 'fi.jetnev.laskenta.kylpyhuonet';
-const DEFAULT_UPDATE_FEED_URL = 'https://jetnev.github.io/laskenta-kylpyhuonet/';
+const APP_ID = 'fi.jetnev.projekta';
+const DEFAULT_UPDATE_FEED_URL = 'https://projekta.fi/';
 const UPDATE_CHECK_DELAY_MS = 10_000;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const MIME_TYPES = {
@@ -168,8 +168,12 @@ function snapshotDesktopUpdateState() {
   };
 }
 
+function isAutoUpdateDisabled() {
+  return process.env.PROJEKTA_DISABLE_AUTO_UPDATE === '1' || process.env.LASKENTA_DISABLE_AUTO_UPDATE === '1';
+}
+
 async function resolveDesktopUpdateFeedUrl() {
-  const envFeedUrl = normalizeFeedUrl(process.env.LASKENTA_UPDATE_FEED_URL);
+  const envFeedUrl = normalizeFeedUrl(process.env.PROJEKTA_UPDATE_FEED_URL || process.env.LASKENTA_UPDATE_FEED_URL);
   if (envFeedUrl) {
     return envFeedUrl;
   }
@@ -186,7 +190,7 @@ async function resolveDesktopUpdateFeedUrl() {
 }
 
 async function syncDesktopUpdateFeed(force = false) {
-  if (!app.isPackaged || process.env.LASKENTA_DISABLE_AUTO_UPDATE === '1') {
+  if (!app.isPackaged || isAutoUpdateDisabled()) {
     desktopUpdateState.enabled = false;
     desktopUpdateState.status = 'disabled';
     desktopUpdateState.feedUrl = null;
@@ -221,7 +225,7 @@ async function checkForDesktopUpdates() {
   }
 
   updateCheckInProgress = (async () => {
-    if (!app.isPackaged || process.env.LASKENTA_DISABLE_AUTO_UPDATE === '1') {
+    if (!app.isPackaged || isAutoUpdateDisabled()) {
       desktopUpdateState.enabled = false;
       desktopUpdateState.status = 'disabled';
       desktopUpdateState.feedUrl = null;
@@ -461,7 +465,7 @@ async function createMainWindow() {
 }
 
 function configureAutoUpdater() {
-  if (!app.isPackaged || process.env.LASKENTA_DISABLE_AUTO_UPDATE === '1') {
+  if (!app.isPackaged || isAutoUpdateDisabled()) {
     desktopUpdateState.enabled = false;
     desktopUpdateState.status = 'disabled';
     desktopUpdateState.feedUrl = null;
@@ -544,7 +548,7 @@ function configureAutoUpdater() {
 }
 
 function startAutoUpdateLoop() {
-  if (updateCheckStarted || !app.isPackaged || process.env.LASKENTA_DISABLE_AUTO_UPDATE === '1') {
+  if (updateCheckStarted || !app.isPackaged || isAutoUpdateDisabled()) {
     return;
   }
 

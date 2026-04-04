@@ -1,7 +1,7 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { deriveAccessState } from '../lib/access-control';
-import { buildAuthRedirectUrl } from '../lib/auth-callback';
+import { resolveAuthRedirectUrl } from '../lib/auth-callback';
 import type { SignupLegalAcceptanceBundle } from '../lib/legal';
 import {
   createIsolatedSupabaseClient,
@@ -318,8 +318,9 @@ function getInitials(displayName: string) {
 }
 
 function getAuthRedirectUrl() {
-  return buildAuthRedirectUrl({
-    configuredUrl: import.meta.env.VITE_SUPABASE_REDIRECT_URL?.trim(),
+  return resolveAuthRedirectUrl({
+    redirectUrl: import.meta.env.VITE_SUPABASE_REDIRECT_URL?.trim(),
+    siteUrl: import.meta.env.VITE_SITE_URL?.trim(),
     currentOrigin: window.location.origin,
   });
 }

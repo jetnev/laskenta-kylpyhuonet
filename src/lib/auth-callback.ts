@@ -125,3 +125,14 @@ export function buildAuthRedirectUrl(options: { configuredUrl?: string | null; c
 
   return baseUrl.toString();
 }
+
+export function resolveAuthRedirectUrl(options: {
+  redirectUrl?: string | null;
+  siteUrl?: string | null;
+  currentOrigin: string;
+}) {
+  return buildAuthRedirectUrl({
+    configuredUrl: options.redirectUrl?.trim() || options.siteUrl?.trim() || options.currentOrigin,
+    currentOrigin: options.currentOrigin,
+  });
+}

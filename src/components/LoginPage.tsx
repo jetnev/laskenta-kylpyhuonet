@@ -8,7 +8,9 @@ import { Alert, AlertDescription } from './ui/alert';
 import { Checkbox } from './ui/checkbox';
 import { AuthActionError, useAuth } from '../hooks/use-auth';
 import LegalDocumentLinks from './legal/LegalDocumentLinks';
+import { applyDocumentMetadata } from '../lib/document-metadata';
 import { buildSignupLegalAcceptanceBundle, listPublicActiveLegalDocuments } from '../lib/legal';
+import { APP_LOGIN_META_DESCRIPTION, APP_NAME, buildDocumentTitle } from '../lib/site-brand';
 import type { LegalDocumentVersionRow } from '../lib/supabase';
 
 type AuthView = 'login' | 'register' | 'forgot' | 'reset';
@@ -155,6 +157,15 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
 
   const HeadingIcon = heading.icon;
 
+  useEffect(() => {
+    applyDocumentMetadata({
+      title: buildDocumentTitle(heading.title),
+      description: view === 'login' ? APP_LOGIN_META_DESCRIPTION : heading.description,
+      pathname: '/login',
+      siteUrl: import.meta.env.VITE_SITE_URL?.trim(),
+    });
+  }, [heading.description, heading.title, view]);
+
   const runAction = async (action: () => Promise<void>) => {
     setSubmitting(true);
     setError(null);
@@ -245,7 +256,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
       <header className="relative z-10 border-b border-slate-200/80 bg-white/82 backdrop-blur-xl">
         <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-6">
           <button className="text-left" onClick={onNavigateHome} type="button">
-            <div className="text-lg font-semibold tracking-tight text-slate-950">Tarjouslaskenta</div>
+            <div className="text-lg font-semibold tracking-tight text-slate-950">{APP_NAME}</div>
           </button>
           <Button variant="ghost" onClick={onNavigateHome}>
             <ArrowLeft className="h-4 w-4" />
@@ -256,9 +267,9 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
 
       <main className="relative z-10 mx-auto grid max-w-6xl gap-12 px-6 py-12 lg:grid-cols-[0.95fr_0.8fr] lg:items-start lg:py-20">
         <section className="max-w-xl pt-2">
-          <div className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Tarjouslaskenta</div>
+          <div className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">{APP_NAME}</div>
           <h1 className="mt-5 text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">
-            Kirjaudu tarjouslaskennan työtilaan
+            Kirjaudu Projekta-työtilaan
           </h1>
           <p className="mt-5 text-lg leading-8 text-slate-600">
             Hallinnoi tarjouksia, tuotteita ja projekteja samassa järjestelmässä ilman hajanaisia tiedostoja ja erillisiä näkymiä.

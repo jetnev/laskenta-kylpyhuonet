@@ -40,12 +40,13 @@ Supabase Dashboardissa:
 Supabase Dashboardissa:
 
 1. Mene `Authentication -> URL Configuration`.
-2. Aseta `Site URL` Pages-osoitteeseen, esimerkiksi `https://laskenta-kylpyhuonet.pages.dev`.
+2. Aseta `Site URL` tuotantodomainiin `https://projekta.fi`.
 3. Lisää `Redirect URLs` -listaan vähintään:
-   - `https://laskenta-kylpyhuonet.pages.dev/auth/callback`
+   - `https://projekta.fi/auth/callback`
+   - `https://www.projekta.fi/auth/callback`
    - `http://localhost:5173/auth/callback`
-4. Jos aiot käyttää myöhemmin omaa domainia, lisää myös se samaan listaan, esimerkiksi `https://app.yritys.fi`.
-   - Käytä callback-reittiä myös omalla domainilla, esimerkiksi `https://app.yritys.fi/auth/callback`.
+4. Jos haluat testata authia myös Cloudflare Pagesin preview-osoitteella, lisää lisäksi kyseisen Pages-projektin todellinen callback-osoite, esimerkiksi `https://projekta.pages.dev/auth/callback`.
+5. Ohjaa `www.projekta.fi` Cloudflaressa samaan tuotantoversioon tai tee siita 301-uudelleenohjaus apex-domainiin.
 
 ## 4. Cloudflare Pages
 
@@ -57,11 +58,13 @@ Supabase Dashboardissa:
    - Build command: `npm run build`
    - Build output directory: `dist`
 5. Lisää Environment Variables:
+   - `VITE_SITE_URL`
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
    - `VITE_SUPABASE_REDIRECT_URL`
-6. Aseta `VITE_SUPABASE_REDIRECT_URL` callback-reittiin, esimerkiksi `https://laskenta-kylpyhuonet.pages.dev/auth/callback`.
-7. Callback-reitin on oltava julkinen, koska sekä sähköpostivahvistus että salasanan palautus palaavat siihen ennen kirjautumista.
+6. Aseta `VITE_SITE_URL=https://projekta.fi` kaikille tuotantobuildeille, jotta canonical- ja some-metat osoittavat oikeaan domainiin.
+7. Aseta `VITE_SUPABASE_REDIRECT_URL=https://projekta.fi/auth/callback`, ellei authin paluulinkkiä tarvitse erikseen ohjata johonkin muuhun sallittuun callback-osoitteeseen.
+8. Callback-reitin on oltava julkinen, koska sekä sähköpostivahvistus että salasanan palautus palaavat siihen ennen kirjautumista.
 
 ## 5. Password reset
 

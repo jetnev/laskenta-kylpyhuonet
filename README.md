@@ -1,8 +1,8 @@
-# Laskenta - Tarjouslaskenta ja Hinnoittelujärjestelmä
+# Projekta - Tarjouslaskenta ja projektiseuranta
 
 **Status**: ✅ STABLE - WORKING STATE LOCKED
 
-Laskenta on kattava suomenkielinen tarjouslaskenta- ja hinnoittelujärjestelmä esteetönten kylpyhuonetuotteiden ja asennusprojektien hallintaan.
+Projekta on kattava suomenkielinen tarjouslaskennan ja projektiseurannan jarjestelma esteettomien kylpyhuonetuotteiden ja asennusprojektien hallintaan.
 
 ## 📋 Yleiskatsaus
 

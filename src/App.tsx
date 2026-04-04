@@ -61,6 +61,8 @@ import {
   type AppLocationState,
   type AppPage,
 } from './lib/app-routing';
+import { applyDocumentMetadata } from './lib/document-metadata';
+import { APP_NAME, buildDocumentTitle, getWorkspacePageDescription } from './lib/site-brand';
 
 function App() {
   const [currentPathname, setCurrentPathname] = useState(() => normalizePathname(window.location.pathname));
@@ -232,6 +234,21 @@ function App() {
     window.addEventListener('popstate', syncRoute);
     return () => window.removeEventListener('popstate', syncRoute);
   }, []);
+
+  useEffect(() => {
+    if (!user || currentRoute !== 'app') {
+      return;
+    }
+
+    const pageTitle = navigation.find((item) => item.id === currentPage)?.name || 'Työtila';
+
+    applyDocumentMetadata({
+      title: buildDocumentTitle(pageTitle),
+      description: getWorkspacePageDescription(currentPage),
+      pathname: currentPathname,
+      siteUrl: import.meta.env.VITE_SITE_URL?.trim(),
+    });
+  }, [currentPage, currentPathname, currentRoute, navigation, user]);
 
   useEffect(() => {
     void loadLegalState({ background: hasResolvedLegalStateRef.current });
@@ -496,8 +513,8 @@ function App() {
       >
         <div className="flex h-16 items-center border-b border-border px-6 justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-primary">Laskenta</h1>
-            <p className="text-xs text-muted-foreground">{organization?.name || user?.organizationName || 'Tarjouslaskenta'}</p>
+            <h1 className="text-xl font-semibold text-primary">{APP_NAME}</h1>
+            <p className="text-xs text-muted-foreground">{organization?.name || user?.organizationName || APP_NAME}</p>
           </div>
           {isMobile && (
             <button onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-muted rounded-md">
@@ -578,7 +595,7 @@ function App() {
               <List className="h-6 w-6" />
             </button>
             <h1 className="text-lg font-semibold text-primary truncate">
-              {navigation.find((item) => item.id === currentPage)?.name || 'Laskenta'}
+              {navigation.find((item) => item.id === currentPage)?.name || APP_NAME}
             </h1>
           </header>
         )}

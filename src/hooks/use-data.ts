@@ -30,6 +30,7 @@ import {
   updateTermTemplate,
 } from '../lib/term-templates';
 import { createInvoiceSnapshotFromQuote } from '../lib/invoices';
+import { APP_DEFAULT_UPDATE_FEED_URL } from '../lib/site-brand';
 
 type OwnedAuditKeys = 'id' | keyof ReturnType<typeof buildOwnedAudit>;
 type CustomerCreateInput = Omit<Customer, 'id' | keyof ReturnType<typeof buildOwnedAudit>> & {
@@ -70,7 +71,7 @@ const DEFAULT_SETTINGS: Settings = {
   companyAddress: '',
   companyPhone: '',
   companyEmail: '',
-  updateFeedUrl: 'https://jetnev.github.io/laskenta-kylpyhuonet/',
+  updateFeedUrl: APP_DEFAULT_UPDATE_FEED_URL,
   defaultVatPercent: 25.5,
   defaultMarginPercent: 30,
   defaultValidityDays: 30,

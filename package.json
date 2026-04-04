@@ -1,5 +1,5 @@
 {
-    "name": "laskenta-kylpyhuonet",
+    "name": "projekta",
     "private": true,
     "version": "0.1.0",
     "type": "module",
@@ -114,12 +114,12 @@
         ]
     },
     "build": {
-        "appId": "fi.jetnev.laskenta.kylpyhuonet",
-        "productName": "Laskenta",
+        "appId": "fi.jetnev.projekta",
+        "productName": "Projekta",
         "publish": [
             {
                 "provider": "generic",
-                "url": "https://jetnev.github.io/laskenta-kylpyhuonet/"
+                "url": "https://projekta.fi/"
             }
         ],
         "directories": {

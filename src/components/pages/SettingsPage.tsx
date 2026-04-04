@@ -128,7 +128,7 @@ export default function SettingsPage() {
           <Input
             id="settings-update-feed-url"
             type="url"
-            placeholder="https://oma-domain.fi/laskenta/"
+            placeholder="https://projekta.fi/"
             value={formData.updateFeedUrl || ''}
             onChange={(event) => setFormData((current) => ({ ...current, updateFeedUrl: event.target.value }))}
           />

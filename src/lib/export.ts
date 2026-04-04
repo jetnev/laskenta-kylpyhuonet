@@ -11,6 +11,7 @@ import {
 import { Customer, InstallationGroup, Invoice, Product, Project, Quote, QuoteRow, QuoteTerms, ScheduleMilestone, Settings } from './types';
 import { getInvoiceStatusLabel, invoiceToQuoteLike, isInvoiceOverdue } from './invoices';
 import { renderTermTemplateHtml, renderTermTemplatePlainText, resolveTermTemplatePlaceholders } from './term-templates';
+import { APP_NAME } from './site-brand';
 
 type ExcelCellValue = string | number;
 
@@ -1551,7 +1552,7 @@ interface ReportPdfExportInput {
 }
 
 function reportDocumentHtml(input: ReportPdfExportInput) {
-  const companyName = input.settings?.companyName?.trim() || 'Tarjouslaskenta';
+  const companyName = input.settings?.companyName?.trim() || APP_NAME;
 
   return `
     <!DOCTYPE html>

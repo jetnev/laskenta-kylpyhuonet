@@ -1,7 +1,10 @@
+import { useEffect } from 'react';
 import { ArrowRight, Buildings, CalendarCheck, ChartBar, CheckCircle, CurrencyCircleDollar, FileText, Folder, HardHat, ListChecks, Package, PlayCircle, ShieldCheck, Wrench, X } from '@phosphor-icons/react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import LegalDocumentLinks from './legal/LegalDocumentLinks';
+import { applyDocumentMetadata } from '../lib/document-metadata';
+import { APP_MARKETING_META_DESCRIPTION, APP_NAME, buildDemoMailtoUrl, buildDocumentTitle } from '../lib/site-brand';
 
 interface LandingPageProps {
   onNavigateToLogin: () => void;
@@ -14,10 +17,19 @@ const previewRows = [
 ];
 
 function handleRequestDemo() {
-  window.location.href = 'mailto:myynti@tarjouslaskenta.fi?subject=Pyydä%20esittely%20Tarjouslaskenta-palvelusta';
+  window.location.href = buildDemoMailtoUrl();
 }
 
 export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
+  useEffect(() => {
+    applyDocumentMetadata({
+      title: buildDocumentTitle('Tarjoukset, kate ja projektit'),
+      description: APP_MARKETING_META_DESCRIPTION,
+      pathname: '/',
+      siteUrl: import.meta.env.VITE_SITE_URL?.trim(),
+    });
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#f6f8fb] text-slate-950">
       <div className="absolute inset-x-0 top-0 h-[620px] bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.08),transparent_50%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.04),transparent_40%)] pointer-events-none" />
@@ -26,7 +38,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-[#f6f8fb]/88 backdrop-blur-xl">
         <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-6">
           <button className="text-left" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} type="button">
-            <div className="text-lg font-semibold tracking-tight text-slate-950">Tarjouslaskenta</div>
+            <div className="text-lg font-semibold tracking-tight text-slate-950">{APP_NAME}</div>
           </button>
 
           <nav className="hidden items-center gap-8 text-sm text-slate-600 lg:flex">
@@ -96,7 +108,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                 {/* Toolbar */}
                 <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-6 py-4">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-slate-950">Tarjouslaskenta</div>
+                    <div className="text-sm font-semibold text-slate-950">{APP_NAME}</div>
                     <div className="mt-0.5 text-xs text-slate-500">Tarjous, kate ja projekti yhdessä työtilassa</div>
                   </div>
                   <Badge variant="outline" className="rounded-full border-slate-300 px-3 py-1 text-xs text-slate-600">Esimerkkinäkymä</Badge>
@@ -257,7 +269,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                 </div>
                 <ul className="mt-5 space-y-3">
                   {[
-                    'Tarjouslaskenta yhdessä näkymässä, versiot tallessa',
+                    'Tarjoukset yhdessä näkymässä, versiot tallessa',
                     'Tuote- ja hintatieto keskitetysti rekisterissä',
                     'Kate näkyy ennen päätöstä, ei jälkikäteen',
                     'Projekti jatkuu samasta datasta ilman katkoksia',
@@ -418,8 +430,8 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-lg font-semibold tracking-tight text-slate-950">Tarjouslaskenta</div>
-            <div className="mt-1 text-sm text-slate-500">Tarjouslaskenta ja projektiseuranta rakennusalan yrityksille.</div>
+            <div className="text-lg font-semibold tracking-tight text-slate-950">{APP_NAME}</div>
+            <div className="mt-1 text-sm text-slate-500">Projekta yhdistaa tarjouslaskennan ja projektiseurannan rakennusalan yrityksille.</div>
             <LegalDocumentLinks className="mt-4" />
           </div>
           <div className="flex flex-wrap items-center gap-3">

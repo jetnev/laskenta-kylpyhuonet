@@ -6,12 +6,15 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { applyDocumentMetadata } from '../lib/document-metadata';
 import {
+  AUTH_CALLBACK_PATH,
   buildCleanAuthCallbackUrl,
   LOGIN_PATH,
   parseAuthCallbackUrl,
   type ParsedAuthCallbackUrl,
 } from '../lib/auth-callback';
+import { APP_AUTH_CALLBACK_META_DESCRIPTION, APP_NAME, buildDocumentTitle } from '../lib/site-brand';
 import { getSupabaseConfigError, isSupabaseConfigured, requireSupabase } from '../lib/supabase';
 
 type CallbackStatus = 'processing' | 'confirmation-success' | 'reset-password' | 'reset-success' | 'error';
@@ -89,6 +92,25 @@ export default function AuthCallbackPage() {
   const [submittingPassword, setSubmittingPassword] = useState(false);
 
   const callback = useMemo(() => parseAuthCallbackUrl(window.location.href), []);
+  const statusTitle =
+    status === 'processing'
+      ? 'Käsitellään linkkiä'
+      : status === 'confirmation-success'
+        ? 'Sähköposti vahvistettu'
+        : status === 'reset-password'
+          ? 'Aseta uusi salasana'
+          : status === 'reset-success'
+            ? 'Salasana vaihdettu'
+            : 'Linkin käsittely epäonnistui';
+
+  useEffect(() => {
+    applyDocumentMetadata({
+      title: buildDocumentTitle(statusTitle),
+      description: message || APP_AUTH_CALLBACK_META_DESCRIPTION,
+      pathname: AUTH_CALLBACK_PATH,
+      siteUrl: import.meta.env.VITE_SITE_URL?.trim(),
+    });
+  }, [message, statusTitle]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -237,6 +259,7 @@ export default function AuthCallbackPage() {
       <main className="relative z-10 mx-auto flex min-h-screen max-w-3xl items-center px-6 py-12">
         <Card className="w-full overflow-hidden rounded-[28px] border-slate-200/90 bg-white shadow-[0_32px_80px_-42px_rgba(15,23,42,0.45)]">
           <CardHeader className="border-b border-slate-200/90 px-7 py-6">
+            <div className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">{APP_NAME}</div>
             <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/8 text-primary">
               {status === 'processing' ? (
                 <CircleNotch className="h-6 w-6 animate-spin" weight="bold" />
@@ -248,13 +271,7 @@ export default function AuthCallbackPage() {
                 <CheckCircle className="h-6 w-6" weight="fill" />
               )}
             </div>
-            <CardTitle className="text-2xl tracking-[-0.03em]">
-              {status === 'processing' && 'Käsitellään linkkiä'}
-              {status === 'confirmation-success' && 'Sähköposti vahvistettu'}
-              {status === 'reset-password' && 'Aseta uusi salasana'}
-              {status === 'reset-success' && 'Salasana vaihdettu'}
-              {status === 'error' && 'Linkin käsittely epäonnistui'}
-            </CardTitle>
+            <CardTitle className="text-2xl tracking-[-0.03em]">{statusTitle}</CardTitle>
             {message && <CardDescription className="text-sm text-slate-600">{message}</CardDescription>}
           </CardHeader>
 

@@ -4,7 +4,9 @@ import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
 import LegalDocumentArticle from './LegalDocumentArticle';
 import LegalDocumentLinks from './LegalDocumentLinks';
+import { applyDocumentMetadata } from '../../lib/document-metadata';
 import { listPublicActiveLegalDocuments, getLegalDocumentTypeLabel } from '../../lib/legal';
+import { APP_NAME, buildDocumentTitle, buildPublicLegalDescription } from '../../lib/site-brand';
 import type { LegalDocumentType, LegalDocumentVersionRow } from '../../lib/supabase';
 
 interface PublicLegalDocumentPageProps {
@@ -54,6 +56,16 @@ export default function PublicLegalDocumentPage({ documentType }: PublicLegalDoc
 
   const pageTitle = getLegalDocumentTypeLabel(documentType);
 
+  useEffect(() => {
+    applyDocumentMetadata({
+      title: buildDocumentTitle(pageTitle),
+      description: buildPublicLegalDescription(pageTitle),
+      pathname: window.location.pathname,
+      siteUrl: import.meta.env.VITE_SITE_URL?.trim(),
+      ogType: 'article',
+    });
+  }, [pageTitle]);
+
   return (
     <div className="min-h-screen bg-[#f5f7fb] text-slate-950">
       <div className="absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.08),transparent_42%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.05),transparent_30%)] pointer-events-none" />
@@ -61,7 +73,7 @@ export default function PublicLegalDocumentPage({ documentType }: PublicLegalDoc
       <header className="relative z-10 border-b border-slate-200/80 bg-white/88 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl flex-col gap-5 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-lg font-semibold tracking-tight text-slate-950">Tarjouslaskenta</div>
+            <div className="text-lg font-semibold tracking-tight text-slate-950">{APP_NAME}</div>
             <p className="mt-1 text-sm text-slate-500">Voimassa olevat juridiset dokumentit ovat luettavissa ilman kirjautumista.</p>
           </div>
 
