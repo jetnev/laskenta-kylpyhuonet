@@ -721,6 +721,23 @@ async function updateEmployeeStatusInCurrentOrganization(userId: string, status:
   return data as ProfileRow;
 }
 
+export function mergeVisibleUsers(currentUsers: AuthUser[], nextUser: AuthUser) {
+  if (currentUsers.length === 0) {
+    return [nextUser];
+  }
+
+  const hasCurrentUser = currentUsers.some((candidate) => candidate.id === nextUser.id);
+  if (!hasCurrentUser) {
+    return [nextUser];
+  }
+
+  return currentUsers.map((candidate) =>
+    candidate.id === nextUser.id
+      ? nextUser
+      : candidate
+  );
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [users, setUsers] = useState<AuthUser[]>([]);
@@ -844,11 +861,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const nextUser = toAuthUser(profile, currentOrganization);
         setOrganization(currentOrganization);
         setUser(nextUser);
-        setUsers([nextUser]);
+        setUsers((current) => mergeVisibleUsers(current, nextUser));
 
         void loadUsers(nextUser, currentOrganization).catch((error) => {
           console.error('Supabase user directory bootstrap failed, continuing with current user only.', error);
-          setUsers([nextUser]);
+          setUsers((current) => mergeVisibleUsers(current, nextUser));
         });
 
         return nextUser;
@@ -861,7 +878,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const nextUser = buildRecoverableFallbackAuthUser(session.user, options?.markLogin);
         setOrganization(null);
         setUser(nextUser);
-        setUsers([nextUser]);
+        setUsers((current) => mergeVisibleUsers(current, nextUser));
         return nextUser;
       }
     },

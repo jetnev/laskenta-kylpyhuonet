@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, type ReactNode } from 'react';
+import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -60,6 +60,7 @@ import {
   type ReportBadgeVariant,
   type ReportSeverity,
 } from '../../lib/reporting';
+import { selectReportingViewState } from '../../lib/reporting-view-state';
 
 const FMT_CURRENCY = new Intl.NumberFormat('fi-FI', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const FMT_PERCENT = new Intl.NumberFormat('fi-FI', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -93,6 +94,31 @@ function EmptyState({ icon, title, description, action }: { icon: ReactNode; tit
       <h3 className="text-lg font-semibold mb-1">{title}</h3>
       <p className="text-sm text-muted-foreground max-w-md">{description}</p>
       {action && <p className="text-sm text-muted-foreground mt-2 font-medium">{action}</p>}
+    </div>
+  );
+}
+
+function ReportsLoadingState() {
+  return (
+    <div className="p-8 space-y-6">
+      <div>
+        <h1 className="text-3xl font-semibold">Raportointi</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Ladataan raportointinäkymää ensimmäistä kertaa.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Card key={index} className="p-5">
+            <div className="space-y-3 animate-pulse">
+              <div className="h-4 w-28 rounded bg-muted" />
+              <div className="h-8 w-24 rounded bg-muted" />
+              <div className="h-3 w-20 rounded bg-muted" />
+            </div>
+          </Card>
+        ))}
+      </div>
+      <Card className="p-6 text-sm text-muted-foreground">
+        Raportin sisältö valmistellaan. Ensimmäisen latauksen jälkeen data pidetään näkyvissä myös taustapäivitysten aikana.
+      </Card>
     </div>
   );
 }
@@ -135,13 +161,13 @@ interface ReportsPageProps {
 
 export default function ReportsPage({ onNavigate }: ReportsPageProps) {
   const { user, users, canManageUsers } = useAuth();
-  const { projects } = useProjects();
-  const { quotes } = useQuotes();
-  const { rows } = useQuoteRows();
-  const { customers } = useCustomers();
-  const { invoices } = useInvoices();
-  const { products } = useProducts();
-  const { groups: installationGroups } = useInstallationGroups();
+  const { projects, projectsLoaded } = useProjects();
+  const { quotes, quotesLoaded } = useQuotes();
+  const { rows, rowsLoaded } = useQuoteRows();
+  const { customers, customersLoaded } = useCustomers();
+  const { invoices, invoicesLoaded } = useInvoices();
+  const { products, productsLoaded } = useProducts();
+  const { groups: installationGroups, groupsLoaded } = useInstallationGroups();
   const { documentSettings } = useDocumentSettings();
 
   const [filterDraft, setFilterDraft] = useState<ReportingFilterDraft>({});
@@ -161,10 +187,35 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
     [filterDraft, canManageUsers, user?.id]
   );
 
-  const model: ReportingModel = useMemo(
+  const liveModel: ReportingModel = useMemo(
     () => buildReportingModel({ quotes, quoteRows: rows, projects, customers, invoices, products, installationGroups, users: responsibleUsers, filters: resolvedFilters }),
     [quotes, rows, projects, customers, invoices, products, installationGroups, responsibleUsers, resolvedFilters]
   );
+
+  const [stableModel, setStableModel] = useState<ReportingModel | null>(null);
+
+  const datasetsLoaded = projectsLoaded
+    && quotesLoaded
+    && rowsLoaded
+    && customersLoaded
+    && invoicesLoaded
+    && productsLoaded
+    && groupsLoaded;
+
+  useEffect(() => {
+    if (!datasetsLoaded) {
+      return;
+    }
+
+    setStableModel(liveModel);
+  }, [datasetsLoaded, liveModel]);
+
+  const { model: resolvedModel, isInitialLoading, isRefreshing } = useMemo(
+    () => selectReportingViewState({ datasetsLoaded, liveModel, stableModel }),
+    [datasetsLoaded, liveModel, stableModel]
+  );
+  const model = resolvedModel ?? liveModel;
+  const shouldShowInitialLoading = !resolvedModel || isInitialLoading;
 
   const openDrill = useCallback((d: DrillState) => setDrill(d), []);
   const closeDrill = useCallback(() => setDrill(null), []);
@@ -239,7 +290,11 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
     toast.success('CSV-raportti ladattu');
   }, [model.families]);
 
-  if (!model.meta.hasQuotes && customers.length === 0) {
+  if (shouldShowInitialLoading) {
+    return <ReportsLoadingState />;
+  }
+
+  if (!model.meta.hasQuotes && model.customers.length === 0) {
     return (
       <div className="p-8">
         <h1 className="text-3xl font-semibold mb-2">Raportointi</h1>
@@ -255,7 +310,10 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
     <div className="p-8 space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold">Raportointi</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-semibold">Raportointi</h1>
+            {isRefreshing && <Badge variant="outline">Päivitetään taustalla...</Badge>}
+          </div>
           <p className="text-muted-foreground mt-1">Tarjouksesta projektiin — johtamis- ja toimintanäkymä</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

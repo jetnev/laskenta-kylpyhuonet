@@ -386,7 +386,7 @@ export function mergeDocumentSettings(
 }
 
 export function useProducts() {
-  const [products = [], setProducts] = useKV<Product[]>('products', []);
+  const [products = [], setProducts, productsLoaded] = useKV<Product[]>('products', []);
   const { user, canDelete, canEdit } = useAuth();
   const userId = user?.id;
 
@@ -549,11 +549,11 @@ export function useProducts() {
 
   const getProduct = (id: string) => orderedProducts.find((item) => item.id === id);
 
-  return { products: orderedProducts, addProduct, updateProduct, deleteProduct, getProduct };
+  return { products: orderedProducts, productsLoaded, addProduct, updateProduct, deleteProduct, getProduct };
 }
 
 export function useInstallationGroups() {
-  const [groups = [], setGroups] = useKV<InstallationGroup[]>('installation-groups', []);
+  const [groups = [], setGroups, groupsLoaded] = useKV<InstallationGroup[]>('installation-groups', []);
   const { user, canManageSharedData } = useAuth();
 
   const addGroup = (group: Omit<InstallationGroup, 'id' | keyof ReturnType<typeof buildAudit>>) => {
@@ -589,7 +589,7 @@ export function useInstallationGroups() {
     setGroups((current = []) => current.filter((group) => group.id !== id));
   };
 
-  return { groups, addGroup, updateGroup, deleteGroup };
+  return { groups, groupsLoaded, addGroup, updateGroup, deleteGroup };
 }
 
 export function useInstallationGroupCategorySettings() {
@@ -1105,7 +1105,7 @@ export function useQuoteRows() {
     () => getVisibleUserIds(users, userId, canManageUsers),
     [canManageUsers, userId, users]
   );
-  const [rowsByUserId, setRowsForUser] = useUserScopedKVMany<QuoteRow[]>('quote-rows', [], visibleUserIds);
+  const [rowsByUserId, setRowsForUser, rowsLoaded] = useUserScopedKVMany<QuoteRow[]>('quote-rows', [], visibleUserIds);
 
   const visibleQuoteIds = useMemo(() => new Set(quotes.map((quote) => quote.id)), [quotes]);
   const rows = useMemo(() => {
@@ -1237,7 +1237,7 @@ export function useQuoteRows() {
   const getRowsForQuote = (quoteId: string) =>
     rows.filter((row) => row.quoteId === quoteId).sort((left, right) => left.sortOrder - right.sortOrder);
 
-  return { rows, addRow, updateRow, deleteRow, deleteRows, deleteRowsForQuote, getRowsForQuote };
+  return { rows, rowsLoaded, addRow, updateRow, deleteRow, deleteRows, deleteRowsForQuote, getRowsForQuote };
 }
 
 export function useQuoteTerms() {
@@ -1371,7 +1371,7 @@ export function useInvoices() {
     () => getVisibleUserIds(users, userId, canManageUsers),
     [canManageUsers, userId, users]
   );
-  const [invoicesByUserId, setInvoicesForUser] = useUserScopedKVMany<Invoice[]>(
+  const [invoicesByUserId, setInvoicesForUser, invoicesLoaded] = useUserScopedKVMany<Invoice[]>(
     'invoices',
     [],
     visibleUserIds
@@ -1514,6 +1514,7 @@ export function useInvoices() {
 
   return {
     invoices: orderedInvoices,
+    invoicesLoaded,
     createInvoiceFromQuote,
     updateInvoice,
     updateInvoiceStatus,
