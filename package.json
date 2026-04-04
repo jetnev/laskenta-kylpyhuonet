@@ -14,7 +14,16 @@
         "desktop:publish": "npm run desktop:pack",
         "lint": "eslint .",
         "optimize": "vite optimize",
-        "preview": "vite preview"
+        "preview": "vite preview",
+        "supabase:start": "npx supabase start",
+        "supabase:stop": "npx supabase stop",
+        "supabase:status": "npx supabase status",
+        "supabase:link": "npx supabase link",
+        "supabase:migration:list": "npx supabase migration list",
+        "supabase:migration:new": "npx supabase migration new",
+        "supabase:db:lint": "npx supabase db lint --local --schema public,extensions",
+        "supabase:db:diff:linked": "npx supabase db diff --linked --schema public,extensions",
+        "supabase:db:push:dry-run": "npx supabase db push --linked --dry-run"
     },
     "dependencies": {
         "@heroicons/react": "^2.2.0",

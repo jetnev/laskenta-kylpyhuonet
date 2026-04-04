@@ -2,11 +2,11 @@
 
 ## 1. Supabase
 
-1. Luo Supabase-projekti.
-2. Avaa SQL Editor.
-3. Jos pystytät ympäristön alusta asti, aja koko tiedosto [supabase/schema.sql](supabase/schema.sql).
-4. Jos ympäristö on jo olemassa ja haluat ottaa vain versionoidun sopimus- ja hyväksyntäketjun käyttöön, aja migration [supabase/migrations/20260404_legal_acceptance_chain.sql](supabase/migrations/20260404_legal_acceptance_chain.sql).
-5. Täydennä ennen tuotantoa migrationin mukana tulevat juridiset placeholderit, kuten yrityksen nimi, Y-tunnus, osoite, tukiosoitteet, retention-ajat ja toimivaltainen tuomioistuin.
+1. Luo Supabase-projekti tai linkitä olemassa oleva projekti CLI:llä.
+2. Seuraa ensin hallittua migraatio- ja baseline-työnkulkua tiedostosta [supabase/README.md](../supabase/README.md).
+3. Älä aloita tuotanto- tai olemassa olevan ympäristön muutoksia ajamalla SQL:ää suoraan Dashboardin SQL Editorissa, ellei kyse ole hallitusta palautus- tai adoptiotilanteesta, joka dokumentoidaan heti takaisin migraatioiksi.
+4. Pidä `supabase/schema.sql` snapshot/reference-artifaktina. Kaikki uudet muutokset tehdään `supabase/migrations/`-tiedostoina.
+5. Tarkista ennen tuotantoa myös juridiset placeholderit, joita nykyinen baseline ja historiallinen migration käyttävät, kuten yrityksen nimi, Y-tunnus, osoite, tukiosoitteet, retention-ajat ja toimivaltainen tuomioistuin.
 6. Avaa `Project Settings -> API`.
 7. Kopioi:
    - `Project URL`
@@ -14,13 +14,17 @@
 
 ## 1.1 Julkaisujärjestys olemassa olevaan ympäristöön
 
-1. Aja ensin tietokantamuutos SQL Editorissa.
-2. Vasta sen jälkeen julkaise frontend-koodi, jossa rekisteröinti, public legal -reitit ja reacceptance-portti käyttävät uusia tauluja ja funktioita.
-3. Tarkista julkaisemisen jälkeen vähintään:
+1. Linkitä projekti ja tarkista migraatiohistoria ennen mitään rolloutia.
+2. Ota authoritative baseline olemassa olevasta remotesta CLI:llä, jos historia ei ole luotettava.
+3. Tarkista aina `npx supabase db push --linked --dry-run` ennen varsinaista pushia.
+4. Vie tietokantamuutos ensin testi- tai preview-ympäristöön, jos sellainen on käytössä.
+5. Julkaise frontend vasta sen jälkeen, kun tietokantamuutos on validoitu kyseisessä ympäristössä.
+6. Tarkista julkaisemisen jälkeen vähintään:
    - uusi rekisteröityminen owner-käyttäjänä
    - ownerin ensimmäinen kirjautuminen ja DPA-hyväksyntä
    - organisaation työntekijän ensimmäinen kirjautuminen
    - julkiset reitit `/kayttoehdot`, `/tietosuoja`, `/tietojenkasittely` ja `/evasteet`
+7. Älä käytä `npx supabase db reset --linked` tuotantoa tai muuta olemassa olevaa hosted-projektia vasten.
 
 ## 2. Supabase Auth
 
@@ -76,9 +80,10 @@ Ensimmäinen kirjautuva käyttäjä saa `admin`-roolin triggerin kautta.
 
 Kun repo on kytketty Pagesiin:
 
-1. tee muutos
-2. push GitHubiin
-3. Cloudflare buildaa uuden version automaattisesti
-4. Pages-osoite päivittyy uuteen versioon
+1. tee tietokantamuutos migraationa ja validoi se ensin paikallisesti
+2. aja dry-run linked-projektiin ennen varsinaista rolloutia
+3. push GitHubiin vasta kun tietokantamuutos ja frontend-muutos ovat linjassa
+4. Cloudflare buildaa uuden version automaattisesti
+5. Pages-osoite päivittyy uuteen versioon
 <!-- EOF -->
 

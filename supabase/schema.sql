@@ -1,3 +1,9 @@
+-- Repo snapshot of the current public/extensions schema state.
+-- Use this file as a reviewed baseline reference and for controlled re-baselining only.
+-- All new database changes must be authored as files under supabase/migrations/.
+-- Refresh this snapshot intentionally after review, for example with:
+--   npx supabase db dump --linked -f supabase/schema.sql
+
 create extension if not exists pgcrypto;
 
 create or replace function public.set_updated_at()

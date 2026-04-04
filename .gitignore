@@ -1,3 +1,26 @@
+# Local environment and secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+**/agent-eval-report*
+
+# Node and build output
+node_modules/
+dist/
+dist-ssr
+*-dist
+release/
+*.local
+packages
+pids
+
+# Supabase local artifacts
+supabase/.branches/
+supabase/.temp/
+supabase/*.local.sql
+
 # Logs
 logs
 *.log
@@ -6,13 +29,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*-dist
-*.local
-release
 
 # Editor directories and files
 .vscode/*
@@ -25,10 +41,6 @@ release
 *.sln
 *.sw?
 
-.env
-**/agent-eval-report*
-packages
-pids
 .file-manifest
 .devcontainer/
 
