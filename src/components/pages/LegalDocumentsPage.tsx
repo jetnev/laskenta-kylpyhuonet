@@ -109,7 +109,7 @@ export default function LegalDocumentsPage() {
       setDocuments(nextDocuments);
       setAcceptances(nextAcceptances);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Sopimusasioiden lataus epäonnistui.');
+      setError(reason instanceof Error ? reason.message : 'Juridisten dokumenttien lataus epäonnistui.');
     } finally {
       setLoading(false);
     }
@@ -173,7 +173,7 @@ export default function LegalDocumentsPage() {
     return (
       <div className="p-4 sm:p-8">
         <Card className="p-8 text-center text-muted-foreground">
-          Sopimusasiat ovat näkyvissä vain yrityksen omistajalle tai pääkäyttäjälle.
+          Juridiset dokumentit ovat näkyvissä vain yrityksen omistajalle tai pääkäyttäjälle.
         </Card>
       </div>
     );
@@ -183,9 +183,9 @@ export default function LegalDocumentsPage() {
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold">Sopimusasiat</h1>
+          <h1 className="text-2xl sm:text-3xl font-semibold">Juridiset dokumentit</h1>
           <p className="mt-1 text-muted-foreground">
-            Näe aktiiviset dokumenttiversiot, hyväksyntähistoria ja tarvittaessa julkaise uusia luonnoksia.
+            Hallitse palvelun omia käyttöehtoja, tietosuojaa, DPA:ta ja hyväksyntäauditointia. Tarjousehdot hallitaan erikseen Tarjousehdot-sivulla.
           </p>
         </div>
         <Button variant="outline" onClick={() => void loadData()} disabled={loading}>

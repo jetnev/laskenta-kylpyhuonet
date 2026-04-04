@@ -50,45 +50,19 @@ import {
   listPublicActiveLegalDocuments,
   type LegalAcceptanceState,
 } from './lib/legal';
-
-type Page =
-  | 'dashboard'
-  | 'help'
-  | 'projects'
-  | 'invoices'
-  | 'products'
-  | 'installation-groups'
-  | 'substitutes'
-  | 'terms'
-  | 'legal'
-  | 'reports'
-  | 'users'
-  | 'settings'
-  | 'account';
-
-type AppRoute = 'login' | 'app';
-
-function normalizePathname(pathname: string) {
-  if (!pathname || pathname === '/') {
-    return '/';
-  }
-
-  return pathname.replace(/\/+$/, '') || '/';
-}
-
-function resolveAppRoute(pathname: string): AppRoute {
-  const normalizedPath = normalizePathname(pathname);
-
-  if (normalizedPath === '/app') {
-    return 'app';
-  }
-
-  return 'login';
-}
+import {
+  DEFAULT_APP_PAGE,
+  getAppPagePath,
+  normalizePathname,
+  resolveAccessibleAppPage,
+  resolveAppPage,
+  resolveAppRoute,
+  type AppPage,
+} from './lib/app-routing';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard');
-  const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => resolveAppRoute(window.location.pathname));
+  const [currentPage, setCurrentPage] = useState<AppPage>(DEFAULT_APP_PAGE);
+  const [currentPathname, setCurrentPathname] = useState(() => normalizePathname(window.location.pathname));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [checkingForUpdates, setCheckingForUpdates] = useState(false);
   const [restartingForUpdate, setRestartingForUpdate] = useState(false);
@@ -111,12 +85,10 @@ function App() {
   } = useAuth();
   const isMobile = useIsMobile();
   const showDesktopUpdateActions = isDesktopRuntime();
+  const currentRoute = useMemo(() => resolveAppRoute(currentPathname), [currentPathname]);
 
   const navigateTo = useCallback(
-    (
-      pathname: '/' | '/login' | '/app',
-      options?: { replace?: boolean; preserveHash?: boolean; preserveSearch?: boolean }
-    ) => {
+    (pathname: string, options?: { replace?: boolean; preserveHash?: boolean; preserveSearch?: boolean }) => {
       const nextUrl = new URL(window.location.href);
       nextUrl.pathname = pathname;
 
@@ -133,7 +105,7 @@ function App() {
       } else {
         window.history.pushState({}, '', nextUrl);
       }
-      setCurrentRoute(resolveAppRoute(nextUrl.pathname));
+      setCurrentPathname(normalizePathname(nextUrl.pathname));
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     },
     []
@@ -181,10 +153,10 @@ function App() {
         { id: 'installation-groups' as const, name: 'Hintaryhmät', icon: Wrench, visible: true },
         { id: 'substitutes' as const, name: 'Korvaavat tuotteet', icon: ArrowsLeftRight, visible: true },
         { id: 'terms' as const, name: 'Tarjousehdot', icon: FileText, visible: true },
-        { id: 'legal' as const, name: 'Sopimusasiat', icon: Shield, visible: canManageUsers },
         { id: 'reports' as const, name: 'Raportointi', icon: ChartBar, visible: true },
         { id: 'users' as const, name: 'Käyttäjät', icon: User, visible: canManageUsers },
         { id: 'settings' as const, name: 'Asetukset', icon: Gear, visible: canManageSharedData },
+        { id: 'legal' as const, name: 'Juridiset dokumentit', icon: Shield, visible: canManageUsers },
         { id: 'account' as const, name: 'Oma tili', icon: User, visible: true },
       ].filter((item) => item.visible),
     [canManageSharedData, canManageUsers]
@@ -192,13 +164,14 @@ function App() {
 
   useEffect(() => {
     if (!navigation.some((item) => item.id === currentPage)) {
-      setCurrentPage('dashboard');
+      setCurrentPage(DEFAULT_APP_PAGE);
+      navigateTo(getAppPagePath(DEFAULT_APP_PAGE), { replace: true });
     }
-  }, [currentPage, navigation]);
+  }, [currentPage, navigateTo, navigation]);
 
   useEffect(() => {
     const syncRoute = () => {
-      setCurrentRoute(resolveAppRoute(window.location.pathname));
+      setCurrentPathname(normalizePathname(window.location.pathname));
     };
 
     window.addEventListener('popstate', syncRoute);
@@ -216,7 +189,7 @@ function App() {
 
     if (user) {
       if (currentRoute !== 'app') {
-        navigateTo('/app', { replace: true });
+        navigateTo(getAppPagePath(DEFAULT_APP_PAGE), { replace: true });
       }
       return;
     }
@@ -232,6 +205,27 @@ function App() {
       navigateTo('/login', { replace: true });
     }
   }, [currentRoute, loading, navigateTo, requiresPasswordReset, user]);
+
+  useEffect(() => {
+    if (loading || !user || currentRoute !== 'app') {
+      return;
+    }
+
+    const requestedPage = resolveAppPage(currentPathname);
+    const nextPage = resolveAccessibleAppPage(requestedPage, {
+      canManageSharedData,
+      canManageUsers,
+    });
+    const canonicalPath = getAppPagePath(nextPage);
+
+    if (currentPage !== nextPage) {
+      setCurrentPage(nextPage);
+    }
+
+    if (currentPathname !== canonicalPath) {
+      navigateTo(canonicalPath, { replace: true });
+    }
+  }, [canManageSharedData, canManageUsers, currentPage, currentPathname, currentRoute, loading, navigateTo, user]);
 
   useEffect(() => {
     if (!showDesktopUpdateActions) {
@@ -418,8 +412,9 @@ function App() {
     variant: accessState.roleBadgeVariant,
   };
 
-  const handleNavigate = (page: Page) => {
+  const handleNavigate = (page: AppPage) => {
     setCurrentPage(page);
+    navigateTo(getAppPagePath(page));
     if (isMobile) {
       setMobileMenuOpen(false);
     }
