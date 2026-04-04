@@ -2,10 +2,12 @@ import { Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ErrorBoundary } from 'react-error-boundary';
 
+import AuthCallbackPage from './components/AuthCallbackPage.tsx';
 import LandingPage from './components/LandingPage.tsx';
 import PublicLegalDocumentPage from './components/legal/PublicLegalDocumentPage.tsx';
 import RouteLoadingFallback from './components/RouteLoadingFallback.tsx';
 import ErrorFallback from './ErrorFallback.tsx';
+import { AUTH_CALLBACK_PATH } from './lib/auth-callback.ts';
 import { resolveLegalDocumentTypeFromPath } from './lib/legal.ts';
 
 import './main.css';
@@ -24,12 +26,15 @@ function normalizePathname(pathname: string) {
 
 const currentPath = normalizePathname(window.location.pathname);
 const isPublicLanding = currentPath === '/';
+const isPublicAuthCallback = currentPath === AUTH_CALLBACK_PATH;
 const publicLegalDocumentType = resolveLegalDocumentTypeFromPath(currentPath);
 
 createRoot(document.getElementById('root')!).render(
   <ErrorBoundary FallbackComponent={ErrorFallback}>
     {isPublicLanding ? (
       <LandingPage onNavigateToLogin={() => window.location.assign('/login')} />
+    ) : isPublicAuthCallback ? (
+      <AuthCallbackPage />
     ) : publicLegalDocumentType ? (
       <PublicLegalDocumentPage documentType={publicLegalDocumentType} />
     ) : (

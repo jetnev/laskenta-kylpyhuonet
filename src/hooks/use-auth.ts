@@ -1,6 +1,7 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { deriveAccessState } from '../lib/access-control';
+import { buildAuthRedirectUrl } from '../lib/auth-callback';
 import type { SignupLegalAcceptanceBundle } from '../lib/legal';
 import {
   createIsolatedSupabaseClient,
@@ -36,6 +37,22 @@ interface RegisterInput {
   password: string;
   organizationName: string;
   legalAcceptance: SignupLegalAcceptanceBundle;
+}
+
+export interface RegisterResult {
+  requiresEmailConfirmation: boolean;
+}
+
+type AuthActionErrorCode = 'email-not-confirmed';
+
+export class AuthActionError extends Error {
+  readonly code: AuthActionErrorCode;
+
+  constructor(code: AuthActionErrorCode, message: string) {
+    super(message);
+    this.name = 'AuthActionError';
+    this.code = code;
+  }
 }
 
 interface LoginInput {
@@ -78,9 +95,10 @@ interface AuthContextValue {
   canManageSharedData: boolean;
   requiresPasswordReset: boolean;
   backendConfigError: string | null;
-  register: (input: RegisterInput) => Promise<void>;
+  register: (input: RegisterInput) => Promise<RegisterResult>;
   login: (input: LoginInput) => Promise<void>;
   logout: () => Promise<void>;
+  resendEmailConfirmation: (email: string) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   resetPassword: (_unused: string, nextPassword: string) => Promise<void>;
   updateProfile: (input: ProfileInput) => Promise<void>;
@@ -247,6 +265,26 @@ function mapLoginErrorMessage(error: unknown) {
   return error.message;
 }
 
+function mapConfirmationResendErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return 'Vahvistusviestin lähettäminen epäonnistui. Yritä uudelleen.';
+  }
+
+  const message = error.message.toLowerCase();
+
+  if (message.includes('too many requests') || message.includes('over_email_send_rate_limit')) {
+    return 'Liian monta vahvistusviestiä lyhyessä ajassa. Odota hetki ja yritä uudelleen.';
+  }
+  if (message.includes('invalid email')) {
+    return 'Anna kelvollinen sähköpostiosoite.';
+  }
+  if (message.includes('email not confirmed')) {
+    return 'Sähköpostiosoite odottaa vielä vahvistusta. Uusi vahvistusviesti voidaan lähettää samaan osoitteeseen.';
+  }
+
+  return error.message;
+}
+
 function mapProvisioningErrorMessage(error: unknown) {
   if (!(error instanceof Error)) {
     return 'Kayttajan luonti epaonnistui.';
@@ -280,14 +318,10 @@ function getInitials(displayName: string) {
 }
 
 function getAuthRedirectUrl() {
-  const configuredUrl = import.meta.env.VITE_SUPABASE_REDIRECT_URL?.trim();
-  const targetUrl = new URL(configuredUrl || window.location.origin, window.location.origin);
-
-  if (!targetUrl.pathname || targetUrl.pathname === '/') {
-    targetUrl.pathname = '/login';
-  }
-
-  return targetUrl.toString();
+  return buildAuthRedirectUrl({
+    configuredUrl: import.meta.env.VITE_SUPABASE_REDIRECT_URL?.trim(),
+    currentOrigin: window.location.origin,
+  });
 }
 
 function toDisplayName(user: User, fallbackDisplayName?: string) {
@@ -939,14 +973,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (error) {
-      throw new Error(error.message);
+      throw new Error(mapProvisioningErrorMessage(error));
     }
 
     if (data.session) {
-      return;
+      return { requiresEmailConfirmation: false };
     }
 
-    throw new Error('Tili luotiin. Vahvista sähköpostiosoitteesi Supabasen lähettämästä viestistä ennen kirjautumista.');
+    return { requiresEmailConfirmation: true };
   };
 
   const login = async ({ email, password }: LoginInput) => {
@@ -958,11 +992,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (error) {
-      throw new Error(mapLoginErrorMessage(error));
+      const message = mapLoginErrorMessage(error);
+
+      if (message === 'Vahvista sähköpostiosoite ennen kirjautumista.') {
+        throw new AuthActionError('email-not-confirmed', message);
+      }
+
+      throw new Error(message);
     }
 
     if (!data.session?.user) {
       throw new Error('Kirjautuminen epäonnistui.');
+    }
+  };
+
+  const resendEmailConfirmation = async (email: string) => {
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!validateEmail(normalizedEmail)) {
+      throw new Error('Anna kelvollinen sähköpostiosoite.');
+    }
+
+    const client = requireSupabase();
+    const { error } = await client.auth.resend({
+      type: 'signup',
+      email: normalizedEmail,
+      options: {
+        emailRedirectTo: getAuthRedirectUrl(),
+      },
+    });
+
+    if (error) {
+      throw new Error(mapConfirmationResendErrorMessage(error));
     }
   };
 
@@ -1276,6 +1337,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     register,
     login,
     logout,
+    resendEmailConfirmation,
     requestPasswordReset,
     resetPassword,
     updateProfile,

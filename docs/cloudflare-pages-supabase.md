@@ -38,9 +38,10 @@ Supabase Dashboardissa:
 1. Mene `Authentication -> URL Configuration`.
 2. Aseta `Site URL` Pages-osoitteeseen, esimerkiksi `https://laskenta-kylpyhuonet.pages.dev`.
 3. Lisää `Redirect URLs` -listaan vähintään:
-   - `https://laskenta-kylpyhuonet.pages.dev`
-   - `http://localhost:5173`
+   - `https://laskenta-kylpyhuonet.pages.dev/auth/callback`
+   - `http://localhost:5173/auth/callback`
 4. Jos aiot käyttää myöhemmin omaa domainia, lisää myös se samaan listaan, esimerkiksi `https://app.yritys.fi`.
+   - Käytä callback-reittiä myös omalla domainilla, esimerkiksi `https://app.yritys.fi/auth/callback`.
 
 ## 4. Cloudflare Pages
 
@@ -55,7 +56,8 @@ Supabase Dashboardissa:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
    - `VITE_SUPABASE_REDIRECT_URL`
-6. Aseta `VITE_SUPABASE_REDIRECT_URL` samaan Pages-osoitteeseen kuin projekti saa, esimerkiksi `https://laskenta-kylpyhuonet.pages.dev`.
+6. Aseta `VITE_SUPABASE_REDIRECT_URL` callback-reittiin, esimerkiksi `https://laskenta-kylpyhuonet.pages.dev/auth/callback`.
+7. Callback-reitin on oltava julkinen, koska sekä sähköpostivahvistus että salasanan palautus palaavat siihen ennen kirjautumista.
 
 ## 5. Password reset
 
@@ -63,8 +65,8 @@ Salasanan palautus käyttää Supabasen sähköpostilinkkiä.
 
 1. Käyttäjä pyytää palautuslinkin sovelluksesta.
 2. Supabase lähettää sähköpostin.
-3. Linkki avaa tämän saman Pages-sovelluksen.
-4. Sovellus näyttää salasanan reset-näkymän.
+3. Linkki avaa julkisen reitin `/auth/callback`.
+4. Callback käsittelee vahvistuksen eksplisiittisesti ja näyttää salasanan vaihtonäkymän ilman, että koko sovellus jää auth-spinneriin.
 
 ## 6. Ensimmäinen käyttäjä
 

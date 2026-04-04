@@ -88,7 +88,8 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(supabaseUrl!, supabaseAnonKey!, {
       auth: {
         autoRefreshToken: true,
-        detectSessionInUrl: true,
+        detectSessionInUrl: false,
+        flowType: 'implicit',
         persistSession: true,
       },
     })
@@ -103,6 +104,7 @@ export function createIsolatedSupabaseClient() {
     auth: {
       autoRefreshToken: false,
       detectSessionInUrl: false,
+      flowType: 'implicit',
       persistSession: false,
     },
   });

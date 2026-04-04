@@ -6,7 +6,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Alert, AlertDescription } from './ui/alert';
 import { Checkbox } from './ui/checkbox';
-import { useAuth } from '../hooks/use-auth';
+import { AuthActionError, useAuth } from '../hooks/use-auth';
 import LegalDocumentLinks from './legal/LegalDocumentLinks';
 import { buildSignupLegalAcceptanceBundle, listPublicActiveLegalDocuments } from '../lib/legal';
 import type { LegalDocumentVersionRow } from '../lib/supabase';
@@ -17,75 +17,8 @@ interface LoginPageProps {
   onNavigateHome: () => void;
 }
 
-function readAuthFeedbackFromLocation() {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  const url = new URL(window.location.href);
-  const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
-  const hashParams = new URLSearchParams(hash);
-  const searchParams = url.searchParams;
-
-  const type = searchParams.get('type') ?? hashParams.get('type');
-  const errorCode = searchParams.get('error_code') ?? hashParams.get('error_code');
-  const errorDescription =
-    searchParams.get('error_description') ??
-    hashParams.get('error_description') ??
-    searchParams.get('error') ??
-    hashParams.get('error');
-  const hasAccessToken = Boolean(hashParams.get('access_token') || hashParams.get('refresh_token'));
-  const hasTokenHash = Boolean(searchParams.get('token_hash'));
-
-  const hasAuthFeedback =
-    Boolean(type) ||
-    Boolean(errorCode) ||
-    Boolean(errorDescription) ||
-    hasAccessToken ||
-    hasTokenHash;
-
-  if (!hasAuthFeedback) {
-    return null;
-  }
-
-  const cleanedUrl = new URL(window.location.href);
-  [
-    'type',
-    'error',
-    'error_code',
-    'error_description',
-    'error_description_code',
-    'token',
-    'token_hash',
-    'code',
-  ].forEach((key) => cleanedUrl.searchParams.delete(key));
-  cleanedUrl.hash = '';
-  window.history.replaceState({}, document.title, cleanedUrl.toString());
-
-  if (errorDescription) {
-    const normalizedError = decodeURIComponent(errorDescription).replace(/\+/g, ' ');
-
-    if (errorCode === 'otp_expired') {
-      return {
-        kind: 'error' as const,
-        message: 'Vahvistuslinkki on vanhentunut. Pyydä uusi vahvistusviesti ja yritä uudelleen.',
-      };
-    }
-
-    return {
-      kind: 'error' as const,
-      message: `Sähköpostin vahvistus epäonnistui: ${normalizedError}`,
-    };
-  }
-
-  if (type === 'signup' || hasTokenHash || hasAccessToken) {
-    return {
-      kind: 'success' as const,
-      message: 'Sähköpostiosoite vahvistettiin onnistuneesti. Voit nyt kirjautua sisään.',
-    };
-  }
-
-  return null;
+function normalizeEmailValue(email: string) {
+  return email.trim().toLowerCase();
 }
 
 function getActionErrorMessage(error: unknown) {
@@ -119,6 +52,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
   const {
     login,
     register,
+    resendEmailConfirmation,
     requestPasswordReset,
     resetPassword,
     requiresPasswordReset,
@@ -126,8 +60,10 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
   } = useAuth();
   const [view, setView] = useState<AuthView>('login');
   const [submitting, setSubmitting] = useState(false);
+  const [resendingConfirmation, setResendingConfirmation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState<string | null>(null);
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({
@@ -152,24 +88,6 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
       setView('reset');
     }
   }, [requiresPasswordReset]);
-
-  useEffect(() => {
-    const feedback = readAuthFeedbackFromLocation();
-    if (!feedback) {
-      return;
-    }
-
-    if (feedback.kind === 'error') {
-      setError(feedback.message);
-      setInfoMessage(null);
-      setView('login');
-      return;
-    }
-
-    setInfoMessage(feedback.message);
-    setError(null);
-    setView('login');
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -251,6 +169,75 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
     }
   };
 
+  const handleLoginSubmit = () => {
+    void runAction(async () => {
+      try {
+        await login(loginForm);
+        setPendingConfirmationEmail(null);
+      } catch (reason) {
+        if (reason instanceof AuthActionError && reason.code === 'email-not-confirmed') {
+          setPendingConfirmationEmail(normalizeEmailValue(loginForm.email));
+        }
+
+        throw reason;
+      }
+    });
+  };
+
+  const handleRegisterSubmit = async () => {
+    const result = await register({
+      displayName: registerForm.displayName,
+      organizationName: registerForm.organizationName,
+      email: registerForm.email,
+      password: registerForm.password,
+      legalAcceptance: buildSignupLegalAcceptanceBundle(legalDocuments, {
+        acceptedTermsAndPrivacy: registrationChecks.acceptedTermsAndPrivacy,
+        authorityConfirmed: registrationChecks.authorityConfirmed,
+        locale: navigator.language || 'fi-FI',
+        userAgent: navigator.userAgent || 'Tuntematon selain',
+      }),
+    });
+
+    if (!result.requiresEmailConfirmation) {
+      return;
+    }
+
+    const normalizedEmail = normalizeEmailValue(registerForm.email);
+    setPendingConfirmationEmail(normalizedEmail);
+    setLoginForm({ email: normalizedEmail, password: '' });
+    setRegisterForm({
+      displayName: '',
+      organizationName: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+    });
+    setRegistrationChecks({
+      acceptedTermsAndPrivacy: false,
+      authorityConfirmed: false,
+    });
+    setView('login');
+    setInfoMessage(`Tili luotiin. Vahvista sähköpostiosoite ${normalizedEmail} sähköpostissa olevasta linkistä ennen kirjautumista.`);
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!pendingConfirmationEmail) {
+      return;
+    }
+
+    setResendingConfirmation(true);
+    setError(null);
+
+    try {
+      await resendEmailConfirmation(pendingConfirmationEmail);
+      setInfoMessage(`Uusi vahvistusviesti lähetettiin osoitteeseen ${pendingConfirmationEmail}.`);
+    } catch (reason) {
+      setError(getActionErrorMessage(reason));
+    } finally {
+      setResendingConfirmation(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f5f7fb] text-slate-950">
       <div className="absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.10),transparent_44%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.06),transparent_30%)] pointer-events-none" />
@@ -314,12 +301,33 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
                 </Alert>
               )}
 
+              {view === 'login' && pendingConfirmationEmail && (
+                <Alert>
+                  <AlertDescription>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <span>
+                        Sähköpostiosoitetta {pendingConfirmationEmail} ei ole vielä vahvistettu. Lähetä uusi vahvistusviesti,
+                        jos alkuperäinen linkki on vanhentunut tai kadonnut.
+                      </span>
+                      <Button
+                        disabled={resendingConfirmation || submitting}
+                        onClick={() => void handleResendConfirmation()}
+                        type="button"
+                        variant="outline"
+                      >
+                        {resendingConfirmation ? 'Lähetetään...' : 'Lähetä uudelleen'}
+                      </Button>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {view === 'login' && (
                 <form
                   className="space-y-4"
                   onSubmit={(event) => {
                     event.preventDefault();
-                    void runAction(() => login(loginForm));
+                    handleLoginSubmit();
                   }}
                 >
                   <div className="space-y-2">
@@ -376,9 +384,8 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
                       return;
                     }
 
-                    let legalAcceptance;
                     try {
-                      legalAcceptance = buildSignupLegalAcceptanceBundle(legalDocuments, {
+                      buildSignupLegalAcceptanceBundle(legalDocuments, {
                         acceptedTermsAndPrivacy: registrationChecks.acceptedTermsAndPrivacy,
                         authorityConfirmed: registrationChecks.authorityConfirmed,
                         locale: navigator.language || 'fi-FI',
@@ -389,15 +396,9 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
                       return;
                     }
 
-                    void runAction(() =>
-                      register({
-                        displayName: registerForm.displayName,
-                        organizationName: registerForm.organizationName,
-                        email: registerForm.email,
-                        password: registerForm.password,
-                        legalAcceptance,
-                      })
-                    );
+                    void runAction(async () => {
+                      await handleRegisterSubmit();
+                    });
                   }}
                 >
                   <div className="space-y-2">
