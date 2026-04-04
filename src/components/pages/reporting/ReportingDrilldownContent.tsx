@@ -180,12 +180,12 @@ function InfoField({
   return (
     <div className="min-w-0">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className="mt-1 truncate text-sm text-foreground" title={value}>{value}</p>
+      <p className="mt-1 truncate text-sm font-medium text-foreground" title={value}>{value}</p>
     </div>
   );
 }
 
-function MetricBlock({
+function StatItem({
   label,
   value,
   valueClassName,
@@ -195,9 +195,9 @@ function MetricBlock({
   valueClassName?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
+    <div className="min-w-[5.75rem]">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className={cn('mt-2 font-mono text-lg font-semibold tabular-nums text-foreground', valueClassName)}>{value}</p>
+      <p className={cn('mt-1 font-mono text-lg font-semibold tracking-[-0.03em] tabular-nums text-foreground', valueClassName)}>{value}</p>
     </div>
   );
 }
@@ -213,9 +213,10 @@ function renderFamiliesList(
   const countLabel = families.length === 1 ? '1 tarjouskohde' : `${families.length} tarjouskohdetta`;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-4">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1 pb-2">
         <p className="text-sm font-semibold text-foreground">{countLabel}</p>
+        <p className="text-xs text-muted-foreground">Tarkista kohteet nopeasti ja avaa tarjous jatkotoimia varten.</p>
       </div>
       {families.map((family) => {
         const heading = getFamilyHeading(family);
@@ -228,52 +229,60 @@ function renderFamiliesList(
         return (
           <article
             key={family.id}
-            className="rounded-3xl border border-border/70 bg-card p-5 shadow-[0_18px_45px_-42px_rgba(15,23,42,0.5)]"
+            className="rounded-[28px] border border-border/60 bg-background px-5 py-5 shadow-[0_22px_60px_-48px_rgba(15,23,42,0.35)] sm:px-6 sm:py-6"
           >
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0 flex-1 space-y-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className="font-mono text-xs tabular-nums">
-                    {family.latestQuoteNumber}
-                  </Badge>
-                  <CompactBadge
-                    label={family.latestStatusLabel}
-                    variant={badgeVariant(family.latestStatusVariant)}
-                    className="max-w-full"
-                  />
-                </div>
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <span className="inline-flex h-7 items-center rounded-full bg-muted px-3 font-mono text-[11px] font-semibold tracking-[0.08em] text-foreground/80" title={family.latestQuoteNumber}>
+                      {family.latestQuoteNumber}
+                    </span>
+                    <CompactBadge
+                      label={family.latestStatusLabel}
+                      variant={badgeVariant(family.latestStatusVariant)}
+                      className="max-w-full"
+                    />
+                  </div>
 
-                <div className="min-w-0 space-y-3">
-                  <h3 className="line-clamp-2 break-words text-base font-semibold leading-6 text-foreground" title={heading}>
+                  <h3 className="mt-3 line-clamp-2 break-words text-lg font-semibold leading-6 tracking-[-0.02em] text-foreground sm:text-[1.15rem]" title={heading}>
                     {heading}
                   </h3>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <InfoField label="Asiakas" value={family.customerName} />
-                    <InfoField label="Vastuuhenkilö" value={getFamilyOwnerLabel(family)} />
-                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:min-w-[15rem] lg:flex-none lg:justify-items-end">
+                  <StatItem label="Arvo" value={fc(family.latestSubtotal)} />
+                  <StatItem
+                    label="Kate"
+                    value={fp(family.latestMarginPercent)}
+                    valueClassName={family.belowTargetMargin ? 'text-red-600 dark:text-red-400' : undefined}
+                  />
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[340px] xl:max-w-[360px] xl:flex-none">
-                <MetricBlock label="Arvo" value={fc(family.latestSubtotal)} />
-                <MetricBlock
-                  label="Kate"
-                  value={fp(family.latestMarginPercent)}
-                  valueClassName={family.belowTargetMargin ? 'text-red-600 dark:text-red-400' : undefined}
-                />
+              <div className="grid gap-4 border-t border-border/50 pt-4 sm:grid-cols-2 sm:gap-x-6">
+                <InfoField label="Asiakas" value={family.customerName} />
+                <InfoField label="Vastuuhenkilö" value={getFamilyOwnerLabel(family)} />
+              </div>
+
+              <div className="flex flex-col gap-4 border-t border-border/50 pt-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Syy</p>
+                  <p className="mt-1 text-sm leading-6 text-foreground/90" title={reason}>
+                    {reason}
+                  </p>
+                </div>
+
                 <Button
-                  className="w-full sm:col-span-2"
+                  variant="outline"
+                  size="sm"
+                  className="self-start rounded-full border-border/70 px-4 shadow-none sm:self-end"
                   onClick={() => options?.onOpenQuote?.(family)}
                   disabled={!options?.onOpenQuote}
                 >
                   Avaa tarjous
                 </Button>
               </div>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-border/60 bg-muted/35 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Miksi näkyy tässä</p>
-              <p className="mt-2 text-sm leading-6 text-foreground">{reason}</p>
             </div>
           </article>
         );
@@ -398,13 +407,13 @@ export function getReportingDrilldownDescription(kind: ReportingDrillKind | null
   switch (kind) {
     case 'families':
     case 'family-detail':
-      return 'Avaa alla olevat tarjoukset yksi kerrallaan ja korjaa ensin näkyvin syy.';
+      return 'Tarkista kohteen tila, arvo, kate ja vastuuhenkilö. Avaa tarjous jatkotoimia varten.';
     case 'customers':
-      return 'Skannaa asiakkaat nopeasti ja etsi poikkeamat ennen tarkempaa jatkoselvitystä.';
+      return 'Skannaa asiakkaat nopeasti ja poraudu tarvittaessa tarkempaan tarjousnäkymään.';
     case 'projects':
-      return 'Tarkista projektipoikkeamat nopeasti ja arvioi mitkä kohteet vaativat seuraavan toimenpiteen.';
+      return 'Tarkista projektipoikkeamat, vastuuhenkilöt ja kohteet jotka vaativat seuraavan toimenpiteen.';
     default:
-      return 'Tarkista poikkeavat kohteet ja avaa seuraavaksi ne, jotka vaativat välittömän toimenpiteen.';
+      return 'Tarkista poikkeavat kohteet ja avaa tarvittavat tarjoukset seuraavaa toimenpidettä varten.';
   }
 }
 

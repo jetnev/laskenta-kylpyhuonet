@@ -58,7 +58,7 @@ const project = {
 } as ReportProjectSummary;
 
 describe('ReportingDrilldownContent', () => {
-  it('renders family drill-downs as action cards with a clear CTA and long-text handling', () => {
+  it('renders family drill-downs as lighter action cards with a clear hierarchy and CTA', () => {
     const markup = renderToStaticMarkup(
       <ReportingDrilldownContent
         kind="families"
@@ -73,15 +73,17 @@ describe('ReportingDrilldownContent', () => {
     expect(markup).toContain('2 tarjouskohdetta');
     expect(markup).toContain('Avaa tarjous');
     expect(markup.match(/Avaa tarjous/g)).toHaveLength(2);
-    expect(markup).toContain('Miksi näkyy tässä');
+    expect(markup).toContain('Syy');
     expect(markup).toContain('line-clamp-2');
-    expect(markup).toContain('truncate text-sm text-foreground');
+    expect(markup).toContain('grid grid-cols-2 gap-x-6 gap-y-3');
+    expect(markup).toContain('border-t border-border/50 pt-4');
+    expect(markup).toContain('rounded-full border-border/70 px-4');
+    expect(markup).toContain('rounded-[28px]');
     expect(markup).toContain(longQuoteName);
     expect(markup).toContain(longCustomerName);
     expect(markup).toContain(longOwnerName);
     expect(markup).toContain('Kate jää 4,6 prosenttiyksikköä tavoitteen alle.');
-    expect(markup).toContain('sm:grid-cols-2');
-    expect(markup).toContain('xl:flex-row');
+    expect(markup).not.toContain('Miksi näkyy tässä');
   });
 
   it('handles a single family card without collapsing the layout', () => {
@@ -117,7 +119,7 @@ describe('ReportingDrilldownContent', () => {
   });
 
   it('describes the action-list strategy for the dialog', () => {
-    expect(getReportingDrilldownDescription('families')).toContain('Avaa alla olevat tarjoukset');
-    expect(getReportingDrilldownDescription('projects')).toContain('projektipoikkeamat nopeasti');
+    expect(getReportingDrilldownDescription('families')).toContain('tila, arvo, kate ja vastuuhenkilö');
+    expect(getReportingDrilldownDescription('projects')).toContain('projektipoikkeamat, vastuuhenkilöt');
   });
 });

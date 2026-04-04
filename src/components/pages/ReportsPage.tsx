@@ -770,23 +770,23 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
 
       {/* DRILL-DOWN DIALOG */}
       <Dialog open={drill !== null} onOpenChange={(open) => { if (!open) closeDrill(); }}>
-        <DialogContent className="max-h-[88vh] w-[min(96vw,76rem)] max-w-[76rem] overflow-hidden p-0">
-          <DialogHeader className="border-b bg-muted/20 px-6 pb-5 pt-6 pr-14 sm:px-8 sm:pb-6 sm:pt-7">
+        <DialogContent className="max-h-[90vh] w-[min(96vw,78rem)] max-w-[78rem] overflow-hidden rounded-[30px] border-border/70 bg-background p-0 shadow-[0_40px_120px_-54px_rgba(15,23,42,0.56)]">
+          <DialogHeader className="border-b border-border/50 bg-gradient-to-b from-muted/25 via-background to-background px-6 pb-6 pt-7 pr-14 sm:px-8 sm:pb-7 sm:pt-8">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-2">
-                <DialogTitle className="text-xl leading-tight sm:text-2xl">{drill?.title ?? 'Toimenpiteet'}</DialogTitle>
-                <DialogDescription className="max-w-3xl text-sm leading-6">
+              <div className="space-y-2.5">
+                <DialogTitle className="text-2xl leading-tight tracking-[-0.03em] sm:text-[1.9rem]">{drill?.title ?? 'Toimenpiteet'}</DialogTitle>
+                <DialogDescription className="max-w-2xl text-sm leading-6">
                   {getReportingDrilldownDescription(drill?.kind ?? null)}
                 </DialogDescription>
               </div>
-              <Badge variant="secondary" className="w-fit shrink-0 tabular-nums">
+              <Badge variant="outline" className="w-fit shrink-0 rounded-full bg-background/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] tabular-nums">
                 {drillCount} {drillCount === 1 ? 'kohde' : 'kohdetta'}
               </Badge>
             </div>
           </DialogHeader>
-          <div className="px-6 pb-6 pt-5 sm:px-8 sm:pb-8">
+          <div className="px-6 pb-7 pt-6 sm:px-8 sm:pb-8">
             <ScrollArea className="max-h-[70vh] w-full">
-              <div className="pr-4 sm:pr-6">
+              <div className="pr-2 sm:pr-4">
                 <ReportingDrilldownContent
                   kind={drill?.kind ?? null}
                   title={drill?.title}
