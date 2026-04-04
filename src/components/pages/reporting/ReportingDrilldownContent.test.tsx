@@ -12,14 +12,25 @@ const family = {
   id: 'family-1',
   latestQuoteTitle: longQuoteName,
   projectName: 'Porrashuoneremontti vaihe 3',
+  projectId: 'project-1',
+  latestQuoteId: 'quote-1',
   latestQuoteNumber: 'TAR-2026-0001',
   customerName: longCustomerName,
+  latestStatus: 'sent',
   latestStatusVariant: 'secondary',
   latestStatusLabel: 'Lähetetty ja odottaa päätöstä',
   latestSubtotal: 128000,
   latestMarginPercent: 19.4,
+  marginGapPercent: -4.6,
+  belowTargetMargin: true,
   revisionCount: 6,
   ownerLabel: longOwnerName,
+  isOpen: true,
+  hasOwner: true,
+  ageDays: 18,
+  expiresInDays: 5,
+  actualValue: null,
+  primaryDeviationReason: 'Tarjouskate alittaa tavoitteen',
   lastActivityAt: '2026-04-04T10:00:00.000Z',
 } as QuoteFamilySummary;
 
@@ -47,17 +58,47 @@ const project = {
 } as ReportProjectSummary;
 
 describe('ReportingDrilldownContent', () => {
-  it('renders fixed-layout family tables with truncation and compact columns', () => {
+  it('renders family drill-downs as action cards with a clear CTA and long-text handling', () => {
     const markup = renderToStaticMarkup(
-      <ReportingDrilldownContent kind="families" families={[family, family]} customers={[]} projects={[]} />
+      <ReportingDrilldownContent
+        kind="families"
+        title="Tarjouskate alittaa tavoitteen"
+        families={[family, family]}
+        customers={[]}
+        projects={[]}
+        onOpenQuote={() => undefined}
+      />
     );
 
-    expect(markup).toContain('table-fixed');
-    expect(markup).toContain('min-w-[980px]');
+    expect(markup).toContain('2 tarjouskohdetta');
+    expect(markup).toContain('Avaa tarjous');
+    expect(markup.match(/Avaa tarjous/g)).toHaveLength(2);
+    expect(markup).toContain('Miksi näkyy tässä');
     expect(markup).toContain('line-clamp-2');
+    expect(markup).toContain('truncate text-sm text-foreground');
     expect(markup).toContain(longQuoteName);
+    expect(markup).toContain(longCustomerName);
     expect(markup).toContain(longOwnerName);
-    expect(markup).toContain('inline-flex max-w-full items-center whitespace-nowrap');
+    expect(markup).toContain('Kate jää 4,6 prosenttiyksikköä tavoitteen alle.');
+    expect(markup).toContain('sm:grid-cols-2');
+    expect(markup).toContain('xl:flex-row');
+  });
+
+  it('handles a single family card without collapsing the layout', () => {
+    const markup = renderToStaticMarkup(
+      <ReportingDrilldownContent
+        kind="family-detail"
+        title="TAR-2026-0001"
+        families={[family]}
+        customers={[]}
+        projects={[]}
+        onOpenQuote={() => undefined}
+      />
+    );
+
+    expect(markup).toContain('1 tarjouskohde');
+    expect(markup.match(/Avaa tarjous/g)).toHaveLength(1);
+    expect(markup).toContain('Tarjouskate alittaa tavoitteen');
   });
 
   it('keeps customer and project drill-down tables compact with titles for long text', () => {
@@ -75,8 +116,8 @@ describe('ReportingDrilldownContent', () => {
     expect(projectMarkup).toContain('title="Hyvin pitkä projektille annettu nimi joka ei saa mennä muiden sarakkeiden päälle modaalissa');
   });
 
-  it('describes the horizontal-scroll and truncation strategy for the dialog', () => {
-    expect(getReportingDrilldownDescription('families')).toContain('vaakasuunnassa');
-    expect(getReportingDrilldownDescription('projects')).toContain('euro- tai vaihe-sarakkeet');
+  it('describes the action-list strategy for the dialog', () => {
+    expect(getReportingDrilldownDescription('families')).toContain('Avaa alla olevat tarjoukset');
+    expect(getReportingDrilldownDescription('projects')).toContain('projektipoikkeamat nopeasti');
   });
 });

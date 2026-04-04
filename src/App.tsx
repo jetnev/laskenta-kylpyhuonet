@@ -610,7 +610,7 @@ function App() {
           {currentPage === 'substitutes' && <SubstituteProductsPage />}
           {currentPage === 'terms' && <TermsPage />}
           {currentPage === 'legal' && <LegalDocumentsPage />}
-          {currentPage === 'reports' && <ReportsPage />}
+          {currentPage === 'reports' && <ReportsPage onNavigate={handleNavigateLocation} />}
           {currentPage === 'users' && <UsersPage />}
           {currentPage === 'settings' && <SettingsPage />}
           {currentPage === 'account' && <AccountPage />}

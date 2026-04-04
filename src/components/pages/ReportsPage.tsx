@@ -48,6 +48,7 @@ import { useAuth } from '../../hooks/use-auth';
 import { getResponsibleUserLabel } from '../../lib/ownership';
 import { exportReportsToPDF } from '../../lib/export';
 import ReportingDrilldownContent, { getReportingDrilldownDescription } from './reporting/ReportingDrilldownContent';
+import type { AppLocationState } from '../../lib/app-routing';
 import {
   buildReportingModel,
   resolveReportingFilters,
@@ -128,7 +129,11 @@ function ActionRow({ item, onDrill }: { item: ReportActionItem; onDrill: (d: Dri
   );
 }
 
-export default function ReportsPage() {
+interface ReportsPageProps {
+  onNavigate?: (location: AppLocationState, options?: { replace?: boolean }) => void;
+}
+
+export default function ReportsPage({ onNavigate }: ReportsPageProps) {
   const { user, users, canManageUsers } = useAuth();
   const { projects } = useProjects();
   const { quotes } = useQuotes();
@@ -164,6 +169,16 @@ export default function ReportsPage() {
   const openDrill = useCallback((d: DrillState) => setDrill(d), []);
   const closeDrill = useCallback(() => setDrill(null), []);
 
+  const openQuoteFromDrill = useCallback((family: QuoteFamilySummary) => {
+    closeDrill();
+    onNavigate?.({
+      page: 'projects',
+      projectId: family.projectId,
+      quoteId: family.latestQuoteId,
+      editor: 'quote',
+    });
+  }, [closeDrill, onNavigate]);
+
   const drillFamilies = useMemo(() => {
     if (!drill || (drill.kind !== 'families' && drill.kind !== 'family-detail')) return [];
     const idSet = new Set(drill.ids);
@@ -181,6 +196,12 @@ export default function ReportsPage() {
     const idSet = new Set(drill.ids);
     return model.projects.filter((p) => idSet.has(p.id));
   }, [drill, model.projects]);
+
+  const drillCount = drill?.kind === 'customers'
+    ? drillCustomers.length
+    : drill?.kind === 'projects'
+      ? drillProjects.length
+      : drillFamilies.length;
 
   const exportToPDF = useCallback(() => {
     try {
@@ -691,19 +712,30 @@ export default function ReportsPage() {
 
       {/* DRILL-DOWN DIALOG */}
       <Dialog open={drill !== null} onOpenChange={(open) => { if (!open) closeDrill(); }}>
-        <DialogContent className="max-h-[85vh] max-w-[1100px] overflow-hidden p-0">
-          <DialogHeader className="border-b px-6 pb-4 pt-6 pr-14">
-            <DialogTitle>{drill?.title ?? 'Tarkasteluikkuna'}</DialogTitle>
-            <DialogDescription>{getReportingDrilldownDescription(drill?.kind ?? null)}</DialogDescription>
+        <DialogContent className="max-h-[88vh] w-[min(96vw,76rem)] max-w-[76rem] overflow-hidden p-0">
+          <DialogHeader className="border-b bg-muted/20 px-6 pb-5 pt-6 pr-14 sm:px-8 sm:pb-6 sm:pt-7">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-2">
+                <DialogTitle className="text-xl leading-tight sm:text-2xl">{drill?.title ?? 'Toimenpiteet'}</DialogTitle>
+                <DialogDescription className="max-w-3xl text-sm leading-6">
+                  {getReportingDrilldownDescription(drill?.kind ?? null)}
+                </DialogDescription>
+              </div>
+              <Badge variant="secondary" className="w-fit shrink-0 tabular-nums">
+                {drillCount} {drillCount === 1 ? 'kohde' : 'kohdetta'}
+              </Badge>
+            </div>
           </DialogHeader>
-          <div className="px-6 pb-6 pt-4">
-            <ScrollArea className="max-h-[68vh] w-full">
-              <div className="pr-4">
+          <div className="px-6 pb-6 pt-5 sm:px-8 sm:pb-8">
+            <ScrollArea className="max-h-[70vh] w-full">
+              <div className="pr-4 sm:pr-6">
                 <ReportingDrilldownContent
                   kind={drill?.kind ?? null}
+                  title={drill?.title}
                   families={drillFamilies}
                   customers={drillCustomers}
                   projects={drillProjects}
+                  onOpenQuote={openQuoteFromDrill}
                 />
               </div>
             </ScrollArea>
