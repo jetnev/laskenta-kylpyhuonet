@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash, FileText, Building, Users, MagnifyingGlass, X } from '@phosphor-icons/react';
+import { Plus, Pencil, Trash, FileText, Building, Users, MagnifyingGlass, X, Clock, FolderOpen } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { useProjects, useCustomers, useQuotes, useQuoteRows, useQuoteTerms, useSettings, useStarterWorkspaceTemplate } from '../../hooks/use-data';
 import { useAuth } from '../../hooks/use-auth';
 import { toast } from 'sonner';
 import { Project, Customer } from '../../lib/types';
+import { cn } from '../../lib/utils';
 import { filterOwnedRecords, getResponsibleUserLabel } from '../../lib/ownership';
 import QuoteEditor from '../QuoteEditor';
 import FieldHelpLabel from '../FieldHelpLabel';
@@ -35,16 +37,27 @@ const PAGE_FIELD_HELP = {
   ownerFilter: 'Rajaa näkyviin vain tietyn vastuuhenkilön asiakkaat, projektit ja tarjoukset. Omistaja tai admin voi vaihtaa näkymää tästä.',
 } as const;
 
+const QUOTE_STATUS_META = {
+  draft: { label: 'Luonnos', variant: 'secondary' as const },
+  sent: { label: 'Lähetetty', variant: 'outline' as const },
+  accepted: { label: 'Hyväksytty', variant: 'default' as const },
+  rejected: { label: 'Hylätty', variant: 'destructive' as const },
+};
+
+function sortByUpdatedAtDesc<T extends { updatedAt: string }>(items: T[]) {
+  return [...items].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+}
+
 export default function ProjectsPage() {
   const starterWorkspace = useStarterWorkspaceTemplate();
   const { user, users, canManageUsers } = useAuth();
   const { projects, addProject, updateProject, deleteProject } = useProjects();
   const { customers, addCustomer, updateCustomer, deleteCustomer, getCustomer } = useCustomers();
-  const { addQuote, getQuotesForProject, deleteQuote } = useQuotes();
+  const { quotes, addQuote, getQuotesForProject, deleteQuote } = useQuotes();
   const { rows, deleteRow } = useQuoteRows();
   const { createQuoteTermsSnapshot, getDefaultTerms } = useQuoteTerms();
   const { settings } = useSettings();
-  
+
   const [showProjectDialog, setShowProjectDialog] = useState(false);
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
   const [showQuoteEditor, setShowQuoteEditor] = useState(false);
@@ -56,6 +69,7 @@ export default function ProjectsPage() {
   const [searchProjects, setSearchProjects] = useState('');
   const [searchCustomers, setSearchCustomers] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('all');
+  const [sidePanelTab, setSidePanelTab] = useState<'summary' | 'customers'>('customers');
 
   const responsibleUsers = [user, ...users]
     .filter((candidate): candidate is NonNullable<typeof user> => Boolean(candidate))
@@ -77,7 +91,7 @@ export default function ProjectsPage() {
 
   const resolveResponsibleUserLabel = (ownerUserId?: string | null) =>
     getResponsibleUserLabel(ownerUserId, responsibleUsers);
-  
+
   const [projectForm, setProjectForm] = useState({
     customerId: '',
     name: '',
@@ -86,7 +100,7 @@ export default function ProjectsPage() {
     ownerUserId: '',
     customOptions: [] as { id: string; label: string; value: string }[],
   });
-  
+
   const [customerForm, setCustomerForm] = useState({
     name: '',
     contactPerson: '',
@@ -96,50 +110,72 @@ export default function ProjectsPage() {
     ownerUserId: '',
   });
 
-  const filteredProjects = filterOwnedRecords(projects, ownerFilter).filter(project => {
-    const customer = getCustomer(project.customerId);
-    const projectQuotes = filterOwnedRecords(getQuotesForProject(project.id), ownerFilter);
-    const searchLower = searchProjects.trim().toLowerCase();
-    const projectResponsibleLabel = resolveResponsibleUserLabel(project.ownerUserId || customer?.ownerUserId).toLowerCase();
+  const filteredProjects = sortByUpdatedAtDesc(
+    filterOwnedRecords(projects, ownerFilter).filter((project) => {
+      const customer = getCustomer(project.customerId);
+      const projectQuotes = filterOwnedRecords(getQuotesForProject(project.id), ownerFilter);
+      const searchLower = searchProjects.trim().toLowerCase();
+      const projectResponsibleLabel = resolveResponsibleUserLabel(project.ownerUserId || customer?.ownerUserId).toLowerCase();
 
-    if (!searchLower) {
-      return true;
-    }
+      if (!searchLower) {
+        return true;
+      }
 
-    return (
-      project.name.toLowerCase().includes(searchLower) ||
-      project.site.toLowerCase().includes(searchLower) ||
-      projectResponsibleLabel.includes(searchLower) ||
-      (customer && customer.name.toLowerCase().includes(searchLower)) ||
-      projectQuotes.some((quote) =>
-        [
-          quote.title,
-          quote.quoteNumber,
-          resolveResponsibleUserLabel(quote.ownerUserId || project.ownerUserId || customer?.ownerUserId),
-          quote.status === 'draft' ? 'luonnos' :
-          quote.status === 'sent' ? 'lähetetty' :
-          quote.status === 'accepted' ? 'hyväksytty' :
-          'hylätty',
-        ]
-          .filter(Boolean)
-          .some((value) => value.toLowerCase().includes(searchLower))
-      )
-    );
-  });
+      return (
+        project.name.toLowerCase().includes(searchLower) ||
+        project.site.toLowerCase().includes(searchLower) ||
+        projectResponsibleLabel.includes(searchLower) ||
+        (customer && customer.name.toLowerCase().includes(searchLower)) ||
+        projectQuotes.some((quote) =>
+          [
+            quote.title,
+            quote.quoteNumber,
+            resolveResponsibleUserLabel(quote.ownerUserId || project.ownerUserId || customer?.ownerUserId),
+            quote.status === 'draft'
+              ? 'luonnos'
+              : quote.status === 'sent'
+                ? 'lähetetty'
+                : quote.status === 'accepted'
+                  ? 'hyväksytty'
+                  : 'hylätty',
+          ]
+            .filter(Boolean)
+            .some((value) => value.toLowerCase().includes(searchLower))
+        )
+      );
+    })
+  );
 
-  const filteredCustomers = filterOwnedRecords(customers, ownerFilter).filter((customer) => {
-    const searchLower = searchCustomers.trim().toLowerCase();
-    if (!searchLower) {
-      return true;
-    }
+  const filteredCustomers = sortByUpdatedAtDesc(
+    filterOwnedRecords(customers, ownerFilter).filter((customer) => {
+      const searchLower = searchCustomers.trim().toLowerCase();
+      if (!searchLower) {
+        return true;
+      }
 
-    return (
-      customer.name.toLowerCase().includes(searchLower) ||
-      (customer.contactPerson && customer.contactPerson.toLowerCase().includes(searchLower)) ||
-      (customer.email && customer.email.toLowerCase().includes(searchLower)) ||
-      resolveResponsibleUserLabel(customer.ownerUserId).toLowerCase().includes(searchLower)
-    );
-  });
+      return (
+        customer.name.toLowerCase().includes(searchLower) ||
+        (customer.contactPerson && customer.contactPerson.toLowerCase().includes(searchLower)) ||
+        (customer.email && customer.email.toLowerCase().includes(searchLower)) ||
+        resolveResponsibleUserLabel(customer.ownerUserId).toLowerCase().includes(searchLower)
+      );
+    })
+  );
+
+  const visibleQuotes = sortByUpdatedAtDesc(filterOwnedRecords(quotes, ownerFilter));
+  const selectedProject = filteredProjects.find((project) => project.id === selectedProjectId) ?? null;
+  const selectedCustomer = selectedProject ? getCustomer(selectedProject.customerId) : null;
+  const selectedProjectQuotes = selectedProject
+    ? sortByUpdatedAtDesc(filterOwnedRecords(getQuotesForProject(selectedProject.id), ownerFilter))
+    : [];
+  const projectQuoteStats = {
+    draft: selectedProjectQuotes.filter((quote) => quote.status === 'draft').length,
+    sent: selectedProjectQuotes.filter((quote) => quote.status === 'sent').length,
+    accepted: selectedProjectQuotes.filter((quote) => quote.status === 'accepted').length,
+    rejected: selectedProjectQuotes.filter((quote) => quote.status === 'rejected').length,
+  };
+  const latestSelectedQuote = selectedProjectQuotes[0];
+  const draftQuotes = visibleQuotes.filter((quote) => quote.status === 'draft');
 
   useEffect(() => {
     if (!starterWorkspace) {
@@ -149,14 +185,35 @@ export default function ProjectsPage() {
     toast.success('Lisäsimme valmiiksi malliasiakkaan, malliprojektin ja mallitarjouksen. Voit muokata niitä suoraan oman työn pohjaksi.');
   }, [starterWorkspace]);
 
+  useEffect(() => {
+    if (!selectedProjectId) {
+      return;
+    }
+
+    const projectStillVisible = filteredProjects.some((project) => project.id === selectedProjectId);
+    if (!projectStillVisible) {
+      setSelectedProjectId(null);
+      setSelectedQuoteId(null);
+      setSelectedQuotes(new Set());
+      setShowQuoteEditor(false);
+      setSidePanelTab('customers');
+    }
+  }, [filteredProjects, selectedProjectId]);
+
+  useEffect(() => {
+    if (selectedProject) {
+      setSidePanelTab('summary');
+    }
+  }, [selectedProject]);
+
   const handleSaveProject = () => {
     if (!projectForm.customerId || !projectForm.name || !projectForm.site) {
       toast.error('Täytä kaikki pakolliset kentät');
       return;
     }
 
-    const selectedCustomer = customers.find((customer) => customer.id === projectForm.customerId);
-    const ownerUserId = projectForm.ownerUserId || selectedCustomer?.ownerUserId || user?.id;
+    const selectedFormCustomer = customers.find((customer) => customer.id === projectForm.customerId);
+    const ownerUserId = projectForm.ownerUserId || selectedFormCustomer?.ownerUserId || user?.id;
     if (!ownerUserId) {
       toast.error('Valitse projektille vastuuhenkilö');
       return;
@@ -174,7 +231,7 @@ export default function ProjectsPage() {
       addProject(nextProject);
       toast.success('Projekti luotu');
     }
-    
+
     setShowProjectDialog(false);
     setEditingProject(null);
     setProjectForm({ customerId: '', name: '', site: '', regionCoefficient: 1.0, ownerUserId: resolveDefaultOwnerUserId(), customOptions: [] });
@@ -204,7 +261,7 @@ export default function ProjectsPage() {
       addCustomer(nextCustomer);
       toast.success('Asiakas luotu');
     }
-    
+
     setShowCustomerDialog(false);
     setEditingCustomer(null);
     setCustomerForm({ name: '', contactPerson: '', email: '', phone: '', address: '', ownerUserId: resolveDefaultOwnerUserId() });
@@ -239,21 +296,24 @@ export default function ProjectsPage() {
 
   const deleteQuoteWithRows = (quoteId: string) => {
     rows
-      .filter(row => row.quoteId === quoteId)
-      .forEach(row => deleteRow(row.id));
+      .filter((row) => row.quoteId === quoteId)
+      .forEach((row) => deleteRow(row.id));
     deleteQuote(quoteId);
   };
 
   const handleDeleteProject = (id: string) => {
     const projectQuotes = getQuotesForProject(id);
-    const projectQuoteRows = rows.filter(row => projectQuotes.some(quote => quote.id === row.quoteId));
+    const projectQuoteRows = rows.filter((row) => projectQuotes.some((quote) => quote.id === row.quoteId));
     const confirmMessage = projectQuotes.length > 0
       ? `Haluatko varmasti poistaa projektin? Tämä poistaa myös ${projectQuotes.length} tarjousta ja ${projectQuoteRows.length} riviä.`
       : 'Haluatko varmasti poistaa projektin?';
 
     if (confirm(confirmMessage)) {
-      projectQuoteRows.forEach(row => deleteRow(row.id));
-      projectQuotes.forEach(quote => deleteQuote(quote.id));
+      const deletedQuoteIds = new Set(projectQuotes.map((quote) => quote.id));
+      setSelectedQuotes((current) => new Set([...current].filter((quoteId) => !deletedQuoteIds.has(quoteId))));
+
+      projectQuoteRows.forEach((row) => deleteRow(row.id));
+      projectQuotes.forEach((quote) => deleteQuote(quote.id));
       deleteProject(id);
 
       if (selectedProjectId === id) {
@@ -267,12 +327,12 @@ export default function ProjectsPage() {
   };
 
   const handleDeleteCustomer = (id: string) => {
-    const customerProjects = projects.filter(p => p.customerId === id);
+    const customerProjects = projects.filter((project) => project.customerId === id);
     if (customerProjects.length > 0) {
       toast.error('Asiakkaalla on projekteja, poista ne ensin');
       return;
     }
-    
+
     if (confirm('Haluatko varmasti poistaa asiakkaan?')) {
       deleteCustomer(id);
       toast.success('Asiakas poistettu');
@@ -324,7 +384,7 @@ export default function ProjectsPage() {
   const handleDeleteQuote = (quoteId: string) => {
     if (confirm('Haluatko varmasti poistaa tarjouksen?')) {
       deleteQuoteWithRows(quoteId);
-      setSelectedQuotes(prev => {
+      setSelectedQuotes((prev) => {
         const newSet = new Set(prev);
         newSet.delete(quoteId);
         return newSet;
@@ -347,14 +407,14 @@ export default function ProjectsPage() {
     }
 
     if (confirm(`Haluatko varmasti poistaa ${selectedQuotes.size} tarjousta?`)) {
-      selectedQuotes.forEach(id => deleteQuoteWithRows(id));
+      selectedQuotes.forEach((id) => deleteQuoteWithRows(id));
       setSelectedQuotes(new Set());
       toast.success(`${selectedQuotes.size} tarjousta poistettu`);
     }
   };
 
   const toggleQuoteSelection = (quoteId: string) => {
-    setSelectedQuotes(prev => {
+    setSelectedQuotes((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(quoteId)) {
         newSet.delete(quoteId);
@@ -365,66 +425,52 @@ export default function ProjectsPage() {
     });
   };
 
+  const handleSelectProject = (projectId: string) => {
+    if (selectedProjectId !== projectId) {
+      setShowQuoteEditor(false);
+      setSelectedQuoteId(null);
+      setSelectedQuotes(new Set());
+    }
+    setSelectedProjectId(projectId);
+  };
+
   return (
-    <div className="p-4 sm:p-8 space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="p-4 sm:p-8 space-y-6">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold">Projektit ja Asiakkaat</h1>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base">Hallinnoi projekteja, asiakkaita ja tarjouksia</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-[-0.03em]">Projektityötila</h1>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground sm:text-base">
+            Valitse projekti vasemmalta, hallitse tarjouksia keskellä ja pidä asiakas- sekä vastuukonteksti oikealla.
+          </p>
         </div>
-        {canManageUsers && responsibleUsers.length > 0 && (
-          <div className="w-full sm:w-80">
-            <FieldHelpLabel
-              htmlFor="owner-filter"
-              label="Vastuuhenkilö"
-              help={PAGE_FIELD_HELP.ownerFilter}
-              className="mb-2"
-            />
-            <select
-              id="owner-filter"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={ownerFilter}
-              onChange={(event) => setOwnerFilter(event.target.value)}
-            >
-              <option value="all">Kaikki vastuuhenkilöt</option>
-              {responsibleUsers.map((responsibleUser) => (
-                <option key={responsibleUser.id} value={responsibleUser.id}>{responsibleUser.displayName}</option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
 
-      {selectedQuotes.size > 0 && (
-        <Card className="p-4 bg-accent/20 border-accent">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Badge variant="secondary" className="px-3 py-1">
-                {selectedQuotes.size} tarjous{selectedQuotes.size !== 1 ? 'ta' : ''} valittu
-              </Badge>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedQuotes(new Set())}>
-                <X /> Tyhjennä valinta
-              </Button>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          {canManageUsers && responsibleUsers.length > 0 && (
+            <div className="w-full lg:w-72">
+              <FieldHelpLabel
+                htmlFor="owner-filter"
+                label="Vastuuhenkilö"
+                help={PAGE_FIELD_HELP.ownerFilter}
+                className="mb-2"
+              />
+              <select
+                id="owner-filter"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={ownerFilter}
+                onChange={(event) => setOwnerFilter(event.target.value)}
+              >
+                <option value="all">Kaikki vastuuhenkilöt</option>
+                {responsibleUsers.map((responsibleUser) => (
+                  <option key={responsibleUser.id} value={responsibleUser.id}>{responsibleUser.displayName}</option>
+                ))}
+              </select>
             </div>
-            <Button variant="destructive" size="sm" onClick={handleBulkDeleteQuotes} className="gap-2">
-              <Trash weight="bold" />
-              Poista valitut
-            </Button>
-          </div>
-        </Card>
-      )}
+          )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Building className="h-5 w-5 text-primary" weight="fill" />
-              <h2 className="text-xl font-semibold">Projektit</h2>
-            </div>
+          <div className="flex flex-wrap gap-2">
             <Dialog open={showProjectDialog} onOpenChange={setShowProjectDialog}>
               <DialogTrigger asChild>
-                <Button 
-                  size="sm"
+                <Button
                   onClick={() => {
                     setEditingProject(null);
                     setProjectForm({
@@ -463,8 +509,8 @@ export default function ProjectsPage() {
                       }}
                     >
                       <option value="">Valitse asiakas...</option>
-                      {customers.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                      {customers.map((customer) => (
+                        <option key={customer.id} value={customer.id}>{customer.name}</option>
                       ))}
                     </select>
                   </div>
@@ -473,7 +519,7 @@ export default function ProjectsPage() {
                     <Input
                       id="project-name"
                       value={projectForm.name}
-                      onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })}
+                      onChange={(event) => setProjectForm({ ...projectForm, name: event.target.value })}
                       placeholder="Esim. Kylpyhuoneremontti"
                     />
                   </div>
@@ -482,7 +528,7 @@ export default function ProjectsPage() {
                     <Input
                       id="site"
                       value={projectForm.site}
-                      onChange={(e) => setProjectForm({ ...projectForm, site: e.target.value })}
+                      onChange={(event) => setProjectForm({ ...projectForm, site: event.target.value })}
                       placeholder="Esim. Mannerheimintie 1, Helsinki"
                     />
                   </div>
@@ -493,7 +539,7 @@ export default function ProjectsPage() {
                       type="number"
                       step="0.1"
                       value={projectForm.regionCoefficient}
-                      onChange={(e) => setProjectForm({ ...projectForm, regionCoefficient: parseFloat(e.target.value) || 1.0 })}
+                      onChange={(event) => setProjectForm({ ...projectForm, regionCoefficient: parseFloat(event.target.value) || 1.0 })}
                     />
                   </div>
                   {canManageUsers && responsibleUsers.length > 0 && (
@@ -517,143 +563,11 @@ export default function ProjectsPage() {
                 </div>
               </DialogContent>
             </Dialog>
-          </div>
 
-          <div className="mb-4">
-            <div className="relative">
-              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchProjects}
-                onChange={(e) => setSearchProjects(e.target.value)}
-                placeholder="Hae projektia, asiakasta tai tarjousnumeroa..."
-                className="pl-10"
-              />
-            </div>
-          </div>
-
-          {filteredProjects.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Building className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>{projects.length === 0 ? 'Ei projekteja' : 'Ei hakutuloksia'}</p>
-            </div>
-          ) : (
-            <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {filteredProjects.map(project => {
-                const customer = getCustomer(project.customerId);
-                const projectQuotes = filterOwnedRecords(getQuotesForProject(project.id), ownerFilter);
-                const projectResponsibleLabel = resolveResponsibleUserLabel(project.ownerUserId || customer?.ownerUserId);
-                
-                return (
-                  <div key={project.id} className="border rounded-lg p-4 space-y-2">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-medium">{project.name}</h3>
-                        <p className="text-sm text-muted-foreground">{customer?.name}</p>
-                        <p className="text-sm text-muted-foreground">{project.site}</p>
-                        <p className="text-xs text-muted-foreground mt-2">Vastuuhenkilö: {projectResponsibleLabel}</p>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleEditProject(project)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteProject(project.id)}
-                        >
-                          <Trash className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between pt-2 border-t">
-                      <div className="text-sm text-muted-foreground">
-                        {projectQuotes.length} tarjous{projectQuotes.length !== 1 ? 'ta' : ''}
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleCreateQuote(project.id)}
-                      >
-                        <FileText className="h-4 w-4" />
-                        Uusi tarjous
-                      </Button>
-                    </div>
-
-                    {projectQuotes.length > 0 && (
-                      <div className="space-y-1 pt-2">
-                        {projectQuotes.map(quote => (
-                          <div
-                            key={quote.id}
-                            className="flex items-center gap-2 bg-muted/50 rounded px-3 py-2 text-sm"
-                          >
-                            <Checkbox
-                              checked={selectedQuotes.has(quote.id)}
-                              onCheckedChange={() => toggleQuoteSelection(quote.id)}
-                            />
-                            <div
-                              className="flex-1 cursor-pointer hover:underline"
-                              onClick={() => handleEditQuote(project.id, quote.id)}
-                            >
-                              <div className="text-xs text-muted-foreground mb-1">
-                                Vastuuhenkilö: {resolveResponsibleUserLabel(quote.ownerUserId || project.ownerUserId || customer?.ownerUserId)}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span>{quote.title}</span>
-                                {quote.quoteNumber && (
-                                  <Badge variant="outline" className="text-xs font-mono">
-                                    {quote.quoteNumber}
-                                  </Badge>
-                                )}
-                                <Badge variant="outline" className="text-xs">
-                                  v{quote.revisionNumber}
-                                </Badge>
-                              </div>
-                            </div>
-                            <Badge variant={
-                              quote.status === 'draft' ? 'secondary' :
-                              quote.status === 'sent' ? 'default' :
-                              quote.status === 'accepted' ? 'default' :
-                              'destructive'
-                            }>
-                              {quote.status === 'draft' ? 'Luonnos' :
-                               quote.status === 'sent' ? 'Lähetetty' :
-                               quote.status === 'accepted' ? 'Hyväksytty' :
-                               'Hylätty'}
-                            </Badge>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteQuote(quote.id)}
-                              className="h-6 w-6 p-0"
-                            >
-                              <Trash className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" weight="fill" />
-              <h2 className="text-xl font-semibold">Asiakkaat</h2>
-            </div>
             <Dialog open={showCustomerDialog} onOpenChange={setShowCustomerDialog}>
               <DialogTrigger asChild>
-                <Button 
-                  size="sm"
+                <Button
+                  variant="outline"
                   onClick={() => {
                     setEditingCustomer(null);
                     setCustomerForm({
@@ -680,7 +594,7 @@ export default function ProjectsPage() {
                     <Input
                       id="customer-name"
                       value={customerForm.name}
-                      onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })}
+                      onChange={(event) => setCustomerForm({ ...customerForm, name: event.target.value })}
                       placeholder="Yritys Oy"
                     />
                   </div>
@@ -689,7 +603,7 @@ export default function ProjectsPage() {
                     <Input
                       id="contact-person"
                       value={customerForm.contactPerson}
-                      onChange={(e) => setCustomerForm({ ...customerForm, contactPerson: e.target.value })}
+                      onChange={(event) => setCustomerForm({ ...customerForm, contactPerson: event.target.value })}
                       placeholder="Matti Meikäläinen"
                     />
                   </div>
@@ -699,7 +613,7 @@ export default function ProjectsPage() {
                       id="email"
                       type="email"
                       value={customerForm.email}
-                      onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
+                      onChange={(event) => setCustomerForm({ ...customerForm, email: event.target.value })}
                       placeholder="matti@yritys.fi"
                     />
                   </div>
@@ -708,7 +622,7 @@ export default function ProjectsPage() {
                     <Input
                       id="phone"
                       value={customerForm.phone}
-                      onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })}
+                      onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })}
                       placeholder="+358 40 123 4567"
                     />
                   </div>
@@ -717,7 +631,7 @@ export default function ProjectsPage() {
                     <Input
                       id="address"
                       value={customerForm.address}
-                      onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })}
+                      onChange={(event) => setCustomerForm({ ...customerForm, address: event.target.value })}
                       placeholder="Mannerheimintie 1, 00100 Helsinki"
                     />
                   </div>
@@ -743,64 +657,132 @@ export default function ProjectsPage() {
               </DialogContent>
             </Dialog>
           </div>
+        </div>
+      </div>
 
-          <div className="mb-4">
-            <div className="relative">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'Projektit', value: filteredProjects.length, detail: 'Näkyvät tämän suodatuksen alla', icon: Building },
+          { label: 'Asiakkaat', value: filteredCustomers.length, detail: 'Aktiivinen asiakaskanta', icon: Users },
+          { label: 'Tarjoukset', value: visibleQuotes.length, detail: 'Projektityötilan tarjoukset', icon: FileText },
+          { label: 'Luonnokset', value: draftQuotes.length, detail: 'Vaativat viimeistelyä tai seurantaa', icon: Clock },
+        ].map((item) => {
+          const Icon = item.icon;
+          return (
+            <Card key={item.label} className="border-slate-200/80 px-5 py-5 shadow-[0_18px_40px_-40px_rgba(15,23,42,0.4)]">
+              <div className="flex items-start gap-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-slate-700">
+                  <Icon className="h-5 w-5" weight="fill" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">{item.label}</p>
+                  <p className="mt-1 text-2xl font-semibold tracking-[-0.03em]">{item.value}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{item.detail}</p>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(320px,360px)_minmax(0,1fr)_minmax(280px,320px)]">
+        <Card className="overflow-hidden border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
+          <div className="border-b px-6 py-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Projektit</h2>
+                <p className="text-sm text-muted-foreground">Valitse projekti työtilaan. Muut toiminnot pysyvät tämän paneelin ulkopuolella.</p>
+              </div>
+              <Badge variant="outline">{filteredProjects.length}</Badge>
+            </div>
+            <div className="relative mt-4">
               <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
-                value={searchCustomers}
-                onChange={(e) => setSearchCustomers(e.target.value)}
-                placeholder="Hae asiakasta tai vastuuhenkilöä..."
+                value={searchProjects}
+                onChange={(event) => setSearchProjects(event.target.value)}
+                placeholder="Hae projektia, asiakasta tai tarjousnumeroa..."
                 className="pl-10"
               />
             </div>
           </div>
 
-          {filteredCustomers.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>{customers.length === 0 ? 'Ei asiakkaita' : 'Ei hakutuloksia'}</p>
+          {filteredProjects.length === 0 ? (
+            <div className="px-6 py-16 text-center text-muted-foreground">
+              <Building className="mx-auto mb-3 h-12 w-12 opacity-50" />
+              <p>{projects.length === 0 ? 'Ei projekteja vielä. Luo ensimmäinen projekti aloittaaksesi.' : 'Ei hakutuloksia tällä suodatuksella.'}</p>
             </div>
           ) : (
-            <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {filteredCustomers.map(customer => {
-                const customerProjects = projects.filter(p => p.customerId === customer.id);
-                
+            <div className="max-h-[640px] space-y-3 overflow-y-auto p-4">
+              {filteredProjects.map((project) => {
+                const customer = getCustomer(project.customerId);
+                const projectQuotes = sortByUpdatedAtDesc(filterOwnedRecords(getQuotesForProject(project.id), ownerFilter));
+                const projectResponsibleLabel = resolveResponsibleUserLabel(project.ownerUserId || customer?.ownerUserId);
+                const isSelected = selectedProjectId === project.id;
+
                 return (
-                  <div key={customer.id} className="border rounded-lg p-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-medium">{customer.name}</h3>
-                        <p className="text-xs text-muted-foreground mt-1">Vastuuhenkilö: {resolveResponsibleUserLabel(customer.ownerUserId)}</p>
-                        {customer.contactPerson && (
-                          <p className="text-sm text-muted-foreground">{customer.contactPerson}</p>
-                        )}
-                        {customer.email && (
-                          <p className="text-sm text-muted-foreground">{customer.email}</p>
-                        )}
-                        {customer.phone && (
-                          <p className="text-sm text-muted-foreground">{customer.phone}</p>
-                        )}
-                        <div className="text-xs text-muted-foreground mt-2">
-                          {customerProjects.length} projekti{customerProjects.length !== 1 ? 'a' : ''}
+                  <div
+                    key={project.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleSelectProject(project.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handleSelectProject(project.id);
+                      }
+                    }}
+                    className={cn(
+                      'rounded-2xl border p-4 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30',
+                      isSelected ? 'border-primary bg-primary/5 shadow-[0_16px_30px_-28px_rgba(15,23,42,0.45)]' : 'border-slate-200 bg-white hover:bg-slate-50'
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-medium text-slate-950">{project.name}</h3>
+                          {isSelected && <Badge variant="default">Valittu</Badge>}
                         </div>
+                        <p className="mt-1 text-sm text-muted-foreground">{customer?.name || 'Ei asiakasta'}</p>
+                        <p className="text-sm text-muted-foreground">{project.site}</p>
+                        <p className="mt-2 text-xs text-muted-foreground">Vastuuhenkilö: {projectResponsibleLabel}</p>
                       </div>
                       <div className="flex gap-1">
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleEditCustomer(customer)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleEditProject(project);
+                          }}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleDeleteCustomer(customer.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDeleteProject(project.id);
+                          }}
                         >
                           <Trash className="h-4 w-4" />
                         </Button>
                       </div>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between border-t pt-3 text-sm">
+                      <span className="text-muted-foreground">{projectQuotes.length} tarjous{projectQuotes.length !== 1 ? 'ta' : ''}</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleCreateQuote(project.id);
+                        }}
+                      >
+                        <FileText className="h-4 w-4" />
+                        Uusi tarjous
+                      </Button>
                     </div>
                   </div>
                 );
@@ -808,19 +790,320 @@ export default function ProjectsPage() {
             </div>
           )}
         </Card>
-      </div>
 
-      {showQuoteEditor && selectedProjectId && (
-        <QuoteEditor
-          projectId={selectedProjectId}
-          quoteId={selectedQuoteId}
-          onClose={() => {
-            setShowQuoteEditor(false);
-            setSelectedProjectId(null);
-            setSelectedQuoteId(null);
-          }}
-        />
-      )}
+        <div className="space-y-6">
+          <Card className="overflow-hidden border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
+            {selectedProject ? (
+              <div className="p-6">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">Valittu projekti</Badge>
+                      <Badge variant="secondary">{selectedProjectQuotes.length} tarjous{selectedProjectQuotes.length !== 1 ? 'ta' : ''}</Badge>
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">{selectedProject.name}</h2>
+                      <p className="mt-1 text-sm text-muted-foreground">{selectedCustomer?.name || 'Ei asiakasta'} • {selectedProject.site}</p>
+                    </div>
+                    <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                      Tässä näkymässä hallitset yhden projektin tarjouksia ja pidät asiakkaan perustiedot näkyvissä ilman erillisiä listoja.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => handleCreateQuote(selectedProject.id)}>
+                      <Plus className="h-4 w-4" />
+                      Uusi tarjous
+                    </Button>
+                    <Button variant="outline" onClick={() => handleEditProject(selectedProject)}>
+                      <Pencil className="h-4 w-4" />
+                      Muokkaa projektia
+                    </Button>
+                    <Button variant="ghost" onClick={() => setSelectedProjectId(null)}>
+                      <X className="h-4 w-4" />
+                      Tyhjennä valinta
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {([
+                    { key: 'draft', label: 'Luonnokset', value: projectQuoteStats.draft },
+                    { key: 'sent', label: 'Lähetetyt', value: projectQuoteStats.sent },
+                    { key: 'accepted', label: 'Hyväksytyt', value: projectQuoteStats.accepted },
+                    { key: 'rejected', label: 'Hylätyt', value: projectQuoteStats.rejected },
+                  ] as const).map((item) => (
+                    <div key={item.key} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{item.label}</p>
+                      <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                  {latestSelectedQuote ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-slate-950">Viimeisin tarjous</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{latestSelectedQuote.title} • {new Date(latestSelectedQuote.updatedAt).toLocaleDateString('fi-FI')}</p>
+                      </div>
+                      <Badge variant={QUOTE_STATUS_META[latestSelectedQuote.status].variant}>{QUOTE_STATUS_META[latestSelectedQuote.status].label}</Badge>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-2xl bg-white p-2 shadow-sm">
+                        <FolderOpen className="h-4 w-4 text-slate-700" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-950">Projekti on valmis ensimmäiselle tarjoukselle</p>
+                        <p className="mt-1 text-sm text-muted-foreground">Luo tarjous tästä projektista, niin se ilmestyy heti työtilaan ja raportointiin.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="px-6 py-16 text-center">
+                <FolderOpen className="mx-auto mb-4 h-12 w-12 text-muted-foreground/60" />
+                <h2 className="text-xl font-semibold text-slate-950">Valitse projekti työtilaan</h2>
+                <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+                  Vasemman paneelin projektivalinta avaa tarjoukset ja asiakaskontekstin samaan näkymään. Näin työ alkaa yhdestä selkeästä paikasta.
+                </p>
+                <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+                  <Button onClick={() => setShowProjectDialog(true)}>
+                    <Plus className="h-4 w-4" />
+                    Luo projekti
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowCustomerDialog(true)}>
+                    <Users className="h-4 w-4" />
+                    Luo asiakas
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          {selectedProject && (
+            <Card className="overflow-hidden border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
+              <div className="border-b px-6 py-5">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold">Tarjoukset</h2>
+                    <p className="text-sm text-muted-foreground">Projektin aktiiviset ja aiemmat tarjoukset samassa listassa.</p>
+                  </div>
+
+                  {selectedQuotes.size > 0 ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">{selectedQuotes.size} valittu</Badge>
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedQuotes(new Set())}>
+                        <X className="h-4 w-4" />
+                        Tyhjennä
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={handleBulkDeleteQuotes}>
+                        <Trash className="h-4 w-4" />
+                        Poista valitut
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Avaa tarjous editoriin klikkaamalla riviä.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-6">
+                {selectedProjectQuotes.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
+                    Tälle projektille ei ole vielä tarjouksia. Luo ensimmäinen tarjous työtilan päätoiminnolla.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedProjectQuotes.map((quote) => {
+                      const statusMeta = QUOTE_STATUS_META[quote.status];
+                      return (
+                        <div key={quote.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_30px_-32px_rgba(15,23,42,0.45)]">
+                          <div className="flex items-start gap-3">
+                            <Checkbox
+                              checked={selectedQuotes.has(quote.id)}
+                              onCheckedChange={() => toggleQuoteSelection(quote.id)}
+                              aria-label={`Valitse tarjous ${quote.title}`}
+                            />
+                            <div className="min-w-0 flex-1 cursor-pointer" onClick={() => handleEditQuote(selectedProject.id, quote.id)}>
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="font-medium text-slate-950">{quote.title}</p>
+                                    {quote.quoteNumber && (
+                                      <Badge variant="outline" className="font-mono text-xs">{quote.quoteNumber}</Badge>
+                                    )}
+                                    <Badge variant="outline" className="text-xs">v{quote.revisionNumber}</Badge>
+                                  </div>
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Vastuuhenkilö: {resolveResponsibleUserLabel(quote.ownerUserId || selectedProject.ownerUserId || selectedCustomer?.ownerUserId)}
+                                  </p>
+                                  <p className="mt-2 text-sm text-muted-foreground">Päivitetty {new Date(quote.updatedAt).toLocaleString('fi-FI')}</p>
+                                </div>
+                                <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteQuote(quote.id)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Trash className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {showQuoteEditor && selectedProjectId && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">Tarjouseditori</h2>
+                  <p className="text-sm text-muted-foreground">Muokkaa valittua tarjousta ilman että poistut projektityötilasta.</p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowQuoteEditor(false);
+                    setSelectedQuoteId(null);
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                  Piilota editori
+                </Button>
+              </div>
+              <QuoteEditor
+                projectId={selectedProjectId}
+                quoteId={selectedQuoteId}
+                onClose={() => {
+                  setShowQuoteEditor(false);
+                  setSelectedProjectId(null);
+                  setSelectedQuoteId(null);
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        <Card className="overflow-hidden border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
+          <Tabs value={sidePanelTab} onValueChange={(value) => setSidePanelTab(value as 'summary' | 'customers')} className="gap-0">
+            <div className="border-b px-4 py-4">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="summary">Yhteenveto</TabsTrigger>
+                <TabsTrigger value="customers">Asiakkaat</TabsTrigger>
+              </TabsList>
+            </div>
+
+            <TabsContent value="summary" className="space-y-4 p-4">
+              {selectedProject ? (
+                <>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Projektin tiedot</p>
+                    <p className="mt-3 text-lg font-semibold text-slate-950">{selectedProject.name}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{selectedProject.site}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">Vastuuhenkilö: {resolveResponsibleUserLabel(selectedProject.ownerUserId || selectedCustomer?.ownerUserId)}</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Asiakas</p>
+                    <p className="mt-3 text-base font-semibold text-slate-950">{selectedCustomer?.name || 'Ei asiakasta'}</p>
+                    {selectedCustomer?.contactPerson && <p className="mt-2 text-sm text-muted-foreground">{selectedCustomer.contactPerson}</p>}
+                    {selectedCustomer?.email && <p className="mt-1 text-sm text-muted-foreground">{selectedCustomer.email}</p>}
+                    {selectedCustomer?.phone && <p className="mt-1 text-sm text-muted-foreground">{selectedCustomer.phone}</p>}
+                    {selectedCustomer?.address && <p className="mt-1 text-sm text-muted-foreground">{selectedCustomer.address}</p>}
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Tilanne nyt</p>
+                    <div className="mt-3 space-y-3">
+                      {([
+                        { key: 'draft', label: 'Luonnoksia', value: projectQuoteStats.draft },
+                        { key: 'sent', label: 'Lähetettyjä', value: projectQuoteStats.sent },
+                        { key: 'accepted', label: 'Hyväksyttyjä', value: projectQuoteStats.accepted },
+                      ] as const).map((item) => (
+                        <div key={item.key} className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">{item.label}</span>
+                          <span className="font-medium text-slate-950">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-2xl border border-dashed px-4 py-12 text-center text-sm text-muted-foreground">
+                  Valitse projekti vasemmalta nähdäksesi asiakkaan tiedot, vastuuhenkilön ja tarjousyhteenvedon.
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="customers" className="space-y-4 p-4">
+              <div className="relative">
+                <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchCustomers}
+                  onChange={(event) => setSearchCustomers(event.target.value)}
+                  placeholder="Hae asiakasta tai vastuuhenkilöä..."
+                  className="pl-10"
+                />
+              </div>
+
+              {filteredCustomers.length === 0 ? (
+                <div className="rounded-2xl border border-dashed px-4 py-12 text-center text-sm text-muted-foreground">
+                  {customers.length === 0 ? 'Ei asiakkaita vielä. Luo ensimmäinen asiakas tästä näkymästä.' : 'Ei hakutuloksia tällä suodatuksella.'}
+                </div>
+              ) : (
+                <div className="max-h-[560px] space-y-3 overflow-y-auto pr-1">
+                  {filteredCustomers.map((customer) => {
+                    const customerProjects = projects.filter((project) => project.customerId === customer.id);
+                    const isSelectedCustomer = selectedCustomer?.id === customer.id;
+
+                    return (
+                      <div
+                        key={customer.id}
+                        className={cn(
+                          'rounded-2xl border p-4 transition-colors',
+                          isSelectedCustomer ? 'border-primary bg-primary/5' : 'border-slate-200 bg-white'
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-medium text-slate-950">{customer.name}</h3>
+                              {isSelectedCustomer && <Badge variant="default">Valitun projektin asiakas</Badge>}
+                            </div>
+                            <p className="mt-2 text-xs text-muted-foreground">Vastuuhenkilö: {resolveResponsibleUserLabel(customer.ownerUserId)}</p>
+                            {customer.contactPerson && <p className="mt-2 text-sm text-muted-foreground">{customer.contactPerson}</p>}
+                            {customer.email && <p className="text-sm text-muted-foreground">{customer.email}</p>}
+                            {customer.phone && <p className="text-sm text-muted-foreground">{customer.phone}</p>}
+                            <p className="mt-2 text-xs text-muted-foreground">{customerProjects.length} projekti{customerProjects.length !== 1 ? 'a' : ''}</p>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => handleEditCustomer(customer)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleDeleteCustomer(customer.id)}>
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </Card>
+      </div>
     </div>
   );
 }
