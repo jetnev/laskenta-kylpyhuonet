@@ -36,6 +36,14 @@ import { Separator } from './ui/separator';
 import { ResponsiveDialog } from './ResponsiveDialog';
 import ScheduleSection from './ScheduleSection';
 import FieldHelpLabel from './FieldHelpLabel';
+import AdditionalCostsSection from './quote-editor/AdditionalCostsSection';
+import HelpTooltip from './quote-editor/HelpTooltip';
+import QuoteCompletionChecklist from './quote-editor/QuoteCompletionChecklist';
+import QuoteEditorSection from './quote-editor/QuoteEditorSection';
+import QuoteEditorStepper from './quote-editor/QuoteEditorStepper';
+import QuoteNotesPanels from './quote-editor/QuoteNotesPanels';
+import QuotePricingModeSelector from './quote-editor/QuotePricingModeSelector';
+import VisibilityBadge from './quote-editor/VisibilityBadge';
 import { useAuth } from '../hooks/use-auth';
 import {
   useCustomers,
@@ -69,6 +77,7 @@ import {
   exportQuoteToInternalExcel,
   exportQuoteToPDF,
 } from '../lib/export';
+import { getQuoteCompletionChecklist, getQuoteEditorSteps, type QuoteEditorStepId } from '../lib/quote-editor-ux';
 import { getResponsibleUserLabel } from '../lib/ownership';
 import { resolveQuoteTermsSnapshotTemplate, resolveTermTemplatePlaceholders } from '../lib/term-templates';
 
@@ -176,6 +185,8 @@ const SCHEDULE_MILESTONE_LABELS: Record<ScheduleMilestone['type'], string> = {
   completion: 'Valmistuminen',
   other: 'Muu',
 };
+
+const QUOTE_EDITOR_STEP_ORDER: QuoteEditorStepId[] = ['basics', 'rows', 'costs', 'finishing', 'review'];
 
 function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -324,7 +335,10 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const [bootstrapQuote, setBootstrapQuote] = useState<Quote | null>(null);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+  const [activeStep, setActiveStep] = useState<QuoteEditorStepId>('basics');
+  const [additionalCostsOpen, setAdditionalCostsOpen] = useState(false);
   const initializedDraftRef = useRef(false);
+  const initializedQuoteUiRef = useRef<string | null>(null);
 
   useEffect(() => {
     setActiveQuoteId(quoteId);
@@ -332,6 +346,9 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     setBootstrapQuote(null);
     setBootstrapError(null);
     setSelectedRowIds([]);
+    setActiveStep('basics');
+    setAdditionalCostsOpen(false);
+    initializedQuoteUiRef.current = null;
   }, [quoteId]);
 
   useEffect(() => {
@@ -430,6 +447,42 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     () => (quote ? canSendQuote(quote, quoteRows, customer, project, quoteHasNewerRevision) : null),
     [customer, project, quote, quoteHasNewerRevision, quoteRows]
   );
+  const billableRowCount = useMemo(
+    () => quoteRows.filter((row) => row.mode !== 'section').length,
+    [quoteRows]
+  );
+  const hasPotentialDoubleInstallationCharge = useMemo(
+    () => Boolean(
+      quote &&
+      quote.installationCosts > 0 &&
+      quoteRows.some(
+        (row) =>
+          row.mode !== 'section' &&
+          row.mode !== 'charge' &&
+          (row.mode === 'installation' || row.mode === 'product_installation') &&
+          row.installationPrice > 0
+      )
+    ),
+    [quote, quoteRows]
+  );
+  const quoteEditorProgress = useMemo(
+    () => (quote && validation ? {
+      quote,
+      rows: quoteRows,
+      validation,
+      quoteOwnerLabel,
+      visibleScheduleMilestones,
+    } : null),
+    [quote, quoteOwnerLabel, quoteRows, validation, visibleScheduleMilestones]
+  );
+  const quoteEditorSteps = useMemo(
+    () => (quoteEditorProgress ? getQuoteEditorSteps(quoteEditorProgress) : []),
+    [quoteEditorProgress]
+  );
+  const quoteCompletionChecklist = useMemo(
+    () => (quoteEditorProgress ? getQuoteCompletionChecklist(quoteEditorProgress) : []),
+    [quoteEditorProgress]
+  );
 
   const matchingProducts = useMemo(() => {
     const search = productSearch.trim().toLowerCase();
@@ -453,6 +506,16 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   }, [productSearch, products]);
   const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
   const allRowsSelected = quoteRows.length > 0 && selectedRowIds.length === quoteRows.length;
+
+  useEffect(() => {
+    if (!quote || initializedQuoteUiRef.current === quote.id) {
+      return;
+    }
+
+    initializedQuoteUiRef.current = quote.id;
+    setActiveStep(billableRowCount > 0 ? 'rows' : 'basics');
+    setAdditionalCostsOpen(calculation ? calculation.extraChargesTotal > 0 || hasPotentialDoubleInstallationCharge : false);
+  }, [billableRowCount, calculation, hasPotentialDoubleInstallationCharge, quote]);
 
   const isProjectLoading = !projectsLoaded;
   const isCustomerLoading = Boolean(project) && !customersLoaded;
@@ -509,6 +572,32 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       </ResponsiveDialog>
     );
   }
+
+  const basicsStep = quoteEditorSteps.find((step) => step.id === 'basics');
+  const rowsStep = quoteEditorSteps.find((step) => step.id === 'rows');
+  const costsStep = quoteEditorSteps.find((step) => step.id === 'costs');
+  const finishingStep = quoteEditorSteps.find((step) => step.id === 'finishing');
+  const reviewStep = quoteEditorSteps.find((step) => step.id === 'review');
+
+  if (!basicsStep || !rowsStep || !costsStep || !finishingStep || !reviewStep) {
+    return (
+      <ResponsiveDialog open onOpenChange={(open) => !open && onClose()} title="Tarjouseditori" maxWidth="full">
+        <Card className="p-10 text-center text-muted-foreground">
+          Tarjouseditorin vaiheita ei voitu muodostaa. Sulje editori ja yrita uudelleen.
+        </Card>
+      </ResponsiveDialog>
+    );
+  }
+
+  const getPreviousStepId = (stepId: QuoteEditorStepId) => {
+    const index = QUOTE_EDITOR_STEP_ORDER.indexOf(stepId);
+    return index > 0 ? QUOTE_EDITOR_STEP_ORDER[index - 1] : null;
+  };
+
+  const getNextStepId = (stepId: QuoteEditorStepId) => {
+    const index = QUOTE_EDITOR_STEP_ORDER.indexOf(stepId);
+    return index >= 0 && index < QUOTE_EDITOR_STEP_ORDER.length - 1 ? QUOTE_EDITOR_STEP_ORDER[index + 1] : null;
+  };
 
   const touchQuote = () => {
     updateQuote(quote.id, {});
@@ -861,6 +950,30 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     }
   };
 
+  const renderSectionFooter = (stepId: QuoteEditorStepId, nextLabel?: string, nextStepOverride?: QuoteEditorStepId) => {
+    const previousStepId = getPreviousStepId(stepId);
+    const nextStepId = nextStepOverride ?? getNextStepId(stepId);
+
+    return (
+      <>
+        {previousStepId ? (
+          <Button type="button" variant="outline" onClick={() => setActiveStep(previousStepId)}>
+            Edellinen vaihe
+          </Button>
+        ) : (
+          <div className="text-sm text-slate-500">Vaiheittainen rakenne auttaa pitämään tarjousrivit editorin päätyönä.</div>
+        )}
+        {nextStepId ? (
+          <Button type="button" onClick={() => setActiveStep(nextStepId)}>
+            {nextLabel || 'Seuraava vaihe'}
+          </Button>
+        ) : (
+          <div className="text-sm text-slate-500">Viimeinen vaihe. Tarkista lähetysvalmius ennen asiakkaalle vientiä.</div>
+        )}
+      </>
+    );
+  };
+
   const footer = (
     <>
       <Button variant="outline" onClick={onClose}>Sulje</Button>
@@ -922,7 +1035,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   <Badge variant={getStatusVariant(quote.status)}>{STATUS_LABELS[quote.status]}</Badge>
                   {quote.status === 'sent' && <Badge variant="outline">Odottaa asiakkaan päätöstä</Badge>}
                   <Badge variant="outline">Revisio {quote.revisionNumber}</Badge>
-                  <Badge variant="outline">{quote.quoteNumber}</Badge>
+                  <Badge variant="outline">{quote.quoteNumber || 'Tarjousnumero puuttuu'}</Badge>
                 </div>
                 <Input
                   value={quote.title}
@@ -969,193 +1082,198 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
               </Alert>
             )}
 
-            <div className="grid gap-4 xl:grid-cols-2">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="quote-number" label="Tarjousnumero" help={QUOTE_FIELD_HELP.quoteNumber} />
-                  <Input id="quote-number" value={quote.quoteNumber} onChange={(event) => updateQuote(quote.id, { quoteNumber: event.target.value })} disabled={!isEditable} />
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="valid-until" label="Voimassa asti" help={QUOTE_FIELD_HELP.validUntil} />
-                  <Input id="valid-until" type="date" value={quote.validUntil || ''} onChange={(event) => updateQuote(quote.id, { validUntil: event.target.value })} disabled={!isEditable} />
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="quote-owner" label="Vastuuhenkilö / myyjä" help="Tämä käyttäjä omistaa tarjouksen ja sen rivit. Uudet rivit ja raportointi kohdistuvat tämän vastuuhenkilön alle." />
-                  {canManageUsers ? (
-                    <Select value={quote.ownerUserId || user?.id || 'none'} onValueChange={handleQuoteOwnerChange} disabled={!isEditable}>
-                      <SelectTrigger id="quote-owner"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {responsibleUsers.map((responsibleUser) => (
-                          <SelectItem key={responsibleUser.id} value={responsibleUser.id}>{responsibleUser.displayName}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{quoteOwnerLabel}</div>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="pricing-mode" label="Uusien rivien oletustila" help={QUOTE_FIELD_HELP.pricingMode} />
-                  <Select
-                    value={quote.pricingMode}
-                    onValueChange={(value) => {
-                      updateQuote(quote.id, { pricingMode: value as Quote['pricingMode'] });
-                      if (value === 'margin') {
-                        quoteRows.forEach((row) => {
-                          if (getQuoteRowUnitPricingMode(row) === 'margin' && !row.manualSalesPrice) {
-                            syncRowWithMargin(row, quote.selectedMarginPercent);
-                          }
-                        });
-                      }
-                    }}
-                    disabled={!isEditable}
-                  >
-                    <SelectTrigger id="pricing-mode"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="margin">Kateohjattu</SelectItem>
-                      <SelectItem value="manual">Manuaalinen asiakashinta</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="quote-margin" label="Oletuskate %" help={QUOTE_FIELD_HELP.selectedMarginPercent} />
-                  <Input id="quote-margin" type="number" min="0" step="0.1" value={quote.selectedMarginPercent} onChange={(event) => applyQuoteMargin(parseFloat(event.target.value) || 0)} disabled={!isEditable} />
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="vat" label="ALV %" help={QUOTE_FIELD_HELP.vatPercent} />
-                  <Input id="vat" type="number" min="0" step="0.1" value={quote.vatPercent} onChange={(event) => updateQuote(quote.id, { vatPercent: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="terms" label="Ehtopohja" help={QUOTE_FIELD_HELP.termsId} />
-                  <Select value={quote.termsId || 'none'} onValueChange={applyTermsTemplateSelection} disabled={!isEditable}>
-                    <SelectTrigger id="terms"><SelectValue placeholder="Valitse ehtopohja" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Ei ehtopohjaa</SelectItem>
-                      {activeTerms.map((term) => (
-                        <SelectItem key={term.id} value={term.id}>{term.name}{term.isDefault ? ' (oletus)' : ''}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <FieldHelpLabel
-                  htmlFor="terms-snapshot"
-                  label="Tarjouksen ehtoteksti"
-                  help="Valittu ehtopohja kopioidaan tarjoukselle snapshot-muotoon. Voit muokata tätä tekstiä vapaasti ilman, että alkuperäinen ehtopohja muuttuu."
-                />
-                <Textarea
-                  id="terms-snapshot"
-                  rows={10}
-                  value={quote.termsSnapshotContentMd || ''}
-                  onChange={(event) => updateQuote(quote.id, {
-                    termsSnapshotName: quote.termsSnapshotName || quoteTerms?.name || 'Tarjousehdot',
-                    termsSnapshotContentMd: event.target.value,
-                  })}
-                  placeholder="Valitse ehtopohja tai kirjoita tarjouksen oma ehtoteksti tähän."
-                  disabled={!isEditable}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Myöhemmin tehtävät ehtopohjan muutokset eivät muuta tähän tarjoukseen tallennettua ehtotekstiä.
+            <div className="grid gap-4 xl:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Päätyövaihe</div>
+                <div className="mt-2 text-base font-semibold text-slate-950">Tarjousrivit</div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Vaiheet pitävät perustiedot, rivit, lisäkulut ja viimeistelyn erillään, jotta varsinainen myyntityö pysyy riveissä.
                 </p>
               </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="discount-type" label="Alennus" help={QUOTE_FIELD_HELP.discountType} />
-                  <Select value={quote.discountType} onValueChange={(value) => updateQuote(quote.id, { discountType: value as Quote['discountType'] })} disabled={!isEditable}>
-                    <SelectTrigger id="discount-type"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Ei alennusta</SelectItem>
-                      <SelectItem value="percent">Prosentti</SelectItem>
-                      <SelectItem value="amount">Eurot</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="discount-value" label="Alennuksen arvo" help={QUOTE_FIELD_HELP.discountValue} />
-                  <Input id="discount-value" type="number" min="0" step="0.01" value={quote.discountValue} onChange={(event) => updateQuote(quote.id, { discountValue: parseFloat(event.target.value) || 0 })} disabled={!isEditable || quote.discountType === 'none'} />
-                </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Loppusumma</div>
+                <div className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{formatCurrency(calculation.total)}</div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Rivit, lisäkulut, alennus ja ALV muodostavat asiakkaalle näkyvän kokonaissumman tähän näkymään reaaliaikaisesti.
+                </p>
               </div>
-            </div>
-
-            <div className="rounded-2xl border bg-muted/20 p-5">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <h3 className="text-base font-semibold">Korjausrakentamisen lisäkulut</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Erota työmaan lisäkulut omaksi kokonaisuudekseen. Näin kilometrit, jätemaksut, suojaus ja muut kustannukset eivät huku rivihinnoittelun sekaan.
-                  </p>
-                </div>
-                <div className="rounded-xl border bg-background px-4 py-3 text-sm">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Lisäkulut yhteensä</div>
-                  <div className="mt-1 text-lg font-semibold">{formatCurrency(calculation.extraChargesTotal)}</div>
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="project-costs" label="Muut projektikulut" help={QUOTE_FIELD_HELP.projectCosts} />
-                  <Input id="project-costs" type="number" min="0" step="0.01" value={quote.projectCosts} onChange={(event) => updateQuote(quote.id, { projectCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="delivery-costs" label="Toimituskulut" help={QUOTE_FIELD_HELP.deliveryCosts} />
-                  <Input id="delivery-costs" type="number" min="0" step="0.01" value={quote.deliveryCosts} onChange={(event) => updateQuote(quote.id, { deliveryCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="installation-costs" label="Asennuskulut erillisenä rivinä" help={QUOTE_FIELD_HELP.installationCosts} />
-                  <Input id="installation-costs" type="number" min="0" step="0.01" value={quote.installationCosts} onChange={(event) => updateQuote(quote.id, { installationCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="travel-kilometers" label="Kilometrit" help={QUOTE_FIELD_HELP.travelKilometers} />
-                  <Input id="travel-kilometers" type="number" min="0" step="1" value={quote.travelKilometers ?? 0} onChange={(event) => updateQuote(quote.id, { travelKilometers: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="travel-rate" label="Km-hinta" help={QUOTE_FIELD_HELP.travelRatePerKm} />
-                  <Input id="travel-rate" type="number" min="0" step="0.01" value={quote.travelRatePerKm ?? 0} onChange={(event) => updateQuote(quote.id, { travelRatePerKm: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel label="Ajokulu yhteensä" help={QUOTE_FIELD_HELP.travelCosts} />
-                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(travelCosts)}</div>
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="disposal-costs" label="Kaatopaikka- ja jätemaksut" help={QUOTE_FIELD_HELP.disposalCosts} />
-                  <Input id="disposal-costs" type="number" min="0" step="0.01" value={quote.disposalCosts ?? 0} onChange={(event) => updateQuote(quote.id, { disposalCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="demolition-costs" label="Purkutyön lisäkulut" help={QUOTE_FIELD_HELP.demolitionCosts} />
-                  <Input id="demolition-costs" type="number" min="0" step="0.01" value={quote.demolitionCosts ?? 0} onChange={(event) => updateQuote(quote.id, { demolitionCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="protection-costs" label="Suojaus- ja peittokulut" help={QUOTE_FIELD_HELP.protectionCosts} />
-                  <Input id="protection-costs" type="number" min="0" step="0.01" value={quote.protectionCosts ?? 0} onChange={(event) => updateQuote(quote.id, { protectionCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
-                </div>
-                <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="permit-costs" label="Lupa- ja käsittelymaksut" help={QUOTE_FIELD_HELP.permitCosts} />
-                  <Input id="permit-costs" type="number" min="0" step="0.01" value={quote.permitCosts ?? 0} onChange={(event) => updateQuote(quote.id, { permitCosts: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-2">
-              <div className="space-y-2">
-                <FieldHelpLabel htmlFor="quote-notes" label="Tarjoushuomautukset" help={QUOTE_FIELD_HELP.notes} />
-                <Textarea id="quote-notes" value={quote.notes || ''} onChange={(event) => updateQuote(quote.id, { notes: event.target.value })} disabled={!isEditable} rows={4} />
-              </div>
-              <div className="space-y-2">
-                <FieldHelpLabel htmlFor="internal-notes" label="Sisäiset muistiinpanot" help={QUOTE_FIELD_HELP.internalNotes} />
-                <Textarea id="internal-notes" value={quote.internalNotes || ''} onChange={(event) => updateQuote(quote.id, { internalNotes: event.target.value })} disabled={!isEditable} rows={4} />
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Sisäinen kate</div>
+                <div className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{formatCurrency(calculation.totalMargin)}</div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {formatNumber(calculation.marginPercent, 1)} % koko tarjoukselle. Tämä auttaa tarkistamaan kannattavuuden ennen lähetystä.
+                </p>
               </div>
             </div>
           </Card>
 
+          <QuoteEditorStepper steps={quoteEditorSteps} activeStep={activeStep} onStepChange={setActiveStep} />
+
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.8fr)_minmax(340px,0.95fr)]">
             <div className="space-y-6">
-              <Card className="p-6 space-y-4">
+              <QuoteEditorSection
+                step={basicsStep}
+                stepNumber={1}
+                active={activeStep === 'basics'}
+                onSelect={() => setActiveStep('basics')}
+                badges={(
+                  <>
+                    <VisibilityBadge tone="derived" label="Vaikuttaa uusien rivien oletuksiin" />
+                    <VisibilityBadge tone="optional" label="Alennus on valinnainen" />
+                  </>
+                )}
+                footer={renderSectionFooter('basics', 'Siirry tarjousriveihin')}
+              >
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <FieldHelpLabel htmlFor="quote-number" label="Tarjousnumero" help={QUOTE_FIELD_HELP.quoteNumber} />
+                      <Input id="quote-number" value={quote.quoteNumber} onChange={(event) => updateQuote(quote.id, { quoteNumber: event.target.value })} disabled={!isEditable} />
+                    </div>
+                    <div className="space-y-2">
+                      <FieldHelpLabel htmlFor="valid-until" label="Voimassa asti" help={QUOTE_FIELD_HELP.validUntil} />
+                      <Input id="valid-until" type="date" value={quote.validUntil || ''} onChange={(event) => updateQuote(quote.id, { validUntil: event.target.value })} disabled={!isEditable} />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <FieldHelpLabel htmlFor="quote-owner" label="Vastuuhenkilö / myyjä" help="Tämä käyttäjä omistaa tarjouksen ja sen rivit. Uudet rivit ja raportointi kohdistuvat tämän vastuuhenkilön alle." />
+                      {canManageUsers ? (
+                        <Select value={quote.ownerUserId || user?.id || 'none'} onValueChange={handleQuoteOwnerChange} disabled={!isEditable}>
+                          <SelectTrigger id="quote-owner"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {responsibleUsers.map((responsibleUser) => (
+                              <SelectItem key={responsibleUser.id} value={responsibleUser.id}>{responsibleUser.displayName}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{quoteOwnerLabel}</div>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <FieldHelpLabel htmlFor="pricing-mode" label="Uusien rivien oletustila" help={QUOTE_FIELD_HELP.pricingMode} />
+                      <Select
+                        value={quote.pricingMode}
+                        onValueChange={(value) => {
+                          updateQuote(quote.id, { pricingMode: value as Quote['pricingMode'] });
+                          if (value === 'margin') {
+                            quoteRows.forEach((row) => {
+                              if (getQuoteRowUnitPricingMode(row) === 'margin' && !row.manualSalesPrice) {
+                                syncRowWithMargin(row, quote.selectedMarginPercent);
+                              }
+                            });
+                          }
+                        }}
+                        disabled={!isEditable}
+                      >
+                        <SelectTrigger id="pricing-mode"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="margin">Kateohjattu</SelectItem>
+                          <SelectItem value="manual">Manuaalinen asiakashinta</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <FieldHelpLabel htmlFor="quote-margin" label="Oletuskate %" help={QUOTE_FIELD_HELP.selectedMarginPercent} />
+                      <Input id="quote-margin" type="number" min="0" step="0.1" value={quote.selectedMarginPercent} onChange={(event) => applyQuoteMargin(parseFloat(event.target.value) || 0)} disabled={!isEditable} />
+                    </div>
+                    <div className="space-y-2">
+                      <FieldHelpLabel htmlFor="vat" label="ALV %" help={QUOTE_FIELD_HELP.vatPercent} />
+                      <Input id="vat" type="number" min="0" step="0.1" value={quote.vatPercent} onChange={(event) => updateQuote(quote.id, { vatPercent: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                    </div>
+                    <div className="space-y-2">
+                      <FieldHelpLabel htmlFor="discount-type" label="Alennus" help={QUOTE_FIELD_HELP.discountType} />
+                      <Select value={quote.discountType} onValueChange={(value) => updateQuote(quote.id, { discountType: value as Quote['discountType'] })} disabled={!isEditable}>
+                        <SelectTrigger id="discount-type"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Ei alennusta</SelectItem>
+                          <SelectItem value="percent">Prosentti</SelectItem>
+                          <SelectItem value="amount">Eurot</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <FieldHelpLabel htmlFor="discount-value" label="Alennuksen arvo" help={QUOTE_FIELD_HELP.discountValue} />
+                      <Input id="discount-value" type="number" min="0" step="0.01" value={quote.discountValue} onChange={(event) => updateQuote(quote.id, { discountValue: parseFloat(event.target.value) || 0 })} disabled={!isEditable || quote.discountType === 'none'} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-base font-semibold tracking-[-0.03em] text-slate-950">Mitä perustiedoissa päätetään?</h4>
+                        <HelpTooltip
+                          label="Perustiedot"
+                          help="Perustiedoissa asetat tarjouksen tunnisteet, vastuuhenkilön, verotuksen ja uusien rivien oletuslogiikan. Varsinainen rivikohtainen hinnoittelu tehdään vasta tarjousriveillä."
+                        />
+                      </div>
+                      <div className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
+                        <p>
+                          Uusien rivien oletustila määrittää, syntyykö uusi rivi kateohjattuna vai manuaalisella asiakashinnalla. Jokaisella rivillä voit vaihtaa tämän myöhemmin erikseen.
+                        </p>
+                        <p>
+                          ALV ja alennus vaikuttavat koko tarjouksen loppusummaan, mutta eivät muuta rivien sisäistä kustannuslogiikkaa.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+                      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Tämän vaiheen tarkistus</div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Vastuuhenkilö</div>
+                          <div className="mt-1 text-sm font-medium text-slate-950">{quoteOwnerLabel}</div>
+                        </div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Uusien rivien oletus</div>
+                          <div className="mt-1 text-sm font-medium text-slate-950">{quote.pricingMode === 'margin' ? 'Kateohjattu' : 'Manuaalinen asiakashinta'}</div>
+                        </div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Oletuskate</div>
+                          <div className="mt-1 text-sm font-medium text-slate-950">{formatNumber(quote.selectedMarginPercent, 1)} %</div>
+                        </div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">ALV</div>
+                          <div className="mt-1 text-sm font-medium text-slate-950">{formatNumber(quote.vatPercent, 1)} %</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </QuoteEditorSection>
+
+              <QuoteEditorSection
+                step={rowsStep}
+                stepNumber={2}
+                active={activeStep === 'rows'}
+                onSelect={() => setActiveStep('rows')}
+                badges={(
+                  <>
+                    <VisibilityBadge tone="customer" label="Asiakkaan laskutettava työtila" />
+                    <VisibilityBadge tone="internal" label="Sisäinen kannattavuus näkyy erikseen" />
+                    <VisibilityBadge tone="derived" label="Kateohjauksessa asiakashinta voidaan johtaa automaattisesti" />
+                  </>
+                )}
+                footer={renderSectionFooter('rows', 'Lisää tarvittaessa lisäkulut')}
+              >
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Laskutettavia rivejä</div>
+                    <div className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{billableRowCount}</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">Tuotteet, työrivit ja erilliset veloitukset. Väliotsikot jäsentävät, mutta eivät vaikuta summaan.</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Rivien välisumma</div>
+                    <div className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{formatCurrency(calculation.lineSubtotal)}</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">Lisäkulut, alennus ja ALV lisätään tämän vaiheen jälkeen.</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Valitut rivit</div>
+                    <div className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{selectedRowIds.length}</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">Massapoisto helpottaa suurten tarjousten siistimistä ilman, että rivejä tarvitsee poistaa yksitellen.</p>
+                  </div>
+                </div>
+
+                <Card className="p-6 space-y-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div className="space-y-2">
                     <FieldHelpLabel htmlFor="product-search" label="Lisää tuotteita tarjoukselle" help={QUOTE_FIELD_HELP.productSearch} />
@@ -1332,12 +1450,9 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                     <div>
                                       <div className="flex flex-wrap items-center gap-2">
                                         <div className="text-sm font-medium">Hinnoittelutapa</div>
-                                        <Badge
-                                          variant="outline"
-                                          className="rounded-full border-primary/25 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary"
-                                        >
-                                          Näkyy asiakkaan hintaan asti
-                                        </Badge>
+                                        <VisibilityBadge tone="customer" label="Määrittää asiakkaalle näkyvän hinnan" />
+                                        {isMarginWorkflow && <VisibilityBadge tone="internal" label="Lähtee sisäisestä kustannuksesta" />}
+                                        {isLineTotalWorkflow && <VisibilityBadge tone="derived" label="Yksikköhinta johdetaan automaattisesti" />}
                                       </div>
                                       <p className="mt-1 text-xs text-muted-foreground">
                                         {isMarginWorkflow
@@ -1347,21 +1462,14 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                             : 'Syötä koko rivin veroton kokonaishinta. Järjestelmä johtaa yksikköhinnan vain apuarvoksi.'}
                                       </p>
                                     </div>
-                                    <div className="inline-flex flex-wrap rounded-xl border bg-muted/30 p-1">
-                                      {(['margin', 'manual', 'line_total'] as RowPricingWorkflow[]).map((value) => (
-                                        <Button
-                                          key={value}
-                                          type="button"
-                                          size="sm"
-                                          variant={pricingWorkflow === value ? 'default' : 'ghost'}
-                                          onClick={() => setRowPricingWorkflow(row, value)}
-                                          disabled={!isEditable || (value === 'margin' && !canUseMarginWorkflow)}
-                                        >
-                                          {ROW_PRICING_WORKFLOW_LABELS[value]}
-                                        </Button>
-                                      ))}
-                                    </div>
                                   </div>
+
+                                  <QuotePricingModeSelector
+                                    value={pricingWorkflow}
+                                    onChange={(value) => setRowPricingWorkflow(row, value)}
+                                    disabled={!isEditable}
+                                    canUseMargin={canUseMarginWorkflow}
+                                  />
 
                                   {!canUseMarginWorkflow && (
                                     <p className="text-xs text-muted-foreground">
@@ -1395,12 +1503,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                           <div>
                                             <div className="flex flex-wrap items-center gap-2">
                                               <div className="text-sm font-medium text-slate-950">Sisäinen kannattavuus</div>
-                                              <Badge
-                                                variant="outline"
-                                                className="rounded-full border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950"
-                                              >
-                                                Päälohko kateohjauksessa
-                                              </Badge>
+                                              <VisibilityBadge tone="internal" label="Ei näy asiakkaalle" />
                                             </div>
                                             <p className="mt-1 text-xs text-muted-foreground">
                                               Syötä ensin oma kustannus ja tavoitekate. Asiakashinta johdetaan näistä arvoista.
@@ -1493,12 +1596,8 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                           <div>
                                             <div className="flex flex-wrap items-center gap-2">
                                               <div className="text-sm font-medium">Asiakashinta asiakkaalle</div>
-                                              <Badge
-                                                variant="outline"
-                                                className="rounded-full border-primary/25 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary"
-                                              >
-                                                Johdettu sisäisestä kannattavuudesta
-                                              </Badge>
+                                              <VisibilityBadge tone="customer" />
+                                              {!isManualOverride && <VisibilityBadge tone="derived" label="Johdettu sisäisestä kannattavuudesta" />}
                                             </div>
                                             <p className="mt-1 text-xs text-muted-foreground">
                                               Asiakashinta on tässä tilassa johdettu arvo. Käytä ylikirjoitusta vain poikkeuksissa.
@@ -1571,12 +1670,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                         <div>
                                           <div className="flex flex-wrap items-center gap-2">
                                             <div className="text-sm font-medium">Asiakashinta asiakkaalle</div>
-                                            <Badge
-                                              variant="outline"
-                                              className="rounded-full border-primary/25 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary"
-                                            >
-                                              Syötetään käsin
-                                            </Badge>
+                                            <VisibilityBadge tone="customer" label="Syötetään käsin" />
                                           </div>
                                           <p className="mt-1 text-xs text-muted-foreground">
                                             Asiakashinta on tässä tilassa käyttäjän syöttämä veroton yksikköhinta.
@@ -1624,12 +1718,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                           <div>
                                             <div className="flex flex-wrap items-center gap-2">
                                               <div className="text-sm font-medium text-slate-950">Sisäinen kustannus- ja kateseuranta</div>
-                                              <Badge
-                                                variant="outline"
-                                                className="rounded-full border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950"
-                                              >
-                                                Valinnainen tässä tilassa
-                                              </Badge>
+                                              <VisibilityBadge tone="internal" label="Valinnainen sisäinen seuranta" />
                                             </div>
                                             <p className="mt-1 text-xs text-muted-foreground">
                                               Täytä sisäiset kustannukset, jos haluat nähdä toteutuvan katteen myös manuaalisella asiakashinnalla.
@@ -1718,12 +1807,8 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                         <div>
                                           <div className="flex flex-wrap items-center gap-2">
                                             <div className="text-sm font-medium">Rivin kokonaishinta asiakkaalle</div>
-                                            <Badge
-                                              variant="outline"
-                                              className="rounded-full border-primary/25 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary"
-                                            >
-                                              Syötetään verottomana kokonaissummana
-                                            </Badge>
+                                            <VisibilityBadge tone="customer" label="Syötetään verottomana kokonaissummana" />
+                                            <VisibilityBadge tone="derived" label="Yksikköhinta johdetaan automaattisesti" />
                                           </div>
                                           <p className="mt-1 text-xs text-muted-foreground">
                                             Järjestelmä johtaa tästä rivin yksikköhinnan vain apuarvoksi.
@@ -1775,12 +1860,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                           <div>
                                             <div className="flex flex-wrap items-center gap-2">
                                               <div className="text-sm font-medium text-slate-950">Sisäinen kustannus- ja kateseuranta</div>
-                                              <Badge
-                                                variant="outline"
-                                                className="rounded-full border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950"
-                                              >
-                                                Valinnainen tässä tilassa
-                                              </Badge>
+                                              <VisibilityBadge tone="internal" label="Valinnainen sisäinen seuranta" />
                                             </div>
                                             <p className="mt-1 text-xs text-muted-foreground">
                                               Täytä sisäiset kustannukset, jos haluat nähdä toteutuvan katteen myös kokonaishintarivillä.
@@ -1896,19 +1976,235 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   </div>
                 )}
               </Card>
+              </QuoteEditorSection>
+
+              <QuoteEditorSection
+                step={costsStep}
+                stepNumber={3}
+                active={activeStep === 'costs'}
+                onSelect={() => setActiveStep('costs')}
+                badges={(
+                  <>
+                    <VisibilityBadge tone="optional" />
+                    <VisibilityBadge tone="customer" label="Näkyvät asiakkaalle erillisinä erinä" />
+                  </>
+                )}
+                footer={renderSectionFooter('costs', 'Viimeistele ehdot ja huomiot')}
+              >
+                <AdditionalCostsSection
+                  quote={quote}
+                  total={calculation.extraChargesTotal}
+                  travelCosts={travelCosts}
+                  open={additionalCostsOpen}
+                  isEditable={isEditable}
+                  onOpenChange={setAdditionalCostsOpen}
+                  onUpdateQuote={updateQuote}
+                  fieldHelp={QUOTE_FIELD_HELP}
+                  hasPotentialDoubleInstallationCharge={hasPotentialDoubleInstallationCharge}
+                />
+              </QuoteEditorSection>
+
+              <QuoteEditorSection
+                step={finishingStep}
+                stepNumber={4}
+                active={activeStep === 'finishing'}
+                onSelect={() => setActiveStep('finishing')}
+                badges={(
+                  <>
+                    <VisibilityBadge tone="customer" label="Ehdot, aikataulu ja asiakasviesti näkyvät asiakkaalle" />
+                    <VisibilityBadge tone="internal" label="Sisäiset muistiot pysyvät erillään" />
+                  </>
+                )}
+                footer={renderSectionFooter('finishing', 'Tarkista lähetysvalmius')}
+              >
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-base font-semibold tracking-[-0.03em] text-slate-950">Ehtopohja ja tarjouksen ehtoteksti</h4>
+                      <VisibilityBadge tone="customer" label="Tulostuu asiakkaalle" />
+                      <HelpTooltip
+                        label="Ehtoteksti"
+                        help="Valittu ehtopohja tallentuu tarjoukselle snapshot-muotoon. Voit muokata tätä tarjouksen versiota vapaasti ilman, että alkuperäinen ehtopohja muuttuu."
+                      />
+                    </div>
+                    <div className="mt-4 space-y-4">
+                      <div className="space-y-2">
+                        <FieldHelpLabel htmlFor="terms" label="Ehtopohja" help={QUOTE_FIELD_HELP.termsId} />
+                        <Select value={quote.termsId || 'none'} onValueChange={applyTermsTemplateSelection} disabled={!isEditable}>
+                          <SelectTrigger id="terms"><SelectValue placeholder="Valitse ehtopohja" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Ei ehtopohjaa</SelectItem>
+                            {activeTerms.map((term) => (
+                              <SelectItem key={term.id} value={term.id}>{term.name}{term.isDefault ? ' (oletus)' : ''}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <FieldHelpLabel
+                          htmlFor="terms-snapshot"
+                          label="Tarjouksen ehtoteksti"
+                          help="Valittu ehtopohja kopioidaan tarjoukselle snapshot-muotoon. Voit muokata tätä tekstiä vapaasti ilman, että alkuperäinen ehtopohja muuttuu."
+                        />
+                        <Textarea
+                          id="terms-snapshot"
+                          rows={10}
+                          value={quote.termsSnapshotContentMd || ''}
+                          onChange={(event) => updateQuote(quote.id, {
+                            termsSnapshotName: quote.termsSnapshotName || quoteTerms?.name || 'Tarjousehdot',
+                            termsSnapshotContentMd: event.target.value,
+                          })}
+                          placeholder="Valitse ehtopohja tai kirjoita tarjouksen oma ehtoteksti tähän."
+                          disabled={!isEditable}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Myöhemmin tehtävät ehtopohjan muutokset eivät muuta tähän tarjoukseen tallennettua ehtotekstiä.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-base font-semibold tracking-[-0.03em] text-slate-950">Aikataulu ja määräajat</h4>
+                      <VisibilityBadge tone="customer" />
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      Lisää aloitus, toimitus, määräaika tai valmistuminen tähän vaiheeseen. Tiedot näkyvät myös asiakkaan dokumenteissa.
+                    </p>
+                    <div className="mt-4">
+                      <ScheduleSection milestones={quote.scheduleMilestones || []} onChange={(scheduleMilestones) => updateQuote(quote.id, { scheduleMilestones })} disabled={!isEditable} />
+                    </div>
+                  </div>
+                </div>
+
+                <QuoteNotesPanels quote={quote} isEditable={isEditable} onUpdateQuote={updateQuote} fieldHelp={{ notes: QUOTE_FIELD_HELP.notes, internalNotes: QUOTE_FIELD_HELP.internalNotes }} />
+
+                {quoteTerms && resolvedQuoteTermsContent && (
+                  <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-base font-semibold tracking-[-0.03em] text-slate-950">Esikatselu asiakkaalle näkyvästä ehtotekstistä</h4>
+                      <VisibilityBadge tone="customer" />
+                    </div>
+                    <div className="mt-4 whitespace-pre-wrap rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm leading-7 text-slate-700">
+                      {resolvedQuoteTermsContent}
+                    </div>
+                  </div>
+                )}
+              </QuoteEditorSection>
+
+              <QuoteEditorSection
+                step={reviewStep}
+                stepNumber={5}
+                active={activeStep === 'review'}
+                onSelect={() => setActiveStep('review')}
+                badges={(
+                  <>
+                    <VisibilityBadge tone="derived" label="Yhteenveto perustuu koko tarjoukseen" />
+                    <VisibilityBadge tone="customer" label="Tarkista asiakkaalle lähtevä sisältö" />
+                    <VisibilityBadge tone="internal" label="Varmista myös sisäinen kate" />
+                  </>
+                )}
+                footer={renderSectionFooter('review')}
+              >
+                <div className="grid gap-5 xl:grid-cols-2">
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-base font-semibold tracking-[-0.03em] text-slate-950">Lähetysvalmius</h4>
+                      <VisibilityBadge tone="derived" label="Perustuu validointiin" />
+                    </div>
+                    <div className="mt-4 space-y-4">
+                      {validation.errors.length > 0 && (
+                        <Alert variant="destructive">
+                          <AlertDescription>
+                            <div className="font-medium">Lähetys estyy näiden virheiden vuoksi:</div>
+                            <ul className="mt-2 list-disc pl-5">
+                              {validation.errors.map((error) => <li key={error.field}>{error.message}</li>)}
+                            </ul>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      {validation.warnings.length > 0 && (
+                        <Alert className="border-amber-300 bg-amber-50 text-amber-950">
+                          <Warning className="h-4 w-4" />
+                          <AlertDescription>
+                            <div className="font-medium">Tarkista vielä nämä varoitukset:</div>
+                            <ul className="mt-2 list-disc pl-5">
+                              {validation.warnings.map((warning) => <li key={warning.field}>{warning.message}</li>)}
+                            </ul>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      {validation.errors.length === 0 && validation.warnings.length === 0 && (
+                        <Alert className="border-emerald-300 bg-emerald-50 text-emerald-950">
+                          <CheckCircle className="h-4 w-4" weight="fill" />
+                          <AlertDescription>
+                            Tarjous näyttää olevan valmis lähetettäväksi ilman estäviä puutteita tai varoituksia.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" onClick={() => setValidationOpen(true)} disabled={!validation.isValid}>
+                          <PaperPlaneTilt className="h-4 w-4" />
+                          Tarkista ja lähetä tarjous
+                        </Button>
+                        <Button type="button" variant="outline" onClick={() => setActiveStep('rows')}>
+                          Palaa riveihin
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-base font-semibold tracking-[-0.03em] text-slate-950">Mitä eri vientiversiot sisältävät?</h4>
+                      <HelpTooltip
+                        label="Vientiversiot"
+                        help="Asiakasversiot näyttävät vain asiakkaalle tarkoitetut tiedot. Sisäiset viennit sisältävät lisäksi ostohinnan, toteutuneen katteen ja sisäiset muistiinpanot."
+                      />
+                    </div>
+                    <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                      <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h5 className="text-sm font-semibold uppercase tracking-[0.14em] text-sky-950">Asiakasversio</h5>
+                          <VisibilityBadge tone="customer" />
+                        </div>
+                        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-6 text-sky-950/90">
+                          <li>Tarjousrivit ja asiakkaalle näkyvät hinnat</li>
+                          <li>Lisäkulut, alennus, ALV ja loppusumma</li>
+                          <li>Aikataulu, ehtoteksti ja tarjoushuomautukset</li>
+                        </ul>
+                      </div>
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h5 className="text-sm font-semibold uppercase tracking-[0.14em] text-amber-950">Sisäinen versio</h5>
+                          <VisibilityBadge tone="internal" />
+                        </div>
+                        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-6 text-amber-950/90">
+                          <li>Ostohinta, sisäinen kustannus ja katetiedot</li>
+                          <li>Sisäiset muistiinpanot ja kannattavuuden seuranta</li>
+                          <li>Kokonaiskate koko tarjoukselle</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </QuoteEditorSection>
             </div>
             <div className="space-y-6 xl:sticky xl:top-0 self-start">
+              <QuoteCompletionChecklist items={quoteCompletionChecklist} onJumpToStep={setActiveStep} />
+
               <Card className="p-6 space-y-4">
                 <div>
                   <h3 className="text-lg font-semibold">Tarjouksen yhteenveto</h3>
-                  <p className="text-sm text-muted-foreground">Asiakas-, projekti- ja summatiedot tulostusta varten.</p>
+                  <p className="text-sm text-muted-foreground">Asiakas-, projekti- ja summatiedot yhdellä silmäyksellä ennen vientiä tai lähetystä.</p>
                 </div>
                 <div className="space-y-3 text-sm">
                   <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">Asiakas</span><span className="text-right font-medium">{customer.name}</span></div>
                   <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">Projekti</span><span className="text-right font-medium">{project.name}</span></div>
                   <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">Vastuuhenkilö</span><span className="text-right font-medium">{quoteOwnerLabel}</span></div>
                   <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">Voimassa asti</span><span className="text-right font-medium">{quote.validUntil || '-'}</span></div>
-                  <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">Rivejä</span><span className="text-right font-medium">{quoteRows.filter((row) => row.mode !== 'section').length}</span></div>
+                  <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">Rivejä</span><span className="text-right font-medium">{billableRowCount}</span></div>
                 </div>
                 {visibleScheduleMilestones.length > 0 && (
                   <>
@@ -1962,16 +2258,19 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   <div className="flex justify-between border-t pt-3 text-lg font-semibold"><span>Loppusumma</span><span>{formatCurrency(calculation.total)}</span></div>
                   <div className="flex justify-between text-muted-foreground"><span>Kokonaiskate</span><span>{formatCurrency(calculation.totalMargin)} ({formatNumber(calculation.marginPercent, 1)} %)</span></div>
                 </div>
-                {quoteTerms && (
+                <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+                  <div className="font-medium text-foreground">Ehdot</div>
+                  <div className="mt-2">{quoteTerms ? `${quoteTerms.name} on liitetty tarjoukselle snapshot-muotoisena.` : 'Tarjoukselle ei ole valittu ehtopohjaa.'}</div>
+                </div>
+                {quote.notes?.trim() && (
                   <div className="rounded-xl border bg-muted/20 p-4">
-                    <div className="text-sm font-medium">Ehtopohja</div>
-                    <div className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{resolvedQuoteTermsContent}</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-medium">Asiakasnäkyvät huomautukset</div>
+                      <VisibilityBadge tone="customer" />
+                    </div>
+                    <div className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{quote.notes.trim()}</div>
                   </div>
                 )}
-              </Card>
-
-              <Card className="p-6">
-                <ScheduleSection milestones={quote.scheduleMilestones || []} onChange={(scheduleMilestones) => updateQuote(quote.id, { scheduleMilestones })} disabled={!isEditable} />
               </Card>
             </div>
           </div>
