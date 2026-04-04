@@ -4,6 +4,10 @@ export type UserRole = 'admin' | 'user';
 export type UserStatus = 'active' | 'disabled';
 export type OrganizationRole = 'owner' | 'employee';
 export type AppKvScope = 'shared' | 'organization' | 'user';
+export type LegalDocumentType = 'terms' | 'privacy' | 'dpa' | 'cookies';
+export type LegalDocumentStatus = 'draft' | 'active' | 'archived';
+export type LegalDocumentAcceptanceRequirement = 'all-users' | 'organization-owner' | 'none';
+export type LegalAcceptanceSource = 'signup' | 'invited-user-first-login' | 'reacceptance' | 'admin-flow';
 
 export interface OrganizationRow {
   id: string;
@@ -33,6 +37,42 @@ export interface AppKvRow<T = unknown> {
   owner_user_id: string | null;
   value: T;
   updated_at: string;
+}
+
+export interface LegalDocumentVersionRow {
+  id: string;
+  document_type: LegalDocumentType;
+  title: string;
+  version_label: string;
+  effective_at: string;
+  status: LegalDocumentStatus;
+  acceptance_requirement: LegalDocumentAcceptanceRequirement;
+  requires_reacceptance: boolean;
+  change_summary?: string | null;
+  locale: string;
+  content_md: string;
+  content_hash: string;
+  created_by_user_id?: string | null;
+  updated_by_user_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  published_at?: string | null;
+}
+
+export interface LegalDocumentAcceptanceRow {
+  id: string;
+  document_version_id: string;
+  document_type: LegalDocumentType;
+  version_label: string;
+  content_hash: string;
+  user_id: string;
+  organization_id?: string | null;
+  accepted_at: string;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  acceptance_source: LegalAcceptanceSource;
+  locale?: string | null;
+  accepted_on_behalf_of_organization: boolean;
 }
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();

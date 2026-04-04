@@ -1,6 +1,7 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { deriveAccessState } from '../lib/access-control';
+import type { SignupLegalAcceptanceBundle } from '../lib/legal';
 import {
   createIsolatedSupabaseClient,
   getSupabaseConfigError,
@@ -34,6 +35,7 @@ interface RegisterInput {
   email: string;
   password: string;
   organizationName: string;
+  legalAcceptance: SignupLegalAcceptanceBundle;
 }
 
 interface LoginInput {
@@ -900,7 +902,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [clearAuthState, hydrateSession]);
 
-  const register = async ({ displayName, email, password, organizationName }: RegisterInput) => {
+  const register = async ({ displayName, email, password, organizationName, legalAcceptance }: RegisterInput) => {
     const trimmedName = displayName.trim();
     const normalizedEmail = normalizeEmail(email);
     const trimmedOrganizationName = organizationName.trim();
@@ -917,6 +919,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!validatePassword(password)) {
       throw new Error('Salasanan on oltava vähintään 8 merkkiä.');
     }
+    if (!legalAcceptance.accepted_document_version_ids.length) {
+      throw new Error('Ajantasaiset sopimusasiakirjat on hyväksyttävä ennen tilin luontia.');
+    }
 
     const client = requireSupabase();
     const { data, error } = await client.auth.signUp({
@@ -927,6 +932,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data: {
           display_name: trimmedName,
           organization_name: trimmedOrganizationName,
+          signup_flow: 'self-service-owner',
+          legal_acceptance_bundle: legalAcceptance,
         },
       },
     });

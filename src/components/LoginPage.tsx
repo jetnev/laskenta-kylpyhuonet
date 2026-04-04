@@ -5,7 +5,11 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Alert, AlertDescription } from './ui/alert';
+import { Checkbox } from './ui/checkbox';
 import { useAuth } from '../hooks/use-auth';
+import LegalDocumentLinks from './legal/LegalDocumentLinks';
+import { buildSignupLegalAcceptanceBundle, listPublicActiveLegalDocuments } from '../lib/legal';
+import type { LegalDocumentVersionRow } from '../lib/supabase';
 
 type AuthView = 'login' | 'register' | 'forgot' | 'reset';
 
@@ -133,6 +137,13 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
     password: '',
     confirmPassword: '',
   });
+  const [legalDocuments, setLegalDocuments] = useState<LegalDocumentVersionRow[]>([]);
+  const [legalLoading, setLegalLoading] = useState(true);
+  const [legalError, setLegalError] = useState<string | null>(null);
+  const [registrationChecks, setRegistrationChecks] = useState({
+    acceptedTermsAndPrivacy: false,
+    authorityConfirmed: false,
+  });
   const [forgotEmail, setForgotEmail] = useState('');
   const [resetForm, setResetForm] = useState({ password: '', confirmPassword: '' });
 
@@ -158,6 +169,37 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
     setInfoMessage(feedback.message);
     setError(null);
     setView('login');
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    void listPublicActiveLegalDocuments()
+      .then((documents) => {
+        if (!active) {
+          return;
+        }
+
+        setLegalDocuments(documents);
+        setLegalError(null);
+      })
+      .catch((reason) => {
+        if (!active) {
+          return;
+        }
+
+        setLegalDocuments([]);
+        setLegalError(reason instanceof Error ? reason.message : 'Sopimusasiakirjojen lataus epäonnistui.');
+      })
+      .finally(() => {
+        if (active) {
+          setLegalLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const heading = useMemo(() => {
@@ -323,12 +365,37 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
                       setError('Salasanat eivät täsmää.');
                       return;
                     }
+
+                    if (legalLoading) {
+                      setError('Sopimusasiakirjoja ladataan vielä. Yritä hetken kuluttua uudelleen.');
+                      return;
+                    }
+
+                    if (legalError) {
+                      setError(legalError);
+                      return;
+                    }
+
+                    let legalAcceptance;
+                    try {
+                      legalAcceptance = buildSignupLegalAcceptanceBundle(legalDocuments, {
+                        acceptedTermsAndPrivacy: registrationChecks.acceptedTermsAndPrivacy,
+                        authorityConfirmed: registrationChecks.authorityConfirmed,
+                        locale: navigator.language || 'fi-FI',
+                        userAgent: navigator.userAgent || 'Tuntematon selain',
+                      });
+                    } catch (reason) {
+                      setError(getActionErrorMessage(reason));
+                      return;
+                    }
+
                     void runAction(() =>
                       register({
                         displayName: registerForm.displayName,
                         organizationName: registerForm.organizationName,
                         email: registerForm.email,
                         password: registerForm.password,
+                        legalAcceptance,
                       })
                     );
                   }}
@@ -380,8 +447,68 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
                       onChange={(event) => setRegisterForm((current) => ({ ...current, confirmPassword: event.target.value }))}
                     />
                   </div>
+                  <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
+                    <p className="text-sm leading-7 text-slate-700">
+                      Tilin luomalla hyväksyt palvelun käyttöehdot. Tietojesi käsittelystä kerrotaan tietosuojaselosteessa. Yritysasiakkaan tietojenkäsittelyliite on saatavilla samalla sivulla luettavaksi.
+                    </p>
+                    <LegalDocumentLinks className="mt-3" openInNewTab />
+
+                    {legalLoading && (
+                      <p className="mt-3 text-xs text-slate-500">Ladataan ajantasaisia sopimusasiakirjoja...</p>
+                    )}
+
+                    {legalError && (
+                      <Alert className="mt-3" variant="destructive">
+                        <AlertDescription>{legalError}</AlertDescription>
+                      </Alert>
+                    )}
+
+                    <div className="mt-4 space-y-4">
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={registrationChecks.acceptedTermsAndPrivacy}
+                          id="register-accept-terms"
+                          onCheckedChange={(checked) =>
+                            setRegistrationChecks((current) => ({
+                              ...current,
+                              acceptedTermsAndPrivacy: checked === true,
+                            }))
+                          }
+                        />
+                        <div className="space-y-1">
+                          <Label className="cursor-pointer text-sm leading-6 text-slate-800" htmlFor="register-accept-terms">
+                            Hyväksyn käyttöehdot ja vahvistan lukeneeni tietosuojaselosteen
+                          </Label>
+                          <p className="text-xs leading-6 text-slate-500">
+                            Tätä hyväksyntää ei voi ohittaa, eikä se ole oletuksena valittuna.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={registrationChecks.authorityConfirmed}
+                          id="register-authority"
+                          onCheckedChange={(checked) =>
+                            setRegistrationChecks((current) => ({
+                              ...current,
+                              authorityConfirmed: checked === true,
+                            }))
+                          }
+                        />
+                        <div className="space-y-1">
+                          <Label className="cursor-pointer text-sm leading-6 text-slate-800" htmlFor="register-authority">
+                            Vakuutan, että minulla on oikeus hyväksyä ehdot organisaation puolesta.
+                          </Label>
+                          <p className="text-xs leading-6 text-slate-500">
+                            Itse rekisteröityvä käyttäjä luo samalla organisaation owner-tilin, joten tämä vahvistus tallennetaan audit trailiin.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                   <Button className="h-11 w-full" disabled={submitting} type="submit">
-                    {heading.actionLabel}
+                    {legalLoading ? 'Ladataan ehtoja...' : heading.actionLabel}
                   </Button>
                   <button className="text-sm text-primary hover:underline" onClick={() => { setError(null); setView('login'); }} type="button">
                     Takaisin kirjautumiseen
@@ -469,6 +596,13 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
                   </button>
                 </form>
               )}
+
+              <div className="border-t border-slate-200 pt-4">
+                <p className="text-xs leading-6 text-slate-500">
+                  Dokumentit ovat luettavissa ilman kirjautumista. Mahdolliset tulevat markkinointisuostumukset pyydetään erikseen, eikä niitä niputeta käyttöehtojen hyväksyntään.
+                </p>
+                <LegalDocumentLinks className="mt-3" openInNewTab />
+              </div>
             </CardContent>
           </Card>
         </section>

@@ -4,11 +4,23 @@
 
 1. Luo Supabase-projekti.
 2. Avaa SQL Editor.
-3. Aja tiedosto [supabase/schema.sql](/C:/Users/jethr/Documents/Laskenta/laskenta-kylpyhuonet/supabase/schema.sql).
-4. Avaa `Project Settings -> API`.
-5. Kopioi:
+3. Jos pystytät ympäristön alusta asti, aja koko tiedosto [supabase/schema.sql](supabase/schema.sql).
+4. Jos ympäristö on jo olemassa ja haluat ottaa vain versionoidun sopimus- ja hyväksyntäketjun käyttöön, aja migration [supabase/migrations/20260404_legal_acceptance_chain.sql](supabase/migrations/20260404_legal_acceptance_chain.sql).
+5. Täydennä ennen tuotantoa migrationin mukana tulevat juridiset placeholderit, kuten yrityksen nimi, Y-tunnus, osoite, tukiosoitteet, retention-ajat ja toimivaltainen tuomioistuin.
+6. Avaa `Project Settings -> API`.
+7. Kopioi:
    - `Project URL`
    - `anon public key`
+
+## 1.1 Julkaisujärjestys olemassa olevaan ympäristöön
+
+1. Aja ensin tietokantamuutos SQL Editorissa.
+2. Vasta sen jälkeen julkaise frontend-koodi, jossa rekisteröinti, public legal -reitit ja reacceptance-portti käyttävät uusia tauluja ja funktioita.
+3. Tarkista julkaisemisen jälkeen vähintään:
+   - uusi rekisteröityminen owner-käyttäjänä
+   - ownerin ensimmäinen kirjautuminen ja DPA-hyväksyntä
+   - organisaation työntekijän ensimmäinen kirjautuminen
+   - julkiset reitit `/kayttoehdot`, `/tietosuoja`, `/tietojenkasittely` ja `/evasteet`
 
 ## 2. Supabase Auth
 
@@ -66,4 +78,5 @@ Kun repo on kytketty Pagesiin:
 2. push GitHubiin
 3. Cloudflare buildaa uuden version automaattisesti
 4. Pages-osoite päivittyy uuteen versioon
+<!-- EOF -->
 

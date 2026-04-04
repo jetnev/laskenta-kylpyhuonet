@@ -1,6 +1,7 @@
 import { ArrowRight, Buildings, CalendarCheck, ChartBar, CheckCircle, CurrencyCircleDollar, FileText, Folder, HardHat, ListChecks, Package, PlayCircle, ShieldCheck, Wrench, X } from '@phosphor-icons/react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
+import LegalDocumentLinks from './legal/LegalDocumentLinks';
 
 interface LandingPageProps {
   onNavigateToLogin: () => void;
@@ -419,6 +420,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
           <div>
             <div className="text-lg font-semibold tracking-tight text-slate-950">Tarjouslaskenta</div>
             <div className="mt-1 text-sm text-slate-500">Tarjouslaskenta ja projektiseuranta rakennusalan yrityksille.</div>
+            <LegalDocumentLinks className="mt-4" />
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="ghost" onClick={onNavigateToLogin}>

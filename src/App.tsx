@@ -41,6 +41,15 @@ import ReportsPage from './components/pages/ReportsPage';
 import LoginPage from './components/LoginPage';
 import AccountPage from './components/pages/AccountPage';
 import UsersPage from './components/pages/UsersPage';
+import LegalDocumentsPage from './components/pages/LegalDocumentsPage';
+import LegalAcceptanceGate from './components/legal/LegalAcceptanceGate';
+import {
+  acceptLegalDocuments,
+  evaluateLegalAcceptanceState,
+  listCurrentUserLegalAcceptances,
+  listPublicActiveLegalDocuments,
+  type LegalAcceptanceState,
+} from './lib/legal';
 
 type Page =
   | 'dashboard'
@@ -51,6 +60,7 @@ type Page =
   | 'installation-groups'
   | 'substitutes'
   | 'terms'
+  | 'legal'
   | 'reports'
   | 'users'
   | 'settings'
@@ -83,6 +93,11 @@ function App() {
   const [checkingForUpdates, setCheckingForUpdates] = useState(false);
   const [restartingForUpdate, setRestartingForUpdate] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [legalState, setLegalState] = useState<LegalAcceptanceState | null>(null);
+  const [legalStateLoading, setLegalStateLoading] = useState(false);
+  const [legalStateError, setLegalStateError] = useState<string | null>(null);
+  const [legalAcceptanceError, setLegalAcceptanceError] = useState<string | null>(null);
+  const [acceptingLegalDocuments, setAcceptingLegalDocuments] = useState(false);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateSnapshot | null>(null);
   const {
     user,
@@ -124,6 +139,37 @@ function App() {
     []
   );
 
+  const loadLegalState = useCallback(async () => {
+    if (!user) {
+      setLegalState(null);
+      setLegalStateError(null);
+      setLegalAcceptanceError(null);
+      setLegalStateLoading(false);
+      return;
+    }
+
+    setLegalStateLoading(true);
+    setLegalStateError(null);
+    try {
+      const [documents, acceptances] = await Promise.all([
+        listPublicActiveLegalDocuments(),
+        listCurrentUserLegalAcceptances(),
+      ]);
+
+      setLegalState(
+        evaluateLegalAcceptanceState(documents, acceptances, {
+          organizationRole: user.organizationRole,
+        })
+      );
+      setLegalAcceptanceError(null);
+    } catch (error) {
+      setLegalState(null);
+      setLegalStateError(error instanceof Error ? error.message : 'Sopimusasiakirjojen tarkistus epäonnistui.');
+    } finally {
+      setLegalStateLoading(false);
+    }
+  }, [user]);
+
   const navigation = useMemo(
     () =>
       [
@@ -134,9 +180,10 @@ function App() {
         { id: 'products' as const, name: 'Tuoterekisteri', icon: Package, visible: true },
         { id: 'installation-groups' as const, name: 'Hintaryhmät', icon: Wrench, visible: true },
         { id: 'substitutes' as const, name: 'Korvaavat tuotteet', icon: ArrowsLeftRight, visible: true },
-        { id: 'terms' as const, name: 'Ehdot', icon: FileText, visible: true },
+        { id: 'terms' as const, name: 'Tarjousehdot', icon: FileText, visible: true },
+        { id: 'legal' as const, name: 'Sopimusasiat', icon: Shield, visible: canManageUsers },
         { id: 'reports' as const, name: 'Raportointi', icon: ChartBar, visible: true },
-        { id: 'users' as const, name: 'Käyttäjät', icon: Shield, visible: canManageUsers },
+        { id: 'users' as const, name: 'Käyttäjät', icon: User, visible: canManageUsers },
         { id: 'settings' as const, name: 'Asetukset', icon: Gear, visible: canManageSharedData },
         { id: 'account' as const, name: 'Oma tili', icon: User, visible: true },
       ].filter((item) => item.visible),
@@ -157,6 +204,10 @@ function App() {
     window.addEventListener('popstate', syncRoute);
     return () => window.removeEventListener('popstate', syncRoute);
   }, []);
+
+  useEffect(() => {
+    void loadLegalState();
+  }, [loadLegalState]);
 
   useEffect(() => {
     if (loading) {
@@ -278,6 +329,80 @@ function App() {
     return (
       <>
         <LoginPage onNavigateHome={() => window.location.assign('/')} />
+        <Toaster />
+      </>
+    );
+  }
+
+  if (legalStateLoading) {
+    return (
+      <>
+        <RouteLoadingFallback />
+        <Toaster />
+      </>
+    );
+  }
+
+  if (legalStateError) {
+    return (
+      <>
+        <div className="min-h-screen bg-[#f5f7fb] px-6 py-10 text-slate-950 sm:py-16">
+          <div className="mx-auto max-w-3xl rounded-[28px] border border-slate-200 bg-white p-8 shadow-[0_28px_70px_-46px_rgba(15,23,42,0.4)]">
+            <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">Sopimusasiakirjojen tarkistus epäonnistui</h1>
+            <p className="mt-3 text-sm leading-7 text-slate-600">
+              Palvelun käyttöä ei jatketa ennen kuin ajantasaiset dokumentit voidaan tarkistaa luotettavasti. Yritä päivittää näkymä tai kirjaudu ulos.
+            </p>
+            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {legalStateError}
+            </div>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <Button variant="outline" onClick={() => void handleLogout()} disabled={signingOut}>
+                {signingOut ? 'Kirjaudutaan ulos...' : 'Kirjaudu ulos'}
+              </Button>
+              <Button onClick={() => void loadLegalState()}>
+                Yritä uudelleen
+              </Button>
+            </div>
+          </div>
+        </div>
+        <Toaster />
+      </>
+    );
+  }
+
+  if (legalState?.requires_blocking_acceptance && legalState.pending_source) {
+    return (
+      <>
+        <LegalAcceptanceGate
+          organizationName={organization?.name || user.organizationName}
+          organizationRole={user.organizationRole}
+          pendingDocuments={legalState.pending_documents}
+          acceptanceSource={legalState.pending_source}
+          submitting={acceptingLegalDocuments}
+          error={legalAcceptanceError}
+          onAccept={async ({ acceptOnBehalfOfOrganization }) => {
+            try {
+              setAcceptingLegalDocuments(true);
+              setLegalAcceptanceError(null);
+              await acceptLegalDocuments({
+                documentVersionIds: legalState.pending_documents.map((document) => document.id),
+                acceptanceSource: legalState.pending_source || 'reacceptance',
+                locale: navigator.language || 'fi-FI',
+                userAgent: navigator.userAgent || 'Tuntematon selain',
+                acceptOnBehalfOfOrganization,
+              });
+              await loadLegalState();
+              toast.success('Hyväksyntä tallennettu. Voit jatkaa palvelun käyttöä.');
+            } catch (error) {
+              setLegalAcceptanceError(error instanceof Error ? error.message : 'Hyväksyntää ei voitu tallentaa.');
+            } finally {
+              setAcceptingLegalDocuments(false);
+            }
+          }}
+          onLogout={async () => {
+            await handleLogout();
+          }}
+        />
         <Toaster />
       </>
     );
@@ -411,6 +536,7 @@ function App() {
           {currentPage === 'installation-groups' && <InstallationGroupsPage />}
           {currentPage === 'substitutes' && <SubstituteProductsPage />}
           {currentPage === 'terms' && <TermsPage />}
+          {currentPage === 'legal' && <LegalDocumentsPage />}
           {currentPage === 'reports' && <ReportsPage />}
           {currentPage === 'users' && <UsersPage />}
           {currentPage === 'settings' && <SettingsPage />}
