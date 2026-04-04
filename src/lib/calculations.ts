@@ -1,4 +1,4 @@
-import { Customer, Project, Quote, QuoteRow, type QuoteRowPricingModel } from './types';
+import { Customer, Project, Quote, QuoteRow, type QuotePricingMode, type QuoteRowPricingModel } from './types';
 
 export interface QuoteRowCalculation {
   pricingModel: QuoteRowPricingModel;
@@ -8,9 +8,11 @@ export interface QuoteRowCalculation {
   baseTotal: number;
   adjustmentTotal: number;
   rowTotal: number;
+  internalUnitCost: number;
   costTotal: number;
   marginAmount: number;
   marginPercent: number;
+  hasInternalCostBasis: boolean;
   isUnitPriceDerived: boolean;
   usesLegacyPricing: boolean;
 }
@@ -87,8 +89,52 @@ function normalizeAdjustment(value?: number) {
   return value as number;
 }
 
-function normalizeRegionMultiplier(row: QuoteRow) {
+function normalizeRegionMultiplier(row: Pick<QuoteRow, 'regionMultiplier'>) {
   return Number.isFinite(row.regionMultiplier) && row.regionMultiplier > 0 ? row.regionMultiplier : 1;
+}
+
+export function getQuoteRowUnitPricingMode(
+  row: Pick<QuoteRow, 'unitPricingMode' | 'manualSalesPrice'>
+): QuotePricingMode {
+  if (row.unitPricingMode === 'manual') {
+    return 'manual';
+  }
+
+  if (row.unitPricingMode === 'margin') {
+    return 'margin';
+  }
+
+  return row.manualSalesPrice ? 'manual' : 'margin';
+}
+
+export function hasQuoteRowInternalCostBasis(
+  row: Pick<QuoteRow, 'mode' | 'purchasePrice' | 'installationPrice'>
+) {
+  if (row.mode === 'section' || row.mode === 'charge') {
+    return false;
+  }
+
+  return normalizeNonNegativeNumber(row.purchasePrice) > 0 || normalizeNonNegativeNumber(row.installationPrice) > 0;
+}
+
+export function getQuoteRowInternalUnitCost(
+  row: Pick<QuoteRow, 'mode' | 'purchasePrice' | 'installationPrice' | 'regionMultiplier'>
+) {
+  if (row.mode === 'section' || row.mode === 'charge') {
+    return 0;
+  }
+
+  const internalBaseCost = normalizeNonNegativeNumber(row.purchasePrice) + normalizeNonNegativeNumber(row.installationPrice);
+  return roundCurrency(internalBaseCost * normalizeRegionMultiplier(row));
+}
+
+export function calculateQuoteRowTargetUnitPrice(
+  row: Pick<QuoteRow, 'mode' | 'purchasePrice' | 'installationPrice' | 'regionMultiplier'>,
+  marginPercent: number
+) {
+  const normalizedMarginPercent = Number.isFinite(marginPercent) ? Math.max(0, marginPercent) : 0;
+  const safeDenominator = Math.max(0.01, 1 - (normalizedMarginPercent / 100));
+  return roundCurrency(getQuoteRowInternalUnitCost(row) / safeDenominator);
 }
 
 export function getQuoteRowPricingModel(row: QuoteRow): QuoteRowPricingModel {
@@ -205,9 +251,8 @@ export function getQuoteExtraChargeLines(quote: Quote): QuoteExtraChargeLine[] {
 export function calculateQuoteRow(row: QuoteRow): QuoteRowCalculation {
   const quantity = Number.isFinite(row.quantity) ? Math.max(0, row.quantity) : 0;
   const pricing = getQuoteRowPricingDetails(row);
-  const costTotal = row.mode !== 'installation'
-    ? roundCurrency(normalizeNonNegativeNumber(row.purchasePrice) * quantity)
-    : 0;
+  const internalUnitCost = getQuoteRowInternalUnitCost(row);
+  const costTotal = roundCurrency(internalUnitCost * quantity);
   const marginAmount = roundCurrency(pricing.netTotal - costTotal);
   const marginPercent = pricing.netTotal > 0 ? roundCurrency((marginAmount / pricing.netTotal) * 100) : 0;
 
@@ -219,9 +264,11 @@ export function calculateQuoteRow(row: QuoteRow): QuoteRowCalculation {
     baseTotal: pricing.baseTotal,
     adjustmentTotal: pricing.adjustmentTotal,
     rowTotal: pricing.netTotal,
+    internalUnitCost,
     costTotal,
     marginAmount,
     marginPercent,
+    hasInternalCostBasis: hasQuoteRowInternalCostBasis(row),
     isUnitPriceDerived: pricing.isUnitPriceDerived,
     usesLegacyPricing: pricing.usesLegacyPricing,
   };

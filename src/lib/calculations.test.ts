@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { calculateQuote, calculateQuoteRow, getQuoteRowPricingDetails } from './calculations';
+import {
+  calculateQuote,
+  calculateQuoteRow,
+  calculateQuoteRowTargetUnitPrice,
+  getQuoteRowPricingDetails,
+} from './calculations';
 import type { Quote, QuoteRow } from './types';
 
 function createBaseRow(overrides: Partial<QuoteRow> = {}): QuoteRow {
@@ -143,5 +148,32 @@ describe('calculateQuoteRow', () => {
     expect(calculation.subtotal).toBe(300);
     expect(calculation.vat).toBe(76.5);
     expect(calculation.total).toBe(376.5);
+  });
+
+  it('derives customer price and margin from the combined internal unit cost', () => {
+    const row = createBaseRow({
+      pricingModel: 'unit_price',
+      mode: 'product_installation',
+      quantity: 2,
+      purchasePrice: 80,
+      installationPrice: 20,
+      regionMultiplier: 1.1,
+      marginPercent: 30,
+      salesPrice: calculateQuoteRowTargetUnitPrice({
+        mode: 'product_installation',
+        purchasePrice: 80,
+        installationPrice: 20,
+        regionMultiplier: 1.1,
+      }, 30),
+    });
+
+    const calculation = calculateQuoteRow(row);
+
+    expect(calculation.internalUnitCost).toBe(110);
+    expect(calculation.costTotal).toBe(220);
+    expect(calculation.rowTotal).toBe(314.28);
+    expect(calculation.marginAmount).toBe(94.28);
+    expect(calculation.marginPercent).toBe(30);
+    expect(calculation.hasInternalCostBasis).toBe(true);
   });
 });

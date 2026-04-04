@@ -196,6 +196,7 @@ export interface QuoteRow extends OwnedFields {
   sortOrder: number;
   mode: QuoteRowMode;
   pricingModel?: QuoteRowPricingModel;
+  unitPricingMode?: QuotePricingMode;
   chargeType?: QuoteChargeType;
   source?: 'manual' | 'catalog';
   productId?: string;

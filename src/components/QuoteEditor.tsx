@@ -49,17 +49,20 @@ import {
   useQuoteTerms,
   useSubstituteProducts,
 } from '../hooks/use-data';
-import { Product, Quote, QuoteChargeType, QuoteRow, QuoteRowMode, QuoteRowPricingModel, ScheduleMilestone } from '../lib/types';
+import { Product, Quote, QuoteChargeType, QuotePricingMode, QuoteRow, QuoteRowMode, ScheduleMilestone } from '../lib/types';
 import {
+  calculateQuoteRowTargetUnitPrice,
   calculateQuote,
   calculateQuoteRow,
   calculateTravelCosts,
   canSendQuote,
   formatCurrency,
   formatNumber,
+  getQuoteRowInternalUnitCost,
   getQuoteExtraChargeLines,
   getQuoteRowPricingDetails,
   getQuoteRowPricingModel,
+  getQuoteRowUnitPricingMode,
 } from '../lib/calculations';
 import {
   exportQuoteToCustomerExcel,
@@ -83,9 +86,18 @@ const ROW_MODE_LABELS: Record<QuoteRowMode, string> = {
   charge: 'Veloitus',
 };
 
-const ROW_PRICING_MODEL_LABELS: Record<QuoteRowPricingModel, string> = {
-  unit_price: 'Yksikköhinta',
+type RowPricingWorkflow = QuotePricingMode | 'line_total';
+
+const ROW_PRICING_WORKFLOW_LABELS: Record<RowPricingWorkflow, string> = {
+  margin: 'Kateohjattu',
+  manual: 'Manuaalinen asiakashinta',
   line_total: 'Rivin kokonaishinta',
+};
+
+const ROW_PRICE_SOURCE_LABELS: Record<RowPricingWorkflow, string> = {
+  margin: 'Johdettu kateohjatusti',
+  manual: 'Manuaalisesti syötetty',
+  line_total: 'Kokonaishinnasta johdettu',
 };
 
 const STATUS_LABELS = {
@@ -110,7 +122,7 @@ const CHARGE_TYPE_LABELS: Record<QuoteChargeType, string> = {
 const QUOTE_FIELD_HELP = {
   quoteNumber: 'Tarjousnumero on yksilöllinen tunnus, jolla tarjous löytyy myöhemmin nopeasti. Käytä yrityksellesi tuttua numerointitapaa.',
   validUntil: 'Voimassaoloaika kertoo asiakkaalle, mihin saakka tarjous on hyväksyttävissä tällä hinnalla.',
-  pricingMode: 'Tämä ohjaa uusien tai automaattisesti johdettujen yksikköhintojen muodostusta. Rivin varsinainen hinnoittelutapa valitaan aina rivikohtaisesti.',
+  pricingMode: 'Tämä määrittää uusien rivien oletustilan. Rivin varsinainen hinnoittelutapa valitaan aina rivikohtaisesti.',
   selectedMarginPercent: 'Oletuskate toimii uusien rivien lähtötasona. Se auttaa pitämään tarjouksen hinnoittelun tasaisena.',
   vatPercent: 'ALV-prosentti vaikuttaa tarjouksen loppusummaan. Käytä arvoa, joka vastaa kyseisen työn verokohtelua.',
   termsId: 'Ehtopohja lisää tarjoukselle valmiit toimitus- ja sopimusehdot, jotta niitä ei tarvitse kirjoittaa joka kerta uudelleen.',
@@ -133,7 +145,7 @@ const QUOTE_FIELD_HELP = {
 
 const QUOTE_ROW_FIELD_HELP = {
   mode: 'Rivin tyyppi määrää onko kyse tuotteesta, asennuksesta, väliotsikosta vai erillisestä veloituksesta.',
-  pricingModel: 'Valitse syötätkö riville verottoman yksikköhinnan vai koko rivin verottoman kokonaishinnan.',
+  pricingModel: 'Valitse ensin rivin hinnoittelutapa: kateohjattu, manuaalinen asiakashinta tai rivin kokonaishinta.',
   chargeType: 'Veloituksen tyyppi helpottaa lisäkulujen erottelua raportoinnissa ja yhteenvedossa.',
   productCode: 'Tuotekoodi helpottaa rivin tunnistusta ja pitää tarjouksen linjassa oman tuoterekisterin kanssa.',
   productName: 'Tuotenimi on näkyvin tieto asiakkaalle. Kirjoita se selkeästi ja asiakkaan näkökulmasta ymmärrettävästi.',
@@ -141,15 +153,15 @@ const QUOTE_ROW_FIELD_HELP = {
   notes: 'Rivihuomautus tuo lisätietoa juuri tälle riville, esimerkiksi rajauksia tai tarkennuksia asiakkaalle.',
   quantity: 'Määrä kertoo kuinka monta kappaletta, metriä tai muuta yksikköä tarjotaan tällä rivillä.',
   unit: 'Yksikkö kertoo millä tavalla määrä lasketaan, kuten kpl, m2 tai erä.',
-  purchasePrice: 'Ostohinta on oma kustannuksesi kyseisellä rivillä. Sen avulla järjestelmä laskee katteen.',
-  marginPercent: 'Kate prosentteina kertoo tavoitellun marginaalin tälle riville, jos myyntihintaa ei anneta käsin.',
-  salesPrice: 'Yksikköhinta on asiakkaalle tarjottu veroton hinta yhtä yksikköä kohti.',
+  purchasePrice: 'Ostohinta per yksikkö muodostaa yhdessä asennuksen taustahinnan ja aluekertoimen kanssa sisäisen yksikkökustannuksen.',
+  marginPercent: 'Tavoitekate kertoo millä prosentilla asiakashinta johdetaan sisäisestä yksikkökustannuksesta.',
+  salesPrice: 'Asiakashinta per yksikkö on asiakkaalle tarjottu veroton hinta. Kateohjatussa tilassa arvo on johdettu, ellei sitä ylikirjoiteta.',
   lineTotal: 'Rivin kokonaishinta on koko riville sovittu veroton summa. Järjestelmä johtaa siitä yksikköhinnan vain apuarvoksi.',
   derivedUnitPrice: 'Johdettu yksikköhinta lasketaan rivin kokonaishinnasta ja määrästä. Se ei ole käyttäjän syöttämä arvo.',
   priceAdjustment: 'Voit lisätä tai vähentää riviltä kiinteän euromäärän ilman että määrä muuttuu.',
-  installationPrice: 'Asennuksen taustahinta per yksikkö sisältyy johdettuun yksikköhintaan. Sitä ei lisätä piilossa toista kertaa.',
+  installationPrice: 'Asennuksen taustahinta per yksikkö lisätään sisäiseen kustannukseen ennen asiakashinnan johtamista.',
   installationGroupId: 'Hintaryhmä tuo valmiita oletuksia asennuksen osuuteen ja nopeuttaa vastaavien rivien luontia.',
-  regionMultiplier: 'Aluekerroin vaikuttaa johdettuun asennuksen osuuteen ja oletushintaan. Se ei muuta jo syötettyä rivin kokonaishintaa.',
+  regionMultiplier: 'Aluekerroin kerrotaan sisäisellä yksikkökustannuksella ennen asiakashinnan johtamista. Se ei muuta jo syötettyä rivin kokonaishintaa.',
   netTotal: 'Veroton summa on rivin laskutettava summa ennen arvonlisäveroa.',
   vatAmount: 'ALV lasketaan verottomasta summasta tarjouksen ALV-prosentin mukaan.',
   grossTotal: 'Verollinen summa on veroton summa lisättynä ALV:lla.',
@@ -169,10 +181,6 @@ function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-function calculateSalesPrice(purchasePrice: number, marginPercent: number) {
-  return roundCurrency(Math.max(0, purchasePrice) * (1 + Math.max(0, marginPercent) / 100));
-}
-
 function formatFlexibleNumber(value: number) {
   return new Intl.NumberFormat('fi-FI', {
     minimumFractionDigits: 0,
@@ -181,22 +189,72 @@ function formatFlexibleNumber(value: number) {
 }
 
 function calculateSuggestedUnitPrice(row: Pick<QuoteRow, 'mode' | 'purchasePrice' | 'installationPrice' | 'regionMultiplier'>, marginPercent: number) {
-  const productUnitPrice = row.mode === 'installation'
-    ? 0
-    : calculateSalesPrice(row.purchasePrice, marginPercent);
-  const installationUnitPrice = row.mode === 'product_installation' || row.mode === 'installation'
-    ? roundCurrency(Math.max(0, row.installationPrice) * (row.regionMultiplier > 0 ? row.regionMultiplier : 1))
-    : 0;
+  return calculateQuoteRowTargetUnitPrice(row, marginPercent);
+}
 
-  return roundCurrency(productUnitPrice + installationUnitPrice);
+function getRowPricingWorkflow(
+  row: Pick<QuoteRow, 'pricingModel' | 'unitPricingMode' | 'manualSalesPrice'>
+): RowPricingWorkflow {
+  if (row.pricingModel === 'line_total') {
+    return 'line_total';
+  }
+
+  return getQuoteRowUnitPricingMode(row);
+}
+
+function getRowPriceSource(
+  row: Pick<QuoteRow, 'pricingModel' | 'unitPricingMode' | 'manualSalesPrice'>
+): RowPricingWorkflow {
+  if (row.pricingModel === 'line_total') {
+    return 'line_total';
+  }
+
+  return getQuoteRowUnitPricingMode(row) === 'margin' && !row.manualSalesPrice ? 'margin' : 'manual';
+}
+
+function formatRowQuantityLabel(row: Pick<QuoteRow, 'quantity' | 'unit'>) {
+  return `${formatFlexibleNumber(row.quantity)} ${row.unit}`.trim();
+}
+
+function formatAdjustmentLabel(adjustmentTotal: number) {
+  if (adjustmentTotal === 0) {
+    return '';
+  }
+
+  return ` ${adjustmentTotal > 0 ? '+' : '-'} ${formatCurrency(Math.abs(adjustmentTotal))}`;
+}
+
+function formatInternalCostFormula(
+  row: Pick<QuoteRow, 'mode' | 'purchasePrice' | 'installationPrice' | 'regionMultiplier' | 'unit'>
+) {
+  const purchasePrice = roundCurrency(Math.max(0, row.purchasePrice));
+  const installationPrice = roundCurrency(Math.max(0, row.installationPrice));
+  const regionMultiplier = row.regionMultiplier > 0 ? row.regionMultiplier : 1;
+  const internalUnitCost = getQuoteRowInternalUnitCost(row);
+  return `(${formatCurrency(purchasePrice)} + ${formatCurrency(installationPrice)}) × ${formatFlexibleNumber(regionMultiplier)} = ${formatCurrency(internalUnitCost)} / ${row.unit}`;
+}
+
+function formatMarginDrivenPriceFormula(row: QuoteRow, vatPercent: number) {
+  const pricing = getQuoteRowPricingDetails(row, vatPercent);
+  const derivedUnitPrice = calculateSuggestedUnitPrice(row, row.marginPercent);
+  const targetMarginLabel = formatNumber(row.marginPercent, 1);
+  const formula = `${formatCurrency(getQuoteRowInternalUnitCost(row))} / (1 - ${targetMarginLabel} %) = ${formatCurrency(derivedUnitPrice)} / ${row.unit}`;
+
+  if (row.manualSalesPrice) {
+    return `${formula}. Käytössä on ylikirjoitettu asiakashinta ${formatCurrency(pricing.enteredUnitPrice ?? 0)} / ${row.unit}.`;
+  }
+
+  return formula;
 }
 
 function formatQuoteRowFormula(row: QuoteRow, vatPercent: number) {
   const pricing = getQuoteRowPricingDetails(row, vatPercent);
-  const quantityLabel = `${formatFlexibleNumber(row.quantity)} ${row.unit}`.trim();
-  const adjustmentLabel = pricing.adjustmentTotal === 0
-    ? ''
-    : ` ${pricing.adjustmentTotal > 0 ? '+' : '-'} ${formatCurrency(Math.abs(pricing.adjustmentTotal))}`;
+  const quantityLabel = formatRowQuantityLabel(row);
+  const adjustmentLabel = formatAdjustmentLabel(pricing.adjustmentTotal);
+
+  if (getRowPricingWorkflow(row) === 'margin') {
+    return formatMarginDrivenPriceFormula(row, vatPercent);
+  }
 
   if (pricing.pricingModel === 'line_total') {
     const lead = `Syötetty rivin veroton kokonaishinta ${formatCurrency(pricing.enteredLineTotal ?? 0)}${adjustmentLabel}.`;
@@ -487,6 +545,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       sortOrder: quoteRows.length,
       mode,
       pricingModel: 'unit_price',
+      unitPricingMode: quote.pricingMode,
       source: 'catalog',
       productId: product.id,
       productCode: product.code,
@@ -502,7 +561,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       regionMultiplier,
       installationGroupId: product.installationGroupId,
       notes: '',
-      manualSalesPrice: false,
+      manualSalesPrice: quote.pricingMode === 'manual',
     };
   };
 
@@ -519,6 +578,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       sortOrder: quoteRows.length,
       mode,
       pricingModel: 'unit_price',
+      unitPricingMode: mode === 'charge' ? 'manual' : quote.pricingMode,
       source: 'manual',
       productName: mode === 'section' ? 'Uusi väliotsikko' : mode === 'charge' ? 'Lisäveloitus' : '',
       productCode: '',
@@ -532,7 +592,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       priceAdjustment: 0,
       regionMultiplier: project.regionCoefficient || 1,
       notes: '',
-      manualSalesPrice: mode === 'charge',
+      manualSalesPrice: mode === 'charge' || quote.pricingMode === 'manual',
       chargeType: mode === 'charge' ? 'other' : undefined,
     };
     addRow(baseRow);
@@ -543,13 +603,13 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     if (
       row.mode === 'section' ||
       row.mode === 'charge' ||
-      row.mode === 'installation' ||
-      getQuoteRowPricingModel(row) === 'line_total'
+      getRowPricingWorkflow(row) !== 'margin'
     ) {
       return;
     }
 
     updateRow(row.id, {
+      unitPricingMode: 'margin',
       marginPercent,
       salesPrice: calculateSuggestedUnitPrice(row, marginPercent),
       manualSalesPrice: false,
@@ -562,19 +622,43 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       ...row,
       ...updates,
       pricingModel: updates.pricingModel ?? row.pricingModel ?? getQuoteRowPricingModel(row),
+      unitPricingMode: updates.unitPricingMode ?? row.unitPricingMode ?? getQuoteRowUnitPricingMode(row),
       priceAdjustment: updates.priceAdjustment ?? row.priceAdjustment ?? 0,
     } satisfies QuoteRow;
 
-    if ('pricingModel' in updates) {
-      if (updates.pricingModel === 'line_total') {
-        nextRow.overridePrice = currentPricing.baseTotal;
+    if ('mode' in updates && nextRow.mode === 'charge' && nextRow.pricingModel !== 'line_total') {
+      nextRow.unitPricingMode = 'manual';
+      nextRow.manualSalesPrice = true;
+    }
+
+    const nextPricingWorkflow = getRowPricingWorkflow(nextRow);
+
+    if ('pricingModel' in updates || 'unitPricingMode' in updates) {
+      if (nextPricingWorkflow === 'line_total') {
+        nextRow.overridePrice = updates.overridePrice ?? currentPricing.baseTotal;
         nextRow.manualSalesPrice = true;
       }
 
-      if (updates.pricingModel === 'unit_price') {
-        nextRow.salesPrice = currentPricing.derivedUnitPrice;
+      if (nextPricingWorkflow === 'manual') {
+        if (!('salesPrice' in updates)) {
+          nextRow.salesPrice = currentPricing.derivedUnitPrice;
+        }
         nextRow.overridePrice = undefined;
         nextRow.manualSalesPrice = true;
+      }
+
+      if (nextPricingWorkflow === 'margin') {
+        nextRow.overridePrice = undefined;
+        nextRow.manualSalesPrice = updates.manualSalesPrice ?? false;
+        nextRow.salesPrice = calculateSuggestedUnitPrice(nextRow, nextRow.marginPercent);
+      }
+    }
+
+    if ('manualSalesPrice' in updates && nextPricingWorkflow === 'margin') {
+      if (updates.manualSalesPrice) {
+        nextRow.salesPrice = currentPricing.derivedUnitPrice;
+      } else {
+        nextRow.salesPrice = calculateSuggestedUnitPrice(nextRow, nextRow.marginPercent);
       }
     }
 
@@ -594,23 +678,18 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
         'regionMultiplier' in updates ||
         'mode' in updates
       ) &&
-      quote.pricingMode === 'margin' &&
-      nextRow.pricingModel !== 'line_total' &&
+      nextPricingWorkflow === 'margin' &&
       !nextRow.manualSalesPrice &&
       nextRow.mode !== 'section' &&
-      nextRow.mode !== 'charge' &&
-      nextRow.mode !== 'installation'
+      nextRow.mode !== 'charge'
     ) {
       nextRow.salesPrice = calculateSuggestedUnitPrice(nextRow, nextRow.marginPercent);
     }
 
     if ('salesPrice' in updates) {
-      nextRow.manualSalesPrice = true;
-      if (nextRow.mode !== 'section' && nextRow.mode !== 'charge') {
-        nextRow.marginPercent = nextRow.salesPrice > 0
-          ? roundCurrency(((nextRow.salesPrice - nextRow.purchasePrice) / nextRow.salesPrice) * 100)
-          : 0;
-      }
+      nextRow.manualSalesPrice = nextPricingWorkflow === 'margin'
+        ? updates.manualSalesPrice ?? true
+        : true;
     }
 
     if ('overridePrice' in updates) {
@@ -619,6 +698,37 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
 
     updateRow(row.id, nextRow);
     touchQuote();
+  };
+
+  const setRowPricingWorkflow = (row: QuoteRow, workflow: RowPricingWorkflow) => {
+    const currentPricing = getQuoteRowPricingDetails(row, quote.vatPercent);
+
+    if (workflow === 'line_total') {
+      patchRow(row, {
+        pricingModel: 'line_total',
+        overridePrice: currentPricing.baseTotal,
+      });
+      return;
+    }
+
+    if (workflow === 'manual') {
+      patchRow(row, {
+        pricingModel: 'unit_price',
+        unitPricingMode: 'manual',
+        salesPrice: currentPricing.pricingModel === 'line_total'
+          ? currentPricing.derivedUnitPrice
+          : currentPricing.enteredUnitPrice ?? currentPricing.derivedUnitPrice,
+      });
+      return;
+    }
+
+    patchRow(row, {
+      pricingModel: 'unit_price',
+      unitPricingMode: 'margin',
+      manualSalesPrice: false,
+      salesPrice: calculateSuggestedUnitPrice(row, row.marginPercent),
+      overridePrice: undefined,
+    });
   };
 
   const handleQuoteOwnerChange = (nextOwnerUserId: string) => {
@@ -681,7 +791,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     updateQuote(quote.id, { selectedMarginPercent: marginPercent });
     if (quote.pricingMode === 'margin') {
       quoteRows.forEach((row) => {
-        if (!row.manualSalesPrice) {
+        if (getQuoteRowUnitPricingMode(row) === 'margin' && !row.manualSalesPrice) {
           syncRowWithMargin(row, marginPercent);
         }
       });
@@ -885,14 +995,14 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   )}
                 </div>
                 <div className="space-y-2">
-                  <FieldHelpLabel htmlFor="pricing-mode" label="Yksikköhinnan oletus" help={QUOTE_FIELD_HELP.pricingMode} />
+                  <FieldHelpLabel htmlFor="pricing-mode" label="Uusien rivien oletustila" help={QUOTE_FIELD_HELP.pricingMode} />
                   <Select
                     value={quote.pricingMode}
                     onValueChange={(value) => {
                       updateQuote(quote.id, { pricingMode: value as Quote['pricingMode'] });
                       if (value === 'margin') {
                         quoteRows.forEach((row) => {
-                          if (!row.manualSalesPrice) {
+                          if (getQuoteRowUnitPricingMode(row) === 'margin' && !row.manualSalesPrice) {
                             syncRowWithMargin(row, quote.selectedMarginPercent);
                           }
                         });
@@ -903,7 +1013,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                     <SelectTrigger id="pricing-mode"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="margin">Kateohjattu</SelectItem>
-                      <SelectItem value="manual">Manuaalinen myyntihinta</SelectItem>
+                      <SelectItem value="manual">Manuaalinen asiakashinta</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1107,7 +1217,33 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                     {quoteRows.map((row, index) => {
                       const rowCalculation = calculateQuoteRow(row);
                       const pricingDetails = getQuoteRowPricingDetails(row, quote.vatPercent);
-                      const pricingModel = getQuoteRowPricingModel(row);
+                      const pricingWorkflow = getRowPricingWorkflow(row);
+                      const priceSource = getRowPriceSource(row);
+                      const isMarginWorkflow = pricingWorkflow === 'margin';
+                      const isManualWorkflow = pricingWorkflow === 'manual';
+                      const isLineTotalWorkflow = pricingWorkflow === 'line_total';
+                      const isManualOverride = isMarginWorkflow && row.manualSalesPrice;
+                      const canUseMarginWorkflow = row.mode !== 'charge';
+                      const canTrackInternalCosts = row.mode !== 'charge';
+                      const targetUnitPrice = calculateSuggestedUnitPrice(row, row.marginPercent);
+                      const priceBelowTarget = isManualOverride && rowCalculation.rowTotal > 0 && rowCalculation.marginPercent < row.marginPercent;
+                      const priceBelowCost = isManualOverride && rowCalculation.marginAmount < 0;
+                      const showOverrideWarning = priceBelowTarget || priceBelowCost;
+                      const optionalInternalUnitCostLabel = rowCalculation.hasInternalCostBasis
+                        ? `${formatCurrency(rowCalculation.internalUnitCost)} / ${row.unit}`
+                        : 'Ei tiedossa';
+                      const optionalInternalRowCostLabel = rowCalculation.hasInternalCostBasis
+                        ? formatCurrency(rowCalculation.costTotal)
+                        : 'Ei tiedossa';
+                      const optionalMarginAmountLabel = rowCalculation.hasInternalCostBasis
+                        ? formatCurrency(rowCalculation.marginAmount)
+                        : 'Ei tiedossa';
+                      const optionalMarginPercentLabel = rowCalculation.hasInternalCostBasis
+                        ? `${formatNumber(rowCalculation.marginPercent, 1)} %`
+                        : 'Ei tiedossa';
+                      const customerUnitPriceLabel = isLineTotalWorkflow
+                        ? `${formatCurrency(pricingDetails.derivedUnitPrice)} / ${row.unit}`
+                        : `${formatCurrency(pricingDetails.enteredUnitPrice ?? 0)} / ${row.unit}`;
                       const showInstallationDefaults = row.mode === 'installation' || row.mode === 'product_installation';
                       const substitutes = row.productId
                         ? getSubstitutesForProduct(row.productId)
@@ -1131,7 +1267,8 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                 />
                                 <Badge variant="outline">#{index + 1}</Badge>
                                 <Badge variant="secondary">{ROW_MODE_LABELS[row.mode]}</Badge>
-                                <Badge variant="outline">{ROW_PRICING_MODEL_LABELS[pricingModel]}</Badge>
+                                <Badge variant="outline">{ROW_PRICING_WORKFLOW_LABELS[pricingWorkflow]}</Badge>
+                                {priceSource !== pricingWorkflow && <Badge variant="outline">{ROW_PRICE_SOURCE_LABELS[priceSource]}</Badge>}
                                 {rowCalculation.usesLegacyPricing && <Badge variant="outline">Vanha rivi, hinnoittelu muunnettu näkyvään malliin</Badge>}
                                 {row.chargeType && <Badge variant="outline">{CHARGE_TYPE_LABELS[row.chargeType]}</Badge>}
                               </div>
@@ -1191,37 +1328,46 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                             {row.mode !== 'section' && (
                               <>
                                 <div className="rounded-xl border bg-background p-4 space-y-4">
-                                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                                     <div>
                                       <div className="flex flex-wrap items-center gap-2">
-                                        <div className="text-sm font-medium">Asiakashinta</div>
+                                        <div className="text-sm font-medium">Hinnoittelutapa</div>
                                         <Badge
                                           variant="outline"
                                           className="rounded-full border-primary/25 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary"
                                         >
-                                          Näkyy asiakkaalle
+                                          Näkyy asiakkaan hintaan asti
                                         </Badge>
                                       </div>
                                       <p className="mt-1 text-xs text-muted-foreground">
-                                        Valitse ensin syötätkö riville verottoman yksikköhinnan vai koko rivin verottoman kokonaishinnan.
-                                        Järjestelmä näyttää erikseen syötetyn arvon, johdetun arvon ja valmiin summan.
+                                        {isMarginWorkflow
+                                          ? 'Aloita omasta kustannuksesta ja tavoitekatteesta. Asiakashinta johdetaan tästä vasta sen jälkeen.'
+                                          : isManualWorkflow
+                                            ? 'Syötä asiakkaalle annettava veroton yksikköhinta suoraan. Sisäiset kustannukset ovat tässä tilassa apuseurantaa.'
+                                            : 'Syötä koko rivin veroton kokonaishinta. Järjestelmä johtaa yksikköhinnan vain apuarvoksi.'}
                                       </p>
                                     </div>
-                                    <div className="inline-flex rounded-xl border bg-muted/30 p-1">
-                                      {(['unit_price', 'line_total'] as QuoteRowPricingModel[]).map((value) => (
+                                    <div className="inline-flex flex-wrap rounded-xl border bg-muted/30 p-1">
+                                      {(['margin', 'manual', 'line_total'] as RowPricingWorkflow[]).map((value) => (
                                         <Button
                                           key={value}
                                           type="button"
                                           size="sm"
-                                          variant={pricingModel === value ? 'default' : 'ghost'}
-                                          onClick={() => patchRow(row, { pricingModel: value })}
-                                          disabled={!isEditable}
+                                          variant={pricingWorkflow === value ? 'default' : 'ghost'}
+                                          onClick={() => setRowPricingWorkflow(row, value)}
+                                          disabled={!isEditable || (value === 'margin' && !canUseMarginWorkflow)}
                                         >
-                                          {ROW_PRICING_MODEL_LABELS[value]}
+                                          {ROW_PRICING_WORKFLOW_LABELS[value]}
                                         </Button>
                                       ))}
                                     </div>
                                   </div>
+
+                                  {!canUseMarginWorkflow && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Lisäveloitusrivit hinnoitellaan manuaalisesti tai rivin kokonaishintana.
+                                    </p>
+                                  )}
 
                                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                                     <div className="space-y-2">
@@ -1232,136 +1378,488 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                       <FieldHelpLabel label="Yksikkö" help={QUOTE_ROW_FIELD_HELP.unit} />
                                       <Input value={row.unit} onChange={(event) => patchRow(row, { unit: event.target.value })} disabled={!isEditable} />
                                     </div>
-                                    {pricingModel === 'unit_price' ? (
-                                      <div className="space-y-2">
-                                        <FieldHelpLabel label="Yksikköhinta, veroton" help={QUOTE_ROW_FIELD_HELP.salesPrice} />
-                                        <Input type="number" min="0" step="0.01" value={pricingDetails.enteredUnitPrice ?? 0} onChange={(event) => patchRow(row, { salesPrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
-                                      </div>
-                                    ) : (
-                                      <div className="space-y-2">
-                                        <FieldHelpLabel label="Rivin kokonaishinta, veroton" help={QUOTE_ROW_FIELD_HELP.lineTotal} />
-                                        <Input type="number" min="0" step="0.01" value={pricingDetails.enteredLineTotal ?? 0} onChange={(event) => patchRow(row, { overridePrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
-                                      </div>
-                                    )}
                                     <div className="space-y-2">
-                                      <FieldHelpLabel label="Lisä / alennus, veroton" help={QUOTE_ROW_FIELD_HELP.priceAdjustment} />
-                                      <Input type="number" step="0.01" value={row.priceAdjustment ?? 0} onChange={(event) => patchRow(row, { priceAdjustment: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                                      <FieldHelpLabel label="Hinnan lähde" help={QUOTE_ROW_FIELD_HELP.pricingModel} />
+                                      <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{ROW_PRICE_SOURCE_LABELS[priceSource]}</div>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <FieldHelpLabel label={isLineTotalWorkflow ? 'Johdettu yksikköhinta' : 'Asiakashinta / yks.'} help={isLineTotalWorkflow ? QUOTE_ROW_FIELD_HELP.derivedUnitPrice : QUOTE_ROW_FIELD_HELP.salesPrice} />
+                                      <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{customerUnitPriceLabel}</div>
                                     </div>
                                   </div>
 
-                                  <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm">
-                                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Laskentakaava</div>
-                                    <div className="mt-1 font-medium text-foreground">{formatQuoteRowFormula(row, quote.vatPercent)}</div>
-                                    <div className="mt-1 text-xs text-muted-foreground">
-                                      {pricingModel === 'line_total'
-                                        ? 'Johdettu yksikköhinta on apuarvo. Käyttäjän syöttämä hinta on yllä oleva rivin kokonaishinta.'
-                                        : quote.pricingMode === 'margin' && !row.manualSalesPrice && row.mode !== 'charge' && row.mode !== 'installation'
-                                          ? 'Nykyinen yksikköhinta on johdettu ostohinnasta, katteesta ja mahdollisesta asennuksen taustahinnasta.'
-                                          : 'Nykyinen yksikköhinta on käyttäjän syöttämä veroton hinta.'}
-                                    </div>
-                                  </div>
-
-                                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                                    <div className="space-y-2">
-                                      <FieldHelpLabel label={pricingModel === 'line_total' ? 'Johdettu yksikköhinta' : 'Rivin veroton summa'} help={pricingModel === 'line_total' ? QUOTE_ROW_FIELD_HELP.derivedUnitPrice : QUOTE_ROW_FIELD_HELP.netTotal} />
-                                      <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">
-                                        {pricingModel === 'line_total'
-                                          ? `${formatCurrency(pricingDetails.derivedUnitPrice)} / ${row.unit}`
-                                          : formatCurrency(pricingDetails.netTotal)}
-                                      </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                      <FieldHelpLabel label="Veroton summa" help={QUOTE_ROW_FIELD_HELP.netTotal} />
-                                      <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.netTotal)}</div>
-                                    </div>
-                                    <div className="space-y-2">
-                                      <FieldHelpLabel label={`ALV ${formatNumber(quote.vatPercent, 1)} %`} help={QUOTE_ROW_FIELD_HELP.vatAmount} />
-                                      <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.vatAmount)}</div>
-                                    </div>
-                                    <div className="space-y-2">
-                                      <FieldHelpLabel label="Verollinen summa" help={QUOTE_ROW_FIELD_HELP.grossTotal} />
-                                      <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.grossTotal)}</div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 p-4 space-y-4">
-                                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                    <div>
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <div className="text-sm font-medium text-slate-950">Sisäinen kannattavuus</div>
-                                        <Badge
-                                          variant="outline"
-                                          className="rounded-full border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950"
-                                        >
-                                          Vain yrityksen sisällä
-                                        </Badge>
-                                      </div>
-                                      <p className="mt-1 text-xs text-muted-foreground">
-                                        Nämä kentät ovat yrityksen sisäistä kustannus- ja kateseurantaa varten. Asiakkaalle näkyvä laskutus tulee aina yllä olevasta asiakashinnasta.
-                                      </p>
-                                    </div>
-                                    <Badge variant="outline">
-                                      {quote.pricingMode === 'margin' ? 'Oletus: kateohjattu yksikköhinta' : 'Oletus: manuaalinen yksikköhinta'}
-                                    </Badge>
-                                  </div>
-
-                                  <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-white/80 px-4 py-3">
-                                    <Warning className="mt-0.5 h-4 w-4 flex-none text-amber-700" weight="fill" />
-                                    <div className="space-y-1">
-                                      <div className="text-sm font-medium text-amber-950">Tämä osio ei näy asiakkaalle</div>
-                                      <p className="text-xs leading-5 text-amber-900/80">
-                                        Näitä arvoja käytetään vain oman yrityksen kustannus- ja kateseurantaan. Tietoja ei viedä asiakas-PDF:ään, asiakas-Exceliin tai tarjouksen asiakasnäkymään.
-                                      </p>
-                                    </div>
-                                  </div>
-
-                                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                                    <div className="space-y-2">
-                                      <FieldHelpLabel label="Ostohinta / yksikkö" help={QUOTE_ROW_FIELD_HELP.purchasePrice} />
-                                      <Input type="number" min="0" step="0.01" value={row.purchasePrice} onChange={(event) => patchRow(row, { purchasePrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'charge'} />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <FieldHelpLabel label="Tavoitekate %" help={QUOTE_ROW_FIELD_HELP.marginPercent} />
-                                      <Input type="number" min="0" step="0.1" value={row.marginPercent} onChange={(event) => patchRow(row, { marginPercent: parseFloat(event.target.value) || 0, manualSalesPrice: false })} disabled={!isEditable || row.mode === 'charge' || quote.pricingMode === 'manual' || pricingModel === 'line_total'} />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <FieldHelpLabel label="Todellinen kate" help={QUOTE_ROW_FIELD_HELP.marginAmount} />
-                                      <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(rowCalculation.marginAmount)}</div>
-                                    </div>
-                                    <div className="space-y-2">
-                                      <FieldHelpLabel label="Kate % toteuma" help={QUOTE_ROW_FIELD_HELP.realizedMarginPercent} />
-                                      <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatNumber(rowCalculation.marginPercent, 1)} %</div>
-                                    </div>
-                                  </div>
-
-                                  {showInstallationDefaults && (
+                                  {isMarginWorkflow && (
                                     <>
-                                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                        <div className="space-y-2">
-                                          <FieldHelpLabel label="Hintaryhmä" help={QUOTE_ROW_FIELD_HELP.installationGroupId} />
-                                          <Select value={row.installationGroupId || 'none'} onValueChange={(value) => patchRow(row, { installationGroupId: value === 'none' ? undefined : value })} disabled={!isEditable || row.mode === 'charge'}>
-                                            <SelectTrigger><SelectValue placeholder="Ei hintaryhmää" /></SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="none">Ei hintaryhmää</SelectItem>
-                                              {groups.map((group) => (
-                                                <SelectItem key={group.id} value={group.id}>{group.name}</SelectItem>
-                                              ))}
-                                            </SelectContent>
-                                          </Select>
+                                      <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 p-4 space-y-4">
+                                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                          <div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <div className="text-sm font-medium text-slate-950">Sisäinen kannattavuus</div>
+                                              <Badge
+                                                variant="outline"
+                                                className="rounded-full border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950"
+                                              >
+                                                Päälohko kateohjauksessa
+                                              </Badge>
+                                            </div>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                              Syötä ensin oma kustannus ja tavoitekate. Asiakashinta johdetaan näistä arvoista.
+                                            </p>
+                                          </div>
+                                          <Badge variant="outline">{formatCurrency(rowCalculation.internalUnitCost)} / {row.unit}</Badge>
                                         </div>
-                                        <div className="space-y-2">
-                                          <FieldHelpLabel label="Aluekerroin" help={QUOTE_ROW_FIELD_HELP.regionMultiplier} />
-                                          <Input type="number" min="0" step="0.01" value={row.regionMultiplier} onChange={(event) => patchRow(row, { regionMultiplier: parseFloat(event.target.value) || 1 })} disabled={!isEditable} />
+
+                                        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-white/80 px-4 py-3">
+                                          <Warning className="mt-0.5 h-4 w-4 flex-none text-amber-700" weight="fill" />
+                                          <div className="space-y-1">
+                                            <div className="text-sm font-medium text-amber-950">Tämä osio ei näy asiakkaalle</div>
+                                            <p className="text-xs leading-5 text-amber-900/80">
+                                              Sisäinen kannattavuus ohjaa tarjouksen hinnan muodostusta, mutta sitä ei viedä asiakkaalle näkyviin dokumentteihin.
+                                            </p>
+                                          </div>
                                         </div>
-                                        <div className="space-y-2">
-                                          <FieldHelpLabel label="Asennuksen taustahinta / yks." help={QUOTE_ROW_FIELD_HELP.installationPrice} />
-                                          <Input type="number" min="0" step="0.01" value={row.installationPrice} onChange={(event) => patchRow(row, { installationPrice: parseFloat(event.target.value) || 0, manualSalesPrice: false })} disabled={!isEditable || row.mode === 'charge'} />
+
+                                        <div className="rounded-xl border bg-white/80 px-4 py-3 text-sm">
+                                          <div className="text-xs uppercase tracking-wide text-muted-foreground">Sisäisen kustannuksen kaava</div>
+                                          <div className="mt-1 font-medium text-foreground">{formatInternalCostFormula(row)}</div>
+                                        </div>
+
+                                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Ostohinta / yksikkö" help={QUOTE_ROW_FIELD_HELP.purchasePrice} />
+                                            <Input type="number" min="0" step="0.01" value={row.purchasePrice} onChange={(event) => patchRow(row, { purchasePrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'charge'} />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Aluekerroin" help={QUOTE_ROW_FIELD_HELP.regionMultiplier} />
+                                            <Input type="number" min="0" step="0.01" value={row.regionMultiplier} onChange={(event) => patchRow(row, { regionMultiplier: parseFloat(event.target.value) || 1 })} disabled={!isEditable} />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Tavoitekate %" help={QUOTE_ROW_FIELD_HELP.marginPercent} />
+                                            <Input type="number" min="0" step="0.1" value={row.marginPercent} onChange={(event) => patchRow(row, { marginPercent: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'charge'} />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Sisäinen yksikkökustannus" help={QUOTE_ROW_FIELD_HELP.purchasePrice} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(rowCalculation.internalUnitCost)} / {row.unit}</div>
+                                          </div>
+                                        </div>
+
+                                        {showInstallationDefaults ? (
+                                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Hintaryhmä" help={QUOTE_ROW_FIELD_HELP.installationGroupId} />
+                                              <Select value={row.installationGroupId || 'none'} onValueChange={(value) => patchRow(row, { installationGroupId: value === 'none' ? undefined : value })} disabled={!isEditable || row.mode === 'charge'}>
+                                                <SelectTrigger><SelectValue placeholder="Ei hintaryhmää" /></SelectTrigger>
+                                                <SelectContent>
+                                                  <SelectItem value="none">Ei hintaryhmää</SelectItem>
+                                                  {groups.map((group) => (
+                                                    <SelectItem key={group.id} value={group.id}>{group.name}</SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                            </div>
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Asennuksen taustahinta / yks." help={QUOTE_ROW_FIELD_HELP.installationPrice} />
+                                              <Input type="number" min="0" step="0.01" value={row.installationPrice} onChange={(event) => patchRow(row, { installationPrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'charge'} />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Todellinen kate" help={QUOTE_ROW_FIELD_HELP.marginAmount} />
+                                              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(rowCalculation.marginAmount)}</div>
+                                            </div>
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Kate % toteuma" help={QUOTE_ROW_FIELD_HELP.realizedMarginPercent} />
+                                              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatNumber(rowCalculation.marginPercent, 1)} %</div>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Todellinen kate" help={QUOTE_ROW_FIELD_HELP.marginAmount} />
+                                              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(rowCalculation.marginAmount)}</div>
+                                            </div>
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Kate % toteuma" help={QUOTE_ROW_FIELD_HELP.realizedMarginPercent} />
+                                              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatNumber(rowCalculation.marginPercent, 1)} %</div>
+                                            </div>
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Sisäinen rivikustannus" help={QUOTE_ROW_FIELD_HELP.purchasePrice} />
+                                              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(rowCalculation.costTotal)}</div>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div className="rounded-xl border bg-background p-4 space-y-4">
+                                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                          <div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <div className="text-sm font-medium">Asiakashinta asiakkaalle</div>
+                                              <Badge
+                                                variant="outline"
+                                                className="rounded-full border-primary/25 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary"
+                                              >
+                                                Johdettu sisäisestä kannattavuudesta
+                                              </Badge>
+                                            </div>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                              Asiakashinta on tässä tilassa johdettu arvo. Käytä ylikirjoitusta vain poikkeuksissa.
+                                            </p>
+                                          </div>
+                                          <label className="flex items-center gap-2 rounded-full border bg-muted/20 px-3 py-2 text-xs font-medium text-foreground">
+                                            <Checkbox checked={row.manualSalesPrice} onCheckedChange={(checked) => patchRow(row, { manualSalesPrice: Boolean(checked) })} disabled={!isEditable} />
+                                            Ylikirjoita asiakashinta
+                                          </label>
+                                        </div>
+
+                                        {showOverrideWarning && (
+                                          <Alert className={priceBelowCost ? 'border-destructive/40 text-destructive' : 'border-amber-300 bg-amber-50 text-amber-950'}>
+                                            <AlertDescription>
+                                              {priceBelowCost ? 'Ylikirjoitettu asiakashinta jää alle sisäisen kustannuksen.' : 'Ylikirjoitettu asiakashinta jää alle tavoitekatteen.'}
+                                              {priceBelowTarget && ` Toteutuva kate ${formatNumber(rowCalculation.marginPercent, 1)} % jää alle tavoitteen ${formatNumber(row.marginPercent, 1)} %.`}
+                                            </AlertDescription>
+                                          </Alert>
+                                        )}
+
+                                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label={isManualOverride ? 'Asiakashinta, veroton / yks.' : 'Johdettu asiakashinta, veroton / yks.'} help={QUOTE_ROW_FIELD_HELP.salesPrice} />
+                                            {isManualOverride ? (
+                                              <Input type="number" min="0" step="0.01" value={pricingDetails.enteredUnitPrice ?? 0} onChange={(event) => patchRow(row, { salesPrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                                            ) : (
+                                              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(targetUnitPrice)} / {row.unit}</div>
+                                            )}
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Lisä / alennus, veroton" help={QUOTE_ROW_FIELD_HELP.priceAdjustment} />
+                                            <Input type="number" step="0.01" value={row.priceAdjustment ?? 0} onChange={(event) => patchRow(row, { priceAdjustment: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Kateohjattu tavoitehinta" help={QUOTE_ROW_FIELD_HELP.salesPrice} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(targetUnitPrice)} / {row.unit}</div>
+                                          </div>
+                                        </div>
+
+                                        <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm">
+                                          <div className="text-xs uppercase tracking-wide text-muted-foreground">Laskentakaava</div>
+                                          <div className="mt-1 font-medium text-foreground">{formatQuoteRowFormula(row, quote.vatPercent)}</div>
+                                        </div>
+
+                                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Hinnan lähde" help={QUOTE_ROW_FIELD_HELP.pricingModel} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{ROW_PRICE_SOURCE_LABELS[priceSource]}</div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Veroton summa" help={QUOTE_ROW_FIELD_HELP.netTotal} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.netTotal)}</div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label={`ALV ${formatNumber(quote.vatPercent, 1)} %`} help={QUOTE_ROW_FIELD_HELP.vatAmount} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.vatAmount)}</div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Verollinen summa" help={QUOTE_ROW_FIELD_HELP.grossTotal} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.grossTotal)}</div>
+                                          </div>
                                         </div>
                                       </div>
-                                      <p className="text-xs text-muted-foreground">
-                                        Asennuksen taustahinta sisältyy johdettuun yksikköhintaan. Sitä ei lisätä asiakkaan laskutukseen erillisenä piiloveloituksena.
-                                      </p>
+                                    </>
+                                  )}
+
+                                  {isManualWorkflow && (
+                                    <>
+                                      <div className="rounded-xl border bg-background p-4 space-y-4">
+                                        <div>
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <div className="text-sm font-medium">Asiakashinta asiakkaalle</div>
+                                            <Badge
+                                              variant="outline"
+                                              className="rounded-full border-primary/25 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary"
+                                            >
+                                              Syötetään käsin
+                                            </Badge>
+                                          </div>
+                                          <p className="mt-1 text-xs text-muted-foreground">
+                                            Asiakashinta on tässä tilassa käyttäjän syöttämä veroton yksikköhinta.
+                                          </p>
+                                        </div>
+
+                                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Asiakashinta, veroton / yks." help={QUOTE_ROW_FIELD_HELP.salesPrice} />
+                                            <Input type="number" min="0" step="0.01" value={pricingDetails.enteredUnitPrice ?? 0} onChange={(event) => patchRow(row, { salesPrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Lisä / alennus, veroton" help={QUOTE_ROW_FIELD_HELP.priceAdjustment} />
+                                            <Input type="number" step="0.01" value={row.priceAdjustment ?? 0} onChange={(event) => patchRow(row, { priceAdjustment: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                                          </div>
+                                        </div>
+
+                                        <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm">
+                                          <div className="text-xs uppercase tracking-wide text-muted-foreground">Laskentakaava</div>
+                                          <div className="mt-1 font-medium text-foreground">{formatQuoteRowFormula(row, quote.vatPercent)}</div>
+                                        </div>
+
+                                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Hinnan lähde" help={QUOTE_ROW_FIELD_HELP.pricingModel} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{ROW_PRICE_SOURCE_LABELS[priceSource]}</div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Veroton summa" help={QUOTE_ROW_FIELD_HELP.netTotal} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.netTotal)}</div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label={`ALV ${formatNumber(quote.vatPercent, 1)} %`} help={QUOTE_ROW_FIELD_HELP.vatAmount} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.vatAmount)}</div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Verollinen summa" help={QUOTE_ROW_FIELD_HELP.grossTotal} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.grossTotal)}</div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {canTrackInternalCosts && (
+                                        <div className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-4 space-y-4">
+                                          <div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <div className="text-sm font-medium text-slate-950">Sisäinen kustannus- ja kateseuranta</div>
+                                              <Badge
+                                                variant="outline"
+                                                className="rounded-full border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950"
+                                              >
+                                                Valinnainen tässä tilassa
+                                              </Badge>
+                                            </div>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                              Täytä sisäiset kustannukset, jos haluat nähdä toteutuvan katteen myös manuaalisella asiakashinnalla.
+                                            </p>
+                                          </div>
+
+                                          {!rowCalculation.hasInternalCostBasis && (
+                                            <Alert>
+                                              <AlertDescription>
+                                                Täytä ostohinta tai asennuksen taustahinta, jos haluat toteutuvan katteen näkyviin.
+                                              </AlertDescription>
+                                            </Alert>
+                                          )}
+
+                                          <div className="rounded-xl border bg-white/80 px-4 py-3 text-sm">
+                                            <div className="text-xs uppercase tracking-wide text-muted-foreground">Sisäisen kustannuksen kaava</div>
+                                            <div className="mt-1 font-medium text-foreground">{formatInternalCostFormula(row)}</div>
+                                          </div>
+
+                                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Ostohinta / yksikkö" help={QUOTE_ROW_FIELD_HELP.purchasePrice} />
+                                              <Input type="number" min="0" step="0.01" value={row.purchasePrice} onChange={(event) => patchRow(row, { purchasePrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'charge'} />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Aluekerroin" help={QUOTE_ROW_FIELD_HELP.regionMultiplier} />
+                                              <Input type="number" min="0" step="0.01" value={row.regionMultiplier} onChange={(event) => patchRow(row, { regionMultiplier: parseFloat(event.target.value) || 1 })} disabled={!isEditable} />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Sisäinen yksikkökustannus" help={QUOTE_ROW_FIELD_HELP.purchasePrice} />
+                                              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{optionalInternalUnitCostLabel}</div>
+                                            </div>
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Sisäinen rivikustannus" help={QUOTE_ROW_FIELD_HELP.purchasePrice} />
+                                              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{optionalInternalRowCostLabel}</div>
+                                            </div>
+                                          </div>
+
+                                          {showInstallationDefaults ? (
+                                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                              <div className="space-y-2">
+                                                <FieldHelpLabel label="Hintaryhmä" help={QUOTE_ROW_FIELD_HELP.installationGroupId} />
+                                                <Select value={row.installationGroupId || 'none'} onValueChange={(value) => patchRow(row, { installationGroupId: value === 'none' ? undefined : value })} disabled={!isEditable || row.mode === 'charge'}>
+                                                  <SelectTrigger><SelectValue placeholder="Ei hintaryhmää" /></SelectTrigger>
+                                                  <SelectContent>
+                                                    <SelectItem value="none">Ei hintaryhmää</SelectItem>
+                                                    {groups.map((group) => (
+                                                      <SelectItem key={group.id} value={group.id}>{group.name}</SelectItem>
+                                                    ))}
+                                                  </SelectContent>
+                                                </Select>
+                                              </div>
+                                              <div className="space-y-2">
+                                                <FieldHelpLabel label="Asennuksen taustahinta / yks." help={QUOTE_ROW_FIELD_HELP.installationPrice} />
+                                                <Input type="number" min="0" step="0.01" value={row.installationPrice} onChange={(event) => patchRow(row, { installationPrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'charge'} />
+                                              </div>
+                                              <div className="space-y-2">
+                                                <FieldHelpLabel label="Todellinen kate" help={QUOTE_ROW_FIELD_HELP.marginAmount} />
+                                                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{optionalMarginAmountLabel}</div>
+                                              </div>
+                                              <div className="space-y-2">
+                                                <FieldHelpLabel label="Kate % toteuma" help={QUOTE_ROW_FIELD_HELP.realizedMarginPercent} />
+                                                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{optionalMarginPercentLabel}</div>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
+                                              <div className="space-y-2">
+                                                <FieldHelpLabel label="Todellinen kate" help={QUOTE_ROW_FIELD_HELP.marginAmount} />
+                                                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{optionalMarginAmountLabel}</div>
+                                              </div>
+                                              <div className="space-y-2">
+                                                <FieldHelpLabel label="Kate % toteuma" help={QUOTE_ROW_FIELD_HELP.realizedMarginPercent} />
+                                                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{optionalMarginPercentLabel}</div>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+
+                                  {isLineTotalWorkflow && (
+                                    <>
+                                      <div className="rounded-xl border bg-background p-4 space-y-4">
+                                        <div>
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <div className="text-sm font-medium">Rivin kokonaishinta asiakkaalle</div>
+                                            <Badge
+                                              variant="outline"
+                                              className="rounded-full border-primary/25 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary"
+                                            >
+                                              Syötetään verottomana kokonaissummana
+                                            </Badge>
+                                          </div>
+                                          <p className="mt-1 text-xs text-muted-foreground">
+                                            Järjestelmä johtaa tästä rivin yksikköhinnan vain apuarvoksi.
+                                          </p>
+                                        </div>
+
+                                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Rivin kokonaishinta, veroton" help={QUOTE_ROW_FIELD_HELP.lineTotal} />
+                                            <Input type="number" min="0" step="0.01" value={pricingDetails.enteredLineTotal ?? 0} onChange={(event) => patchRow(row, { overridePrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Lisä / alennus, veroton" help={QUOTE_ROW_FIELD_HELP.priceAdjustment} />
+                                            <Input type="number" step="0.01" value={row.priceAdjustment ?? 0} onChange={(event) => patchRow(row, { priceAdjustment: parseFloat(event.target.value) || 0 })} disabled={!isEditable} />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Johdettu yksikköhinta" help={QUOTE_ROW_FIELD_HELP.derivedUnitPrice} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.derivedUnitPrice)} / {row.unit}</div>
+                                          </div>
+                                        </div>
+
+                                        <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm">
+                                          <div className="text-xs uppercase tracking-wide text-muted-foreground">Laskentakaava</div>
+                                          <div className="mt-1 font-medium text-foreground">{formatQuoteRowFormula(row, quote.vatPercent)}</div>
+                                        </div>
+
+                                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Hinnan lähde" help={QUOTE_ROW_FIELD_HELP.pricingModel} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{ROW_PRICE_SOURCE_LABELS[priceSource]}</div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Veroton summa" help={QUOTE_ROW_FIELD_HELP.netTotal} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.netTotal)}</div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label={`ALV ${formatNumber(quote.vatPercent, 1)} %`} help={QUOTE_ROW_FIELD_HELP.vatAmount} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.vatAmount)}</div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <FieldHelpLabel label="Verollinen summa" help={QUOTE_ROW_FIELD_HELP.grossTotal} />
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{formatCurrency(pricingDetails.grossTotal)}</div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {canTrackInternalCosts && (
+                                        <div className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-4 space-y-4">
+                                          <div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <div className="text-sm font-medium text-slate-950">Sisäinen kustannus- ja kateseuranta</div>
+                                              <Badge
+                                                variant="outline"
+                                                className="rounded-full border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950"
+                                              >
+                                                Valinnainen tässä tilassa
+                                              </Badge>
+                                            </div>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                              Täytä sisäiset kustannukset, jos haluat nähdä toteutuvan katteen myös kokonaishintarivillä.
+                                            </p>
+                                          </div>
+
+                                          {!rowCalculation.hasInternalCostBasis && (
+                                            <Alert>
+                                              <AlertDescription>
+                                                Täytä ostohinta tai asennuksen taustahinta, jos haluat toteutuvan katteen näkyviin.
+                                              </AlertDescription>
+                                            </Alert>
+                                          )}
+
+                                          <div className="rounded-xl border bg-white/80 px-4 py-3 text-sm">
+                                            <div className="text-xs uppercase tracking-wide text-muted-foreground">Sisäisen kustannuksen kaava</div>
+                                            <div className="mt-1 font-medium text-foreground">{formatInternalCostFormula(row)}</div>
+                                          </div>
+
+                                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Ostohinta / yksikkö" help={QUOTE_ROW_FIELD_HELP.purchasePrice} />
+                                              <Input type="number" min="0" step="0.01" value={row.purchasePrice} onChange={(event) => patchRow(row, { purchasePrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'charge'} />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Aluekerroin" help={QUOTE_ROW_FIELD_HELP.regionMultiplier} />
+                                              <Input type="number" min="0" step="0.01" value={row.regionMultiplier} onChange={(event) => patchRow(row, { regionMultiplier: parseFloat(event.target.value) || 1 })} disabled={!isEditable} />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Sisäinen yksikkökustannus" help={QUOTE_ROW_FIELD_HELP.purchasePrice} />
+                                              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{optionalInternalUnitCostLabel}</div>
+                                            </div>
+                                            <div className="space-y-2">
+                                              <FieldHelpLabel label="Sisäinen rivikustannus" help={QUOTE_ROW_FIELD_HELP.purchasePrice} />
+                                              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{optionalInternalRowCostLabel}</div>
+                                            </div>
+                                          </div>
+
+                                          {showInstallationDefaults ? (
+                                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                              <div className="space-y-2">
+                                                <FieldHelpLabel label="Hintaryhmä" help={QUOTE_ROW_FIELD_HELP.installationGroupId} />
+                                                <Select value={row.installationGroupId || 'none'} onValueChange={(value) => patchRow(row, { installationGroupId: value === 'none' ? undefined : value })} disabled={!isEditable || row.mode === 'charge'}>
+                                                  <SelectTrigger><SelectValue placeholder="Ei hintaryhmää" /></SelectTrigger>
+                                                  <SelectContent>
+                                                    <SelectItem value="none">Ei hintaryhmää</SelectItem>
+                                                    {groups.map((group) => (
+                                                      <SelectItem key={group.id} value={group.id}>{group.name}</SelectItem>
+                                                    ))}
+                                                  </SelectContent>
+                                                </Select>
+                                              </div>
+                                              <div className="space-y-2">
+                                                <FieldHelpLabel label="Asennuksen taustahinta / yks." help={QUOTE_ROW_FIELD_HELP.installationPrice} />
+                                                <Input type="number" min="0" step="0.01" value={row.installationPrice} onChange={(event) => patchRow(row, { installationPrice: parseFloat(event.target.value) || 0 })} disabled={!isEditable || row.mode === 'charge'} />
+                                              </div>
+                                              <div className="space-y-2">
+                                                <FieldHelpLabel label="Todellinen kate" help={QUOTE_ROW_FIELD_HELP.marginAmount} />
+                                                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{optionalMarginAmountLabel}</div>
+                                              </div>
+                                              <div className="space-y-2">
+                                                <FieldHelpLabel label="Kate % toteuma" help={QUOTE_ROW_FIELD_HELP.realizedMarginPercent} />
+                                                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{optionalMarginPercentLabel}</div>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
+                                              <div className="space-y-2">
+                                                <FieldHelpLabel label="Todellinen kate" help={QUOTE_ROW_FIELD_HELP.marginAmount} />
+                                                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{optionalMarginAmountLabel}</div>
+                                              </div>
+                                              <div className="space-y-2">
+                                                <FieldHelpLabel label="Kate % toteuma" help={QUOTE_ROW_FIELD_HELP.realizedMarginPercent} />
+                                                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">{optionalMarginPercentLabel}</div>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
                                     </>
                                   )}
                                 </div>
@@ -1391,32 +1889,6 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                 )}
                               </>
                             )}
-
-                            <Separator />
-                            <div className="grid gap-3 md:grid-cols-4">
-                              <div className="rounded-xl border bg-muted/20 p-3">
-                                <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                                  {pricingModel === 'line_total' ? 'Syötetty rivin kokonaishinta' : 'Syötetty yksikköhinta'}
-                                </div>
-                                <div className="mt-1 text-lg font-semibold">
-                                  {pricingModel === 'line_total'
-                                    ? formatCurrency(pricingDetails.enteredLineTotal ?? 0)
-                                    : `${formatCurrency(pricingDetails.enteredUnitPrice ?? 0)} / ${row.unit}`}
-                                </div>
-                              </div>
-                              <div className="rounded-xl border bg-muted/20 p-3">
-                                <div className="text-xs uppercase tracking-wide text-muted-foreground">Veroton summa</div>
-                                <div className="mt-1 text-lg font-semibold">{formatCurrency(pricingDetails.netTotal)}</div>
-                              </div>
-                              <div className="rounded-xl border bg-muted/20 p-3">
-                                <div className="text-xs uppercase tracking-wide text-muted-foreground">ALV</div>
-                                <div className="mt-1 text-lg font-semibold">{formatCurrency(pricingDetails.vatAmount)}</div>
-                              </div>
-                              <div className="rounded-xl border bg-muted/20 p-3">
-                                <div className="text-xs uppercase tracking-wide text-muted-foreground">Verollinen summa</div>
-                                <div className="mt-1 text-lg font-semibold">{formatCurrency(pricingDetails.grossTotal)}</div>
-                              </div>
-                            </div>
                           </div>
                         </Card>
                       );
