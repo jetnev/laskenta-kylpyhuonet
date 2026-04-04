@@ -6,6 +6,7 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { useCustomers, useInvoices, useProjects, useQuoteRows, useQuotes } from '../../hooks/use-data';
+import type { AppLocationState } from '../../lib/app-routing';
 import { calculateQuote, formatCurrency } from '../../lib/calculations';
 import { exportInvoiceToPDF } from '../../lib/export';
 import { getInvoiceStatusLabel, invoiceToQuoteLike, isInvoiceOverdue } from '../../lib/invoices';
@@ -29,14 +30,19 @@ function getStatusVariant(status: InvoiceStatus) {
   return 'secondary';
 }
 
-export default function InvoicesPage() {
+interface InvoicesPageProps {
+  routeState?: AppLocationState;
+  onNavigate?: (location: AppLocationState, options?: { replace?: boolean }) => void;
+}
+
+export default function InvoicesPage({ routeState, onNavigate }: InvoicesPageProps) {
   const { quotes } = useQuotes();
   const { getRowsForQuote } = useQuoteRows();
   const { getCustomer } = useCustomers();
   const { getProject } = useProjects();
   const { createInvoiceFromQuote, deleteInvoice, invoices } = useInvoices();
   const [filter, setFilter] = useState<InvoiceFilter>('all');
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const selectedInvoiceId = routeState?.page === 'invoices' ? routeState.invoiceId ?? null : null;
 
   const eligibleQuotes = useMemo(
     () =>
@@ -109,7 +115,7 @@ export default function InvoicesPage() {
 
     try {
       const invoice = createInvoiceFromQuote(quote, rows, customer, project);
-      setSelectedInvoiceId(invoice.id);
+      onNavigate?.({ page: 'invoices', invoiceId: invoice.id });
       toast.success(`Lasku ${invoice.invoiceNumber} luotu.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Laskun luonti epäonnistui.');
@@ -224,7 +230,7 @@ export default function InvoicesPage() {
                       <div className="mt-1 text-xs text-muted-foreground">Eräpäivä {invoice.dueDate || '-'} • Viite {invoice.referenceNumber}</div>
                     </div>
                     <div className="flex flex-wrap gap-2 lg:justify-end">
-                      <Button variant="outline" size="sm" onClick={() => setSelectedInvoiceId(invoice.id)}>
+                      <Button variant="outline" size="sm" onClick={() => onNavigate?.({ page: 'invoices', invoiceId: invoice.id })}>
                         <Eye className="h-4 w-4" />
                         Avaa
                       </Button>
@@ -274,7 +280,7 @@ export default function InvoicesPage() {
         )}
       </Card>
 
-      {selectedInvoiceId && <InvoiceEditor invoiceId={selectedInvoiceId} onClose={() => setSelectedInvoiceId(null)} />}
+      {selectedInvoiceId && <InvoiceEditor invoiceId={selectedInvoiceId} onClose={() => onNavigate?.({ page: 'invoices' })} />}
     </div>
   );
 }

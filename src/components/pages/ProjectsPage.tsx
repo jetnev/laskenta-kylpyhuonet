@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Pencil, Trash, FileText, Building, Users, MagnifyingGlass, X, Clock, FolderOpen } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -7,12 +7,15 @@ import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { useProjects, useCustomers, useQuotes, useQuoteRows, useQuoteTerms, useSettings, useStarterWorkspaceTemplate } from '../../hooks/use-data';
+import { useProjects, useCustomers, useInvoices, useQuotes, useQuoteRows, useQuoteTerms, useSettings, useStarterWorkspaceTemplate } from '../../hooks/use-data';
 import { useAuth } from '../../hooks/use-auth';
 import { toast } from 'sonner';
 import { Project, Customer } from '../../lib/types';
 import { cn } from '../../lib/utils';
+import type { AppLocationState } from '../../lib/app-routing';
+import { getInvoiceStatusLabel, isInvoiceOverdue } from '../../lib/invoices';
 import { filterOwnedRecords, getResponsibleUserLabel } from '../../lib/ownership';
+import { buildProjectWorkspaceContext } from '../../lib/workspace-flow';
 import QuoteEditor from '../QuoteEditor';
 import FieldHelpLabel from '../FieldHelpLabel';
 
@@ -48,11 +51,17 @@ function sortByUpdatedAtDesc<T extends { updatedAt: string }>(items: T[]) {
   return [...items].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
 }
 
-export default function ProjectsPage() {
+interface ProjectsPageProps {
+  routeState?: AppLocationState;
+  onNavigate?: (location: AppLocationState, options?: { replace?: boolean }) => void;
+}
+
+export default function ProjectsPage({ routeState, onNavigate }: ProjectsPageProps) {
   const starterWorkspace = useStarterWorkspaceTemplate();
   const { user, users, canManageUsers } = useAuth();
   const { projects, addProject, updateProject, deleteProject } = useProjects();
   const { customers, addCustomer, updateCustomer, deleteCustomer, getCustomer } = useCustomers();
+  const { invoices, getInvoicesForProject } = useInvoices();
   const { quotes, addQuote, getQuotesForProject, deleteQuote } = useQuotes();
   const { rows, deleteRow } = useQuoteRows();
   const { createQuoteTermsSnapshot, getDefaultTerms } = useQuoteTerms();
@@ -60,16 +69,16 @@ export default function ProjectsPage() {
 
   const [showProjectDialog, setShowProjectDialog] = useState(false);
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
-  const [showQuoteEditor, setShowQuoteEditor] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
   const [selectedQuotes, setSelectedQuotes] = useState<Set<string>>(new Set());
   const [searchProjects, setSearchProjects] = useState('');
   const [searchCustomers, setSearchCustomers] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [sidePanelTab, setSidePanelTab] = useState<'summary' | 'customers'>('customers');
+  const selectedProjectId = routeState?.page === 'projects' ? routeState.projectId ?? null : null;
+  const selectedQuoteId = routeState?.page === 'projects' ? routeState.quoteId ?? null : null;
+  const showQuoteEditor = routeState?.page === 'projects' && routeState.editor === 'quote' && Boolean(routeState.quoteId);
 
   const responsibleUsers = [user, ...users]
     .filter((candidate): candidate is NonNullable<typeof user> => Boolean(candidate))
@@ -110,8 +119,9 @@ export default function ProjectsPage() {
     ownerUserId: '',
   });
 
-  const filteredProjects = sortByUpdatedAtDesc(
-    filterOwnedRecords(projects, ownerFilter).filter((project) => {
+  const ownerScopedProjects = sortByUpdatedAtDesc(filterOwnedRecords(projects, ownerFilter));
+
+  const filteredProjects = ownerScopedProjects.filter((project) => {
       const customer = getCustomer(project.customerId);
       const projectQuotes = filterOwnedRecords(getQuotesForProject(project.id), ownerFilter);
       const searchLower = searchProjects.trim().toLowerCase();
@@ -143,8 +153,7 @@ export default function ProjectsPage() {
             .some((value) => value.toLowerCase().includes(searchLower))
         )
       );
-    })
-  );
+    });
 
   const filteredCustomers = sortByUpdatedAtDesc(
     filterOwnedRecords(customers, ownerFilter).filter((customer) => {
@@ -163,11 +172,12 @@ export default function ProjectsPage() {
   );
 
   const visibleQuotes = sortByUpdatedAtDesc(filterOwnedRecords(quotes, ownerFilter));
-  const selectedProject = filteredProjects.find((project) => project.id === selectedProjectId) ?? null;
+  const selectedProject = ownerScopedProjects.find((project) => project.id === selectedProjectId) ?? null;
   const selectedCustomer = selectedProject ? getCustomer(selectedProject.customerId) : null;
   const selectedProjectQuotes = selectedProject
     ? sortByUpdatedAtDesc(filterOwnedRecords(getQuotesForProject(selectedProject.id), ownerFilter))
     : [];
+  const selectedProjectInvoices = selectedProject ? sortByUpdatedAtDesc(getInvoicesForProject(selectedProject.id)) : [];
   const projectQuoteStats = {
     draft: selectedProjectQuotes.filter((quote) => quote.status === 'draft').length,
     sent: selectedProjectQuotes.filter((quote) => quote.status === 'sent').length,
@@ -176,6 +186,21 @@ export default function ProjectsPage() {
   };
   const latestSelectedQuote = selectedProjectQuotes[0];
   const draftQuotes = visibleQuotes.filter((quote) => quote.status === 'draft');
+  const projectContext = useMemo(
+    () =>
+      selectedProject
+        ? buildProjectWorkspaceContext(selectedProject.id, {
+            customers,
+            invoices,
+            products: [],
+            projects,
+            quoteRows: rows,
+            quotes,
+          })
+        : null,
+    [customers, invoices, projects, quotes, rows, selectedProject]
+  );
+  const latestProjectInvoice = projectContext?.latestInvoice ?? null;
 
   useEffect(() => {
     if (!starterWorkspace) {
@@ -185,20 +210,44 @@ export default function ProjectsPage() {
     toast.success('Lisäsimme valmiiksi malliasiakkaan, malliprojektin ja mallitarjouksen. Voit muokata niitä suoraan oman työn pohjaksi.');
   }, [starterWorkspace]);
 
+  const navigateToProjects = (
+    nextState: Pick<AppLocationState, 'projectId' | 'quoteId' | 'editor'>,
+    options?: { replace?: boolean }
+  ) => {
+    onNavigate?.(
+      {
+        page: 'projects',
+        projectId: nextState.projectId,
+        quoteId: nextState.quoteId,
+        editor: nextState.editor,
+      },
+      options
+    );
+  };
+
   useEffect(() => {
     if (!selectedProjectId) {
       return;
     }
 
-    const projectStillVisible = filteredProjects.some((project) => project.id === selectedProjectId);
+    const projectStillVisible = ownerScopedProjects.some((project) => project.id === selectedProjectId);
     if (!projectStillVisible) {
-      setSelectedProjectId(null);
-      setSelectedQuoteId(null);
       setSelectedQuotes(new Set());
-      setShowQuoteEditor(false);
       setSidePanelTab('customers');
+      navigateToProjects({}, { replace: true });
     }
-  }, [filteredProjects, selectedProjectId]);
+  }, [navigateToProjects, ownerScopedProjects, selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedProject || !selectedQuoteId) {
+      return;
+    }
+
+    const quoteStillVisible = selectedProjectQuotes.some((quote) => quote.id === selectedQuoteId);
+    if (!quoteStillVisible) {
+      navigateToProjects({ projectId: selectedProject.id }, { replace: true });
+    }
+  }, [navigateToProjects, selectedProject, selectedProjectQuotes, selectedQuoteId]);
 
   useEffect(() => {
     if (selectedProject) {
@@ -317,9 +366,7 @@ export default function ProjectsPage() {
       deleteProject(id);
 
       if (selectedProjectId === id) {
-        setShowQuoteEditor(false);
-        setSelectedProjectId(null);
-        setSelectedQuoteId(null);
+        navigateToProjects({}, { replace: true });
       }
 
       toast.success(projectQuotes.length > 0 ? 'Projekti ja siihen liittyvät tarjoukset poistettu' : 'Projekti poistettu');
@@ -370,15 +417,11 @@ export default function ProjectsPage() {
       scheduleMilestones: [],
     });
 
-    setSelectedProjectId(projectId);
-    setSelectedQuoteId(newQuote.id);
-    setShowQuoteEditor(true);
+    navigateToProjects({ projectId, quoteId: newQuote.id, editor: 'quote' });
   };
 
   const handleEditQuote = (projectId: string, quoteId: string) => {
-    setSelectedProjectId(projectId);
-    setSelectedQuoteId(quoteId);
-    setShowQuoteEditor(true);
+    navigateToProjects({ projectId, quoteId, editor: 'quote' });
   };
 
   const handleDeleteQuote = (quoteId: string) => {
@@ -391,9 +434,7 @@ export default function ProjectsPage() {
       });
 
       if (selectedQuoteId === quoteId) {
-        setShowQuoteEditor(false);
-        setSelectedProjectId(null);
-        setSelectedQuoteId(null);
+        navigateToProjects(selectedProjectId ? { projectId: selectedProjectId } : {}, { replace: true });
       }
 
       toast.success('Tarjous poistettu');
@@ -427,11 +468,9 @@ export default function ProjectsPage() {
 
   const handleSelectProject = (projectId: string) => {
     if (selectedProjectId !== projectId) {
-      setShowQuoteEditor(false);
-      setSelectedQuoteId(null);
       setSelectedQuotes(new Set());
     }
-    setSelectedProjectId(projectId);
+    navigateToProjects({ projectId });
   };
 
   return (
@@ -819,7 +858,7 @@ export default function ProjectsPage() {
                       <Pencil className="h-4 w-4" />
                       Muokkaa projektia
                     </Button>
-                    <Button variant="ghost" onClick={() => setSelectedProjectId(null)}>
+                    <Button variant="ghost" onClick={() => navigateToProjects({})}>
                       <X className="h-4 w-4" />
                       Tyhjennä valinta
                     </Button>
@@ -860,6 +899,53 @@ export default function ProjectsPage() {
                       </div>
                     </div>
                   )}
+                </div>
+
+                <div className="mt-6 grid gap-3 xl:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Seuraava työ</p>
+                    {projectContext?.nextAction ? (
+                      <>
+                        <p className="mt-3 font-medium text-slate-950">{projectContext.nextAction.title}</p>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">{projectContext.nextAction.reason}</p>
+                        <Button className="mt-4 w-full justify-between" variant="outline" onClick={() => onNavigate?.(projectContext.nextAction.target)}>
+                          {projectContext.nextAction.ctaLabel}
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <p className="mt-3 text-sm text-muted-foreground">Tässä projektissa ei ole juuri nyt kiireellisiä toimenpiteitä.</p>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Laskutuskonteksti</p>
+                    {latestProjectInvoice ? (
+                      <>
+                        <p className="mt-3 font-medium text-slate-950">{latestProjectInvoice.invoiceNumber}</p>
+                        <p className="mt-2 text-sm text-muted-foreground">{getInvoiceStatusLabel(latestProjectInvoice.status)}{isInvoiceOverdue(latestProjectInvoice) ? ' • Erääntynyt' : ''}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Luonnoksia {projectContext?.draftInvoiceCount || 0} • Erääntyneitä {projectContext?.overdueInvoiceCount || 0}</p>
+                        <Button className="mt-4 w-full justify-between" variant="outline" onClick={() => onNavigate?.({ page: 'invoices', invoiceId: latestProjectInvoice.id })}>
+                          Avaa lasku
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <p className="mt-3 text-sm text-muted-foreground">
+                        {projectContext?.acceptedWithoutInvoiceCount
+                          ? `Hyväksyttyjä tarjouksia ilman laskua: ${projectContext.acceptedWithoutInvoiceCount}.`
+                          : 'Projektilla ei ole vielä laskuja.'}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Työtilan fokus</p>
+                    <p className="mt-3 font-medium text-slate-950">{projectContext?.tasks.length || 0} aktiivista toimenpidettä</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      Tarjoukset, laskutus ja asiakaskonteksti pysyvät tässä projektissa samassa näkymässä. Sulkeminen ei enää nollaa projektivalintaa.
+                    </p>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -973,8 +1059,7 @@ export default function ProjectsPage() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setShowQuoteEditor(false);
-                    setSelectedQuoteId(null);
+                    navigateToProjects(selectedProjectId ? { projectId: selectedProjectId } : {});
                   }}
                 >
                   <X className="h-4 w-4" />
@@ -985,9 +1070,7 @@ export default function ProjectsPage() {
                 projectId={selectedProjectId}
                 quoteId={selectedQuoteId}
                 onClose={() => {
-                  setShowQuoteEditor(false);
-                  setSelectedProjectId(null);
-                  setSelectedQuoteId(null);
+                  navigateToProjects(selectedProjectId ? { projectId: selectedProjectId } : {});
                 }}
               />
             </div>

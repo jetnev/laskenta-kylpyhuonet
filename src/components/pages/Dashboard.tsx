@@ -1,432 +1,303 @@
-import { ArrowRight, Clock, FileText, FolderOpen, Package, Plus, TrendUp, Wrench } from '@phosphor-icons/react';
+import {
+	ArrowRight,
+	ClockCountdown,
+	FileText,
+	FolderOpen,
+	Package,
+	Plus,
+	Receipt,
+	TrendUp,
+	WarningCircle,
+} from '@phosphor-icons/react';
+import { useMemo } from 'react';
+
 import DeadlineNotifications from '../DeadlineNotifications';
+import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Badge } from '../ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { useCustomers, useProducts, useProjects, useQuoteRows, useQuotes } from '../../hooks/use-data';
-import { calculateQuote, formatCurrency } from '../../lib/calculations';
-
-type DashboardTarget = 'projects' | 'products' | 'installation-groups' | 'reports';
+import { useCustomers, useInvoices, useProducts, useProjects, useQuoteRows, useQuotes } from '../../hooks/use-data';
+import type { AppLocationState } from '../../lib/app-routing';
+import { buildWorkspaceActionCenter } from '../../lib/workspace-flow';
 
 interface DashboardProps {
-  onNavigate?: (page: DashboardTarget) => void;
+	onNavigate?: (location: AppLocationState) => void;
 }
 
-function getQuoteStatusLabel(status: string) {
-  switch (status) {
-    case 'draft':
-      return 'Luonnos';
-    case 'sent':
-      return 'Lähetetty';
-    case 'accepted':
-      return 'Hyväksytty';
-    case 'rejected':
-      return 'Hylätty';
-    default:
-      return status;
-  }
-}
-
-function getQuoteStatusVariant(status: string): 'default' | 'secondary' | 'outline' | 'destructive' {
-  switch (status) {
-    case 'accepted':
-      return 'default';
-    case 'rejected':
-      return 'destructive';
-    case 'sent':
-      return 'outline';
-    default:
-      return 'secondary';
-  }
-}
+const TASK_TONE_STYLES = {
+	critical: 'border-red-200 bg-red-50/80 text-red-900',
+	attention: 'border-amber-200 bg-amber-50/80 text-amber-900',
+	'follow-up': 'border-sky-200 bg-sky-50/80 text-sky-900',
+	info: 'border-slate-200 bg-slate-50 text-slate-900',
+} as const;
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
-  const { products } = useProducts();
-  const { projects } = useProjects();
-  const { quotes } = useQuotes();
-  const { customers } = useCustomers();
-  const { getRowsForQuote } = useQuoteRows();
+	const { customers } = useCustomers();
+	const { invoices } = useInvoices();
+	const { products } = useProducts();
+	const { projects } = useProjects();
+	const { rows } = useQuoteRows();
+	const { quotes } = useQuotes();
 
-  const quoteSummaries = quotes
-    .map((quote) => {
-      const project = projects.find((item) => item.id === quote.projectId);
-      const customer = customers.find((item) => item.id === project?.customerId);
-      const rows = getRowsForQuote(quote.id);
-      const totals = calculateQuote(quote, rows);
-      return {
-        ...quote,
-        customerName: customer?.name || 'Ei asiakasta',
-        projectName: project?.name || 'Tuntematon projekti',
-        total: totals.total,
-        rowCount: rows.filter((row) => row.mode !== 'section').length,
-      };
-    })
-    .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+	const actionCenter = useMemo(
+		() =>
+			buildWorkspaceActionCenter({
+				customers,
+				invoices,
+				products,
+				projects,
+				quoteRows: rows,
+				quotes,
+			}),
+		[customers, invoices, products, projects, quotes, rows]
+	);
 
-  const acceptedValue = quoteSummaries
-    .filter((quote) => quote.status === 'accepted')
-    .reduce((sum, quote) => sum + quote.total, 0);
-  const sentQuotes = quoteSummaries.filter((quote) => quote.status === 'sent');
-  const draftQuotes = quoteSummaries.filter((quote) => quote.status === 'draft');
-  const draftsNeedingWork = draftQuotes.filter((quote) => quote.rowCount === 0 || !quote.validUntil || quote.total <= 0);
-  const latestProjects = [...projects]
-    .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
-    .slice(0, 6);
-  const latestQuotes = quoteSummaries.slice(0, 6);
-  const hasWorkspace = projects.length > 0 || quotes.length > 0 || customers.length > 0;
-  const focusQuote = latestQuotes[0];
-  const focusProject = latestProjects[0];
-  const priorityItems = [
-    ...draftsNeedingWork.slice(0, 3).map((quote) => ({
-      id: `draft-${quote.id}`,
-      title: quote.title,
-      detail: quote.rowCount === 0 ? 'Lisää rivit ja tarkista hinnoittelu.' : 'Täydennä voimassaoloaika tai viimeistele yhteenveto.',
-      meta: `${quote.projectName} • ${quote.customerName}`,
-      tone: 'draft' as const,
-    })),
-    ...sentQuotes.slice(0, 2).map((quote) => ({
-      id: `sent-${quote.id}`,
-      title: quote.title,
-      detail: 'Seuraa asiakkaan vastausta ja päivitä tila tarvittaessa.',
-      meta: `${quote.projectName} • ${quote.customerName}`,
-      tone: 'sent' as const,
-    })),
-  ].slice(0, 4);
+	const nextAction = actionCenter.nextAction;
+	const actionQueue = actionCenter.tasks.slice(0, 5);
+	const resumeItems = actionCenter.resumeItems;
+	const summaryCards = [
+		{ label: 'Luonnokset', value: actionCenter.summary.blockedDrafts },
+		{ label: 'Laskutus', value: actionCenter.summary.invoiceActions },
+		{ label: 'Seuranta', value: actionCenter.summary.followUps },
+		{ label: 'Määräajat', value: actionCenter.summary.deadlines },
+		{ label: 'Esteet', value: actionCenter.summary.blockers },
+	];
 
-  const summaryCards = [
-    {
-      title: 'Projektit',
-      value: projects.length,
-      detail: 'Kaikki aktiiviset projektit',
-      icon: FolderOpen,
-      tone: 'bg-sky-50 text-sky-700 border-sky-100',
-    },
-    {
-      title: 'Tarjoukset',
-      value: quotes.length,
-      detail: 'Kaikki tilat yhteensä',
-      icon: FileText,
-      tone: 'bg-violet-50 text-violet-700 border-violet-100',
-    },
-    {
-      title: 'Tuotteet',
-      value: products.length,
-      detail: 'Tuoterekisterissä',
-      icon: Package,
-      tone: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-    },
-    {
-      title: 'Hyväksytty arvo',
-      value: formatCurrency(acceptedValue),
-      detail: 'Voitetut tarjoukset',
-      icon: TrendUp,
-      tone: 'bg-amber-50 text-amber-700 border-amber-100',
-    },
-  ];
+	if (!actionCenter.hasWorkspace) {
+		return (
+			<div className="p-4 sm:p-8 space-y-6">
+				<div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_340px]">
+					<Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
+						<div className="flex h-full flex-col gap-6 p-6 sm:p-8">
+							<Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Työn aloitus</Badge>
+							<div className="space-y-3">
+								<h1 className="text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">Etusivu ohjaa työn käyntiin yhdestä paikasta</h1>
+								<p className="max-w-2xl text-sm leading-7 text-slate-200 sm:text-base">
+									Aloita projektityötilasta. Kun asiakas, projekti ja ensimmäinen tarjous ovat olemassa, Etusivu alkaa ohjata seuraavat työvaiheet automaattisesti oikeaan paikkaan.
+								</p>
+							</div>
 
-  return (
-    <div className="p-4 sm:p-8 space-y-6">
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,360px)]">
-        <Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
-          <div className="flex h-full flex-col gap-6 p-6 sm:p-8">
-            {!hasWorkspace ? (
-              <>
-                <div className="space-y-4">
-                  <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Aloitus</Badge>
-                  <div className="space-y-3">
-                    <h1 className="text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">Uusi työ alkaa projektista</h1>
-                    <p className="max-w-2xl text-sm leading-7 text-slate-200 sm:text-base">
-                      Luo ensin asiakas ja projekti. Sen jälkeen tarjoukset, hintaryhmät ja tuotteet pysyvät samassa työnkulussa ilman erillisiä välivaiheita.
-                    </p>
-                  </div>
-                </div>
+							<div className="flex flex-col gap-3 sm:flex-row">
+								<Button className="justify-center gap-2 bg-white text-slate-950 hover:bg-slate-100" onClick={() => onNavigate?.({ page: 'projects' })}>
+									<Plus className="h-4 w-4" />
+									Avaa projektityötila
+								</Button>
+								<Button
+									variant="outline"
+									className="justify-center gap-2 border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+									onClick={() => onNavigate?.({ page: 'products' })}
+								>
+									<Package className="h-4 w-4" />
+									Lisää ensimmäinen tuote
+								</Button>
+							</div>
 
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button
-                    className="justify-center gap-2 bg-white text-slate-950 hover:bg-slate-100"
-                    onClick={() => onNavigate?.('projects')}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Avaa projektityötila
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="justify-center gap-2 border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
-                    onClick={() => onNavigate?.('products')}
-                  >
-                    <Package className="h-4 w-4" />
-                    Tuoterekisteri
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="justify-center gap-2 text-slate-200 hover:bg-white/10 hover:text-white"
-                    onClick={() => onNavigate?.('installation-groups')}
-                  >
-                    <Wrench className="h-4 w-4" />
-                    Hintaryhmät
-                  </Button>
-                </div>
+							<div className="grid gap-3 md:grid-cols-3">
+								{[
+									{
+										title: '1. Luo asiakas ja projekti',
+										description: 'Projektityötila muodostaa asiakkaan, tarjouksen ja laskutuksen saman työnkulun alle.',
+									},
+									{
+										title: '2. Rakenna tarjous',
+										description: 'Tarjouseditori avautuu suoraan projektin sisään, joten työ ei hajoa sivulta toiselle.',
+									},
+									{
+										title: '3. Palaa Etusivulle',
+										description: 'Kun dataa on, Etusivu nostaa seuraavan tärkeimmän työn ja kiireelliset tehtävät näkyviin.',
+									},
+								].map((item) => (
+									<div key={item.title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+										<p className="text-base font-medium text-white">{item.title}</p>
+										<p className="mt-2 text-sm leading-6 text-slate-300">{item.description}</p>
+									</div>
+								))}
+							</div>
+						</div>
+					</Card>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {[
-                    {
-                      step: '1',
-                      title: 'Luo asiakas ja projekti',
-                      description: 'Perusta kohde yhteen paikkaan, jotta tarjoukset pysyvät oikean asiakkaan alla.',
-                    },
-                    {
-                      step: '2',
-                      title: 'Rakenna tarjous',
-                      description: 'Lisää rivit, kate ja ehdot samassa työtilassa ilman sivupolkuihin eksymistä.',
-                    },
-                    {
-                      step: '3',
-                      title: 'Seuraa etenemistä',
-                      description: 'Palaa työn alla oleviin tarjouksiin, määräaikoihin ja raportointiin yhdestä näkymästä.',
-                    },
-                  ].map((item) => (
-                    <div key={item.step} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">Vaihe {item.step}</div>
-                      <p className="mt-3 text-base font-medium text-white">{item.title}</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-300">{item.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-4">
-                  <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Työtila</Badge>
-                  <div className="space-y-3">
-                    <h1 className="text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">Jatka keskeneräisiä tarjouksia</h1>
-                    <p className="max-w-2xl text-sm leading-7 text-slate-200 sm:text-base">
-                      Etusivu näyttää nyt vain olennaisen: mitä pitää viimeistellä, mihin kannattaa palata seuraavaksi ja mistä projektityötilaan siirrytään.
-                    </p>
-                  </div>
-                </div>
+					<div className="space-y-6">
+						<Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
+							<CardHeader>
+								<CardTitle>Ensimmäinen askel</CardTitle>
+								<CardDescription>Projektit-sivu on varsinainen työtila. Etusivu alkaa ohjata työtä vasta, kun siellä on mitä ohjata.</CardDescription>
+							</CardHeader>
+							<CardContent className="space-y-3">
+								<Button className="w-full justify-between" onClick={() => onNavigate?.({ page: 'projects' })}>
+									Luo ensimmäinen projekti
+									<ArrowRight className="h-4 w-4" />
+								</Button>
+								{actionCenter.hasProductGap && (
+									<Button variant="outline" className="w-full justify-between" onClick={() => onNavigate?.({ page: 'products' })}>
+										Lisää tuotteet ennen ensimmäistä tarjousta
+										<ArrowRight className="h-4 w-4" />
+									</Button>
+								)}
+							</CardContent>
+						</Card>
 
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button
-                    className="justify-center gap-2 bg-white text-slate-950 hover:bg-slate-100"
-                    onClick={() => onNavigate?.('projects')}
-                  >
-                    Avaa projektit
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="justify-center gap-2 border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
-                    onClick={() => onNavigate?.('reports')}
-                  >
-                    <TrendUp className="h-4 w-4" />
-                    Raportointi
-                  </Button>
-                </div>
+						<DeadlineNotifications compact />
+					</div>
+				</div>
+			</div>
+		);
+	}
 
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">Viimeisin tarjous</p>
-                    {focusQuote ? (
-                      <>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <p className="text-lg font-semibold text-white">{focusQuote.title}</p>
-                          <Badge variant="secondary" className="border-white/10 bg-white/10 text-white">
-                            {getQuoteStatusLabel(focusQuote.status)}
-                          </Badge>
-                        </div>
-                        <p className="mt-2 text-sm text-slate-300">{focusQuote.projectName} • {focusQuote.customerName}</p>
-                        <p className="mt-3 text-sm text-slate-200">Arvo {formatCurrency(focusQuote.total)} • Päivitetty {new Date(focusQuote.updatedAt).toLocaleDateString('fi-FI')}</p>
-                      </>
-                    ) : (
-                      <p className="mt-3 text-sm text-slate-300">Ensimmäinen tarjous näkyy tässä heti, kun projektille on luotu sisältöä.</p>
-                    )}
-                  </div>
+	return (
+		<div className="p-4 sm:p-8 space-y-6">
+			<div className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_340px]">
+				<div className="space-y-6">
+					<Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
+						<div className="flex h-full flex-col gap-6 p-6 sm:p-8">
+							<div className="space-y-4">
+								<Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Työn ohjaus</Badge>
+								<div className="space-y-3">
+									<h1 className="text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">Etusivu näyttää mitä pitää tehdä nyt</h1>
+									<p className="max-w-2xl text-sm leading-7 text-slate-200 sm:text-base">
+										Päivän tilanne priorisoi kiireellisimmän työn, nostaa estävät puutteet näkyviin ja ohjaa suoraan oikeaan projektityötilaan tai laskuun.
+									</p>
+								</div>
+							</div>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">Projektifokus</p>
-                    {focusProject ? (
-                      <>
-                        <p className="mt-3 text-lg font-semibold text-white">{focusProject.name}</p>
-                        <p className="mt-2 text-sm text-slate-300">{focusProject.site}</p>
-                        <p className="mt-3 text-sm text-slate-200">Päivitetty {new Date(focusProject.updatedAt).toLocaleDateString('fi-FI')}</p>
-                      </>
-                    ) : (
-                      <p className="mt-3 text-sm text-slate-300">Projektityötila alkaa näkyä tässä, kun ensimmäinen kohde on tallennettu.</p>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </Card>
+							<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+								{summaryCards.map((item) => (
+									<div key={item.label} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+										<p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-200">{item.label}</p>
+										<p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-white">{item.value}</p>
+									</div>
+								))}
+							</div>
 
-        <Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.4)]">
-          <CardHeader className="pb-3">
-            <CardTitle>Päivän tilanne</CardTitle>
-            <CardDescription>Missä työ vaatii huomiota seuraavaksi.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: 'Luonnoksia', value: draftQuotes.length },
-                { label: 'Lähetettyjä', value: sentQuotes.length },
-                { label: 'Asiakkaita', value: customers.length },
-                { label: 'Viimeistele', value: draftsNeedingWork.length },
-              ].map((item) => (
-                <div key={item.label} className="rounded-2xl border bg-slate-50 px-4 py-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{item.label}</p>
-                  <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{item.value}</p>
-                </div>
-              ))}
-            </div>
+							<div className="rounded-[28px] border border-white/10 bg-white/6 p-5 sm:p-6">
+								<div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+									<div className="space-y-3">
+										<div className="flex items-center gap-2 text-sky-200">
+											<TrendUp className="h-4 w-4" weight="bold" />
+											<span className="text-xs font-semibold uppercase tracking-[0.16em]">Seuraava tärkein työ</span>
+										</div>
+										<div>
+											<h2 className="text-2xl font-semibold tracking-[-0.03em] text-white">
+												{nextAction ? nextAction.title : 'Tänään ei ole kiireellisiä tehtäviä'}
+											</h2>
+											<p className="mt-2 max-w-2xl text-sm leading-7 text-slate-200">
+												{nextAction
+													? nextAction.reason
+													: 'Työjono näyttää hallitulta. Avaa projektityötila, kun haluat jatkaa keskeneräisiä projekteja tai luoda uutta.'}
+											</p>
+											{nextAction && <p className="mt-3 text-sm text-slate-300">{nextAction.locationLabel}</p>}
+										</div>
+									</div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="flex items-start gap-3">
-                <div className="rounded-2xl bg-white p-2 shadow-sm">
-                  <Clock className="h-4 w-4 text-slate-700" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-950">
-                    {draftsNeedingWork.length > 0 ? 'Seuraava tärkein työ' : 'Työjono näyttää hallitulta'}
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
-                    {draftsNeedingWork.length > 0
-                      ? `${draftsNeedingWork[0].title} tarvitsee vielä viimeistelyä ennen lähettämistä.`
-                      : 'Kaikissa luonnoksissa on ainakin perusrakenne valmiina. Seuraavaksi kannattaa siirtyä projektityötilaan ja tarkistaa viimeisin tarjous.'}
-                  </p>
-                </div>
-              </div>
-            </div>
+									<div className="flex flex-col gap-3 sm:min-w-52">
+										<Button className="justify-between bg-white text-slate-950 hover:bg-slate-100" onClick={() => nextAction ? onNavigate?.(nextAction.target) : onNavigate?.({ page: 'projects' })}>
+											{nextAction ? nextAction.ctaLabel : 'Avaa projektityötila'}
+											<ArrowRight className="h-4 w-4" />
+										</Button>
+										<Button
+											variant="outline"
+											className="justify-between border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+											onClick={() => onNavigate?.({ page: 'projects' })}
+										>
+											Jatka projektityötilaan
+											<FolderOpen className="h-4 w-4" />
+										</Button>
+									</div>
+								</div>
+							</div>
+						</div>
+					</Card>
 
-            <Button className="w-full justify-between" onClick={() => onNavigate?.('projects')}>
-              Siirry projektityötilaan
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+					<Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
+						<CardHeader>
+							<CardTitle>Päivän tilanne</CardTitle>
+							<CardDescription>
+								Lista näyttää vain tehtävät, jotka johtavat suoraan seuraavaan toimenpiteeseen. Mitä ylempänä rivi on, sitä kiireellisempänä työ kannattaa hoitaa.
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							{actionQueue.length === 0 ? (
+								<div className="rounded-3xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
+									Tänään ei ole kiireellisiä tehtäviä. Avaa projektityötila, kun haluat jatkaa tarjouksia tai tarkistaa asiakaskontekstin.
+								</div>
+							) : (
+								<div className="space-y-3">
+									{actionQueue.map((task, index) => (
+										<div key={task.id} className={`rounded-2xl border px-4 py-4 ${TASK_TONE_STYLES[task.tone]}`}>
+											<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+												<div className="min-w-0">
+													<div className="flex flex-wrap items-center gap-2">
+														<Badge variant="outline" className="bg-white/70">#{index + 1}</Badge>
+														<p className="font-medium">{task.title}</p>
+													</div>
+													<p className="mt-2 text-sm leading-6 text-current/80">{task.reason}</p>
+													<p className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-current/60">{task.locationLabel}</p>
+												</div>
+												<Button variant="outline" className="border-current/20 bg-white/80 text-current hover:bg-white" onClick={() => onNavigate?.(task.target)}>
+													{task.ctaLabel}
+												</Button>
+											</div>
+										</div>
+									))}
+								</div>
+							)}
+						</CardContent>
+					</Card>
+				</div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {summaryCards.map((card) => {
-          const Icon = card.icon;
-          return (
-            <Card key={card.title} className="border-slate-200/80 shadow-[0_18px_40px_-40px_rgba(15,23,42,0.45)]">
-              <CardContent className="flex items-start gap-4 p-5">
-                <div className={`rounded-2xl border p-3 ${card.tone}`}>
-                  <Icon className="h-5 w-5" weight="fill" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm text-muted-foreground">{card.title}</p>
-                  <p className="mt-1 text-2xl font-semibold tracking-[-0.03em]">{card.value}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{card.detail}</p>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+				<div className="space-y-6">
+					<Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
+						<CardHeader>
+							<CardTitle>Jatka työskentelyä</CardTitle>
+							<CardDescription>Etusivulta pääsee suoraan takaisin viimeisimpään tarjoukseen, projektiin tai avoimeen laskuun.</CardDescription>
+						</CardHeader>
+						<CardContent>
+							{resumeItems.length === 0 ? (
+								<div className="rounded-2xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+									Ei jatkettavia kohteita juuri nyt.
+								</div>
+							) : (
+								<div className="space-y-3">
+									{resumeItems.map((item) => (
+										<div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_30px_-32px_rgba(15,23,42,0.35)]">
+											<div className="flex flex-wrap items-center gap-2">
+												<Badge variant="outline">{item.badgeLabel}</Badge>
+												<p className="font-medium text-slate-950">{item.title}</p>
+											</div>
+											<p className="mt-2 text-sm leading-6 text-slate-600">{item.detail}</p>
+											<p className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{item.meta}</p>
+											<Button className="mt-4 w-full justify-between" variant="outline" onClick={() => onNavigate?.(item.target)}>
+												{item.ctaLabel}
+												<ArrowRight className="h-4 w-4" />
+											</Button>
+										</div>
+									))}
+								</div>
+							)}
+						</CardContent>
+					</Card>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,360px)]">
-        <Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.4)]">
-          <CardHeader className="pb-3">
-            <CardTitle>Jatka työskentelyä</CardTitle>
-            <CardDescription>Viimeisimmät tarjoukset ja projektit pysyvät samassa näkymässä ilman erillisiä listoja.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue={latestQuotes.length > 0 ? 'quotes' : 'projects'} className="gap-4">
-              <TabsList className="grid w-full grid-cols-2 md:w-auto">
-                <TabsTrigger value="quotes">Viimeisimmät tarjoukset</TabsTrigger>
-                <TabsTrigger value="projects">Viimeisimmät projektit</TabsTrigger>
-              </TabsList>
+					{actionCenter.hasProductGap && (
+						<Card className="border-amber-200 bg-amber-50/70 shadow-[0_20px_50px_-44px_rgba(120,53,15,0.25)]">
+							<CardHeader>
+								<CardTitle className="flex items-center gap-2 text-amber-950">
+									<WarningCircle className="h-5 w-5" weight="fill" />
+									Tuoterekisteri puuttuu vielä
+								</CardTitle>
+								<CardDescription className="text-amber-900/80">
+									Tarjousluonnokset pysyvät kevyinä ilman tuotteita, mutta ensimmäinen oikea laskenta kannattaa tehdä vasta tuoterekisterin jälkeen.
+								</CardDescription>
+							</CardHeader>
+							<CardContent>
+								<Button className="w-full justify-between" variant="outline" onClick={() => onNavigate?.({ page: 'products' })}>
+									Lisää ensimmäinen tuote
+									<Package className="h-4 w-4" />
+								</Button>
+							</CardContent>
+						</Card>
+					)}
 
-              <TabsContent value="quotes" className="space-y-3">
-                {latestQuotes.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
-                    Tarjouksia ei ole vielä luotu. Aloita projektityötilasta ja lisää ensimmäinen tarjous sinne.
-                  </div>
-                ) : (
-                  latestQuotes.map((quote) => (
-                    <div key={quote.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_30px_-32px_rgba(15,23,42,0.45)]">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium text-slate-950">{quote.quoteNumber ? `${quote.quoteNumber} • ${quote.title}` : quote.title}</p>
-                            <Badge variant={getQuoteStatusVariant(quote.status)}>{getQuoteStatusLabel(quote.status)}</Badge>
-                          </div>
-                          <p className="mt-1 text-sm text-slate-600">{quote.projectName} • {quote.customerName}</p>
-                          <p className="mt-2 text-xs text-slate-500">Päivitetty {new Date(quote.updatedAt).toLocaleString('fi-FI')}</p>
-                        </div>
-                        <div className="text-sm font-semibold text-slate-950">{formatCurrency(quote.total)}</div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </TabsContent>
-
-              <TabsContent value="projects" className="space-y-3">
-                {latestProjects.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
-                    Projektit näkyvät tässä heti, kun ensimmäinen kohde on tallennettu.
-                  </div>
-                ) : (
-                  latestProjects.map((project) => {
-                    const customer = customers.find((item) => item.id === project.customerId);
-                    const projectQuoteCount = quoteSummaries.filter((quote) => quote.projectId === project.id).length;
-                    return (
-                      <div key={project.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_30px_-32px_rgba(15,23,42,0.45)]">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div>
-                            <p className="font-medium text-slate-950">{project.name}</p>
-                            <p className="mt-1 text-sm text-slate-600">{customer?.name || 'Ei asiakasta'} • {project.site}</p>
-                            <p className="mt-2 text-xs text-slate-500">Päivitetty {new Date(project.updatedAt).toLocaleString('fi-FI')}</p>
-                          </div>
-                          <Badge variant="outline">{projectQuoteCount} tarjousta</Badge>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-6">
-          <Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.4)]">
-            <CardHeader className="pb-3">
-              <CardTitle>Seuraavat toimenpiteet</CardTitle>
-              <CardDescription>Pidä etusivulla vain muutama aidosti hyödyllinen nosto.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {priorityItems.length === 0 ? (
-                <div className="rounded-2xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-                  Ei välittömiä viimeisteltäviä kohteita. Siirry projektityötilaan, kun haluat jatkaa tarjousten muokkausta.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {priorityItems.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-medium text-slate-950">{item.title}</p>
-                          <p className="mt-1 text-sm leading-6 text-slate-600">{item.detail}</p>
-                          <p className="mt-2 text-xs text-slate-500">{item.meta}</p>
-                        </div>
-                        <Badge variant={item.tone === 'draft' ? 'secondary' : 'outline'}>
-                          {item.tone === 'draft' ? 'Viimeistele' : 'Seuranta'}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <DeadlineNotifications />
-        </div>
-      </div>
-    </div>
-  );
+					<DeadlineNotifications compact />
+				</div>
+			</div>
+		</div>
+	);
 }

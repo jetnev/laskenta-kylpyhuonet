@@ -51,18 +51,19 @@ import {
   type LegalAcceptanceState,
 } from './lib/legal';
 import {
+  buildAppUrl,
   DEFAULT_APP_PAGE,
-  getAppPagePath,
   normalizePathname,
-  resolveAccessibleAppPage,
-  resolveAppPage,
+  resolveAccessibleAppLocation,
+  resolveAppLocation,
   resolveAppRoute,
+  type AppLocationState,
   type AppPage,
 } from './lib/app-routing';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<AppPage>(DEFAULT_APP_PAGE);
   const [currentPathname, setCurrentPathname] = useState(() => normalizePathname(window.location.pathname));
+  const [currentSearch, setCurrentSearch] = useState(() => window.location.search || '');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [checkingForUpdates, setCheckingForUpdates] = useState(false);
   const [restartingForUpdate, setRestartingForUpdate] = useState(false);
@@ -86,13 +87,25 @@ function App() {
   const isMobile = useIsMobile();
   const showDesktopUpdateActions = isDesktopRuntime();
   const currentRoute = useMemo(() => resolveAppRoute(currentPathname), [currentPathname]);
+  const currentLocation = useMemo(() => resolveAppLocation(currentPathname, currentSearch), [currentPathname, currentSearch]);
+  const currentPage = currentLocation.page;
 
   const navigateTo = useCallback(
-    (pathname: string, options?: { replace?: boolean; preserveHash?: boolean; preserveSearch?: boolean }) => {
+    (
+      pathname: string,
+      options?: {
+        replace?: boolean;
+        preserveHash?: boolean;
+        preserveSearch?: boolean;
+        search?: string;
+      }
+    ) => {
       const nextUrl = new URL(window.location.href);
       nextUrl.pathname = pathname;
 
-      if (!options?.preserveSearch) {
+      if (typeof options?.search === 'string') {
+        nextUrl.search = options.search;
+      } else if (!options?.preserveSearch) {
         nextUrl.search = '';
       }
 
@@ -106,9 +119,22 @@ function App() {
         window.history.pushState({}, '', nextUrl);
       }
       setCurrentPathname(normalizePathname(nextUrl.pathname));
+      setCurrentSearch(nextUrl.search);
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     },
     []
+  );
+
+  const navigateWithinApp = useCallback(
+    (location: AppLocationState, options?: { replace?: boolean }) => {
+      const nextUrl = buildAppUrl(location);
+      const [pathname, search = ''] = nextUrl.split('?');
+      navigateTo(pathname, {
+        replace: options?.replace,
+        search: search ? `?${search}` : '',
+      });
+    },
+    [navigateTo]
   );
 
   const loadLegalState = useCallback(async () => {
@@ -163,15 +189,9 @@ function App() {
   );
 
   useEffect(() => {
-    if (!navigation.some((item) => item.id === currentPage)) {
-      setCurrentPage(DEFAULT_APP_PAGE);
-      navigateTo(getAppPagePath(DEFAULT_APP_PAGE), { replace: true });
-    }
-  }, [currentPage, navigateTo, navigation]);
-
-  useEffect(() => {
     const syncRoute = () => {
       setCurrentPathname(normalizePathname(window.location.pathname));
+      setCurrentSearch(window.location.search || '');
     };
 
     window.addEventListener('popstate', syncRoute);
@@ -189,7 +209,7 @@ function App() {
 
     if (user) {
       if (currentRoute !== 'app') {
-        navigateTo(getAppPagePath(DEFAULT_APP_PAGE), { replace: true });
+        navigateWithinApp({ page: DEFAULT_APP_PAGE }, { replace: true });
       }
       return;
     }
@@ -204,28 +224,22 @@ function App() {
     if (currentRoute === 'app') {
       navigateTo('/login', { replace: true });
     }
-  }, [currentRoute, loading, navigateTo, requiresPasswordReset, user]);
+  }, [currentRoute, loading, navigateTo, navigateWithinApp, requiresPasswordReset, user]);
 
   useEffect(() => {
     if (loading || !user || currentRoute !== 'app') {
       return;
     }
 
-    const requestedPage = resolveAppPage(currentPathname);
-    const nextPage = resolveAccessibleAppPage(requestedPage, {
+    const nextLocation = resolveAccessibleAppLocation(currentLocation, {
       canManageSharedData,
       canManageUsers,
     });
-    const canonicalPath = getAppPagePath(nextPage);
 
-    if (currentPage !== nextPage) {
-      setCurrentPage(nextPage);
+    if (buildAppUrl(currentLocation) !== buildAppUrl(nextLocation)) {
+      navigateWithinApp(nextLocation, { replace: true });
     }
-
-    if (currentPathname !== canonicalPath) {
-      navigateTo(canonicalPath, { replace: true });
-    }
-  }, [canManageSharedData, canManageUsers, currentPage, currentPathname, currentRoute, loading, navigateTo, user]);
+  }, [canManageSharedData, canManageUsers, currentLocation, currentRoute, loading, navigateWithinApp, user]);
 
   useEffect(() => {
     if (!showDesktopUpdateActions) {
@@ -412,9 +426,15 @@ function App() {
     variant: accessState.roleBadgeVariant,
   };
 
-  const handleNavigate = (page: AppPage) => {
-    setCurrentPage(page);
-    navigateTo(getAppPagePath(page));
+  const handleNavigatePage = (page: AppPage) => {
+    navigateWithinApp({ page });
+    if (isMobile) {
+      setMobileMenuOpen(false);
+    }
+  };
+
+  const handleNavigateLocation = (location: AppLocationState, options?: { replace?: boolean }) => {
+    navigateWithinApp(location, options);
     if (isMobile) {
       setMobileMenuOpen(false);
     }
@@ -452,7 +472,7 @@ function App() {
             return (
               <button
                 key={item.id}
-                onClick={() => handleNavigate(item.id)}
+                onClick={() => handleNavigatePage(item.id)}
                 className={cn(
                   'flex w-full items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
                   isActive ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted'
@@ -523,10 +543,10 @@ function App() {
         )}
 
         <main className="flex-1 overflow-auto">
-          {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
-          {currentPage === 'help' && <HelpPage onNavigate={handleNavigate} />}
-          {currentPage === 'projects' && <ProjectsPage />}
-          {currentPage === 'invoices' && <InvoicesPage />}
+          {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigateLocation} />}
+          {currentPage === 'help' && <HelpPage onNavigate={handleNavigatePage} />}
+          {currentPage === 'projects' && <ProjectsPage routeState={currentLocation} onNavigate={handleNavigateLocation} />}
+          {currentPage === 'invoices' && <InvoicesPage routeState={currentLocation} onNavigate={handleNavigateLocation} />}
           {currentPage === 'products' && <ProductsPage />}
           {currentPage === 'installation-groups' && <InstallationGroupsPage />}
           {currentPage === 'substitutes' && <SubstituteProductsPage />}
