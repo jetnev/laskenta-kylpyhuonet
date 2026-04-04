@@ -967,23 +967,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    clearAuthState();
+
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
     const client = requireSupabase();
-    let signOutError: Error | null = null;
 
-    try {
-      const { error } = await client.auth.signOut({ scope: 'local' });
-      if (error) {
-        signOutError = new Error(error.message);
-      }
-    } catch (error) {
-      signOutError = error instanceof Error ? error : new Error('Uloskirjautuminen epäonnistui.');
-    } finally {
-      clearAuthState();
-    }
-
-    if (signOutError) {
-      throw signOutError;
-    }
+    queueMicrotask(() => {
+      void client.auth
+        .signOut({ scope: 'local' })
+        .then(({ error }) => {
+          if (error) {
+            console.error('Supabase local sign-out cleanup failed after optimistic logout.', error);
+          }
+        })
+        .catch((error) => {
+          console.error('Supabase local sign-out cleanup failed after optimistic logout.', error);
+        });
+    });
   };
 
   const requestPasswordReset = async (email: string) => {
