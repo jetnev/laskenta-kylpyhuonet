@@ -282,3 +282,42 @@ describe('suggestNextLegalVersionLabel', () => {
     expect(suggestNextLegalVersionLabel(undefined)).toBe('1.0.0');
   });
 });
+
+describe('post-login legal acceptance state — all accepted', () => {
+  it('does not block the app when the logged-in user has accepted all required documents', () => {
+    const activeDocuments = [
+      createDocument({ id: 'terms-v1', document_type: 'terms', acceptance_requirement: 'all-users' }),
+      createDocument({ id: 'privacy-v1', document_type: 'privacy', acceptance_requirement: 'all-users' }),
+      createDocument({ id: 'dpa-v1', document_type: 'dpa', acceptance_requirement: 'organization-owner' }),
+    ];
+    const acceptances = [
+      createAcceptance({ id: 'acc-1', document_version_id: 'terms-v1', document_type: 'terms' }),
+      createAcceptance({ id: 'acc-2', document_version_id: 'privacy-v1', document_type: 'privacy' }),
+      createAcceptance({ id: 'acc-3', document_version_id: 'dpa-v1', document_type: 'dpa' }),
+    ];
+
+    const state = evaluateLegalAcceptanceState(activeDocuments, acceptances, {
+      organizationRole: 'owner',
+    });
+
+    expect(state.requires_blocking_acceptance).toBe(false);
+    expect(state.pending_documents).toHaveLength(0);
+  });
+});
+
+describe('post-login legal acceptance state — new user with no acceptances', () => {
+  it('blocks the app and reports invited-user-first-login when no acceptances exist', () => {
+    const activeDocuments = [
+      createDocument({ id: 'terms-v1', document_type: 'terms', acceptance_requirement: 'all-users' }),
+      createDocument({ id: 'privacy-v1', document_type: 'privacy', acceptance_requirement: 'all-users' }),
+    ];
+
+    const state = evaluateLegalAcceptanceState(activeDocuments, [], {
+      organizationRole: 'employee',
+    });
+
+    expect(state.requires_blocking_acceptance).toBe(true);
+    expect(state.pending_documents).toHaveLength(2);
+    expect(state.pending_source).toBe('invited-user-first-login');
+  });
+});

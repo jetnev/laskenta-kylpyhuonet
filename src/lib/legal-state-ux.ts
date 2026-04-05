@@ -22,3 +22,10 @@ export function shouldBlockAppForLegalState(params: {
 
   return params.loading || Boolean(params.error);
 }
+
+export function sanitizeLegalLoadError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message || 'Sopimusasiakirjojen tarkistus epäonnistui.';
+  }
+  return 'Sopimusasiakirjojen tarkistus epäonnistui.';
+}

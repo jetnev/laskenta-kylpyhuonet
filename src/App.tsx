@@ -52,7 +52,7 @@ import {
   listPublicActiveLegalDocuments,
   type LegalAcceptanceState,
 } from './lib/legal';
-import { getLegalAcceptanceSubjectKey, shouldBlockAppForLegalState } from './lib/legal-state-ux';
+import { getLegalAcceptanceSubjectKey, sanitizeLegalLoadError, shouldBlockAppForLegalState } from './lib/legal-state-ux';
 import {
   buildAppUrl,
   DEFAULT_APP_PAGE,
@@ -198,7 +198,7 @@ function App() {
       }
 
       setLegalState(null);
-      setLegalStateError(error instanceof Error ? error.message : 'Sopimusasiakirjojen tarkistus epäonnistui.');
+      setLegalStateError(sanitizeLegalLoadError(error));
       setHasResolvedLegalState(false);
     } finally {
       if (!isBackgroundRefresh) {
