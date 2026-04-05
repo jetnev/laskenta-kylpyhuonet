@@ -79,6 +79,7 @@ import {
   exportQuoteToInternalExcel,
   exportQuoteToPDF,
 } from '../lib/export';
+import { matchesProductSearch, normalizeProductSearchQuery } from '../lib/product-search';
 import { getQuoteCompletionChecklist, getQuoteEditorSteps, type QuoteEditorStepId } from '../lib/quote-editor-ux';
 import { getResponsibleUserLabel } from '../lib/ownership';
 import { resolveQuoteTermsSnapshotTemplate, resolveTermTemplatePlaceholders } from '../lib/term-templates';
@@ -489,24 +490,9 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   );
 
   const matchingProducts = useMemo(() => {
-    const search = productSearch.trim().toLowerCase();
-    if (!search) return products.slice(0, 8);
-    return products
-      .filter((product) =>
-        [
-          product.code,
-          product.internalCode,
-          product.name,
-          product.description,
-          product.category,
-          product.brand,
-          product.manufacturer,
-          product.searchableText,
-        ]
-          .filter(Boolean)
-          .some((value) => value?.toLowerCase().includes(search))
-      )
-      .slice(0, 8);
+    const query = normalizeProductSearchQuery(productSearch);
+    if (!query.normalizedText) return products.slice(0, 8);
+    return products.filter((product) => matchesProductSearch(product, query)).slice(0, 8);
   }, [productSearch, products]);
   const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
   const allRowsSelected = quoteRows.length > 0 && selectedRowIds.length === quoteRows.length;
