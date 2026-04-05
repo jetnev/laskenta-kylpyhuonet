@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/use-auth';
 
 import { getTenderIntelligenceRepository } from '../services/tender-intelligence-repository';
 import type {
+  TenderDraftPackage,
   CreateTenderReferenceProfileInput,
   CreateTenderPackageInput,
   TenderAnalysisJob,
@@ -12,6 +13,7 @@ import type {
   TenderPackage,
   TenderPackageDetails,
   TenderReferenceProfile,
+  UpdateTenderDraftPackageItemInput,
   UpdateTenderReferenceProfileInput,
   UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
@@ -34,13 +36,19 @@ export function useTenderIntelligence() {
   const { user, users } = useAuth();
   const repository = useMemo(() => getTenderIntelligenceRepository(), []);
   const [packages, setPackages] = useState<TenderPackage[]>([]);
+  const [draftPackages, setDraftPackages] = useState<TenderDraftPackage[]>([]);
   const [referenceProfiles, setReferenceProfiles] = useState<TenderReferenceProfile[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const [selectedDraftPackageId, setSelectedDraftPackageId] = useState<string | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<TenderPackageDetails | null>(null);
   const [selectedPackageMissing, setSelectedPackageMissing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [creatingDraftPackagePackageId, setCreatingDraftPackagePackageId] = useState<string | null>(null);
+  const [updatingDraftPackageItemIds, setUpdatingDraftPackageItemIds] = useState<string[]>([]);
+  const [reviewingDraftPackageId, setReviewingDraftPackageId] = useState<string | null>(null);
+  const [exportingDraftPackageId, setExportingDraftPackageId] = useState<string | null>(null);
   const [referenceProfileSubmittingId, setReferenceProfileSubmittingId] = useState<string | 'new' | null>(null);
   const [deletingReferenceProfileIds, setDeletingReferenceProfileIds] = useState<string[]>([]);
   const [startingAnalysisPackageId, setStartingAnalysisPackageId] = useState<string | null>(null);
@@ -84,6 +92,25 @@ export function useTenderIntelligence() {
     return nextReferenceProfiles;
   }, [repository]);
 
+  const loadDraftPackages = useCallback(async (packageId: string | null) => {
+    if (!hasOrganizationContext || !packageId) {
+      setDraftPackages([]);
+      setSelectedDraftPackageId(null);
+      return [];
+    }
+
+    const nextDraftPackages = await repository.listDraftPackagesForTenderPackage(packageId);
+    setDraftPackages(nextDraftPackages);
+    setSelectedDraftPackageId((currentId) => {
+      if (currentId && nextDraftPackages.some((item) => item.id === currentId)) {
+        return currentId;
+      }
+
+      return nextDraftPackages[0]?.id ?? null;
+    });
+    return nextDraftPackages;
+  }, [hasOrganizationContext, repository]);
+
   const loadSelectedPackage = useCallback(
     async (packageId: string | null) => {
       if (!hasOrganizationContext) {
@@ -111,9 +138,11 @@ export function useTenderIntelligence() {
 
     if (!hasOrganizationContext) {
       setPackages([]);
+      setDraftPackages([]);
       setReferenceProfiles([]);
       setSelectedPackage(null);
       setSelectedPackageId(null);
+      setSelectedDraftPackageId(null);
       setSelectedPackageMissing(false);
       setError('Tarjousäly vaatii organisaatioon liitetyn käyttäjätilin.');
       setLoading(false);
@@ -134,7 +163,7 @@ export function useTenderIntelligence() {
           const nextSelectedPackageId = selectedPackageId && nextPackages.some((item) => item.id === selectedPackageId)
             ? selectedPackageId
             : nextPackages[0]?.id ?? null;
-          await loadSelectedPackage(nextSelectedPackageId);
+          await Promise.all([loadSelectedPackage(nextSelectedPackageId), loadDraftPackages(nextSelectedPackageId)]);
         }
 
         if (active) {
@@ -161,14 +190,14 @@ export function useTenderIntelligence() {
       active = false;
       unsubscribe();
     };
-  }, [hasOrganizationContext, loadPackages, loadReferenceProfiles, loadSelectedPackage, repository, selectedPackageId]);
+  }, [hasOrganizationContext, loadDraftPackages, loadPackages, loadReferenceProfiles, loadSelectedPackage, repository, selectedPackageId]);
 
   useEffect(() => {
     let active = true;
 
     const hydrateSelectedPackage = async () => {
       try {
-        await loadSelectedPackage(selectedPackageId);
+        await Promise.all([loadSelectedPackage(selectedPackageId), loadDraftPackages(selectedPackageId)]);
       } catch (nextError) {
         if (active) {
           setError(getErrorMessage(nextError));
@@ -181,7 +210,7 @@ export function useTenderIntelligence() {
     return () => {
       active = false;
     };
-  }, [loadSelectedPackage, selectedPackageId]);
+  }, [loadDraftPackages, loadSelectedPackage, selectedPackageId]);
 
   const createPackage = useCallback(
     async (input: CreateTenderPackageInput) => {
@@ -528,6 +557,90 @@ export function useTenderIntelligence() {
     [loadReferenceProfiles, refreshSelectedPackageReferenceSuggestions, repository],
   );
 
+  const createDraftPackage = useCallback(
+    async (packageId: string) => {
+      setCreatingDraftPackagePackageId(packageId);
+
+      try {
+        const created = await repository.createDraftPackageFromReviewedResults(packageId);
+        setSelectedDraftPackageId(created.id);
+        await loadDraftPackages(packageId);
+        setError(null);
+        return created;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setCreatingDraftPackagePackageId((current) => (current === packageId ? null : current));
+      }
+    },
+    [loadDraftPackages, repository],
+  );
+
+  const updateDraftPackageItem = useCallback(
+    async (itemId: string, input: UpdateTenderDraftPackageItemInput) => {
+      setUpdatingDraftPackageItemIds((current) => (current.includes(itemId) ? current : [...current, itemId]));
+
+      try {
+        const updated = await repository.updateDraftPackageItem(itemId, input);
+        setSelectedDraftPackageId(updated.id);
+        await loadDraftPackages(updated.tenderPackageId);
+        setError(null);
+        return updated;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setUpdatingDraftPackageItemIds((current) => current.filter((candidate) => candidate !== itemId));
+      }
+    },
+    [loadDraftPackages, repository],
+  );
+
+  const markDraftPackageReviewed = useCallback(
+    async (draftPackageId: string) => {
+      setReviewingDraftPackageId(draftPackageId);
+
+      try {
+        const updated = await repository.markDraftPackageReviewed(draftPackageId);
+        setSelectedDraftPackageId(updated.id);
+        await loadDraftPackages(updated.tenderPackageId);
+        setError(null);
+        return updated;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setReviewingDraftPackageId((current) => (current === draftPackageId ? null : current));
+      }
+    },
+    [loadDraftPackages, repository],
+  );
+
+  const markDraftPackageExported = useCallback(
+    async (draftPackageId: string) => {
+      setExportingDraftPackageId(draftPackageId);
+
+      try {
+        const updated = await repository.markDraftPackageExported(draftPackageId);
+        setSelectedDraftPackageId(updated.id);
+        await loadDraftPackages(updated.tenderPackageId);
+        setError(null);
+        return updated;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setExportingDraftPackageId((current) => (current === draftPackageId ? null : current));
+      }
+    },
+    [loadDraftPackages, repository],
+  );
+
   const overview = useMemo(
     () => ({
       packages: packages.length,
@@ -541,13 +654,19 @@ export function useTenderIntelligence() {
 
   return {
     packages,
+    draftPackages,
     referenceProfiles,
     selectedPackage,
     selectedPackageId,
+    selectedDraftPackageId,
     selectedPackageMissing,
     loading,
     creating,
     uploading,
+    creatingDraftPackagePackageId,
+    updatingDraftPackageItemIds,
+    reviewingDraftPackageId,
+    exportingDraftPackageId,
     referenceProfileSubmittingId,
     deletingReferenceProfileIds,
     startingAnalysisPackageId,
@@ -563,12 +682,17 @@ export function useTenderIntelligence() {
     currentUserId: user?.id ?? null,
     hasPackages: packages.length > 0,
     selectPackage: setSelectedPackageId,
+    selectDraftPackage: setSelectedDraftPackageId,
     createPackage,
     startAnalysis,
     startDocumentExtraction,
     startPackageExtraction,
     uploadDocuments,
     deleteDocument,
+    createDraftPackage,
+    updateDraftPackageItem,
+    markDraftPackageReviewed,
+    markDraftPackageExported,
     createReferenceProfile,
     updateReferenceProfile,
     deleteReferenceProfile,

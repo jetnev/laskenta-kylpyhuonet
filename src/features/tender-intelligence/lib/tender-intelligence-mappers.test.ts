@@ -4,6 +4,8 @@ import {
   buildTenderPackageDetails,
   mapCreateTenderReferenceProfileInputToInsert,
   mapCreateTenderPackageInputToInsert,
+  mapTenderDraftPackageItemRowToDomain,
+  mapTenderDraftPackageRowToDomain,
   mapTenderDocumentChunkRowToDomain,
   mapTenderDocumentExtractionRowToDomain,
   mapTenderDraftArtifactRowToDomain,
@@ -15,6 +17,7 @@ import {
   mapTenderRequirementRowToDomain,
   mapTenderReviewTaskRowToDomain,
   mapTenderRiskFlagRowToDomain,
+  mapUpdateTenderDraftPackageItemInputToPatch,
   mapUpdateTenderReferenceProfileInputToPatch,
 } from './tender-intelligence-mappers';
 import type {
@@ -22,6 +25,8 @@ import type {
   TenderDocumentChunkRow,
   TenderDocumentExtractionRow,
   TenderDocumentRow,
+  TenderDraftPackageItemRow,
+  TenderDraftPackageRow,
   TenderDraftArtifactRow,
   TenderGoNoGoAssessmentRow,
   TenderMissingItemRow,
@@ -680,6 +685,93 @@ describe('reference profile mappers', () => {
       tags: null,
       source_kind: 'imported',
       source_reference: null,
+    });
+  });
+});
+
+describe('draft package mappers', () => {
+  it('maps draft package rows, item rows, and patch payloads into the feature boundary', () => {
+    const itemRow: TenderDraftPackageItemRow = {
+      id: '31313131-3131-4313-8313-313131313131',
+      organization_id: '22222222-2222-4222-8222-222222222222',
+      tender_draft_package_id: '41414141-4141-4414-8414-414141414141',
+      item_type: 'accepted_requirement',
+      source_entity_type: 'requirement',
+      source_entity_id: '51515151-5151-4515-8515-515151515151',
+      title: 'Vahvista toimituslaajuus',
+      content_md: 'Markdown sisältö',
+      sort_order: 0,
+      is_included: true,
+      created_at: '2026-04-05T12:40:00.000Z',
+      updated_at: '2026-04-05T12:41:00.000Z',
+    };
+    const packageRow: TenderDraftPackageRow = {
+      id: '41414141-4141-4414-8414-414141414141',
+      organization_id: '22222222-2222-4222-8222-222222222222',
+      tender_package_id: '11111111-1111-4111-8111-111111111111',
+      title: 'Tarjouspaketti / draft package',
+      status: 'draft',
+      generated_from_analysis_job_id: '33333333-3333-4333-8333-333333333333',
+      generated_by_user_id: '22222222-2222-4222-8222-222222222222',
+      summary: 'Luonnospaketti sisältää 1 hyväksyttyä vaatimusta.',
+      payload_json: {
+        schema_version: 'tender-draft-package/v1',
+        generated_at: '2026-04-05T12:41:00.000Z',
+        generated_by_user_id: '22222222-2222-4222-8222-222222222222',
+        source_tender_package_id: '11111111-1111-4111-8111-111111111111',
+        source_analysis_job_id: '33333333-3333-4333-8333-333333333333',
+        metadata: {
+          title: 'Tarjouspaketti / draft package',
+          summary: 'Luonnospaketti sisältää 1 hyväksyttyä vaatimusta.',
+          draft_package_status: 'draft',
+        },
+        accepted_requirements: [
+          {
+            source_requirement_id: '51515151-5151-4515-8515-515151515151',
+            title: 'Vahvista toimituslaajuus',
+            content_md: 'Markdown sisältö',
+          },
+        ],
+        selected_references: [],
+        resolved_missing_items: [],
+        notes_for_editor: [],
+      },
+      created_at: '2026-04-05T12:40:00.000Z',
+      updated_at: '2026-04-05T12:41:00.000Z',
+    };
+
+    expect(mapTenderDraftPackageItemRowToDomain(itemRow)).toMatchObject({
+      draftPackageId: packageRow.id,
+      itemType: 'accepted_requirement',
+      sourceEntityType: 'requirement',
+      isIncluded: true,
+    });
+
+    expect(mapTenderDraftPackageRowToDomain(packageRow, [itemRow])).toMatchObject({
+      id: packageRow.id,
+      tenderPackageId: packageRow.tender_package_id,
+      status: 'draft',
+      items: [
+        expect.objectContaining({
+          id: itemRow.id,
+          sourceEntityId: itemRow.source_entity_id,
+        }),
+      ],
+      exportPayload: expect.objectContaining({
+        schema_version: 'tender-draft-package/v1',
+      }),
+    });
+
+    expect(mapUpdateTenderDraftPackageItemInputToPatch({
+      isIncluded: false,
+      sortOrder: 3,
+      title: 'Päivitetty otsikko',
+      contentMd: null,
+    })).toEqual({
+      title: 'Päivitetty otsikko',
+      content_md: null,
+      sort_order: 3,
+      is_included: false,
     });
   });
 });

@@ -2,7 +2,9 @@ import { buildTenderAnalysisReadiness } from './tender-analysis';
 import {
   createTenderReferenceProfileInputSchema,
   createTenderPackageInputSchema,
+  tenderDraftExportPayloadSchema,
   tenderPackageDetailsSchema,
+  updateTenderDraftPackageItemInputSchema,
   updateTenderReferenceProfileInputSchema,
   type CreateTenderReferenceProfileInput,
   type CreateTenderPackageInput,
@@ -10,6 +12,8 @@ import {
   type TenderDocument,
   type TenderDocumentChunk,
   type TenderDocumentExtraction,
+  type TenderDraftPackage,
+  type TenderDraftPackageItem,
   type TenderDraftArtifact,
   type TenderGoNoGoAssessment,
   type TenderMissingItem,
@@ -22,6 +26,7 @@ import {
   type TenderRequirement,
   type TenderReviewTask,
   type TenderRiskFlag,
+  type UpdateTenderDraftPackageItemInput,
   type UpdateTenderReferenceProfileInput,
 } from '../types/tender-intelligence';
 import type {
@@ -29,6 +34,8 @@ import type {
   TenderDocumentChunkRow,
   TenderDocumentExtractionRow,
   TenderDocumentRow,
+  TenderDraftPackageItemRow,
+  TenderDraftPackageRow,
   TenderDraftArtifactRow,
   TenderGoNoGoAssessmentRow,
   TenderMissingItemRow,
@@ -261,6 +268,42 @@ export function mapTenderReferenceSuggestionRowToDomain(row: TenderReferenceSugg
   };
 }
 
+export function mapTenderDraftPackageItemRowToDomain(row: TenderDraftPackageItemRow): TenderDraftPackageItem {
+  return {
+    id: row.id,
+    draftPackageId: row.tender_draft_package_id,
+    itemType: row.item_type,
+    sourceEntityType: row.source_entity_type,
+    sourceEntityId: row.source_entity_id,
+    title: row.title,
+    contentMd: row.content_md,
+    sortOrder: row.sort_order,
+    isIncluded: row.is_included,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapTenderDraftPackageRowToDomain(
+  row: TenderDraftPackageRow,
+  itemRows: TenderDraftPackageItemRow[] = [],
+): TenderDraftPackage {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    tenderPackageId: row.tender_package_id,
+    title: row.title,
+    status: row.status,
+    generatedFromAnalysisJobId: row.generated_from_analysis_job_id,
+    generatedByUserId: row.generated_by_user_id,
+    summary: row.summary,
+    exportPayload: tenderDraftExportPayloadSchema.parse(row.payload_json),
+    items: itemRows.map(mapTenderDraftPackageItemRowToDomain),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export function mapTenderDraftArtifactRowToDomain(row: TenderDraftArtifactRow): TenderDraftArtifact {
   return {
     id: row.id,
@@ -470,4 +513,15 @@ export function mapCreateTenderReferenceProfileInputToInsert(input: CreateTender
 export function mapUpdateTenderReferenceProfileInputToPatch(input: UpdateTenderReferenceProfileInput) {
   const parsedInput = updateTenderReferenceProfileInputSchema.parse(input);
   return mapTenderReferenceProfileInputToRow(parsedInput);
+}
+
+export function mapUpdateTenderDraftPackageItemInputToPatch(input: UpdateTenderDraftPackageItemInput) {
+  const parsedInput = updateTenderDraftPackageItemInputSchema.parse(input);
+
+  return {
+    title: parsedInput.title,
+    content_md: parsedInput.contentMd,
+    sort_order: parsedInput.sortOrder,
+    is_included: parsedInput.isIncluded,
+  };
 }

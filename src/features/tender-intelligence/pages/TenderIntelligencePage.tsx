@@ -44,33 +44,44 @@ export default function TenderIntelligencePage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const {
     packages,
+    draftPackages,
     selectedPackage,
     selectedPackageId,
+    selectedDraftPackageId,
     selectedPackageMissing,
     loading,
     creating,
+    creatingDraftPackagePackageId,
     error,
     overview,
     canCreate,
     selectPackage,
+    selectDraftPackage,
     createPackage,
     referenceProfiles,
     startAnalysis,
     uploadDocuments,
     deleteDocument,
     uploading,
+    updatingDraftPackageItemIds,
     referenceProfileSubmittingId,
     deletingReferenceProfileIds,
+    reviewingDraftPackageId,
     startingAnalysisPackageId,
     extractingPackageId,
     extractingDocumentIds,
     startDocumentExtraction,
     startPackageExtraction,
     deletingDocumentIds,
+    exportingDraftPackageId,
     workflowUpdatingTargetIds,
     recomputingReferenceSuggestionPackageId,
     actorNameById,
     currentUserId,
+    createDraftPackage,
+    updateDraftPackageItem,
+    markDraftPackageReviewed,
+    markDraftPackageExported,
     createReferenceProfile,
     updateReferenceProfile,
     deleteReferenceProfile,
@@ -88,11 +99,11 @@ export default function TenderIntelligencePage() {
         <CardContent className="space-y-8 px-6 py-6 sm:px-8 sm:py-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4">
-              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 10</Badge>
+              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 11</Badge>
               <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Organisaation referenssikorpus ja deterministinen referenssimatchaus tarjouspyyntöpaketeille</h1>
+                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Draft package export foundation reviewed Tarjousäly-löydöksille</h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-200 sm:text-base">
-                  Tarjousälyllä on nyt oma organisaatiokohtainen referenssikorpus. Deterministinen baseline-analyysi tunnistaa referenssivaatimuksia, vertaa niitä corpus-profiileihin avainsana-, projektityyppi-, vuosi- ja sijaintisäännöillä, ja kirjoittaa läpinäkyvät suggestion-rivit review-käsittelyä varten ilman että nykyinen tarjousydin muuttuu.
+                  Tarjousäly muodostaa nyt reviewed löydöksistä versionoidun draft package -payloadin. Hyväksytyt vaatimukset, referenssit, ratkaistut puutteet ja editor-notet voidaan koota erilliseksi staging-paketiksi myöhempää editor-importtia varten ilman että nykyinen tarjousydin muuttuu.
                 </p>
               </div>
             </div>
@@ -103,7 +114,7 @@ export default function TenderIntelligencePage() {
                 <Plus className="h-4 w-4" />
               </Button>
               <Button variant="outline" className="justify-between border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white" disabled>
-                Result-domain päivittyy baseline-, workflow- ja reference-matchausajoista
+                Result-domain päivittyy baseline-, workflow-, reference-matchaus- ja draft package -ajoista
                 <Sparkle className="h-4 w-4" />
               </Button>
             </div>
@@ -138,6 +149,7 @@ export default function TenderIntelligencePage() {
         />
         <TenderPackageWorkspace
           selectedPackage={selectedPackage}
+          draftPackages={draftPackages}
           referenceProfiles={referenceProfiles}
           currentUserId={currentUserId}
           actorNameById={actorNameById}
@@ -148,6 +160,11 @@ export default function TenderIntelligencePage() {
           extractingPackage={Boolean(selectedPackage && extractingPackageId === selectedPackage.package.id)}
           extractingDocumentIds={extractingDocumentIds}
           deletingDocumentIds={deletingDocumentIds}
+          selectedDraftPackageId={selectedDraftPackageId}
+          creatingDraftPackagePackageId={creatingDraftPackagePackageId}
+          updatingDraftPackageItemIds={updatingDraftPackageItemIds}
+          reviewingDraftPackageId={reviewingDraftPackageId}
+          exportingDraftPackageId={exportingDraftPackageId}
           referenceProfileSubmittingId={referenceProfileSubmittingId}
           deletingReferenceProfileIds={deletingReferenceProfileIds}
           workflowUpdatingTargetIds={workflowUpdatingTargetIds}
@@ -161,6 +178,11 @@ export default function TenderIntelligencePage() {
           onStartPackageExtraction={startPackageExtraction}
           onUploadDocuments={uploadDocuments}
           onDeleteDocument={deleteDocument}
+          onSelectDraftPackage={selectDraftPackage}
+          onCreateDraftPackage={createDraftPackage}
+          onUpdateDraftPackageItem={updateDraftPackageItem}
+          onMarkDraftPackageReviewed={markDraftPackageReviewed}
+          onMarkDraftPackageExported={markDraftPackageExported}
           onCreateReferenceProfile={createReferenceProfile}
           onUpdateReferenceProfile={updateReferenceProfile}
           onDeleteReferenceProfile={deleteReferenceProfile}
@@ -194,11 +216,11 @@ export default function TenderIntelligencePage() {
               <Stack className="h-4 w-4" />
               <span className="font-medium">Mitä tämä vaihe jo tekee</span>
             </div>
-            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit, extraction-data, analyysitulokset, evidence-rivit ja organisaation referenssikorpus tallentuvat Supabaseen. TXT-, Markdown-, CSV- ja XLSX-dokumenteille voidaan nyt tallentaa oikea extracted text ja chunkit, joita sääntöpohjainen baseline-analyysi käyttää provenance-lähteinä. Lisäksi käyttäjä voi nyt hallita org-korpuksen referenssejä ja hyväksyä, hylätä tai ratkaista niihin perustuvia suggestion-rivejä samassa workflow-kerroksessa.</p>
+            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit, extraction-data, analyysitulokset, evidence-rivit, review workflow, referenssikorpus ja uudet draft package -staging-paketit tallentuvat Supabaseen. Reviewed löydöksistä voidaan nyt muodostaa versionoitu export payload, jonka sisältöä käyttäjä voi vielä säätää item-kohtaisesti ennen varsinaista editori-importtia.</p>
           </div>
           <div className="space-y-2 sm:max-w-sm">
             <p className="font-medium text-slate-950">Mitä tästä puuttuu tarkoituksella</p>
-            <p>Ei vielä OCR:ää, PDF- tai DOCX-purkua, AI-provider-koodia, semanttista hakua, tarjousluonnoksen generointia tai kytkentää nykyiseen tarjouseditoriin. Nykyinen quote-, project-, invoice- ja reporting-ydin jätetään edelleen rauhaan, ja mahdollinen myöhempi AI-kerros voidaan rakentaa tämän corpus- ja workflow-perustan päälle.</p>
+            <p>Ei vielä OCR:ää, PDF- tai DOCX-purkua, AI-provider-koodia, tarjousluonnoksen oikeaa generointia tai suoraa editor-importtia. Nykyinen quote-, project-, invoice- ja reporting-ydin jätetään edelleen rauhaan, ja myöhempi editori-integraatio rakennetaan tämän staging-domainin päälle.</p>
           </div>
         </CardContent>
       </Card>

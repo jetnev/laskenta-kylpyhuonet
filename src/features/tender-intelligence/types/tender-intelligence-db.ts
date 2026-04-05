@@ -108,6 +108,9 @@ export const tenderResultEvidenceRowSchema = z.object({
 const tenderReviewStatusRowSchema = z.enum(['unreviewed', 'accepted', 'dismissed', 'needs_attention']);
 const tenderResolutionStatusRowSchema = z.enum(['open', 'in_progress', 'resolved', 'wont_fix']);
 const tenderReferenceProfileSourceKindRowSchema = z.enum(['manual', 'imported', 'other']);
+const tenderDraftPackageStatusRowSchema = z.enum(['draft', 'reviewed', 'exported', 'archived']);
+const tenderDraftPackageItemTypeRowSchema = z.enum(['accepted_requirement', 'selected_reference', 'resolved_missing_item', 'review_note', 'draft_artifact']);
+const tenderDraftPackageSourceEntityTypeRowSchema = z.enum(['requirement', 'missing_item', 'reference_suggestion', 'review_task', 'draft_artifact']);
 
 const tenderWorkflowRowSchema = z.object({
   review_status: tenderReviewStatusRowSchema,
@@ -209,6 +212,35 @@ export const tenderReferenceSuggestionRowSchema = z.object({
   updated_at: z.string(),
 }).merge(tenderWorkflowRowSchema);
 
+export const tenderDraftPackageRowSchema = z.object({
+  id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  tender_package_id: z.string().uuid(),
+  title: z.string(),
+  status: tenderDraftPackageStatusRowSchema,
+  generated_from_analysis_job_id: z.string().uuid().nullable(),
+  generated_by_user_id: z.string().uuid().nullable(),
+  summary: z.string().nullable(),
+  payload_json: z.unknown(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const tenderDraftPackageItemRowSchema = z.object({
+  id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  tender_draft_package_id: z.string().uuid(),
+  item_type: tenderDraftPackageItemTypeRowSchema,
+  source_entity_type: tenderDraftPackageSourceEntityTypeRowSchema,
+  source_entity_id: z.string().uuid(),
+  title: z.string(),
+  content_md: z.string().nullable(),
+  sort_order: z.number().int(),
+  is_included: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
 export const tenderDraftArtifactRowSchema = z.object({
   id: z.string().uuid(),
   tender_package_id: z.string().uuid(),
@@ -246,6 +278,8 @@ export const tenderMissingItemRowsSchema = z.array(tenderMissingItemRowSchema);
 export const tenderRiskFlagRowsSchema = z.array(tenderRiskFlagRowSchema);
 export const tenderReferenceProfileRowsSchema = z.array(tenderReferenceProfileRowSchema);
 export const tenderReferenceSuggestionRowsSchema = z.array(tenderReferenceSuggestionRowSchema);
+export const tenderDraftPackageRowsSchema = z.array(tenderDraftPackageRowSchema);
+export const tenderDraftPackageItemRowsSchema = z.array(tenderDraftPackageItemRowSchema);
 export const tenderDraftArtifactRowsSchema = z.array(tenderDraftArtifactRowSchema);
 export const tenderReviewTaskRowsSchema = z.array(tenderReviewTaskRowSchema);
 
@@ -261,5 +295,7 @@ export type TenderMissingItemRow = z.infer<typeof tenderMissingItemRowSchema>;
 export type TenderRiskFlagRow = z.infer<typeof tenderRiskFlagRowSchema>;
 export type TenderReferenceProfileRow = z.infer<typeof tenderReferenceProfileRowSchema>;
 export type TenderReferenceSuggestionRow = z.infer<typeof tenderReferenceSuggestionRowSchema>;
+export type TenderDraftPackageRow = z.infer<typeof tenderDraftPackageRowSchema>;
+export type TenderDraftPackageItemRow = z.infer<typeof tenderDraftPackageItemRowSchema>;
 export type TenderDraftArtifactRow = z.infer<typeof tenderDraftArtifactRowSchema>;
 export type TenderReviewTaskRow = z.infer<typeof tenderReviewTaskRowSchema>;

@@ -5,7 +5,13 @@ import { getSupabaseConfigError, isSupabaseConfigured, requireSupabase } from '@
 import type { TenderIntelligenceBackendAdapter } from './tender-intelligence-backend-adapter';
 import { buildTenderAnalysisReadiness, buildTenderExtractionCoverage } from '../lib/tender-analysis';
 import {
+  buildTenderDraftExportPayload,
+  buildTenderDraftPackageFromReviewedResults,
+  buildTenderDraftSummary,
+} from '../lib/tender-draft-package';
+import {
   type CreateTenderPackageInput,
+  type TenderDraftPackage,
   type CreateTenderReferenceProfileInput,
   type TenderAnalysisJobStatus,
   type TenderAnalysisJobType,
@@ -14,6 +20,7 @@ import {
   type TenderReferenceProfile,
   type TenderResultEvidence,
   type TenderResultEvidenceTargetType,
+  type UpdateTenderDraftPackageItemInput,
   type UpdateTenderReferenceProfileInput,
   type UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
@@ -46,6 +53,8 @@ import {
   mapCreateTenderPackageInputToInsert,
   mapTenderDocumentChunkRowToDomain,
   mapTenderDocumentExtractionRowToDomain,
+  mapTenderDraftPackageItemRowToDomain,
+  mapTenderDraftPackageRowToDomain,
   mapTenderDraftArtifactRowToDomain,
   mapTenderDocumentRowToDomain,
   mapTenderMissingItemRowToDomain,
@@ -57,6 +66,7 @@ import {
   mapTenderRequirementRowToDomain,
   mapTenderReviewTaskRowToDomain,
   mapTenderRiskFlagRowToDomain,
+  mapUpdateTenderDraftPackageItemInputToPatch,
   mapUpdateTenderReferenceProfileInputToPatch,
 } from '../lib/tender-intelligence-mappers';
 import {
@@ -67,6 +77,10 @@ import {
   tenderDocumentExtractionRowsSchema,
   tenderDocumentRowSchema,
   tenderDocumentRowsSchema,
+  tenderDraftPackageItemRowSchema,
+  tenderDraftPackageItemRowsSchema,
+  tenderDraftPackageRowSchema,
+  tenderDraftPackageRowsSchema,
   tenderDraftArtifactRowsSchema,
   tenderGoNoGoAssessmentRowSchema,
   tenderGoNoGoAssessmentRowsSchema,
@@ -148,6 +162,7 @@ async function fetchPackageRows<Row>(options: {
   tableName:
     | 'tender_documents'
     | 'tender_analysis_jobs'
+    | 'tender_draft_packages'
     | 'tender_result_evidence'
     | 'tender_requirements'
     | 'tender_missing_items'
@@ -246,6 +261,28 @@ async function fetchReferenceProfileRowById(profileId: string) {
   return data ? tenderReferenceProfileRowSchema.parse(data) : null;
 }
 
+async function fetchTenderDraftPackageRowById(draftPackageId: string) {
+  const client = requireConfiguredSupabase();
+  const { data, error } = await client.from('tender_draft_packages').select('*').eq('id', draftPackageId).maybeSingle();
+
+  if (error) {
+    throw toRepositoryError(error, 'Luonnospakettia ei voitu ladata.');
+  }
+
+  return data ? tenderDraftPackageRowSchema.parse(data) : null;
+}
+
+async function fetchTenderDraftPackageItemRowById(itemId: string) {
+  const client = requireConfiguredSupabase();
+  const { data, error } = await client.from('tender_draft_package_items').select('*').eq('id', itemId).maybeSingle();
+
+  if (error) {
+    throw toRepositoryError(error, 'Luonnospaketin riviä ei voitu ladata.');
+  }
+
+  return data ? tenderDraftPackageItemRowSchema.parse(data) : null;
+}
+
 async function fetchTenderReferenceProfileRowsForOrganization(options: {
   client?: ReturnType<typeof requireSupabase>;
   organizationId: string;
@@ -262,6 +299,29 @@ async function fetchTenderReferenceProfileRowsForOrganization(options: {
   }
 
   return tenderReferenceProfileRowsSchema.parse(data ?? []);
+}
+
+async function fetchTenderDraftPackageItemRowsForDraftPackages(options: {
+  client?: ReturnType<typeof requireSupabase>;
+  draftPackageIds: string[];
+}) {
+  if (options.draftPackageIds.length < 1) {
+    return [];
+  }
+
+  const client = options.client ?? requireConfiguredSupabase();
+  const { data, error } = await client
+    .from('tender_draft_package_items')
+    .select('*')
+    .in('tender_draft_package_id', options.draftPackageIds)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw toRepositoryError(error, 'Luonnospaketin rivejä ei voitu ladata.');
+  }
+
+  return tenderDraftPackageItemRowsSchema.parse(data ?? []);
 }
 
 async function getAuthenticatedActorUserId() {
@@ -430,6 +490,64 @@ async function insertReferenceSuggestionEvidenceFromRequirements(options: {
   if (error) {
     throw toRepositoryError(error, options.fallbackMessage);
   }
+}
+
+function buildTenderDraftPackageSummaryFromItems(items: Array<{ item_type: string; is_included: boolean }>) {
+  const includedItems = items.filter((item) => item.is_included);
+
+  return buildTenderDraftSummary({
+    acceptedRequirementCount: includedItems.filter((item) => item.item_type === 'accepted_requirement').length,
+    acceptedReferenceCount: includedItems.filter((item) => item.item_type === 'selected_reference').length,
+    resolvedMissingItemCount: includedItems.filter((item) => item.item_type === 'resolved_missing_item').length,
+    noteCount: includedItems.filter((item) => item.item_type === 'review_note').length,
+    draftArtifactCount: includedItems.filter((item) => item.item_type === 'draft_artifact').length,
+  });
+}
+
+function mapTenderDraftPackageRowsWithItems(rows: typeof tenderDraftPackageRowsSchema['_type'], itemRows: typeof tenderDraftPackageItemRowsSchema['_type']) {
+  const itemsByDraftPackageId = new Map<string, typeof itemRows>();
+
+  itemRows.forEach((itemRow) => {
+    const current = itemsByDraftPackageId.get(itemRow.tender_draft_package_id) ?? [];
+    current.push(itemRow);
+    itemsByDraftPackageId.set(itemRow.tender_draft_package_id, current);
+  });
+
+  return rows.map((row) => mapTenderDraftPackageRowToDomain(row, itemsByDraftPackageId.get(row.id) ?? []));
+}
+
+async function materializeTenderDraftPackage(options: {
+  client: ReturnType<typeof requireSupabase>;
+  draftPackageRow: typeof tenderDraftPackageRowSchema['_type'];
+  itemRows: typeof tenderDraftPackageItemRowsSchema['_type'];
+}) {
+  const summary = buildTenderDraftPackageSummaryFromItems(options.itemRows);
+  const payload = buildTenderDraftExportPayload({
+    title: options.draftPackageRow.title,
+    summary,
+    status: options.draftPackageRow.status,
+    generatedAt: new Date().toISOString(),
+    generatedByUserId: options.draftPackageRow.generated_by_user_id,
+    sourceTenderPackageId: options.draftPackageRow.tender_package_id,
+    sourceAnalysisJobId: options.draftPackageRow.generated_from_analysis_job_id,
+    items: options.itemRows.map(mapTenderDraftPackageItemRowToDomain),
+  });
+
+  const { data, error } = await options.client
+    .from('tender_draft_packages')
+    .update({
+      summary,
+      payload_json: payload,
+    })
+    .eq('id', options.draftPackageRow.id)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw toRepositoryError(error, 'Luonnospaketin export payloadia ei voitu päivittää.');
+  }
+
+  return tenderDraftPackageRowSchema.parse(data);
 }
 
 async function fetchTenderDocumentExtractionRowsForPackage(packageId: string) {
@@ -1414,6 +1532,248 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       this.emit();
     } catch (error) {
       throw toRepositoryError(error, 'Referenssiprofiilia ei voitu poistaa.');
+    }
+  }
+
+  async listDraftPackagesForTenderPackage(packageId: string) {
+    try {
+      await assertTenderPackageAccess(packageId);
+      const rows = await fetchPackageRows({
+        tableName: 'tender_draft_packages',
+        packageId,
+        schema: tenderDraftPackageRowsSchema,
+        fallbackMessage: 'Tarjouspyyntöpaketin luonnospaketteja ei voitu ladata.',
+        orderByColumn: 'updated_at',
+      });
+      const itemRows = await fetchTenderDraftPackageItemRowsForDraftPackages({
+        draftPackageIds: rows.map((row) => row.id),
+      });
+
+      return mapTenderDraftPackageRowsWithItems(rows, itemRows);
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjouspyyntöpaketin luonnospaketteja ei voitu ladata.');
+    }
+  }
+
+  async getDraftPackageById(draftPackageId: string) {
+    try {
+      const row = await fetchTenderDraftPackageRowById(draftPackageId);
+
+      if (!row) {
+        return null;
+      }
+
+      await assertTenderPackageAccess(row.tender_package_id);
+      const itemRows = await fetchTenderDraftPackageItemRowsForDraftPackages({ draftPackageIds: [draftPackageId] });
+      return mapTenderDraftPackageRowToDomain(row, itemRows);
+    } catch (error) {
+      throw toRepositoryError(error, 'Luonnospakettia ei voitu ladata.');
+    }
+  }
+
+  async createDraftPackageFromReviewedResults(packageId: string) {
+    let createdDraftPackageRow: typeof tenderDraftPackageRowSchema['_type'] | null = null;
+
+    try {
+      const client = requireConfiguredSupabase();
+      const packageDetails = await this.getTenderPackageById(packageId);
+
+      if (!packageDetails) {
+        throw new Error('Tarjouspyyntöpakettia ei löytynyt luonnospaketin muodostamista varten.');
+      }
+
+      const actorUserId = await getAuthenticatedActorUserId();
+      const generation = buildTenderDraftPackageFromReviewedResults({
+        packageDetails,
+        generatedByUserId: actorUserId,
+      });
+
+      if (!generation.readiness.canGenerate) {
+        throw new Error(generation.readiness.blockedReason ?? 'Luonnospakettia ei voitu muodostaa reviewed löydöksistä.');
+      }
+
+      const { data: packageData, error: packageError } = await client
+        .from('tender_draft_packages')
+        .insert({
+          tender_package_id: packageId,
+          title: generation.title,
+          status: 'draft',
+          generated_from_analysis_job_id: packageDetails.latestAnalysisJob?.id ?? null,
+          generated_by_user_id: actorUserId,
+          summary: generation.summary,
+          payload_json: generation.exportPayload,
+        })
+        .select('*')
+        .single();
+
+      if (packageError) {
+        throw packageError;
+      }
+
+      createdDraftPackageRow = tenderDraftPackageRowSchema.parse(packageData);
+
+      const { data: itemData, error: itemError } = await client
+        .from('tender_draft_package_items')
+        .insert(
+          generation.items.map((item) => ({
+            tender_draft_package_id: createdDraftPackageRow!.id,
+            item_type: item.itemType,
+            source_entity_type: item.sourceEntityType,
+            source_entity_id: item.sourceEntityId,
+            title: item.title,
+            content_md: item.contentMd,
+            sort_order: item.sortOrder,
+            is_included: item.isIncluded,
+          })),
+        )
+        .select('*');
+
+      if (itemError) {
+        throw itemError;
+      }
+
+      const itemRows = tenderDraftPackageItemRowsSchema.parse(itemData ?? []);
+      const materializedRow = await materializeTenderDraftPackage({
+        client,
+        draftPackageRow: createdDraftPackageRow,
+        itemRows,
+      });
+
+      this.emit();
+      return mapTenderDraftPackageRowToDomain(materializedRow, itemRows);
+    } catch (error) {
+      if (createdDraftPackageRow) {
+        try {
+          const client = requireConfiguredSupabase();
+          await client.from('tender_draft_package_items').delete().eq('tender_draft_package_id', createdDraftPackageRow.id);
+          await client.from('tender_draft_packages').delete().eq('id', createdDraftPackageRow.id);
+        } catch (cleanupError) {
+          console.warn('Tender draft package cleanup failed after create error.', cleanupError);
+        }
+      }
+
+      throw toRepositoryError(error, 'Luonnospakettia ei voitu muodostaa reviewed löydöksistä.');
+    }
+  }
+
+  async updateDraftPackageItem(itemId: string, input: UpdateTenderDraftPackageItemInput) {
+    try {
+      const existingItemRow = await fetchTenderDraftPackageItemRowById(itemId);
+
+      if (!existingItemRow) {
+        throw new Error('Luonnospaketin riviä ei löytynyt tai se on jo poistettu.');
+      }
+
+      const existingDraftPackageRow = await fetchTenderDraftPackageRowById(existingItemRow.tender_draft_package_id);
+
+      if (!existingDraftPackageRow) {
+        throw new Error('Luonnospakettia ei löytynyt tai se on jo poistettu.');
+      }
+
+      await assertTenderPackageAccess(existingDraftPackageRow.tender_package_id);
+      const patch = Object.fromEntries(
+        Object.entries(mapUpdateTenderDraftPackageItemInputToPatch(input)).filter(([, value]) => value !== undefined),
+      );
+
+      const client = requireConfiguredSupabase();
+
+      if (Object.keys(patch).length > 0) {
+        const { error } = await client
+          .from('tender_draft_package_items')
+          .update(patch)
+          .eq('id', itemId);
+
+        if (error) {
+          throw error;
+        }
+      }
+
+      const itemRows = await fetchTenderDraftPackageItemRowsForDraftPackages({
+        client,
+        draftPackageIds: [existingDraftPackageRow.id],
+      });
+      const materializedRow = await materializeTenderDraftPackage({
+        client,
+        draftPackageRow: existingDraftPackageRow,
+        itemRows,
+      });
+
+      this.emit();
+      return mapTenderDraftPackageRowToDomain(materializedRow, itemRows);
+    } catch (error) {
+      throw toRepositoryError(error, 'Luonnospaketin riviä ei voitu päivittää.');
+    }
+  }
+
+  async markDraftPackageReviewed(draftPackageId: string) {
+    try {
+      const existingDraftPackageRow = await fetchTenderDraftPackageRowById(draftPackageId);
+
+      if (!existingDraftPackageRow) {
+        throw new Error('Luonnospakettia ei löytynyt tai se on jo poistettu.');
+      }
+
+      await assertTenderPackageAccess(existingDraftPackageRow.tender_package_id);
+      const client = requireConfiguredSupabase();
+      const { data, error } = await client
+        .from('tender_draft_packages')
+        .update({ status: 'reviewed' })
+        .eq('id', draftPackageId)
+        .select('*')
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      const updatedRow = tenderDraftPackageRowSchema.parse(data);
+      const itemRows = await fetchTenderDraftPackageItemRowsForDraftPackages({ client, draftPackageIds: [draftPackageId] });
+      const materializedRow = await materializeTenderDraftPackage({
+        client,
+        draftPackageRow: updatedRow,
+        itemRows,
+      });
+
+      this.emit();
+      return mapTenderDraftPackageRowToDomain(materializedRow, itemRows);
+    } catch (error) {
+      throw toRepositoryError(error, 'Luonnospakettia ei voitu merkitä tarkistetuksi.');
+    }
+  }
+
+  async markDraftPackageExported(draftPackageId: string) {
+    try {
+      const existingDraftPackageRow = await fetchTenderDraftPackageRowById(draftPackageId);
+
+      if (!existingDraftPackageRow) {
+        throw new Error('Luonnospakettia ei löytynyt tai se on jo poistettu.');
+      }
+
+      await assertTenderPackageAccess(existingDraftPackageRow.tender_package_id);
+      const client = requireConfiguredSupabase();
+      const { data, error } = await client
+        .from('tender_draft_packages')
+        .update({ status: 'exported' })
+        .eq('id', draftPackageId)
+        .select('*')
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      const updatedRow = tenderDraftPackageRowSchema.parse(data);
+      const itemRows = await fetchTenderDraftPackageItemRowsForDraftPackages({ client, draftPackageIds: [draftPackageId] });
+      const materializedRow = await materializeTenderDraftPackage({
+        client,
+        draftPackageRow: updatedRow,
+        itemRows,
+      });
+
+      this.emit();
+      return mapTenderDraftPackageRowToDomain(materializedRow, itemRows);
+    } catch (error) {
+      throw toRepositoryError(error, 'Luonnospakettia ei voitu merkitä viedyksi.');
     }
   }
 

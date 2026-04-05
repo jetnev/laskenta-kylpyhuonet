@@ -1,4 +1,5 @@
 import type {
+  TenderDraftPackage,
   CreateTenderReferenceProfileInput,
   CreateTenderPackageInput,
   TenderAnalysisJob,
@@ -21,6 +22,7 @@ import type {
   TenderRequirement,
   TenderReviewTask,
   TenderRiskFlag,
+  UpdateTenderDraftPackageItemInput,
   UpdateTenderReferenceProfileInput,
   UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
@@ -42,6 +44,12 @@ export interface TenderIntelligenceBackendAdapter {
   createReferenceProfile(input: CreateTenderReferenceProfileInput): Promise<TenderReferenceProfile>;
   updateReferenceProfile(profileId: string, input: UpdateTenderReferenceProfileInput): Promise<TenderReferenceProfile>;
   deleteReferenceProfile(profileId: string): Promise<void>;
+  listDraftPackagesForTenderPackage(packageId: string): Promise<TenderDraftPackage[]>;
+  getDraftPackageById(draftPackageId: string): Promise<TenderDraftPackage | null>;
+  createDraftPackageFromReviewedResults(packageId: string): Promise<TenderDraftPackage>;
+  updateDraftPackageItem(itemId: string, input: UpdateTenderDraftPackageItemInput): Promise<TenderDraftPackage>;
+  markDraftPackageReviewed(draftPackageId: string): Promise<TenderDraftPackage>;
+  markDraftPackageExported(draftPackageId: string): Promise<TenderDraftPackage>;
   listReferenceSuggestionsForPackage(packageId: string): Promise<TenderReferenceSuggestion[]>;
   listDraftArtifactsForPackage(packageId: string): Promise<TenderDraftArtifact[]>;
   listReviewTasksForPackage(packageId: string): Promise<TenderReviewTask[]>;

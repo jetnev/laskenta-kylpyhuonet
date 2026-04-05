@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 import TenderAnalysisPanel from './TenderAnalysisPanel';
+import TenderDraftPackagePanel from './TenderDraftPackagePanel';
 import TenderDocumentsPanel from './TenderDocumentsPanel';
 import TenderReferenceCorpusPanel from './TenderReferenceCorpusPanel';
 import TenderResultPanels from './TenderResultPanels';
@@ -19,10 +20,12 @@ import {
 import { TENDER_INTELLIGENCE_BACKEND_PLAN } from '../services/tender-intelligence-backend-adapter';
 import type { TenderDocumentsUploadResult } from '../hooks/use-tender-intelligence';
 import type {
+  TenderDraftPackage,
   CreateTenderReferenceProfileInput,
   TenderDocumentExtraction,
   TenderPackageDetails,
   TenderReferenceProfile,
+  UpdateTenderDraftPackageItemInput,
   UpdateTenderReferenceProfileInput,
   UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
@@ -49,6 +52,7 @@ function TenderPanel({ title, value, description }: TenderPanelProps) {
 
 interface TenderPackageWorkspaceProps {
   selectedPackage: TenderPackageDetails | null;
+  draftPackages?: TenderDraftPackage[];
   referenceProfiles?: TenderReferenceProfile[];
   currentUserId?: string | null;
   actorNameById?: Record<string, string>;
@@ -59,6 +63,11 @@ interface TenderPackageWorkspaceProps {
   extractingPackage?: boolean;
   extractingDocumentIds?: string[];
   deletingDocumentIds?: string[];
+  selectedDraftPackageId?: string | null;
+  creatingDraftPackagePackageId?: string | null;
+  updatingDraftPackageItemIds?: string[];
+  reviewingDraftPackageId?: string | null;
+  exportingDraftPackageId?: string | null;
   referenceProfileSubmittingId?: string | 'new' | null;
   deletingReferenceProfileIds?: string[];
   workflowUpdatingTargetIds?: string[];
@@ -70,6 +79,11 @@ interface TenderPackageWorkspaceProps {
   onStartPackageExtraction: (packageId: string) => Promise<TenderDocumentExtraction[]>;
   onUploadDocuments: (packageId: string, files: File[]) => Promise<TenderDocumentsUploadResult>;
   onDeleteDocument: (documentId: string) => Promise<void>;
+  onSelectDraftPackage: (draftPackageId: string) => void;
+  onCreateDraftPackage: (packageId: string) => Promise<unknown>;
+  onUpdateDraftPackageItem: (itemId: string, input: UpdateTenderDraftPackageItemInput) => Promise<unknown>;
+  onMarkDraftPackageReviewed: (draftPackageId: string) => Promise<unknown>;
+  onMarkDraftPackageExported: (draftPackageId: string) => Promise<unknown>;
   onCreateReferenceProfile: (input: CreateTenderReferenceProfileInput) => Promise<unknown>;
   onUpdateReferenceProfile: (profileId: string, input: UpdateTenderReferenceProfileInput) => Promise<unknown>;
   onDeleteReferenceProfile: (profileId: string) => Promise<void>;
@@ -83,6 +97,7 @@ interface TenderPackageWorkspaceProps {
 
 export default function TenderPackageWorkspace({
   selectedPackage,
+  draftPackages = [],
   referenceProfiles = [],
   currentUserId = null,
   actorNameById = {},
@@ -93,6 +108,11 @@ export default function TenderPackageWorkspace({
   extractingPackage = false,
   extractingDocumentIds = [],
   deletingDocumentIds = [],
+  selectedDraftPackageId = null,
+  creatingDraftPackagePackageId = null,
+  updatingDraftPackageItemIds = [],
+  reviewingDraftPackageId = null,
+  exportingDraftPackageId = null,
   referenceProfileSubmittingId = null,
   deletingReferenceProfileIds = [],
   workflowUpdatingTargetIds = [],
@@ -104,6 +124,11 @@ export default function TenderPackageWorkspace({
   onStartPackageExtraction,
   onUploadDocuments,
   onDeleteDocument,
+  onSelectDraftPackage,
+  onCreateDraftPackage,
+  onUpdateDraftPackageItem,
+  onMarkDraftPackageReviewed,
+  onMarkDraftPackageExported,
   onCreateReferenceProfile,
   onUpdateReferenceProfile,
   onDeleteReferenceProfile,
@@ -144,11 +169,11 @@ export default function TenderPackageWorkspace({
     return (
       <Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
         <CardHeader className="space-y-4 border-b border-white/10 pb-6">
-          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 10 / Reference corpus + deterministic matching</Badge>
+          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 11 / Draft package export foundation</Badge>
           <div className="space-y-3">
-            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousäly yhdistää nyt baseline-löydökset organisaation omaan referenssikorpukseen</CardTitle>
+            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousäly osaa nyt koostaa reviewed löydöksistä editoriin vietävän staging-luonnospaketin</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Luo ensimmäinen tarjouspyyntöpaketti tai täydennä organisaation referenssikorpusta. Dokumenteille voidaan nyt tallentaa pysyvä extracted text ja chunkit, baseline-analyysi tunnistaa referenssivaatimuksia, ja deterministinen matching voi ehdottaa niihin sopivia organisaation omia referenssejä ilman AI:ta.
+              Luo tarjouspyyntöpaketti, reviewaa löydökset ja muodosta niistä Tarjousälyn oma draft package. Payload on versionoitu, validioitu ja myöhempää editor-importtia varten valmis, mutta nykyiseen tarjouseditoriin ei vieläkään kirjoiteta suoraan mitään.
             </CardDescription>
           </div>
         </CardHeader>
@@ -185,9 +210,9 @@ export default function TenderPackageWorkspace({
               description="Päätöstuki rakennetaan myöhemmin omaksi tulosobjektikseen. Näkyvä analyysitila syntyy jobin elinkaaresta ja result-domainin riveistä."
             />
             <TenderPanel
-              title="Luonnos"
-              value="Ei vielä"
-              description="Luonnosartifaktit säilytetään edelleen erillään nykyisestä tarjouseditorista, kunnes generointi ja import-adapteri rakennetaan hallitusti myöhemmin."
+              title="Draft package"
+              value="0"
+              description="Reviewed löydöksistä voidaan nyt muodostaa Tarjousälyn omaan staging-domainiin editoriin vietävä luonnospaketti ilman suoraa editori-integraatiota."
             />
           </div>
 
@@ -223,7 +248,7 @@ export default function TenderPackageWorkspace({
           <div className="space-y-3">
             <CardTitle className="text-3xl tracking-[-0.03em] text-white">{selectedPackage.package.name}</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Tämä tarjouspyyntöpaketti elää omassa Tarjousäly-domainissaan. Dokumentit tallentuvat Supabase Storageen, analyysijobi toimii näkyvästi ja result-domain kirjoittuu pysyvästi omiin tauluihinsa sääntöpohjaisten löydösten, evidence-rivien, review workflow -päätösten ja org-korpukseen sidottujen referenssiehdotusten kanssa, mutta nykyinen quote-editori, exportit, laskentalogiikka ja raportointi eivät edelleenkään ole kytketty tähän näkymään.
+              Tämä tarjouspyyntöpaketti elää omassa Tarjousäly-domainissaan. Dokumentit tallentuvat Supabase Storageen, analyysijobi toimii näkyvästi ja result-domain kirjoittuu pysyvästi omiin tauluihinsa sääntöpohjaisten löydösten, evidence-rivien, review workflow -päätösten, org-korpukseen sidottujen referenssiehdotusten ja uusien draft package -staging-pakettien kanssa, mutta nykyinen quote-editori, exportit, laskentalogiikka ja raportointi eivät edelleenkään ole kytketty tähän näkymään.
             </CardDescription>
           </div>
         </CardHeader>
@@ -239,7 +264,7 @@ export default function TenderPackageWorkspace({
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">Data status</p>
-            <p className="mt-2 text-sm text-slate-100">Paketti, dokumenttimetadata, extraction-data, chunkit, analyysijobit, result-domain, evidence-rivit, review workflow -metadata ja organisaation referenssikorpus luetaan nyt suoraan Supabasesta ilman kytkentää tarjousytimeen.</p>
+            <p className="mt-2 text-sm text-slate-100">Paketti, dokumenttimetadata, extraction-data, chunkit, analyysijobit, result-domain, evidence-rivit, review workflow -metadata, organisaation referenssikorpus ja draft package -staging luetaan nyt suoraan Supabasesta ilman kytkentää tarjousytimeen.</p>
           </div>
         </CardContent>
       </Card>
@@ -288,10 +313,10 @@ export default function TenderPackageWorkspace({
         />
         <TenderPanel
           title="Luonnos"
-          value={String(selectedPackage.results.draftArtifacts.length)}
+          value={String(draftPackages.length)}
           description={
-            getTenderTextPreview(selectedPackage.results.draftArtifacts[0]?.contentMd, 120) ||
-            'Luonnosartifaktit tuotetaan myöhemmin vasta analyysi- ja hyväksyntävaiheen jälkeen.'
+            draftPackages[0]?.summary ||
+            'Reviewed löydöksistä voidaan nyt muodostaa erillinen draft package -stagingpaketti, jota voi vielä säätää ennen varsinaista editori-importtia.'
           }
         />
         <TenderPanel
@@ -325,6 +350,21 @@ export default function TenderPackageWorkspace({
         onUpdateReferenceSuggestion={onUpdateReferenceSuggestion}
         onUpdateReviewTask={onUpdateReviewTask}
         onRecomputeReferenceSuggestions={() => onRecomputeReferenceSuggestions(selectedPackage.package.id)}
+      />
+
+      <TenderDraftPackagePanel
+        selectedPackage={selectedPackage}
+        draftPackages={draftPackages}
+        selectedDraftPackageId={selectedDraftPackageId}
+        creatingDraftPackage={creatingDraftPackagePackageId === selectedPackage.package.id}
+        updatingDraftPackageItemIds={updatingDraftPackageItemIds}
+        reviewingDraftPackageId={reviewingDraftPackageId}
+        exportingDraftPackageId={exportingDraftPackageId}
+        onSelectDraftPackage={onSelectDraftPackage}
+        onCreateDraftPackage={onCreateDraftPackage}
+        onUpdateDraftPackageItem={onUpdateDraftPackageItem}
+        onMarkDraftPackageReviewed={onMarkDraftPackageReviewed}
+        onMarkDraftPackageExported={onMarkDraftPackageExported}
       />
 
       <TenderDocumentsPanel
@@ -368,7 +408,7 @@ export default function TenderPackageWorkspace({
             )}
 
             <div className="rounded-2xl border border-dashed px-4 py-8 text-sm leading-6 text-muted-foreground">
-              Baseline tunnistaa nyt deadline-, liite- ja referenssiosumia extracted tekstistä, Phase 9 lisää niille review/resolution-kerroksen ja Phase 10 liittää mukaan organisaation oman referenssikorpuksen sekä deterministisen suggestion-matchauksen. Varsinainen generointi ja mahdollinen AI-tulkinta jätetään silti tarkoituksella myöhempiin vaiheisiin.
+              Baseline tunnistaa nyt deadline-, liite- ja referenssiosumia extracted tekstistä, review workflow jalostaa ne käsiteltäviksi työobjekteiksi ja Phase 11 kokoaa hyväksytyistä löydöksistä versionoidun draft package -payloadin myöhempää editor-importtia varten. Varsinainen generointi ja mahdollinen AI-tulkinta jätetään silti tarkoituksella myöhempiin vaiheisiin.
             </div>
           </CardContent>
         </Card>
@@ -380,7 +420,7 @@ export default function TenderPackageWorkspace({
               Adapterivalmius
             </CardTitle>
             <CardDescription>
-              Seuraava vaihe voidaan toteuttaa saman Edge Function -rajan taakse ilman että Tarjousälyä tarvitsee tunkea nykyiseen use-data.ts-monoliittiin tai nykyiseen tarjouseditoriin. Nyt myös provenance-lähteet ja käyttäjän review-päätökset kulkevat valmiiksi mukana.
+              Seuraava vaihe voidaan toteuttaa saman Edge Function -rajan taakse ilman että Tarjousälyä tarvitsee tunkea nykyiseen use-data.ts-monoliittiin tai nykyiseen tarjouseditoriin. Nyt myös provenance-lähteet, review-päätökset ja editoriin vietävä staging-payload kulkevat valmiiksi mukana.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 pt-6 text-sm text-slate-700">

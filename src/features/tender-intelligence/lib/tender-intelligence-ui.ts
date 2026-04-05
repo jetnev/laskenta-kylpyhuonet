@@ -3,6 +3,8 @@ import type {
   TenderAnalysisJobStatus,
   TenderDocumentExtractionStatus,
   TenderDocumentExtractorType,
+  TenderDraftPackageItemType,
+  TenderDraftPackageStatus,
   TenderDraftArtifactStatus,
   TenderDraftArtifactType,
   TenderDocumentParseStatus,
@@ -130,6 +132,21 @@ export const TENDER_REFERENCE_PROFILE_SOURCE_KIND_META: Record<
   manual: { label: 'Manuaalinen', variant: 'default' },
   imported: { label: 'Tuotu', variant: 'outline' },
   other: { label: 'Muu lähde', variant: 'secondary' },
+};
+
+export const TENDER_DRAFT_PACKAGE_STATUS_META: Record<TenderDraftPackageStatus, { label: string; variant: TenderBadgeVariant }> = {
+  draft: { label: 'Draft', variant: 'secondary' },
+  reviewed: { label: 'Tarkistettu', variant: 'outline' },
+  exported: { label: 'Merkitty viedyksi', variant: 'default' },
+  archived: { label: 'Arkistoitu', variant: 'secondary' },
+};
+
+export const TENDER_DRAFT_PACKAGE_ITEM_TYPE_META: Record<TenderDraftPackageItemType, { label: string; variant: TenderBadgeVariant }> = {
+  accepted_requirement: { label: 'Hyväksytty vaatimus', variant: 'default' },
+  selected_reference: { label: 'Valittu referenssi', variant: 'outline' },
+  resolved_missing_item: { label: 'Ratkaistu puute', variant: 'secondary' },
+  review_note: { label: 'Editor-note', variant: 'outline' },
+  draft_artifact: { label: 'Draft artefakti', variant: 'secondary' },
 };
 
 export const TENDER_DRAFT_ARTIFACT_TYPE_META: Record<TenderDraftArtifactType, { label: string; variant: TenderBadgeVariant }> = {

@@ -4,6 +4,8 @@ import {
   formatTenderCurrency,
   formatTenderConfidence,
   getTenderTextPreview,
+  TENDER_DRAFT_PACKAGE_ITEM_TYPE_META,
+  TENDER_DRAFT_PACKAGE_STATUS_META,
   TENDER_DOCUMENT_EXTRACTION_STATUS_META,
   TENDER_DOCUMENT_EXTRACTOR_TYPE_META,
   TENDER_DRAFT_ARTIFACT_STATUS_META,
@@ -32,6 +34,8 @@ describe('Phase 6 Tender UI helpers', () => {
     expect(TENDER_SEVERITY_META.high.label).toBe('Korkea');
     expect(TENDER_REFERENCE_SOURCE_META.organization_reference_profile.label).toBe('Referenssikorpus');
     expect(TENDER_REFERENCE_PROFILE_SOURCE_KIND_META.imported.label).toBe('Tuotu');
+    expect(TENDER_DRAFT_PACKAGE_STATUS_META.reviewed.label).toBe('Tarkistettu');
+    expect(TENDER_DRAFT_PACKAGE_ITEM_TYPE_META.review_note.label).toBe('Editor-note');
   });
 
   it('formats confidence values and preview text for result cards', () => {
