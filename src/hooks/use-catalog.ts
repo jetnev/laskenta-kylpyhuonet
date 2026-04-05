@@ -3,6 +3,7 @@ import { useKV } from './use-kv';
 import {
   CatalogCategory,
   CatalogImportPreviewRow,
+  CatalogImportType,
   CatalogProduct,
   CatalogQueryOptions,
   CatalogStoreState,

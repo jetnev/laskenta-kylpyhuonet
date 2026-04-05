@@ -8,8 +8,9 @@ import {
   resolveTenderEditorSelectiveReimportSelection,
 } from './tender-import-ownership-registry';
 import { buildTenderImportOwnedBlockDriftStates } from './tender-import-drift';
-import type { TenderEditorManagedBlock, TenderEditorReconciliationBlock } from '../types/tender-editor-import';
+import type { TenderEditorImportRunExecutionMetadata, TenderEditorManagedBlock, TenderEditorReconciliationBlock } from '../types/tender-editor-import';
 import type { TenderImportOwnedBlockRow } from '../types/tender-intelligence-db';
+import type { Quote, QuoteRow } from '../../../lib/types';
 
 const draftPackageId = '66666666-6666-4666-8666-666666666666';
 const quoteId = '61616161-6161-4616-8616-616161616161';
@@ -77,8 +78,9 @@ function createOwnedBlockRow(blockId: TenderImportOwnedBlockRow['block_id'], tar
   };
 }
 
-function createExecutionMetadata() {
+function createExecutionMetadata(): TenderEditorImportRunExecutionMetadata {
   return {
+    run_type: 'reimport' as const,
     selected_block_ids: ['requirements_and_quote_notes', 'notes_for_editor', 'selected_references'],
     selected_update_block_ids: ['requirements_and_quote_notes', 'notes_for_editor'],
     selected_remove_block_ids: ['selected_references'],
@@ -89,6 +91,22 @@ function createExecutionMetadata() {
     removed_block_ids: ['selected_references'],
     missing_in_quote_block_ids: [],
     untouched_block_ids: [],
+    affected_block_ids: ['requirements_and_quote_notes', 'notes_for_editor', 'selected_references'],
+    orphaned_block_ids: [],
+    refreshed_hash_block_ids: [],
+    pruned_registry_block_ids: [],
+    skipped_block_ids: [],
+    repair_action: null,
+    diagnostics_summary: {
+      healthy_blocks: 0,
+      stale_blocks: 0,
+      orphaned_registry_blocks: 0,
+      missing_quote_blocks: 0,
+      conflict_blocks: 0,
+      drifted_quote_blocks: 0,
+      drifted_draft_blocks: 0,
+      total_registry_blocks: 3,
+    },
     run_mode: 'protected_reimport',
     conflict_policy: 'protect_conflicts' as const,
     summary_counts: {
@@ -99,11 +117,22 @@ function createExecutionMetadata() {
       removed_blocks: 1,
       missing_in_quote_blocks: 0,
       untouched_blocks: 0,
+      affected_blocks: 3,
+      orphaned_blocks: 0,
+      refreshed_hash_blocks: 0,
+      pruned_registry_blocks: 0,
+      skipped_blocks: 0,
+      healthy_blocks: 0,
+      stale_blocks: 0,
+      orphaned_registry_blocks: 0,
+      drifted_quote_blocks: 0,
+      drifted_draft_blocks: 0,
+      total_registry_blocks: 3,
     },
   };
 }
 
-function createTargetQuoteSnapshot() {
+function createTargetQuoteSnapshot(): { quote: Quote; rows: QuoteRow[] } {
   return {
     quote: {
       id: quoteId,
@@ -139,7 +168,7 @@ function createTargetQuoteSnapshot() {
         'Vanha referenssi.',
         `<!-- tender-editor-import:block:${draftPackageId}:selected_references:end -->`,
       ].join('\n'),
-      internalNotes: null,
+      internalNotes: undefined,
     },
     rows: [
       {

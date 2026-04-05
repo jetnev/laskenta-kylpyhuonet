@@ -104,6 +104,7 @@ function toBlockIdArray(value: Iterable<TenderEditorManagedBlockId>) {
 }
 
 const EMPTY_EXECUTION_METADATA: TenderEditorImportRunExecutionMetadata = {
+  run_type: 'reimport',
   selected_block_ids: [],
   selected_update_block_ids: [],
   selected_remove_block_ids: [],
@@ -114,6 +115,22 @@ const EMPTY_EXECUTION_METADATA: TenderEditorImportRunExecutionMetadata = {
   removed_block_ids: [],
   missing_in_quote_block_ids: [],
   untouched_block_ids: [],
+  affected_block_ids: [],
+  orphaned_block_ids: [],
+  refreshed_hash_block_ids: [],
+  pruned_registry_block_ids: [],
+  skipped_block_ids: [],
+  repair_action: null,
+  diagnostics_summary: {
+    healthy_blocks: 0,
+    stale_blocks: 0,
+    orphaned_registry_blocks: 0,
+    missing_quote_blocks: 0,
+    conflict_blocks: 0,
+    drifted_quote_blocks: 0,
+    drifted_draft_blocks: 0,
+    total_registry_blocks: 0,
+  },
   run_mode: 'protected_reimport',
   conflict_policy: 'protect_conflicts',
   summary_counts: {
@@ -124,6 +141,17 @@ const EMPTY_EXECUTION_METADATA: TenderEditorImportRunExecutionMetadata = {
     removed_blocks: 0,
     missing_in_quote_blocks: 0,
     untouched_blocks: 0,
+    affected_blocks: 0,
+    orphaned_blocks: 0,
+    refreshed_hash_blocks: 0,
+    pruned_registry_blocks: 0,
+    skipped_blocks: 0,
+    healthy_blocks: 0,
+    stale_blocks: 0,
+    orphaned_registry_blocks: 0,
+    drifted_quote_blocks: 0,
+    drifted_draft_blocks: 0,
+    total_registry_blocks: 0,
   },
 };
 

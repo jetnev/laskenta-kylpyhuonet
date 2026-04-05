@@ -351,6 +351,7 @@ export default function TermsPage() {
         schedule: 'Asennus voidaan aloittaa 2-3 viikon sisällä tilauksesta.',
         notes: 'Tarjoukseen sisältyvät eritellyt tuotteet, asennus, suojaus ja loppusiivous.',
         projectCosts: 245,
+        vatPercent: documentSettings.defaultVatPercent,
       },
       settings: documentSettings,
     };

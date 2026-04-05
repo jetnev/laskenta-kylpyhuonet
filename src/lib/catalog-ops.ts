@@ -3,6 +3,8 @@ import {
   CatalogImportCommitResult,
   CatalogImportMatch,
   CatalogImportPreviewRow,
+  CatalogImportType,
+  CatalogLegacyMappingContext,
   CatalogProduct,
   CatalogProductSeed,
   CatalogProductView,
@@ -173,7 +175,7 @@ export function buildCatalogProductView(
   const categoryName = getCategoryNameById(categories, product.categoryId);
   const subcategoryName = getCategoryNameById(categories, product.subcategoryId);
   const sourceNames = Array.from(
-    new Set(productSources.filter((source) => source.productId === product.id).map((source) => source.sourceName))
+    new Set<string>(productSources.filter((source) => source.productId === product.id).map((source) => source.sourceName))
   ).sort((left, right) => left.localeCompare(right, 'fi'));
 
   return {
@@ -619,6 +621,7 @@ export function mapLegacyProductToCatalogProduct(product: LegacyProduct, now = n
     product.defaultMarginPercent ?? product.defaultSalesMarginPercent ?? computeMarginPercent(defaultCostPrice, defaultSalePrice)
   );
   const internalCode = cleanText(product.internalCode || product.code || product.id);
+  const archivedAt = 'archivedAt' in product && typeof product.archivedAt === 'string' ? product.archivedAt : undefined;
   const searchableText = buildSearchableText([
     product.code,
     product.name,
@@ -656,7 +659,7 @@ export function mapLegacyProductToCatalogProduct(product: LegacyProduct, now = n
     searchableText,
     createdAt: product.createdAt || now,
     updatedAt: product.updatedAt || now,
-    archivedAt: product.archivedAt,
+    archivedAt,
   };
 }
 
@@ -665,7 +668,7 @@ export function mapCatalogProductToLegacyProduct(
   context: CatalogLegacyMappingContext
 ): LegacyProduct {
   const sourceNames = Array.from(
-    new Set(context.productSources.filter((source) => source.productId === product.id).map((source) => source.sourceName))
+    new Set<string>(context.productSources.filter((source) => source.productId === product.id).map((source) => source.sourceName))
   ).sort((left, right) => left.localeCompare(right, 'fi'));
 
   return {
@@ -703,12 +706,11 @@ export function mapCatalogProductToLegacyProduct(
     tags: sourceNames,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
-    archivedAt: product.archivedAt,
   };
 }
 
 export function buildProductSourceSummary(productId: string, productSources: ProductSource[]) {
-  return Array.from(new Set(productSources.filter((source) => source.productId === productId).map((source) => source.sourceName))).sort((left, right) =>
+  return Array.from(new Set<string>(productSources.filter((source) => source.productId === productId).map((source) => source.sourceName))).sort((left, right) =>
     left.localeCompare(right, 'fi')
   );
 }

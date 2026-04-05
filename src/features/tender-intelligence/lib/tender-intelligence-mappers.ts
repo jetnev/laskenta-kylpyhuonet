@@ -58,11 +58,11 @@ import type {
 
 function mapTenderWorkflowFields<
   Row extends {
-    review_status: string;
+    review_status: TenderReferenceSuggestion['reviewStatus'];
     review_note: string | null;
     reviewed_by_user_id: string | null;
     reviewed_at: string | null;
-    resolution_status: string;
+    resolution_status: TenderReferenceSuggestion['resolutionStatus'];
     resolution_note: string | null;
     resolved_by_user_id: string | null;
     resolved_at: string | null;
@@ -82,11 +82,11 @@ function mapTenderWorkflowFields<
 
 function mapTenderAssignableWorkflowFields<
   Row extends {
-    review_status: string;
+    review_status: TenderReferenceSuggestion['reviewStatus'];
     review_note: string | null;
     reviewed_by_user_id: string | null;
     reviewed_at: string | null;
-    resolution_status: string;
+    resolution_status: TenderReferenceSuggestion['resolutionStatus'];
     resolution_note: string | null;
     resolved_by_user_id: string | null;
     resolved_at: string | null;
@@ -207,10 +207,10 @@ export function mapTenderRequirementRowToDomain(row: TenderRequirementRow): Tend
     sourceDocumentId: row.source_document_id,
     requirementType: row.requirement_type,
     title: row.title,
-    description: row.description,
+    description: row.description ?? null,
     status: row.status,
     confidence: row.confidence,
-    sourceExcerpt: row.source_excerpt,
+    sourceExcerpt: row.source_excerpt ?? null,
     ...mapTenderAssignableWorkflowFields(row),
   };
 }
@@ -222,7 +222,7 @@ export function mapTenderMissingItemRowToDomain(row: TenderMissingItemRow): Tend
     relatedRequirementId: row.related_requirement_id,
     itemType: row.item_type,
     title: row.title,
-    description: row.description,
+    description: row.description ?? null,
     severity: row.severity,
     status: row.status,
     ...mapTenderAssignableWorkflowFields(row),
@@ -235,7 +235,7 @@ export function mapTenderRiskFlagRowToDomain(row: TenderRiskFlagRow): TenderRisk
     packageId: row.tender_package_id,
     riskType: row.risk_type,
     title: row.title,
-    description: row.description,
+    description: row.description ?? null,
     severity: row.severity,
     status: row.status,
     ...mapTenderAssignableWorkflowFields(row),

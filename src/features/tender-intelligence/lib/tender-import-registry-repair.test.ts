@@ -8,7 +8,6 @@ import {
   tenderDraftPackageImportDiagnosticsSchema,
   tenderImportRegistryDiagnosticBlockSchema,
   type TenderImportRegistryDiagnosticBlock,
-  type TenderImportRegistryRepairAction,
 } from '../types/tender-editor-import';
 
 const draftPackageId = '66666666-6666-4666-8666-666666666666';

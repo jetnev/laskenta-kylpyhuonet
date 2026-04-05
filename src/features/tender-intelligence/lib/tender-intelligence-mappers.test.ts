@@ -440,6 +440,7 @@ describe('buildTenderPackageDetails', () => {
         id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
         tender_package_id: packageRow.id,
         organization_id: packageRow.organization_id,
+        related_requirement_id: null,
         source_type: 'manual',
         source_reference: 'tarjouspyynto.pdf',
         title: 'Hyödynnä aiempi vastausrunko',
@@ -795,6 +796,7 @@ describe('draft package mappers', () => {
       organization_id: '22222222-2222-4222-8222-222222222222',
       tender_draft_package_id: '41414141-4141-4414-8414-414141414141',
       target_quote_id: '61616161-6161-4616-8616-616161616161',
+      run_type: 'reimport',
       import_mode: 'update_existing_quote',
       payload_hash: 'cafebabe',
       payload_snapshot: {
@@ -823,6 +825,9 @@ describe('draft package mappers', () => {
       },
       result_status: 'success',
       summary: 'Päivitettiin aiemmin importoitu tarjous.',
+      execution_metadata: {
+        run_type: 'reimport',
+      },
       created_by_user_id: '22222222-2222-4222-8222-222222222222',
       created_at: '2026-04-05T12:50:00.000Z',
     };

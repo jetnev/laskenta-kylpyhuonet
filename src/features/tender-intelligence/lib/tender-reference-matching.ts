@@ -334,7 +334,7 @@ export function buildTenderReferenceMatches<RequirementId>(input: {
   input.requirements.forEach((requirement) => {
     const matches = input.profiles
       .map((profile) => buildSuggestionForProfile({ requirement, profile, currentYear }))
-      .filter((match): match is TenderReferenceProfileMatchSuggestion<RequirementId> => Boolean(match))
+      .filter((match) => match !== null)
       .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title, 'fi-FI'))
       .slice(0, maxSuggestionsPerRequirement);
 

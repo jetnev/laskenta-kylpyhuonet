@@ -10,6 +10,7 @@ import {
   buildTenderDraftSummary,
 } from '../lib/tender-draft-package';
 import { buildTenderEditorImportPreview } from '../lib/tender-editor-import';
+import { buildTenderEditorManagedSurfaceFromPayload } from '../lib/tender-editor-managed-surface';
 import {
   buildTenderDraftPackageImportState,
   buildTenderEditorReconciliationPreview,
@@ -37,7 +38,6 @@ import {
   type TenderAnalysisJobType,
   type TenderAnalysisReadiness,
   type TenderExtractionCoverage,
-  type TenderReferenceProfile,
   type TenderResultEvidence,
   type TenderResultEvidenceTargetType,
   type UpdateTenderDraftPackageItemInput,
@@ -126,11 +126,11 @@ import {
   tenderDraftPackageItemRowsSchema,
   tenderDraftPackageRowSchema,
   tenderDraftPackageRowsSchema,
-  tenderImportOwnedBlockRowSchema,
   tenderImportOwnedBlockRowsSchema,
   tenderDraftArtifactRowsSchema,
   tenderGoNoGoAssessmentRowSchema,
   tenderGoNoGoAssessmentRowsSchema,
+  tenderMissingItemRowSchema,
   tenderMissingItemRowsSchema,
   tenderPackageRowSchema,
   tenderPackageRowsSchema,
@@ -139,8 +139,11 @@ import {
   tenderResultEvidenceRowsSchema,
   tenderReferenceSuggestionRowSchema,
   tenderReferenceSuggestionRowsSchema,
+  tenderRequirementRowSchema,
   tenderRequirementRowsSchema,
+  tenderReviewTaskRowSchema,
   tenderReviewTaskRowsSchema,
+  tenderRiskFlagRowSchema,
   tenderRiskFlagRowsSchema,
 } from '../types/tender-intelligence-db';
 

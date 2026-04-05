@@ -204,7 +204,9 @@ async function seedPlaceholderResults(
       source_excerpt: r.sourceExcerpt,
     })),
   );
-  const reqIds: string[] = requirementRows.map((r: any) => r.id);
+  const reqIds: string[] = requirementRows
+    .map((row) => (typeof row === 'object' && row !== null && 'id' in row ? String(row.id) : null))
+    .filter((id): id is string => Boolean(id));
   await insertTenderResultEvidenceRows(client, {
     packageId,
     targetEntityType: 'requirement',
@@ -284,7 +286,7 @@ async function seedPlaceholderResults(
       sourceExcerpt: requirement.sourceExcerpt,
       evidenceLinks: requirement.evidenceLinks,
     })),
-    profiles: (referenceProfileRows ?? []).map((profile: any) => ({
+    profiles: (referenceProfileRows ?? []).map((profile) => ({
       id: profile.id,
       title: profile.title,
       clientName: profile.client_name,
@@ -503,11 +505,11 @@ Deno.serve(async (req: Request) => {
     }
 
     const extractedRows = (extractionRows ?? []).filter(
-      (row: any) => row.extraction_status === 'extracted',
+      (row) => row.extraction_status === 'extracted',
     );
     const extractedDocumentCount = extractedRows.length;
     const extractedChunkCount = extractedRows.reduce(
-      (sum: number, row: any) => sum + Math.max(0, Number(row.chunk_count ?? 0)),
+      (sum: number, row) => sum + Math.max(0, Number(row.chunk_count ?? 0)),
       0,
     );
 
@@ -576,7 +578,7 @@ Deno.serve(async (req: Request) => {
       return rejected(500, 'Analyysijobin luonti epäonnistui.');
     }
 
-    const jobId: string = (jobData as any).id;
+    const jobId = jobData.id;
 
     /* ---- orchestration: pending → queued → running ---- */
     try {

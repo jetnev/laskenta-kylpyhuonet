@@ -790,7 +790,7 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
             <ScrollArea className="max-h-[70vh] w-full">
               <div className="pr-2 sm:pr-4">
                 <ReportingDrilldownContent
-                  kind={drill?.kind ?? null}
+                  kind={drill?.kind === 'products' ? null : drill?.kind ?? null}
                   title={drill?.title}
                   families={drillFamilies}
                   customers={drillCustomers}

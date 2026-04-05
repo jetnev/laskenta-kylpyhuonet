@@ -703,7 +703,13 @@ export function resolveQuoteTenderManagedEditTarget(options: {
     };
   }
 
-  const row = options.rows.find((candidate) => candidate.id === options.target.rowId);
+  const target = options.target;
+
+  if (target.kind !== 'section_row') {
+    return createUnmanagedEditTarget('Väliotsikko');
+  }
+
+  const row = options.rows.find((candidate) => candidate.id === target.rowId);
   const rowLabel = row?.productName?.trim() ? `Väliotsikko "${row.productName.trim()}"` : 'Väliotsikko';
 
   if (!row) {

@@ -985,14 +985,26 @@ export function buildTenderDeterministicAnalysisPlan(input: {
     goNoGoAssessment: buildGoNoGoSummary(context),
     evidenceSources,
     ruleMatches: context.ruleMatches,
-    requirements: context.requirements.map(({ dedupeKey: _dedupeKey, ...requirement }) => requirement),
-    missingItems: context.missingItems.map(({ dedupeKey: _dedupeKey, relatedRequirementKey, ...missingItem }) => ({
-      ...missingItem,
-      relatedRequirementIndex: relatedRequirementKey ? requirementIndexByKey.get(relatedRequirementKey) ?? null : null,
-    })),
-    riskFlags: context.riskFlags.map(({ dedupeKey: _dedupeKey, ...riskFlag }) => riskFlag),
+    requirements: context.requirements.map(({ dedupeKey, ...requirement }) => {
+      void dedupeKey;
+      return requirement;
+    }),
+    missingItems: context.missingItems.map(({ dedupeKey, relatedRequirementKey, ...missingItem }) => {
+      void dedupeKey;
+      return {
+        ...missingItem,
+        relatedRequirementIndex: relatedRequirementKey ? requirementIndexByKey.get(relatedRequirementKey) ?? null : null,
+      };
+    }),
+    riskFlags: context.riskFlags.map(({ dedupeKey, ...riskFlag }) => {
+      void dedupeKey;
+      return riskFlag;
+    }),
     referenceSuggestions: [],
     draftArtifacts: [],
-    reviewTasks: context.reviewTasks.map(({ dedupeKey: _dedupeKey, ...reviewTask }) => reviewTask),
+    reviewTasks: context.reviewTasks.map(({ dedupeKey, ...reviewTask }) => {
+      void dedupeKey;
+      return reviewTask;
+    }),
   };
 }

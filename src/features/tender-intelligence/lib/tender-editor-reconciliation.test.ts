@@ -10,6 +10,7 @@ import {
 import { buildTenderImportOwnedBlockAppliedContentHash } from './tender-import-ownership-registry';
 import type { TenderDraftPackage } from '../types/tender-intelligence';
 import type { TenderDraftPackageImportRun, TenderImportOwnedBlock } from '../types/tender-editor-import';
+import type { Quote, QuoteRow } from '../../../lib/types';
 
 function createDraftPackage(overrides: Partial<TenderDraftPackage> = {}): TenderDraftPackage {
   return {
@@ -93,6 +94,7 @@ function createPreview(draftPackage: TenderDraftPackage) {
 
 function createExecutionMetadata(overrides: Partial<TenderDraftPackageImportRun['execution_metadata']> = {}) {
   return {
+    run_type: 'reimport' as const,
     selected_block_ids: ['requirements_and_quote_notes', 'selected_references'],
     selected_update_block_ids: ['requirements_and_quote_notes'],
     selected_remove_block_ids: ['selected_references'],
@@ -103,8 +105,24 @@ function createExecutionMetadata(overrides: Partial<TenderDraftPackageImportRun[
     removed_block_ids: ['selected_references'],
     missing_in_quote_block_ids: [],
     untouched_block_ids: [],
+    affected_block_ids: ['requirements_and_quote_notes', 'selected_references'],
+    orphaned_block_ids: [],
+    refreshed_hash_block_ids: [],
+    pruned_registry_block_ids: [],
+    skipped_block_ids: [],
+    repair_action: null,
+    diagnostics_summary: {
+      healthy_blocks: 0,
+      stale_blocks: 0,
+      orphaned_registry_blocks: 0,
+      missing_quote_blocks: 0,
+      conflict_blocks: 0,
+      drifted_quote_blocks: 0,
+      drifted_draft_blocks: 0,
+      total_registry_blocks: 2,
+    },
     run_mode: 'protected_reimport',
-    conflict_policy: 'protect_conflicts',
+    conflict_policy: 'protect_conflicts' as const,
     summary_counts: {
       selected_blocks: 2,
       conflict_blocks: 0,
@@ -113,9 +131,20 @@ function createExecutionMetadata(overrides: Partial<TenderDraftPackageImportRun[
       removed_blocks: 1,
       missing_in_quote_blocks: 0,
       untouched_blocks: 0,
+      affected_blocks: 2,
+      orphaned_blocks: 0,
+      refreshed_hash_blocks: 0,
+      pruned_registry_blocks: 0,
+      skipped_blocks: 0,
+      healthy_blocks: 0,
+      stale_blocks: 0,
+      orphaned_registry_blocks: 0,
+      drifted_quote_blocks: 0,
+      drifted_draft_blocks: 0,
+      total_registry_blocks: 2,
     },
     ...overrides,
-  };
+  } satisfies TenderDraftPackageImportRun['execution_metadata'];
 }
 
 function createSuccessfulRun(overrides: Partial<TenderDraftPackageImportRun> = {}): TenderDraftPackageImportRun {
@@ -123,6 +152,7 @@ function createSuccessfulRun(overrides: Partial<TenderDraftPackageImportRun> = {
     id: '91919191-9191-4919-8919-919191919191',
     tender_draft_package_id: '66666666-6666-4666-8666-666666666666',
     target_quote_id: '99999999-9999-4999-8999-999999999999',
+    run_type: 'reimport',
     import_mode: 'update_existing_quote',
     payload_hash: '1234abcd',
     payload_snapshot: {
@@ -241,7 +271,7 @@ function createOwnedBlocks(): TenderImportOwnedBlock[] {
   ];
 }
 
-function createTargetQuoteSnapshot() {
+function createTargetQuoteSnapshot(): { quote: Quote; rows: QuoteRow[] } {
   return {
     quote: {
       id: '99999999-9999-4999-8999-999999999999',
@@ -277,7 +307,7 @@ function createTargetQuoteSnapshot() {
         'Vanha referenssi.',
         '<!-- tender-editor-import:block:66666666-6666-4666-8666-666666666666:selected_references:end -->',
       ].join('\n'),
-      internalNotes: null,
+      internalNotes: undefined,
     },
     rows: [
       {

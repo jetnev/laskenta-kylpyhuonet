@@ -219,7 +219,7 @@ export function resolveAppLocation(pathname: string, search = ''): AppLocationSt
           tenderPackageId: params.get(APP_QUERY_PARAM.tenderPackage) ?? undefined,
           draftPackageId: params.get(APP_QUERY_PARAM.draftPackage) ?? undefined,
           importedQuoteId: params.get(APP_QUERY_PARAM.importQuote) ?? undefined,
-          intent: params.get(APP_QUERY_PARAM.intent) ?? undefined,
+          intent: normalizeTenderIntelligenceIntent(params.get(APP_QUERY_PARAM.intent)),
           blockIds: params.get(APP_QUERY_PARAM.blocks)?.split(',') ?? undefined,
         }
       : undefined,

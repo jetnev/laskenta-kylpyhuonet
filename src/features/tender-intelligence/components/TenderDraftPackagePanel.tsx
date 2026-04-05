@@ -362,6 +362,9 @@ export default function TenderDraftPackagePanel({
     setSelectedOverrideConflictBlockIds(draftPackageReimportPreview?.default_override_conflict_block_ids ?? []);
     setConfirmSelectiveReimport(false);
   }, [
+    draftPackageReimportPreview?.default_update_block_ids,
+    draftPackageReimportPreview?.default_remove_block_ids,
+    draftPackageReimportPreview?.default_override_conflict_block_ids,
     draftPackageReimportPreview?.current_payload_hash,
     draftPackageReimportPreview?.previous_payload_hash,
     draftPackageReimportPreview?.registry_status,

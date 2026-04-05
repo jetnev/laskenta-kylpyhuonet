@@ -64,7 +64,7 @@ export function resolveTenderDocumentExtractionStatus(value: string | null | und
 
 export function normalizeTenderExtractedText(value: string | null | undefined) {
   return (value ?? '')
-    .replace(/\u0000/g, '')
+    .split(String.fromCharCode(0)).join('')
     .replace(/\r\n?/g, '\n')
     .replace(/\u00a0/g, ' ')
     .trim();

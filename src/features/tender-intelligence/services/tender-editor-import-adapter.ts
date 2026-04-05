@@ -620,6 +620,7 @@ function toUniqueBlockIds(blockIds: TenderEditorManagedBlockId[]) {
 function buildImportExecutionMetadata(options: {
   runMode: TenderEditorImportRunExecutionMetadata['run_mode'];
   conflictPolicy: TenderEditorReimportConflictPolicy;
+  currentBlocks: TenderEditorManagedBlock[];
   selectedUpdateBlockIds: TenderEditorManagedBlockId[];
   selectedRemoveBlockIds: TenderEditorManagedBlockId[];
   overrideConflictBlockIds: TenderEditorManagedBlockId[];
@@ -641,6 +642,7 @@ function buildImportExecutionMetadata(options: {
   const untouchedBlockIds = toUniqueBlockIds(options.untouchedBlockIds);
 
   return {
+    run_type: 'reimport',
     selected_block_ids: toUniqueBlockIds([...selectedUpdateBlockIds, ...selectedRemoveBlockIds]),
     selected_update_block_ids: selectedUpdateBlockIds,
     selected_remove_block_ids: selectedRemoveBlockIds,
@@ -651,6 +653,22 @@ function buildImportExecutionMetadata(options: {
     removed_block_ids: removedBlockIds,
     missing_in_quote_block_ids: missingInQuoteBlockIds,
     untouched_block_ids: untouchedBlockIds,
+    affected_block_ids: toUniqueBlockIds([...updatedBlockIds, ...removedBlockIds]),
+    orphaned_block_ids: [],
+    refreshed_hash_block_ids: [],
+    pruned_registry_block_ids: [],
+    skipped_block_ids: toUniqueBlockIds([...skippedConflictBlockIds, ...untouchedBlockIds]),
+    repair_action: null,
+    diagnostics_summary: {
+      healthy_blocks: 0,
+      stale_blocks: 0,
+      orphaned_registry_blocks: 0,
+      missing_quote_blocks: missingInQuoteBlockIds.length,
+      conflict_blocks: conflictBlockIds.length,
+      drifted_quote_blocks: 0,
+      drifted_draft_blocks: 0,
+      total_registry_blocks: options.currentBlocks.length,
+    },
     run_mode: options.runMode,
     conflict_policy: options.conflictPolicy,
     summary_counts: {
@@ -661,6 +679,17 @@ function buildImportExecutionMetadata(options: {
       removed_blocks: removedBlockIds.length,
       missing_in_quote_blocks: missingInQuoteBlockIds.length,
       untouched_blocks: untouchedBlockIds.length,
+      affected_blocks: updatedBlockIds.length + removedBlockIds.length,
+      orphaned_blocks: 0,
+      refreshed_hash_blocks: 0,
+      pruned_registry_blocks: 0,
+      skipped_blocks: skippedConflictBlockIds.length + untouchedBlockIds.length,
+      healthy_blocks: 0,
+      stale_blocks: 0,
+      orphaned_registry_blocks: 0,
+      drifted_quote_blocks: 0,
+      drifted_draft_blocks: 0,
+      total_registry_blocks: options.currentBlocks.length,
     },
   };
 }
@@ -699,6 +728,7 @@ async function updateExistingImportedQuote(options: {
   const quoteRows = existingRows.filter((row) => row.quoteId === quote.id);
   const driftStates = buildTenderImportOwnedBlockDriftStates({
     draftPackageId: options.preview.payload.source_draft_package_id,
+    currentBlocks: managedSurface.blocks,
     ownedBlocks: options.ownedBlocks ?? [],
     fallbackBlocks: options.fallbackBlocks ?? [],
     fallbackMeta: {
@@ -833,6 +863,7 @@ async function updateExistingImportedQuote(options: {
   const executionMetadata = buildImportExecutionMetadata({
     runMode: overrideConflictBlockIds.length > 0 ? 'protected_reimport_with_override' : 'protected_reimport',
     conflictPolicy,
+    currentBlocks: managedSurface.blocks,
     selectedUpdateBlockIds,
     selectedRemoveBlockIds,
     overrideConflictBlockIds,
@@ -931,7 +962,8 @@ async function ensureTenderEditorImportTarget(options: {
   let createdPlaceholderTarget = false;
 
   if (!customer && project) {
-    customer = nextCustomers.find((candidate) => candidate.id === project.customerId) ?? null;
+    const projectCustomerId = project.customerId;
+    customer = nextCustomers.find((candidate) => candidate.id === projectCustomerId) ?? null;
   }
 
   if (!customer) {
@@ -946,6 +978,10 @@ async function ensureTenderEditorImportTarget(options: {
     nextProjects = [...nextProjects, project];
     await writeUserBucket(options.client, 'projects', options.actorUserId, nextProjects);
     createdPlaceholderTarget = true;
+  }
+
+  if (!customer || !project) {
+    throw new Error('Tender editor import target could not be resolved.');
   }
 
   return {
@@ -995,6 +1031,7 @@ async function createNewImportedQuote(options: {
   const executionMetadata = buildImportExecutionMetadata({
     runMode: 'create_new_quote',
     conflictPolicy: 'protect_conflicts',
+    currentBlocks: managedBlocks,
     selectedUpdateBlockIds,
     selectedRemoveBlockIds: [],
     overrideConflictBlockIds: [],

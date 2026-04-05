@@ -294,8 +294,8 @@ export default function TenderResultPanels({
   const referenceRequirements = selectedPackage.results.requirements.filter((requirement) =>
     isTenderReferenceRequirementCandidate({
       title: requirement.title,
-      description: requirement.description,
-      sourceExcerpt: requirement.sourceExcerpt,
+      description: requirement.description ?? null,
+      sourceExcerpt: requirement.sourceExcerpt ?? null,
     })
   );
 

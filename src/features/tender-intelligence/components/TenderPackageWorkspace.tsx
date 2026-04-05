@@ -15,7 +15,6 @@ import {
   TENDER_PACKAGE_STATUS_META,
   TENDER_REVIEW_TASK_STATUS_META,
   formatTenderTimestamp,
-  getTenderTextPreview,
 } from '../lib/tender-intelligence-ui';
 import { TENDER_INTELLIGENCE_BACKEND_PLAN } from '../services/tender-intelligence-backend-adapter';
 import type { TenderDocumentsUploadResult } from '../hooks/use-tender-intelligence';
@@ -24,6 +23,7 @@ import type {
   TenderDraftPackageImportRun,
   TenderDraftPackageImportState,
   TenderEditorImportPreview,
+  TenderEditorSelectiveReimportSelection,
   TenderImportRegistryRepairAction,
   TenderImportRegistryRepairPreview,
   TenderEditorReconciliationPreview,

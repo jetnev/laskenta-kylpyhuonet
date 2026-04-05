@@ -1,145 +1,97 @@
-# Projekta - Tarjouslaskenta ja projektiseuranta
+# Projekta
 
-**Status**: ✅ STABLE - WORKING STATE LOCKED
+Projekta on suomenkielinen tarjouslaskennan, projektiseurannan ja laskutuksen sovellus kylpyhuone- ja remonttikohteisiin. Samassa tuotteessa yhdistyvät tarjouseditori, asiakas- ja projektidata, snapshot-pohjainen laskutus, juridisten dokumenttien hyväksyntäketju sekä Tarjousäly-työtila tarjouspyyntöpakettien analysointiin ja hallittuun importtiin.
 
-Projekta on kattava suomenkielinen tarjouslaskennan ja projektiseurannan jarjestelma esteettomien kylpyhuonetuotteiden ja asennusprojektien hallintaan.
+## Nykyinen tuotantoarkkitehtuuri
 
-## 📋 Yleiskatsaus
+- Frontend: React 19 + TypeScript + Vite
+- Hosting: Cloudflare Pages
+- Auth ja taustadata: Supabase
+- Sovellusdata: Supabase Auth + `app_kv` sekä juridisten dokumenttien taulut
+- Desktop-jakelu: Electron + `gh-pages`-pohjainen update feed
 
-Sovellus mahdollistaa myynti- ja tarjoushenkilöstön luoda, hallinnoida ja viedä ammattitasoisia asiakastarjouksia joustavalla hinnoittelulogiikalla ja yksityiskohtaisilla kustannuslaskelmilla.
+Vanhemmat Spark-viittaukset eivät enää kuvaa tämän repositorion todellista runtimea. Ajantasaiset käyttöönotto- ja migraatio-ohjeet löytyvät tiedostoista `docs/cloudflare-pages-supabase.md` ja `supabase/README.md`.
 
-## ✨ Keskeiset Ominaisuudet
+## Keskeiset osa-alueet
 
-### 🔐 Tunnistautuminen ja Käyttöoikeudet
-- GitHub-pohjainen autentikointi Spark user API:n kautta
-- Omistajapohjainen käyttöoikeuksien hallinta
-- Katselutila muille käyttäjille
-- Muokkausoikeudet vain sovelluksen omistajalle
+- Tarjoukset, rivit, revisiot ja vienti
+- Asiakkaat, projektit, tuoterekisteri ja hintaryhmät
+- Snapshot-pohjainen laskutus hyväksytyistä tarjouksista
+- Juridiset dokumentit, hyväksyntätilat ja julkiset dokumenttisivut
+- Tarjousäly: tarjouspyyntöpaketit, analyysitulokset, draft package -vientipolku ja hallittu reimport quote-editoriin
+- Desktop-paketointi ja päivitysfeed tuotantojulkaisuille
 
-### 📦 Tiedonhallinta
+## Paikallinen kehitys
 
-- **Tuoterekisteri** - Tuotteiden CRUD-toiminnot koodeineen, nimineen ja hinnoitteluineen
-- **Hintaryhmät** - Uudelleenkäytettävät asennushinnoitteluryhmät
-- **Korvaavat tuotteet** - Vaihtoehtoisten tuotteiden määrittely ja hallinta
-- **Projektit & Asiakkaat** - Asiakastietojen ja projektien organisointi
-- **Ehdot** - Tarjousehtojen hallinta ja oletusehtojen asetus
+- Asenna riippuvuudet.
 
-### 💼 Tarjousten Hallinta
-
-- **Kolme rivimuotoa**:
-  - Tuote (vain tuote)
-  - Asennus (vain asennus)
-  - Tuote + asennus (molemmat)
-- Joustavat määrä- ja hinnoittelukontrollit
-- Katteen ohitusmahdollisuus
-- Alueellisten kertoimien automaattinen soveltaminen
-- Versiointi- ja revisiojärjestelmä
-- Validointijärjestelmä ennen lähettämistä
-
-### 📊 Vienti ja Raportointi
-
-- **Asiakasvienti**: PDF ja Excel (sisäiset hinnat piilotettu)
-- **Sisäinen vienti**: Täydelliset hinnoittelutiedot Excel-muodossa
-- **Raporttinäkymä**: KPI-kortit, myyntianalyysit, top-tuotteet
-- **Tuonti**: Massatuonti Excel-tiedostosta esikatselulla
-
-## 🛠️ Tekninen Toteutus
-
-### Stack
-- **React 19.2.0** + TypeScript
-- **Vite 7.2.6** - Build tool
-- **Tailwind CSS 4.1.17** - Tyylittely
-- **shadcn/ui v4** - Komponenttikirjasto
-- **Spark KV Store** - Tiedon pysyvyys
-
-### Tärkeimmät Kirjastot
-- `@phosphor-icons/react` - Ikonit
-- `react-hook-form` + `zod` - Lomakkeiden käsittely
-- `sonner` - Toast-ilmoitukset
-- `framer-motion` - Animaatiot
-- `recharts` - Kaavioiden visualisointi
-
-## 📁 Rakenne
-
-```
-src/
-├── App.tsx                    # Pääsovellus
-├── index.css                  # Teemat ja globaalit tyylit
-├── components/
-│   ├── pages/                 # Sivukomponentit
-│   │   ├── Dashboard.tsx
-│   │   ├── ProductsPage.tsx
-│   │   ├── InstallationGroupsPage.tsx
-│   │   ├── ProjectsPage.tsx
-│   │   └── ...
-│   └── ui/                    # shadcn-komponentit
-├── hooks/
-│   ├── use-auth.ts           # Autentikointi
-│   ├── use-data.ts           # Tiedonhallinta
-│   └── use-mobile.ts         # Responsiivisuus
-└── lib/
-    ├── types.ts              # TypeScript-tyypit
-    ├── calculations.ts       # Hinnoittelulaskenta
-    └── export.ts             # Vientitoiminnot
+```bash
+npm ci
 ```
 
-## 🎨 Muotoilu
+- Määritä vähintään seuraavat ympäristömuuttujat esimerkiksi `.env.local`-tiedostoon.
 
-### Värit (OKLCH)
-- **Background**: Vaalea lämmin harmaa
-- **Primary**: Syvä pohjoismainen sininen
-- **Accent**: Kirkas turkoosi
-- **Foreground**: Tumma siniharmaa
+```bash
+VITE_SITE_URL=http://localhost:5173
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+VITE_SUPABASE_REDIRECT_URL=http://localhost:5173/auth/callback
+```
 
-### Typografia
-- **Pääfontti**: IBM Plex Sans
-- **Monospace**: JetBrains Mono (koodit ja hinnat)
+- Käynnistä kehityspalvelin.
 
-## 🗺️ Navigaatio
+```bash
+npm run dev
+```
 
-1. **Etusivu** - Yleiskatsaus ja KPI:t
-2. **Tuoterekisteri** - Tuotteiden hallinta
-3. **Hintaryhmät** - Asennushinnoitteluryhmät
-4. **Korvaavat tuotteet** - Vaihtoehtotuotteet
-5. **Projektit** - Projektien ja asiakkaiden hallinta
-6. **Ehdot** - Tarjousehtojen hallinta
-7. **Asetukset** - Sovelluksen asetukset
-8. **Raportointi** - Analytiikka ja raportit
+## Laadunvarmistus
 
-## 💾 Tietomallit
+Käytä näitä komentoja ennen mergeä tai julkaisua:
 
-Kaikki data tallennetaan Spark KV -tallennukseen:
-- `products` - Tuotteet
-- `installation-groups` - Hintaryhmät
-- `substitute-products` - Korvaavat tuotteet
-- `customers` - Asiakkaat
-- `projects` - Projektit
-- `quotes` - Tarjoukset
-- `quote-rows` - Tarjousrivit
-- `quote-terms` - Ehdot
-- `settings` - Asetukset
+```bash
+npm run lint
+npm run typecheck
+npm run test
+npm run validate
+```
 
-## 🚀 Käyttöönotto
+`npm run build` tekee edelleen Vite-tuotantobuildin, mutta se käyttää `tsc -b --noCheck`-asetusta build-nopeuden vuoksi. Siksi varsinainen tyyppitarkistus kuuluu aina `npm run typecheck`- tai `npm run validate` -ajoon.
 
-1. Sovellus käynnistyy automaattisesti Sparkissa
-2. Kirjaudu sisään GitHub-tilillä
-3. Omistajalla on täydet muokkausoikeudet
-4. Muut käyttäjät näkevät datan vain luku -tilassa
+Julkaisua varten käytä:
 
-## 📝 Dokumentaatio
+```bash
+npm run validate:release
+```
 
-- **PRD.md** - Tuotevaatimusmääritelmä
-- **STABLE_STATE.md** - Yksityiskohtainen tekninen dokumentaatio nykyisestä tilasta
-- **LAATTAPISTE_TUONTI.md** - Tuonti-ohjeet
+## Supabase-työnkulku
 
-## 🧹 Kehitys ja Testaus
+- Käynnistä paikallinen stack tarvittaessa: `npm run supabase:start`
+- Luo uudet tietokantamuutokset aina `supabase/migrations/`-hakemistoon
+- Käytä `supabase/schema.sql`-tiedostoa snapshot/reference-baselinena, ei uutena muutoskanavana
+- Tarkista linked-projektiin menevä rollout aina dry-runilla ennen pushia
 
-Sovellus on testattu ja vahvistettu toimivaksi. Kaikki keskeiset ominaisuudet on toteutettu ja validoitu.
+Yksityiskohtainen ohje: `supabase/README.md`
 
-🚀 Sovellus on käytettävissä ja valmis tuotantokäyttöön!
+## Deployment ja julkaisut
 
----
+- Web-tuotanto: `main`-haaran push käynnistää Cloudflare Pages -deploymentin
+- CI-validointi: GitHub Actions ajaa `npm run validate` pull requesteille ja `main`-pushille
+- Desktop-julkaisu: versionumeroitu tagi `v*` käynnistää update feed -julkaisun
 
-📄 License For Spark Template Resources 
+Tarkemmat ohjeet:
 
-The Spark Template files and resources from GitHub are licensed under the terms of the MIT license, Copyright GitHub, Inc.
+- `DEPLOYMENT.md`
+- `docs/cloudflare-pages-supabase.md`
+- `docs/release-checklist.md`
+
+## Dokumentaatio
+
+- `PRD.md` kuvaa tuotteen tavoitetilaa
+- `STABLE_STATE.md` kuvaa repoa ja toimintaa yksityiskohtaisemmin
+- `supabase/README.md` kuvaa Supabase-migraatioiden ja linked-ympäristöjen turvallisen työnkulun
+- `docs/cloudflare-pages-supabase.md` kuvaa Cloudflare Pages + Supabase -käyttöönoton
+- `docs/release-checklist.md` on operatiivinen tarkistuslista julkaisuhetkeen
+
+## Lisenssi
+
+Projektin lisenssi löytyy tiedostosta `LICENSE`.

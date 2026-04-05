@@ -5,6 +5,7 @@ import { buildTenderImportOwnedBlockDriftStates } from './tender-import-drift';
 import { buildTenderImportOwnedBlockAppliedContentHash } from './tender-import-ownership-registry';
 import type { TenderEditorManagedBlock } from '../types/tender-editor-import';
 import type { TenderImportOwnedBlockRow } from '../types/tender-intelligence-db';
+import type { Quote, QuoteRow } from '../../../lib/types';
 
 const draftPackageId = '66666666-6666-4666-8666-666666666666';
 const quoteId = '61616161-6161-4616-8616-616161616161';
@@ -57,7 +58,7 @@ function createOwnedRow(overrides: Partial<TenderImportOwnedBlockRow> = {}): Ten
   };
 }
 
-function createQuoteSnapshot(options?: { notes?: string | null; rows?: Array<{ id: string; productName: string; notes: string }>; }) {
+function createQuoteSnapshot(options?: { notes?: string | null; rows?: Array<{ id: string; productName: string; notes: string }>; }): { quote: Quote; rows: QuoteRow[] } {
   return {
     quote: {
       id: quoteId,
@@ -94,7 +95,7 @@ function createQuoteSnapshot(options?: { notes?: string | null; rows?: Array<{ i
         'Ajantasainen sisältö.',
         `<!-- tender-editor-import:block:${draftPackageId}:requirements_and_quote_notes:end -->`,
       ].join('\n'),
-      internalNotes: null,
+      internalNotes: undefined,
     },
     rows: (options?.rows ?? [
       {

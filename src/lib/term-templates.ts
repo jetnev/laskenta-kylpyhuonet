@@ -380,11 +380,11 @@ Osapuoli ei vastaa viivästyksestä tai vahingosta siltä osin kuin se johtuu va
   }),
 ];
 
-export function getSystemTermTemplates() {
+export function getSystemTermTemplates(): QuoteTerms[] {
   return SYSTEM_TERM_TEMPLATES.map((template) => ({ ...template }));
 }
 
-export function hydrateStoredTermTemplates(storedTemplates: LegacyQuoteTerms[] | undefined, ownerUserId?: string) {
+export function hydrateStoredTermTemplates(storedTemplates: LegacyQuoteTerms[] | undefined, ownerUserId?: string): QuoteTerms[] {
   return (storedTemplates ?? []).map((template, index) => {
     const name = typeof template.name === 'string' && template.name.trim() ? template.name.trim() : `Ehtopohja ${index + 1}`;
     const contentMd = typeof template.contentMd === 'string'
@@ -539,6 +539,7 @@ export function cloneTermTemplateFromMaster(storedTemplates: LegacyQuoteTerms[] 
 
   const desiredName = ensureUniqueName(userTemplates, `${masterTemplate.name} (oma versio)`);
   const now = nowIso();
+  const lastUserTemplate = userTemplates[userTemplates.length - 1];
   const template: QuoteTerms = {
     ...masterTemplate,
     id: crypto.randomUUID(),
@@ -549,7 +550,7 @@ export function cloneTermTemplateFromMaster(storedTemplates: LegacyQuoteTerms[] 
     version: 1,
     isActive: true,
     isDefault: false,
-    sortOrder: (userTemplates.at(-1)?.sortOrder ?? 1000) + 10,
+    sortOrder: (lastUserTemplate?.sortOrder ?? 1000) + 10,
     createdAt: now,
     updatedAt: now,
     createdByUserId: ownerUserId,
@@ -578,6 +579,7 @@ export function duplicateTermTemplate(storedTemplates: LegacyQuoteTerms[] | unde
   const userTemplates = hydrateStoredTermTemplates(storedTemplates, ownerUserId);
   const desiredName = ensureUniqueName(userTemplates, `${sourceTemplate.name} (kopio)`);
   const now = nowIso();
+  const lastUserTemplate = userTemplates[userTemplates.length - 1];
   const template: QuoteTerms = {
     ...sourceTemplate,
     id: crypto.randomUUID(),
@@ -585,7 +587,7 @@ export function duplicateTermTemplate(storedTemplates: LegacyQuoteTerms[] | unde
     slug: ensureUniqueSlug(userTemplates, slugify(desiredName)),
     version: 1,
     isDefault: false,
-    sortOrder: (userTemplates.at(-1)?.sortOrder ?? 1000) + 10,
+    sortOrder: (lastUserTemplate?.sortOrder ?? 1000) + 10,
     createdAt: now,
     updatedAt: now,
     createdByUserId: ownerUserId,

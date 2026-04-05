@@ -30,10 +30,12 @@ function getExampleSurname(displayName?: string, email?: string) {
     ?.split(/[._-]+/)
     .map((part) => part.replace(/[^\p{L}\p{M}-]/gu, ''))
     .filter(Boolean) || [];
+  const lastDisplayNamePart = displayNameParts.length > 1 ? displayNameParts[displayNameParts.length - 1] : undefined;
+  const lastEmailPart = emailParts.length > 1 ? emailParts[emailParts.length - 1] : undefined;
 
   const candidate =
-    (displayNameParts.length > 1 ? displayNameParts.at(-1) : undefined) ||
-    (emailParts.length > 1 ? emailParts.at(-1) : undefined) ||
+    lastDisplayNamePart ||
+    lastEmailPart ||
     displayNameParts[0] ||
     emailParts[0] ||
     '';

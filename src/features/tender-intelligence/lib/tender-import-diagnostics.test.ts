@@ -12,6 +12,7 @@ import {
   tenderImportOwnedBlockSchema,
   type TenderEditorImportItem,
 } from '../types/tender-editor-import';
+import type { Quote, QuoteRow } from '../../../lib/types';
 
 const draftPackageId = '66666666-6666-4666-8666-666666666666';
 const tenderPackageId = '77777777-7777-4777-8777-777777777777';
@@ -87,7 +88,7 @@ function createRun(runType: 'reimport' | 'diagnostics_refresh' | 'registry_repai
   });
 }
 
-function createQuoteSnapshot(notes: string | null, rows: Array<{ id: string; productName: string; notes: string }>) {
+function createQuoteSnapshot(notes: string | null, rows: Array<{ id: string; productName: string; notes: string }>): { quote: Quote; rows: QuoteRow[] } {
   return {
     quote: {
       id: quoteId,
@@ -115,8 +116,8 @@ function createQuoteSnapshot(notes: string | null, rows: Array<{ id: string; pro
       updatedAt: '2026-04-12T09:00:00.000Z',
       createdByUserId: organizationId,
       updatedByUserId: organizationId,
-      notes,
-      internalNotes: null,
+      notes: notes ?? undefined,
+      internalNotes: undefined,
     },
     rows: rows.map((row, index) => ({
       id: row.id,

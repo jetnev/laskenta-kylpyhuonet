@@ -219,7 +219,7 @@ describe('quote-managed-surface-inspector', () => {
   it('marks duplicate, unknown, and drifting managed blocks for attention', () => {
     const driftKey = buildTenderEditorManagedBlockMarkerKey(DRAFT_PACKAGE_ID, 'requirements_and_quote_notes');
     const duplicateKey = buildTenderEditorManagedBlockMarkerKey(DRAFT_PACKAGE_ID, 'notes_for_editor');
-    const unknownKey = buildTenderEditorManagedBlockMarkerKey(DRAFT_PACKAGE_ID, 'custom_block');
+    const unknownKey = `${DRAFT_PACKAGE_ID}:custom_block`;
 
     const diagnostics = inspectQuoteTenderManagedSurface({
       quote: createQuote({

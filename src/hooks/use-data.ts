@@ -982,7 +982,7 @@ export function useQuotes() {
       quoteNumber: quote.quoteNumber || generateQuoteNumber(settings.quoteNumberPrefix),
       revisionNumber: quote.revisionNumber ?? 1,
       status: quote.status ?? 'draft',
-      vatPercent: getQuoteVatPercent(quote, settings.defaultVatPercent),
+      vatPercent: getQuoteVatPercent({ vatPercent: quote.vatPercent ?? settings.defaultVatPercent }, settings.defaultVatPercent),
       discountType: quote.discountType ?? 'none',
       discountValue: quote.discountValue ?? 0,
       projectCosts: quote.projectCosts ?? 0,
@@ -1017,7 +1017,7 @@ export function useQuotes() {
 
     const nextOwnerUserId = updates.ownerUserId || targetQuote.ownerUserId;
     const nextVatPercent = Object.prototype.hasOwnProperty.call(updates, 'vatPercent')
-      ? getQuoteVatPercent({ vatPercent: updates.vatPercent }, settings.defaultVatPercent)
+      ? getQuoteVatPercent({ vatPercent: updates.vatPercent ?? targetQuote.vatPercent }, settings.defaultVatPercent)
       : getQuoteVatPercent(targetQuote, settings.defaultVatPercent);
     const nextQuote: Quote = {
       ...targetQuote,

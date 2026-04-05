@@ -8,7 +8,6 @@ import {
   type TenderEditorImportMode,
   type TenderEditorImportPayload,
   type TenderEditorImportPreview,
-  type TenderEditorManagedBlock,
   type TenderEditorReconciliationBlock,
   type TenderEditorReconciliationEntry,
   type TenderEditorReconciliationPreview,

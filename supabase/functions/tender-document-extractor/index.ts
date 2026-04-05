@@ -255,7 +255,7 @@ Deno.serve(async (req: Request) => {
 
     const support = getTenderDocumentExtractionSupport(documentRow.mime_type);
 
-    const pendingRow = await upsertExtraction(client, {
+    await upsertExtraction(client, {
       tender_document_id: tenderDocumentId,
       extraction_status: 'pending',
       extractor_type: support.supported ? support.extractorType : 'unsupported',

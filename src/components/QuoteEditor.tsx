@@ -1412,15 +1412,15 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     <>
       <Button variant="outline" onClick={onClose}>Sulje</Button>
       <div className="flex flex-wrap gap-2 sm:justify-end">
-        <Button variant="outline" onClick={() => attemptManagedAction('PDF-vienti', () => exportQuoteToPDF(quote, quoteRows, customer, project, quoteTerms, documentSettings), { confirmLabel: 'Vie PDF tästä huolimatta' })}>
+        <Button variant="outline" onClick={() => attemptManagedAction('PDF-vienti', () => exportQuoteToPDF(quote, quoteRows, customer, project, quoteTerms ?? undefined, documentSettings), { confirmLabel: 'Vie PDF tästä huolimatta' })}>
           <FilePdf className="h-4 w-4" />
           PDF
         </Button>
-        <Button variant="outline" onClick={() => attemptManagedAction('Asiakas-Excel-vienti', () => exportQuoteToCustomerExcel(quote, quoteRows, customer, project, quoteTerms, documentSettings), { confirmLabel: 'Vie asiakas-Excel tästä huolimatta' })}>
+        <Button variant="outline" onClick={() => attemptManagedAction('Asiakas-Excel-vienti', () => exportQuoteToCustomerExcel(quote, quoteRows, customer, project, quoteTerms ?? undefined, documentSettings), { confirmLabel: 'Vie asiakas-Excel tästä huolimatta' })}>
           <FileXls className="h-4 w-4" />
           Asiakas-Excel
         </Button>
-        <Button variant="outline" onClick={() => attemptManagedAction('Sisäinen Excel-vienti', () => exportQuoteToInternalExcel(quote, quoteRows, customer, project, quoteTerms, documentSettings), { confirmLabel: 'Vie sisäinen Excel tästä huolimatta' })}>
+        <Button variant="outline" onClick={() => attemptManagedAction('Sisäinen Excel-vienti', () => exportQuoteToInternalExcel(quote, quoteRows, customer, project, quoteTerms ?? undefined, documentSettings), { confirmLabel: 'Vie sisäinen Excel tästä huolimatta' })}>
           <FileXls className="h-4 w-4" />
           Sisäinen Excel
         </Button>
@@ -1821,7 +1821,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                               const product = products.find((candidate) => candidate.id === item.substituteProductId);
                               return product ? { product, notes: item.notes } : null;
                             })
-                            .filter((item): item is { product: Product; notes?: string } => Boolean(item))
+                            .filter((item): item is { product: Product; notes: string | undefined } => Boolean(item))
                         : [];
 
                       return (

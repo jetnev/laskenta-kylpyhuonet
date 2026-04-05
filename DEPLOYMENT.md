@@ -1,206 +1,79 @@
-# Laskenta-sovelluksen julkaisu verkkoon
+# Deployment
 
-## Yleiskatsaus
+Tämä repositorio julkaistaan nykytilassa Cloudflare Pagesiin, ja sovelluksen auth- sekä taustadata kulkevat Supabasen kautta. Tämä tiedosto kuvaa käytännön rollout-järjestyksen. Yksityiskohtainen alustakonfiguraatio löytyy tiedostoista `docs/cloudflare-pages-supabase.md` ja `supabase/README.md`.
 
-Tämä Spark-sovellus on kehitetty GitHub Sparkin ympäristössä. Spark-sovellukset ovat valmiiksi julkaistuja ja saatavilla verkon kautta GitHub-tilisi kautta.
+## 1. Ennen julkaisua
 
-## Sovelluksen käyttöönotto
-
-### 1. Spark-sovelluksen jakaminen
-
-Spark-sovelluksesi on automaattisesti saatavilla GitHub Sparkin kautta. Jokaisella Spark-sovelluksella on oma URL-osoite, joka seuraa muotoa:
-
-```text
-https://spark.github.com/{käyttäjänimi}/{sovelluksen-nimi}
-```
-
-### 2. Oman domainin liittäminen
-
-GitHub Spark ei tällä hetkellä tue suoraan omien domainien liittämistä. Jos haluat käyttää omaa domainia, sinun täytyy viedä sovellus toiselle hosting-palvelulle:
-
-#### Vaihtoehto A: Vercel (Suositeltu)
-
-1. **Valmistele projekti vientiin:**
-   - Luo uusi GitHub-repositorio
-   - Siirrä kaikki sovelluksen tiedostot repositorioon
-
-2. **Luo Vercel-tili:**
-   - Mene osoitteeseen [vercel.com](https://vercel.com)
-   - Rekisteröidy GitHub-tilillä
-
-3. **Julkaise sovellus:**
-   - Klikkaa "New Project"
-   - Valitse GitHub-repositoriosi
-   - Vercel tunnistaa automaattisesti Vite-projektin
-   - Klikkaa "Deploy"
-
-4. **Liitä oma domain:**
-   - Mene projektisi asetuksiin
-   - Valitse "Domains"
-   - Lisää oma domainisi
-   - Seuraa Vercelin ohjeita DNS-asetusten määrittämiseen
-
-**Huomio Spark API:sta:** Vercel-deploymentti ei tue suoraan `spark.kv` tai `spark.user()` API:a. Nämä pitää korvata:
-
-- `spark.kv` → Vercel KV tai Supabase
-- `spark.user()` → GitHub OAuth tai muu autentikointi
-
-#### Vaihtoehto B: Netlify
-
-1. **Valmistele projekti:**
-   - Luo GitHub-repositorio ja siirrä tiedostot sinne
-
-2. **Luo Netlify-tili:**
-   - Mene osoitteeseen [netlify.com](https://netlify.com)
-   - Rekisteröidy
-
-3. **Julkaise:**
-   - Klikkaa "Add new site"
-   - Valitse "Import an existing project"
-   - Yhdistä GitHub-repositorio
-   - Build-asetukset:
-     - Build command: `npm run build`
-     - Publish directory: `dist`
-   - Klikkaa "Deploy"
-
-4. **Oma domain:**
-   - Mene sivuston asetuksiin
-   - Valitse "Domain management"
-   - Lisää custom domain
-
-**Huomio:** Sama Spark API -rajoitus kuin Vercelissä.
-
-#### Vaihtoehto C: GitHub Pages
-
-1. **Muokkaa vite.config.ts:**
-
-```typescript
-export default defineConfig({
-  base: '/repo-nimi/',
-  // ... muut asetukset
-})
-```
-
-1. **Lisää deploy-skripti package.json:**
-
-```json
-{
-  "scripts": {
-    "deploy": "npm run build && gh-pages -d dist"
-  }
-}
-```
-
-1. **Asenna gh-pages:**
+Varmista paikallisesti vähintään:
 
 ```bash
-npm install --save-dev gh-pages
+npm ci
+npm run validate
+npm run build
 ```
 
-1. **Julkaise:**
+Jos julkaisu sisältää tietokantamuutoksia, aja lisäksi:
 
 ```bash
-npm run deploy
+npm run supabase:db:lint
+npm run supabase:db:push:dry-run
 ```
 
-1. **Oma domain:**
+## 2. Ympäristömuuttujat
 
-   - Lisää `CNAME`-tiedosto `/public` -kansioon domainillasi
-   - Aseta DNS-asetukset osoittamaan GitHub Pagesiin
+Cloudflare Pagesin tuotantoympäristössä pitää olla vähintään:
 
-### 3. Spark-spesifisten ominaisuuksien korvaaminen
+- `VITE_SITE_URL`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_SUPABASE_REDIRECT_URL`
 
-Jos viet sovelluksen pois Sparkista, korvaa seuraavat:
+Auth callbackin on vastattava Supabase Dashboardin sallittuja redirect-osoitteita.
 
-#### KV Storage (spark.kv)
+## 3. Julkaisujärjestys
 
-**Supabase:**
+1. Tee ja validoi tietokantamuutos ensin migraationa.
+2. Tarkista linked Supabase -projektiin menevä rollout dry-runilla.
+3. Julkaise frontend vasta, kun tietokantamuutos on testattu tai dry-runattu oikeaa ympäristöä vasten.
+4. Merge tai push `main`-haaraan.
+5. GitHub Actions ajaa validoinnin ja sen jälkeen Cloudflare Pages -deploymentin.
+6. Tee tuotannossa smoke test vähintään kirjautumiselle, juridisille julkisille sivuille, projektityötilalle ja Tarjousälyn pääpolulle.
 
-```typescript
-// Asenna: npm install @supabase/supabase-js
-import { createClient } from '@supabase/supabase-js'
+## 4. GitHub Actions
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+Repossa on nyt kolme olennaista workflowta:
 
-// Käyttö:
-await supabase.from('kv_store').upsert({ key: 'avain', value: data })
-const { data } = await supabase.from('kv_store').select('value').eq('key', 'avain')
-```
+- `validate.yml`: ajaa `npm run validate` pull requesteille ja `main`-pushille
+- `deploy-cloudflare-pages.yml`: ajaa validoinnin ja deployaa `dist`-hakemiston Cloudflare Pagesiin
+- `publish-update-feed.yml`: ajaa validoinnin, paketoi desktop-version ja julkaisee update feedin `gh-pages`-haaraan
 
-**Vercel KV:**
+Tämä tarkoittaa, että `npm run build` ei enää ole ainoa laatuportti tuotantojulkaisussa.
 
-```typescript
-import { kv } from '@vercel/kv'
+## 5. Desktop-julkaisu
 
-await kv.set('avain', data)
-const data = await kv.get('avain')
-```
+Desktop-update feed julkaistaan workflowlla `publish-update-feed.yml`, kun repo vastaanottaa tagin muodossa `vX.Y.Z`.
 
-#### User Authentication (spark.user)
+Suositeltu järjestys:
 
-**GitHub OAuth:**
+1. Varmista että `main` on julkaistavassa kunnossa.
+2. Aja paikallisesti `npm run validate`.
+3. Luo versionumeroitu tagi.
+4. Pushaa tagi origin-repoon.
+5. Tarkista että workflow tuotti artefaktit ja päivitti `gh-pages`-feedin.
 
-```typescript
-// Käytä NextAuth.js tai Auth.js
-import { signIn, useSession } from 'next-auth/react'
+## 6. Julkaisun jälkeiset tarkistukset
 
-const { data: session } = useSession()
-// session.user sisältää käyttäjätiedot
-```
+Tee vähintään nämä tarkistukset:
 
-## Suositeltava ratkaisu
+- kirjautuminen owner-käyttäjänä
+- uusi tai olemassa oleva organisaatiokonteksti latautuu oikein
+- julkiset juridiset reitit avautuvat
+- tarjouseditori ja laskutusnäkymä latautuvat
+- Tarjousäly avaa draft package -näkymän ilman virheitä
+- jos julkaisu koski desktopia, update feed vastaa uutta versiota
 
-**Spark-sovelluksena:**
+## 7. Muut ohjeet
 
-- Yksinkertaisin vaihtoehto
-- Ei vaadi ylimääräistä konfiguraatiota
-- Automaattinen hosting
-- Kaikki Spark-ominaisuudet toimivat
-- Rajoitus: ei omaa domainia
-
-**Vercel + Supabase:**
-
-- Oma domain mahdollinen
-- Ilmainen tier useimmille käyttötarkoituksille
-- Helppo deployment
-- Vaatii Spark API:en korvaamisen
-
-## Domain-ostaminen
-
-Jos sinulla ei ole vielä domainia:
-
-1. **Namecheap** (namecheap.com)
-1. **Cloudflare Registrar** (cloudflare.com)
-1. **Google Domains / Squarespace Domains** (domains.squarespace.com)
-1. **Suomalainen: Louhi** (louhi.fi)
-
-Hinnat noin 10-15€/vuosi .com-domaineille, .fi-domainit noin 15-20€/vuosi.
-
-## DNS-asetukset omalle domainille
-
-Kun olet ostanut domainin, aseta DNS-tietueet:
-
-**Vercel:**
-
-- A-tietue: `76.76.21.21`
-- CNAME-tietue: `cname.vercel-dns.com`
-
-**Netlify:**
-
-- A-tietue: `75.2.60.5`
-- CNAME-tietue: `<sitename>.netlify.app`
-
-**GitHub Pages:**
-
-- A-tietueet: `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
-- CNAME-tietue: `<käyttäjä>.github.io`
-
-## Tuki ja lisätiedot
-
-- GitHub Spark dokumentaatio: [GitHub Spark Docs](https://githubnext.com/projects/spark)
-- Vercel dokumentaatio: [vercel.com/docs](https://vercel.com/docs)
-- Netlify dokumentaatio: [docs.netlify.com](https://docs.netlify.com)
-
----
-
-**Huomautus:** Tämä sovellus käyttää `spark.kv` ja `spark.user()` API:a tietojen tallennukseen ja käyttäjien hallintaan. Nämä toimivat vain GitHub Spark -ympäristössä. Jos viet sovelluksen muualle, sinun täytyy korvata nämä vaihtoehtoisilla ratkaisuilla.
+- Operatiivinen julkaisun tarkistuslista: `docs/release-checklist.md`
+- Cloudflare + Supabase -asennus: `docs/cloudflare-pages-supabase.md`
+- Supabase-migraatiot ja turvallinen linked rollout: `supabase/README.md`

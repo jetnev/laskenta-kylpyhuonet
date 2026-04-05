@@ -1,7 +1,6 @@
 import type { Quote, QuoteRow } from '@/lib/types';
 
 import type {
-  TenderDraftPackageImportDiagnostics,
   TenderDraftPackageImportRun,
   TenderEditorImportPreview,
   TenderEditorImportTargetKind,
