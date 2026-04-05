@@ -15,7 +15,7 @@ import { cn } from '../../lib/utils';
 import type { AppLocationState } from '../../lib/app-routing';
 import { getInvoiceStatusLabel, isInvoiceOverdue } from '../../lib/invoices';
 import { filterOwnedRecords, getResponsibleUserLabel } from '../../lib/ownership';
-import { buildProjectWorkspaceContext } from '../../lib/workspace-flow';
+import { buildProjectWorkspaceContext, resolveWorkspaceTaskExecution, type WorkspaceTask } from '../../lib/workspace-flow';
 import QuoteEditor from '../QuoteEditor';
 import FieldHelpLabel from '../FieldHelpLabel';
 
@@ -419,6 +419,17 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
     });
 
     navigateToProjects({ projectId, quoteId: newQuote.id, editor: 'quote' });
+  };
+
+  const handleProjectWorkspaceTask = (task: WorkspaceTask) => {
+    const execution = resolveWorkspaceTaskExecution(task);
+
+    if (execution.kind === 'create-quote') {
+      handleCreateQuote(execution.projectId);
+      return;
+    }
+
+    onNavigate?.(execution.target);
   };
 
   const handleEditQuote = (projectId: string, quoteId: string) => {
@@ -909,7 +920,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
                       <>
                         <p className="mt-3 font-medium text-slate-950">{nextProjectAction.title}</p>
                         <p className="mt-2 text-sm leading-6 text-muted-foreground">{nextProjectAction.reason}</p>
-                        <Button className="mt-4 w-full justify-between" variant="outline" onClick={() => onNavigate?.(nextProjectAction.target)}>
+                        <Button className="mt-4 w-full justify-between" variant="outline" onClick={() => handleProjectWorkspaceTask(nextProjectAction)}>
                           {nextProjectAction.ctaLabel}
                           <FileText className="h-4 w-4" />
                         </Button>
