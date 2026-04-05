@@ -336,7 +336,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const { createInvoiceFromQuote, getInvoicesForQuote } = useInvoices();
   const { getProject, projectsLoaded } = useProjects();
   const { customersLoaded, getCustomer } = useCustomers();
-  const { activeTerms, createQuoteTermsSnapshot, getDefaultTerms, getTermById } = useQuoteTerms();
+  const { activeTerms, createQuoteTermsSnapshot, getTermById } = useQuoteTerms();
   const { sharedSettings, documentSettings } = useDocumentSettings();
   const project = getProject(projectId);
   const customer = project ? getCustomer(project.customerId) : undefined;
@@ -345,72 +345,27 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const [productSearch, setProductSearch] = useState('');
   const [validationOpen, setValidationOpen] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
-  const [bootstrapQuote, setBootstrapQuote] = useState<Quote | null>(null);
-  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [activeStep, setActiveStep] = useState<QuoteEditorStepId>('basics');
   const [additionalCostsOpen, setAdditionalCostsOpen] = useState(false);
   const [quoteTenderImportSource, setQuoteTenderImportSource] = useState<QuoteTenderImportSourceSummary | null>(null);
-  const initializedDraftRef = useRef(false);
   const initializedQuoteUiRef = useRef<string | null>(null);
 
   useEffect(() => {
     setActiveQuoteId(quoteId);
-    initializedDraftRef.current = Boolean(quoteId);
-    setBootstrapQuote(null);
-    setBootstrapError(null);
     setSelectedRowIds([]);
     setActiveStep('basics');
     setAdditionalCostsOpen(false);
     initializedQuoteUiRef.current = null;
   }, [quoteId]);
 
-  useEffect(() => {
-    if (!project || activeQuoteId || initializedDraftRef.current) return;
-    try {
-      const defaultTerms = getDefaultTerms();
-      const termsSnapshot = createQuoteTermsSnapshot(defaultTerms);
-      const newQuote = addQuote({
-        projectId,
-        ownerUserId: project.ownerUserId || customer?.ownerUserId || user?.id,
-        title: `${project.name} tarjous`,
-        quoteNumber: '',
-        revisionNumber: 1,
-        ...termsSnapshot,
-        pricingMode: 'margin',
-        selectedMarginPercent: sharedSettings.defaultMarginPercent,
-        vatPercent: sharedSettings.defaultVatPercent,
-        discountType: 'none',
-        discountValue: 0,
-        projectCosts: 0,
-        deliveryCosts: 0,
-        installationCosts: 0,
-        travelKilometers: 0,
-        travelRatePerKm: 0,
-        disposalCosts: 0,
-        demolitionCosts: 0,
-        protectionCosts: 0,
-        permitCosts: 0,
-        notes: '',
-        internalNotes: '',
-        scheduleMilestones: [],
-      });
-      initializedDraftRef.current = true;
-      setBootstrapQuote(newQuote);
-      setBootstrapError(null);
-      setActiveQuoteId(newQuote.id);
-    } catch (error) {
-      initializedDraftRef.current = true;
-      setBootstrapError(error instanceof Error ? error.message : 'Tarjouksen luonnissa tapahtui virhe.');
-    }
-  }, [activeQuoteId, addQuote, createQuoteTermsSnapshot, customer?.ownerUserId, getDefaultTerms, project, projectId, sharedSettings, user?.id]);
-
   const quote = useMemo(() => {
     if (!activeQuoteId) {
-      return bootstrapQuote;
+      return null;
     }
-    return getQuote(activeQuoteId) ?? (bootstrapQuote?.id === activeQuoteId ? bootstrapQuote : null);
-  }, [activeQuoteId, bootstrapQuote, getQuote]);
+
+    return getQuote(activeQuoteId) ?? null;
+  }, [activeQuoteId, getQuote]);
   const selectedTermsTemplate = quote?.termsId ? getTermById(quote.termsId) ?? null : null;
   const quoteRows = useMemo(() => (quote ? getRowsForQuote(quote.id) : []), [getRowsForQuote, quote]);
   useEffect(() => {
@@ -657,8 +612,8 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     return (
       <ResponsiveDialog open onOpenChange={(open) => !open && onClose()} title="Tarjouseditori" maxWidth="full">
         <Card className="p-10 text-center text-muted-foreground">
-          {bootstrapError
-            ? bootstrapError
+          {!activeQuoteId
+            ? 'Tarjouseditori pitää avata olemassa olevan tarjouksen kautta. Luo tarjous ensin projektityötilasta.'
             : 'Tarjousta ei löytynyt. Se on voitu poistaa tai se ei ole käytettävissä tällä käyttäjällä.'}
         </Card>
       </ResponsiveDialog>
