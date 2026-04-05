@@ -2,17 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildTenderPackageDetails,
+  mapCreateTenderReferenceProfileInputToInsert,
   mapCreateTenderPackageInputToInsert,
   mapTenderDocumentChunkRowToDomain,
   mapTenderDocumentExtractionRowToDomain,
   mapTenderDraftArtifactRowToDomain,
   mapTenderMissingItemRowToDomain,
   mapTenderPackageRowToDomain,
+  mapTenderReferenceProfileRowToDomain,
   mapTenderResultEvidenceRowToDomain,
   mapTenderReferenceSuggestionRowToDomain,
   mapTenderRequirementRowToDomain,
   mapTenderReviewTaskRowToDomain,
   mapTenderRiskFlagRowToDomain,
+  mapUpdateTenderReferenceProfileInputToPatch,
 } from './tender-intelligence-mappers';
 import type {
   TenderAnalysisJobRow,
@@ -23,6 +26,7 @@ import type {
   TenderGoNoGoAssessmentRow,
   TenderMissingItemRow,
   TenderPackageRow,
+  TenderReferenceProfileRow,
   TenderResultEvidenceRow,
   TenderReferenceSuggestionRow,
   TenderRequirementRow,
@@ -183,6 +187,7 @@ describe('result row mappers', () => {
       id: '77777777-7777-4777-8777-777777777777',
       tender_package_id: requirementRow.tender_package_id,
       organization_id: requirementRow.organization_id,
+      related_requirement_id: requirementRow.id,
       source_type: 'manual',
       source_reference: 'A-liite.pdf',
       title: 'Hyödynnä aiempi vastausrunko',
@@ -286,6 +291,7 @@ describe('result row mappers', () => {
       sourceType: 'manual',
       sourceReference: 'A-liite.pdf',
       confidence: 0.31,
+      relatedRequirementId: requirementRow.id,
     });
     expect(mapTenderDraftArtifactRowToDomain(draftArtifactRow)).toMatchObject({
       artifactType: 'quote-outline',
@@ -593,6 +599,87 @@ describe('mapCreateTenderPackageInputToInsert', () => {
       linked_customer_id: 'customer-1',
       linked_project_id: 'project-1',
       linked_quote_id: null,
+    });
+  });
+});
+
+describe('reference profile mappers', () => {
+  it('maps reference corpus rows and CRUD payloads into the feature boundary', () => {
+    const row: TenderReferenceProfileRow = {
+      id: '21212121-2121-4212-8212-212121212121',
+      organization_id: '22222222-2222-4222-8222-222222222222',
+      title: 'Kylpyhuoneremontti / As Oy Aurinkopiha',
+      client_name: 'As Oy Aurinkopiha',
+      project_type: 'kylpyhuoneremontti',
+      description: 'Laaja saneerauskohde',
+      location: 'Helsinki',
+      completed_year: 2024,
+      contract_value: 185000,
+      tags: ['kylpyhuone', 'saneeraus'],
+      source_kind: 'manual',
+      source_reference: 'CRM-42',
+      created_by_user_id: '33333333-3333-4333-8333-333333333333',
+      created_at: '2026-04-05T09:20:00.000Z',
+      updated_at: '2026-04-05T09:21:00.000Z',
+    };
+
+    expect(mapTenderReferenceProfileRowToDomain(row)).toMatchObject({
+      id: row.id,
+      organizationId: row.organization_id,
+      title: row.title,
+      projectType: 'kylpyhuoneremontti',
+      completedYear: 2024,
+      contractValue: 185000,
+      tags: ['kylpyhuone', 'saneeraus'],
+      sourceKind: 'manual',
+    });
+
+    expect(mapCreateTenderReferenceProfileInputToInsert({
+      title: 'As Oy Aurinkopiha',
+      clientName: 'As Oy Aurinkopiha',
+      projectType: 'kylpyhuoneremontti',
+      description: 'Laaja saneerauskohde',
+      location: 'Helsinki',
+      completedYear: 2024,
+      contractValue: 185000,
+      tags: ['kylpyhuone', 'saneeraus'],
+      sourceKind: 'manual',
+      sourceReference: 'CRM-42',
+    })).toEqual({
+      title: 'As Oy Aurinkopiha',
+      client_name: 'As Oy Aurinkopiha',
+      project_type: 'kylpyhuoneremontti',
+      description: 'Laaja saneerauskohde',
+      location: 'Helsinki',
+      completed_year: 2024,
+      contract_value: 185000,
+      tags: ['kylpyhuone', 'saneeraus'],
+      source_kind: 'manual',
+      source_reference: 'CRM-42',
+    });
+
+    expect(mapUpdateTenderReferenceProfileInputToPatch({
+      title: 'As Oy Aurinkopiha / päivitetty',
+      clientName: null,
+      projectType: 'linjasaneeraus',
+      description: null,
+      location: 'Espoo',
+      completedYear: 2025,
+      contractValue: null,
+      tags: null,
+      sourceKind: 'imported',
+      sourceReference: null,
+    })).toEqual({
+      title: 'As Oy Aurinkopiha / päivitetty',
+      client_name: null,
+      project_type: 'linjasaneeraus',
+      description: null,
+      location: 'Espoo',
+      completed_year: 2025,
+      contract_value: null,
+      tags: null,
+      source_kind: 'imported',
+      source_reference: null,
     });
   });
 });

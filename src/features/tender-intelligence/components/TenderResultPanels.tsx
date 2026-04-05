@@ -12,6 +12,7 @@ import {
   matchesTenderWorkflowFilter,
   type TenderWorkflowFilter,
 } from '../lib/tender-review-workflow';
+import { isTenderReferenceRequirementCandidate } from '../lib/tender-reference-matching';
 import {
   formatTenderConfidence,
   formatCountLabel,
@@ -39,11 +40,15 @@ interface TenderResultPanelsProps {
   selectedPackage: TenderPackageDetails;
   currentUserId?: string | null;
   actorNameById?: Record<string, string>;
+  referenceProfileTitleById?: Record<string, string>;
   updatingTargetIds?: string[];
+  recomputingReferenceSuggestions?: boolean;
   onUpdateRequirement?: (requirementId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
   onUpdateMissingItem?: (missingItemId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
   onUpdateRiskFlag?: (riskFlagId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
+  onUpdateReferenceSuggestion?: (referenceSuggestionId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
   onUpdateReviewTask?: (reviewTaskId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
+  onRecomputeReferenceSuggestions?: () => Promise<unknown>;
 }
 
 interface ResultCardProps {
@@ -53,6 +58,7 @@ interface ResultCardProps {
   countLabel: string;
   emptyMessage: string;
   hasItems: boolean;
+  headerAction?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -103,6 +109,7 @@ function ResultCard({
   countLabel,
   emptyMessage,
   hasItems,
+  headerAction,
   children,
 }: ResultCardProps) {
   return (
@@ -116,7 +123,10 @@ function ResultCard({
             </CardTitle>
             <CardDescription>{description}</CardDescription>
           </div>
-          <Badge variant="outline">{countLabel}</Badge>
+          <div className="flex flex-col items-end gap-2">
+            {headerAction}
+            <Badge variant="outline">{countLabel}</Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3 pt-6">
@@ -266,16 +276,28 @@ export default function TenderResultPanels({
   selectedPackage,
   currentUserId = null,
   actorNameById = {},
+  referenceProfileTitleById = {},
   updatingTargetIds = [],
+  recomputingReferenceSuggestions = false,
   onUpdateRequirement,
   onUpdateMissingItem,
   onUpdateRiskFlag,
+  onUpdateReferenceSuggestion,
   onUpdateReviewTask,
+  onRecomputeReferenceSuggestions,
 }: TenderResultPanelsProps) {
   const documentNameById = new Map(selectedPackage.documents.map((document) => [document.id, document.fileName]));
+  const requirementById = new Map(selectedPackage.results.requirements.map((requirement) => [requirement.id, requirement]));
   const evidenceByTarget = new Map<string, TenderPackageDetails['resultEvidence']>();
   const workflowSummary = buildTenderWorkflowSummary(selectedPackage.results);
   const [filter, setFilter] = useState<TenderWorkflowFilter>('all');
+  const referenceRequirements = selectedPackage.results.requirements.filter((requirement) =>
+    isTenderReferenceRequirementCandidate({
+      title: requirement.title,
+      description: requirement.description,
+      sourceExcerpt: requirement.sourceExcerpt,
+    })
+  );
 
   selectedPackage.resultEvidence.forEach((item) => {
     const key = `${item.targetEntityType}:${item.targetEntityId}`;
@@ -588,13 +610,34 @@ export default function TenderResultPanels({
         <ResultCard
           icon={Sparkle}
           title="Referenssiehdotukset"
-          description="Referenssidomain on edelleen erillinen. Tässä vaiheessa se näyttää workflow-metadataa samalla mallilla kuin muutkin result-rivit, vaikka varsinaisia historiapohjaisia ehdotuksia tuotetaan vasta myöhemmin."
+          description="Deterministinen reference matching lukee baseline-analyysin referenssivaatimukset ja vertaa niitä organisaation omaan referenssikorpukseen ilman AI:ta. Jokainen ehdotus sidotaan vaatimukseen, perustellaan läpinäkyvästi ja käsitellään review workflow’n kautta."
           countLabel={formatWorkflowCountLabel(selectedPackage.results.referenceSuggestions.length, filteredReferenceSuggestions.length, 'ehdotus')}
-          emptyMessage={filter === 'all' ? 'Referenssiehdotukset jätetään tarkoituksella myöhempään vaiheeseen, jotta baseline pysyy sääntöpohjaisena eikä arvaile historiasta.' : filteredEmptyMessage}
+          emptyMessage={filter === 'all'
+            ? referenceRequirements.length > 0
+              ? 'Paketti sisältää referenssivaatimuksia, mutta nykyisestä org-korpuksesta ei löytynyt vielä riittävän vahvaa determinististä osumaa. Lisää referenssiprofiileja tai päivitä ehdotukset uudelleen.'
+              : 'Tähän pakettiin ei ole vielä tunnistettu sellaista referenssivaatimusta, jolle deterministinen org-korpusmatchaus voisi tuottaa ehdotuksia.'
+            : filteredEmptyMessage}
           hasItems={filteredReferenceSuggestions.length > 0}
+          headerAction={onRecomputeReferenceSuggestions ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={recomputingReferenceSuggestions}
+              onClick={() => {
+                void onRecomputeReferenceSuggestions();
+              }}
+            >
+              {recomputingReferenceSuggestions ? 'Päivitetään...' : 'Päivitä corpuksesta'}
+            </Button>
+          ) : undefined}
         >
           {filteredReferenceSuggestions.map((suggestion) => {
             const sourceMeta = TENDER_REFERENCE_SOURCE_META[suggestion.sourceType];
+            const relatedRequirement = suggestion.relatedRequirementId ? requirementById.get(suggestion.relatedRequirementId) : null;
+            const sourceProfileLabel = suggestion.sourceType === 'organization_reference_profile'
+              ? referenceProfileTitleById[suggestion.sourceReference ?? ''] ?? suggestion.title
+              : suggestion.sourceReference;
 
             return (
               <div key={suggestion.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
@@ -605,7 +648,8 @@ export default function TenderResultPanels({
                   <Badge variant="outline">Luottamus {formatTenderConfidence(suggestion.confidence)}</Badge>
                 </div>
                 <p className="mt-3 text-sm font-medium text-slate-950">{suggestion.title}</p>
-                {suggestion.sourceReference && <p className="mt-2 text-xs leading-5 text-muted-foreground">Lähde: {suggestion.sourceReference}</p>}
+                {relatedRequirement && <p className="mt-2 text-xs leading-5 text-muted-foreground">Liittyy vaatimukseen: {relatedRequirement.title}</p>}
+                {sourceProfileLabel && <p className="mt-2 text-xs leading-5 text-muted-foreground">Corpus-lähde: {sourceProfileLabel}</p>}
                 {suggestion.rationale && <p className="mt-2 text-sm leading-6 text-slate-700">{suggestion.rationale}</p>}
                 <ResultWorkflowControls
                   workflowKey={`reference_suggestion:${suggestion.id}`}
@@ -620,6 +664,41 @@ export default function TenderResultPanels({
                   currentUserId={currentUserId}
                   actorNameById={actorNameById}
                   updatingTargetIds={updatingTargetIds}
+                  actions={onUpdateReferenceSuggestion ? [
+                    {
+                      id: 'accept',
+                      label: 'Hyväksy ehdotus',
+                      variant: 'default',
+                      onClick: (note) => onUpdateReferenceSuggestion(suggestion.id, {
+                        reviewStatus: 'accepted',
+                        reviewNote: note || null,
+                        resolutionStatus: 'resolved',
+                        resolutionNote: note || null,
+                      }),
+                    },
+                    {
+                      id: 'dismiss',
+                      label: 'Hylkää ehdotus',
+                      variant: 'outline',
+                      onClick: (note) => onUpdateReferenceSuggestion(suggestion.id, {
+                        reviewStatus: 'dismissed',
+                        reviewNote: note || null,
+                        resolutionStatus: 'wont_fix',
+                        resolutionNote: note || null,
+                      }),
+                    },
+                    {
+                      id: 'needs-attention',
+                      label: 'Vaatii huomiota',
+                      variant: 'destructive',
+                      onClick: (note) => onUpdateReferenceSuggestion(suggestion.id, {
+                        reviewStatus: 'needs_attention',
+                        reviewNote: note || null,
+                        resolutionStatus: 'open',
+                        resolutionNote: note || null,
+                      }),
+                    },
+                  ] : []}
                 />
                 <ResultEvidencePreview evidence={getTargetEvidence('reference_suggestion', suggestion.id)} documentNameById={documentNameById} />
               </div>

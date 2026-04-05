@@ -1,7 +1,10 @@
 import { buildTenderAnalysisReadiness } from './tender-analysis';
 import {
+  createTenderReferenceProfileInputSchema,
   createTenderPackageInputSchema,
   tenderPackageDetailsSchema,
+  updateTenderReferenceProfileInputSchema,
+  type CreateTenderReferenceProfileInput,
   type CreateTenderPackageInput,
   type TenderAnalysisJob,
   type TenderDocument,
@@ -13,11 +16,13 @@ import {
   type TenderPackage,
   type TenderPackageDetails,
   type TenderPackageResults,
+  type TenderReferenceProfile,
   type TenderResultEvidence,
   type TenderReferenceSuggestion,
   type TenderRequirement,
   type TenderReviewTask,
   type TenderRiskFlag,
+  type UpdateTenderReferenceProfileInput,
 } from '../types/tender-intelligence';
 import type {
   TenderAnalysisJobRow,
@@ -28,6 +33,7 @@ import type {
   TenderGoNoGoAssessmentRow,
   TenderMissingItemRow,
   TenderPackageRow,
+  TenderReferenceProfileRow,
   TenderResultEvidenceRow,
   TenderReferenceSuggestionRow,
   TenderRequirementRow,
@@ -221,10 +227,31 @@ export function mapTenderRiskFlagRowToDomain(row: TenderRiskFlagRow): TenderRisk
   };
 }
 
+export function mapTenderReferenceProfileRowToDomain(row: TenderReferenceProfileRow): TenderReferenceProfile {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    title: row.title,
+    clientName: row.client_name,
+    projectType: row.project_type,
+    description: row.description,
+    location: row.location,
+    completedYear: row.completed_year,
+    contractValue: row.contract_value,
+    tags: row.tags,
+    sourceKind: row.source_kind,
+    sourceReference: row.source_reference,
+    createdByUserId: row.created_by_user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export function mapTenderReferenceSuggestionRowToDomain(row: TenderReferenceSuggestionRow): TenderReferenceSuggestion {
   return {
     id: row.id,
     packageId: row.tender_package_id,
+    relatedRequirementId: row.related_requirement_id,
     sourceType: row.source_type,
     sourceReference: row.source_reference,
     title: row.title,
@@ -418,4 +445,29 @@ export function mapCreateTenderPackageInputToInsert(input: CreateTenderPackageIn
     linked_project_id: parsedInput.linkedProjectId ?? null,
     linked_quote_id: parsedInput.linkedQuoteId ?? null,
   };
+}
+
+function mapTenderReferenceProfileInputToRow(input: CreateTenderReferenceProfileInput | UpdateTenderReferenceProfileInput) {
+  return {
+    title: input.title,
+    client_name: input.clientName ?? null,
+    project_type: input.projectType ?? null,
+    description: input.description ?? null,
+    location: input.location ?? null,
+    completed_year: input.completedYear ?? null,
+    contract_value: input.contractValue ?? null,
+    tags: input.tags ?? null,
+    source_kind: input.sourceKind,
+    source_reference: input.sourceReference ?? null,
+  };
+}
+
+export function mapCreateTenderReferenceProfileInputToInsert(input: CreateTenderReferenceProfileInput) {
+  const parsedInput = createTenderReferenceProfileInputSchema.parse(input);
+  return mapTenderReferenceProfileInputToRow(parsedInput);
+}
+
+export function mapUpdateTenderReferenceProfileInputToPatch(input: UpdateTenderReferenceProfileInput) {
+  const parsedInput = updateTenderReferenceProfileInputSchema.parse(input);
+  return mapTenderReferenceProfileInputToRow(parsedInput);
 }

@@ -11,6 +11,7 @@ import type {
   TenderMissingItemStatus,
   TenderMissingItemType,
   TenderPackageStatus,
+  TenderReferenceProfileSourceKind,
   TenderReferenceSuggestionSourceType,
   TenderResolutionStatus,
   TenderReviewStatus,
@@ -119,6 +120,16 @@ export const TENDER_REFERENCE_SOURCE_META: Record<TenderReferenceSuggestionSourc
   project: { label: 'Projekti', variant: 'outline' },
   'document-template': { label: 'Dokumenttipohja', variant: 'outline' },
   manual: { label: 'Manuaalinen', variant: 'secondary' },
+  organization_reference_profile: { label: 'Referenssikorpus', variant: 'default' },
+};
+
+export const TENDER_REFERENCE_PROFILE_SOURCE_KIND_META: Record<
+  TenderReferenceProfileSourceKind,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  manual: { label: 'Manuaalinen', variant: 'default' },
+  imported: { label: 'Tuotu', variant: 'outline' },
+  other: { label: 'Muu lähde', variant: 'secondary' },
 };
 
 export const TENDER_DRAFT_ARTIFACT_TYPE_META: Record<TenderDraftArtifactType, { label: string; variant: TenderBadgeVariant }> = {
@@ -224,6 +235,18 @@ export function formatTenderConfidence(value: number | null | undefined) {
   }
 
   return `${Math.round(value * 100)} %`;
+}
+
+export function formatTenderCurrency(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) {
+    return 'Ei arvoa';
+  }
+
+  return new Intl.NumberFormat('fi-FI', {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 export function getTenderTextPreview(value: string | null | undefined, maxLength = 160) {

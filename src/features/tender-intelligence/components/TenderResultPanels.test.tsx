@@ -76,6 +76,20 @@ function createPackageWithEvidence(): TenderPackageDetails {
         createdAt: '2026-04-05T08:06:00.000Z',
         updatedAt: '2026-04-05T08:06:00.000Z',
       },
+      {
+        id: '56565656-5656-4565-8565-565656565656',
+        packageId: '11111111-1111-4111-8111-111111111111',
+        sourceDocumentId: '33333333-3333-4333-8333-333333333333',
+        extractionId: '44444444-4444-4444-8444-444444444444',
+        chunkId: '66666666-6666-4666-8666-666666666666',
+        targetEntityType: 'reference_suggestion',
+        targetEntityId: '88888888-8888-4888-8888-111111111111',
+        excerptText: 'Tarjoajalla tulee olla vastaavia kylpyhuoneremonttikohteita Helsingin alueelta.',
+        locatorText: 'tarjouspyynto.txt / chunk 1',
+        confidence: 0.74,
+        createdAt: '2026-04-05T08:06:30.000Z',
+        updatedAt: '2026-04-05T08:06:30.000Z',
+      },
     ],
     analysisJobs: [],
     latestAnalysisJob: null,
@@ -120,7 +134,26 @@ function createPackageWithEvidence(): TenderPackageDetails {
       missingItems: [],
       riskFlags: [],
       goNoGoAssessment: null,
-      referenceSuggestions: [],
+      referenceSuggestions: [
+        {
+          id: '88888888-8888-4888-8888-111111111111',
+          packageId: '11111111-1111-4111-8111-111111111111',
+          relatedRequirementId: '77777777-7777-4777-8777-777777777777',
+          sourceType: 'organization_reference_profile',
+          sourceReference: 'profile-1',
+          title: 'Kylpyhuoneremontti / As Oy Aurinkopiha',
+          rationale: 'Avainsanat kylpyhuoneremontti löytyivät profiilin otsikko ja tagit. Sijainti "Helsinki" täsmää vaatimuksen sanamuotoon.',
+          confidence: 0.74,
+          reviewStatus: 'unreviewed',
+          reviewNote: null,
+          reviewedByUserId: null,
+          reviewedAt: null,
+          resolutionStatus: 'open',
+          resolutionNote: null,
+          resolvedByUserId: null,
+          resolvedAt: null,
+        },
+      ],
       draftArtifacts: [],
       reviewTasks: [],
     },
@@ -134,21 +167,28 @@ describe('TenderResultPanels', () => {
         selectedPackage={createPackageWithEvidence()}
         currentUserId="user-1"
         actorNameById={{ 'user-1': 'Copilot Test' }}
+        referenceProfileTitleById={{ 'profile-1': 'Kylpyhuoneremontti / As Oy Aurinkopiha' }}
         onUpdateRequirement={async () => undefined}
         onUpdateMissingItem={async () => undefined}
         onUpdateRiskFlag={async () => undefined}
+        onUpdateReferenceSuggestion={async () => undefined}
         onUpdateReviewTask={async () => undefined}
+        onRecomputeReferenceSuggestions={async () => undefined}
       />,
     );
 
     expect(markup).toContain('Review workflow');
     expect(markup).toContain('Evidence');
     expect(markup).toContain('Hyväksy');
+    expect(markup).toContain('Hyväksy ehdotus');
     expect(markup).toContain('Vaatii huomiota');
     expect(markup).toContain('Ratkaisu: Avoin');
     expect(markup).toContain('tarjouspyynto.txt');
     expect(markup).toContain('tarjouspyynto.txt / chunk 1');
     expect(markup).toContain('Tekninen toimituslaajuus kuvataan tässä extracted chunkissa.');
+    expect(markup).toContain('Referenssikorpus');
+    expect(markup).toContain('Liittyy vaatimukseen');
+    expect(markup).toContain('Päivitä corpuksesta');
     expect(markup).toContain('1 lähde');
   });
 });

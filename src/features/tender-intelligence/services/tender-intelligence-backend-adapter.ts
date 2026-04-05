@@ -1,4 +1,5 @@
 import type {
+  CreateTenderReferenceProfileInput,
   CreateTenderPackageInput,
   TenderAnalysisJob,
   TenderAnalysisJobStatus,
@@ -13,12 +14,14 @@ import type {
   TenderPackage,
   TenderPackageDetails,
   TenderPackageResults,
+  TenderReferenceProfile,
   TenderResultEvidence,
   TenderResultEvidenceTargetType,
   TenderReferenceSuggestion,
   TenderRequirement,
   TenderReviewTask,
   TenderRiskFlag,
+  UpdateTenderReferenceProfileInput,
   UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
 
@@ -35,13 +38,19 @@ export interface TenderIntelligenceBackendAdapter {
   listRequirementsForPackage(packageId: string): Promise<TenderRequirement[]>;
   listMissingItemsForPackage(packageId: string): Promise<TenderMissingItem[]>;
   listRiskFlagsForPackage(packageId: string): Promise<TenderRiskFlag[]>;
+  listReferenceProfiles(): Promise<TenderReferenceProfile[]>;
+  createReferenceProfile(input: CreateTenderReferenceProfileInput): Promise<TenderReferenceProfile>;
+  updateReferenceProfile(profileId: string, input: UpdateTenderReferenceProfileInput): Promise<TenderReferenceProfile>;
+  deleteReferenceProfile(profileId: string): Promise<void>;
   listReferenceSuggestionsForPackage(packageId: string): Promise<TenderReferenceSuggestion[]>;
   listDraftArtifactsForPackage(packageId: string): Promise<TenderDraftArtifact[]>;
   listReviewTasksForPackage(packageId: string): Promise<TenderReviewTask[]>;
   updateRequirementWorkflow(requirementId: string, input: UpdateTenderWorkflowInput): Promise<TenderRequirement>;
   updateMissingItemWorkflow(missingItemId: string, input: UpdateTenderWorkflowInput): Promise<TenderMissingItem>;
   updateRiskFlagWorkflow(riskFlagId: string, input: UpdateTenderWorkflowInput): Promise<TenderRiskFlag>;
+  updateReferenceSuggestionWorkflow(referenceSuggestionId: string, input: UpdateTenderWorkflowInput): Promise<TenderReferenceSuggestion>;
   updateReviewTaskWorkflow(reviewTaskId: string, input: UpdateTenderWorkflowInput): Promise<TenderReviewTask>;
+  recomputeReferenceSuggestionsForPackage(packageId: string): Promise<TenderReferenceSuggestion[]>;
   clearAnalysisResultsForPackage(packageId: string): Promise<void>;
   seedPlaceholderAnalysisResults(packageId: string): Promise<TenderPackageResults>;
   startPlaceholderAnalysis(packageId: string): Promise<TenderAnalysisJob>;

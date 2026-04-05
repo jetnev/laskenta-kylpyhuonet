@@ -16,6 +16,7 @@
  */
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
+import { buildTenderReferenceMatches } from '../../../src/features/tender-intelligence/lib/tender-reference-matching.ts';
 import {
   buildPlaceholderAnalysisSeedPlan,
   type PlaceholderEvidenceSourceSeed,
@@ -177,6 +178,15 @@ async function seedPlaceholderResults(
   }[],
 ) {
   const plan = buildPlaceholderAnalysisSeedPlan({ packageRow, documentRows, chunkRows });
+  const { data: referenceProfileRows, error: referenceProfileError } = await client
+    .from('tender_reference_profiles')
+    .select('id, title, client_name, project_type, description, location, completed_year, contract_value, tags')
+    .eq('organization_id', packageRow.organization_id)
+    .order('updated_at', { ascending: false });
+
+  if (referenceProfileError) {
+    throw referenceProfileError;
+  }
 
   await clearAnalysisResults(client, packageId);
 
@@ -250,6 +260,7 @@ async function seedPlaceholderResults(
     'tender_reference_suggestions',
     plan.referenceSuggestions.map((s) => ({
       tender_package_id: packageId,
+      related_requirement_id: null,
       source_type: s.sourceType,
       source_reference: s.sourceReference,
       title: s.title,
@@ -262,6 +273,57 @@ async function seedPlaceholderResults(
     targetEntityType: 'reference_suggestion',
     targetRows: (referenceSuggestionData ?? []) as { id: string }[],
     seeds: plan.referenceSuggestions,
+    evidenceSources: plan.evidenceSources,
+  });
+
+  const organizationReferenceSuggestions = buildTenderReferenceMatches({
+    requirements: plan.requirements.map((requirement, requirementIndex) => ({
+      id: requirementIndex,
+      title: requirement.title,
+      description: requirement.description,
+      sourceExcerpt: requirement.sourceExcerpt,
+      evidenceLinks: requirement.evidenceLinks,
+    })),
+    profiles: (referenceProfileRows ?? []).map((profile: any) => ({
+      id: profile.id,
+      title: profile.title,
+      clientName: profile.client_name,
+      projectType: profile.project_type,
+      description: profile.description,
+      location: profile.location,
+      completedYear: profile.completed_year,
+      contractValue: profile.contract_value,
+      tags: profile.tags,
+    })),
+  }).flatMap((suggestion) => {
+    const relatedRequirementId = reqIds[suggestion.requirementId] ?? null;
+
+    return relatedRequirementId
+      ? [{
+          ...suggestion,
+          relatedRequirementId,
+        }]
+      : [];
+  });
+
+  const organizationReferenceSuggestionData = await insertRowsIfAny(
+    client,
+    'tender_reference_suggestions',
+    organizationReferenceSuggestions.map((suggestion) => ({
+      tender_package_id: packageId,
+      related_requirement_id: suggestion.relatedRequirementId,
+      source_type: 'organization_reference_profile',
+      source_reference: suggestion.profileId,
+      title: suggestion.title,
+      rationale: suggestion.rationale,
+      confidence: suggestion.confidence,
+    })),
+  );
+  await insertTenderResultEvidenceRows(client, {
+    packageId,
+    targetEntityType: 'reference_suggestion',
+    targetRows: (organizationReferenceSuggestionData ?? []) as { id: string }[],
+    seeds: organizationReferenceSuggestions,
     evidenceSources: plan.evidenceSources,
   });
 

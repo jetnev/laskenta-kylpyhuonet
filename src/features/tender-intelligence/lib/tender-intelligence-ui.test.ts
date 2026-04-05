@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  formatTenderCurrency,
   formatTenderConfidence,
   getTenderTextPreview,
   TENDER_DOCUMENT_EXTRACTION_STATUS_META,
   TENDER_DOCUMENT_EXTRACTOR_TYPE_META,
   TENDER_DRAFT_ARTIFACT_STATUS_META,
   TENDER_MISSING_ITEM_STATUS_META,
+  TENDER_REFERENCE_PROFILE_SOURCE_KIND_META,
+  TENDER_REFERENCE_SOURCE_META,
   TENDER_RESOLUTION_STATUS_META,
   TENDER_REVIEW_STATUS_META,
   TENDER_REQUIREMENT_STATUS_META,
@@ -27,11 +30,14 @@ describe('Phase 6 Tender UI helpers', () => {
     expect(TENDER_DOCUMENT_EXTRACTION_STATUS_META.unsupported.label).toBe('Ei tuettu');
     expect(TENDER_DOCUMENT_EXTRACTOR_TYPE_META.xlsx.label).toBe('XLSX');
     expect(TENDER_SEVERITY_META.high.label).toBe('Korkea');
+    expect(TENDER_REFERENCE_SOURCE_META.organization_reference_profile.label).toBe('Referenssikorpus');
+    expect(TENDER_REFERENCE_PROFILE_SOURCE_KIND_META.imported.label).toBe('Tuotu');
   });
 
   it('formats confidence values and preview text for result cards', () => {
     expect(formatTenderConfidence(0.42)).toBe('42 %');
     expect(formatTenderConfidence(null)).toBe('Ei arviota');
+    expect(formatTenderCurrency(125000)).toContain('125');
     expect(getTenderTextPreview('  Tämä on\n\nplaceholder-rivin pidempi esimerkkiteksti.  ', 20)).toBe('Tämä on placehold...');
   });
 });

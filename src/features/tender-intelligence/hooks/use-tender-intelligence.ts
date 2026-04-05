@@ -4,12 +4,15 @@ import { useAuth } from '@/hooks/use-auth';
 
 import { getTenderIntelligenceRepository } from '../services/tender-intelligence-repository';
 import type {
+  CreateTenderReferenceProfileInput,
   CreateTenderPackageInput,
   TenderAnalysisJob,
   TenderDocument,
   TenderDocumentExtraction,
   TenderPackage,
   TenderPackageDetails,
+  TenderReferenceProfile,
+  UpdateTenderReferenceProfileInput,
   UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
 
@@ -31,17 +34,21 @@ export function useTenderIntelligence() {
   const { user, users } = useAuth();
   const repository = useMemo(() => getTenderIntelligenceRepository(), []);
   const [packages, setPackages] = useState<TenderPackage[]>([]);
+  const [referenceProfiles, setReferenceProfiles] = useState<TenderReferenceProfile[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<TenderPackageDetails | null>(null);
   const [selectedPackageMissing, setSelectedPackageMissing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [referenceProfileSubmittingId, setReferenceProfileSubmittingId] = useState<string | 'new' | null>(null);
+  const [deletingReferenceProfileIds, setDeletingReferenceProfileIds] = useState<string[]>([]);
   const [startingAnalysisPackageId, setStartingAnalysisPackageId] = useState<string | null>(null);
   const [extractingPackageId, setExtractingPackageId] = useState<string | null>(null);
   const [extractingDocumentIds, setExtractingDocumentIds] = useState<string[]>([]);
   const [deletingDocumentIds, setDeletingDocumentIds] = useState<string[]>([]);
   const [workflowUpdatingTargetIds, setWorkflowUpdatingTargetIds] = useState<string[]>([]);
+  const [recomputingReferenceSuggestionPackageId, setRecomputingReferenceSuggestionPackageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const hasOrganizationContext = Boolean(user?.organizationId);
   const actorNameById = useMemo(() => {
@@ -71,6 +78,12 @@ export function useTenderIntelligence() {
     return nextPackages;
   }, [repository]);
 
+  const loadReferenceProfiles = useCallback(async () => {
+    const nextReferenceProfiles = await repository.listReferenceProfiles();
+    setReferenceProfiles(nextReferenceProfiles);
+    return nextReferenceProfiles;
+  }, [repository]);
+
   const loadSelectedPackage = useCallback(
     async (packageId: string | null) => {
       if (!hasOrganizationContext) {
@@ -98,6 +111,7 @@ export function useTenderIntelligence() {
 
     if (!hasOrganizationContext) {
       setPackages([]);
+      setReferenceProfiles([]);
       setSelectedPackage(null);
       setSelectedPackageId(null);
       setSelectedPackageMissing(false);
@@ -114,7 +128,7 @@ export function useTenderIntelligence() {
           setLoading(true);
         }
 
-        const nextPackages = await loadPackages();
+        const [nextPackages] = await Promise.all([loadPackages(), loadReferenceProfiles()]);
 
         if (active) {
           const nextSelectedPackageId = selectedPackageId && nextPackages.some((item) => item.id === selectedPackageId)
@@ -147,7 +161,7 @@ export function useTenderIntelligence() {
       active = false;
       unsubscribe();
     };
-  }, [hasOrganizationContext, loadPackages, loadSelectedPackage, repository, selectedPackageId]);
+  }, [hasOrganizationContext, loadPackages, loadReferenceProfiles, loadSelectedPackage, repository, selectedPackageId]);
 
   useEffect(() => {
     let active = true;
@@ -388,6 +402,37 @@ export function useTenderIntelligence() {
     [loadSelectedPackage],
   );
 
+  const refreshReferenceSuggestionsForPackage = useCallback(
+    async (packageId: string) => {
+      setRecomputingReferenceSuggestionPackageId(packageId);
+
+      try {
+        const suggestions = await repository.recomputeReferenceSuggestionsForPackage(packageId);
+        await loadSelectedPackage(packageId);
+        setError(null);
+        return suggestions;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setRecomputingReferenceSuggestionPackageId((current) => (current === packageId ? null : current));
+      }
+    },
+    [loadSelectedPackage, repository],
+  );
+
+  const refreshSelectedPackageReferenceSuggestions = useCallback(
+    async () => {
+      if (!selectedPackageId) {
+        return [];
+      }
+
+      return refreshReferenceSuggestionsForPackage(selectedPackageId);
+    },
+    [refreshReferenceSuggestionsForPackage, selectedPackageId],
+  );
+
   const updateRequirementWorkflow = useCallback(
     async (requirementId: string, input: UpdateTenderWorkflowInput) =>
       runWorkflowUpdate(`requirement:${requirementId}`, () => repository.updateRequirementWorkflow(requirementId, input)),
@@ -406,35 +451,111 @@ export function useTenderIntelligence() {
     [repository, runWorkflowUpdate],
   );
 
+  const updateReferenceSuggestionWorkflow = useCallback(
+    async (referenceSuggestionId: string, input: UpdateTenderWorkflowInput) =>
+      runWorkflowUpdate(
+        `reference_suggestion:${referenceSuggestionId}`,
+        () => repository.updateReferenceSuggestionWorkflow(referenceSuggestionId, input),
+      ),
+    [repository, runWorkflowUpdate],
+  );
+
   const updateReviewTaskWorkflow = useCallback(
     async (reviewTaskId: string, input: UpdateTenderWorkflowInput) =>
       runWorkflowUpdate(`review_task:${reviewTaskId}`, () => repository.updateReviewTaskWorkflow(reviewTaskId, input)),
     [repository, runWorkflowUpdate],
   );
 
+  const createReferenceProfile = useCallback(
+    async (input: CreateTenderReferenceProfileInput) => {
+      setReferenceProfileSubmittingId('new');
+
+      try {
+        const created = await repository.createReferenceProfile(input);
+        await loadReferenceProfiles();
+        await refreshSelectedPackageReferenceSuggestions();
+        setError(null);
+        return created;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setReferenceProfileSubmittingId(null);
+      }
+    },
+    [loadReferenceProfiles, refreshSelectedPackageReferenceSuggestions, repository],
+  );
+
+  const updateReferenceProfile = useCallback(
+    async (profileId: string, input: UpdateTenderReferenceProfileInput) => {
+      setReferenceProfileSubmittingId(profileId);
+
+      try {
+        const updated = await repository.updateReferenceProfile(profileId, input);
+        await loadReferenceProfiles();
+        await refreshSelectedPackageReferenceSuggestions();
+        setError(null);
+        return updated;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setReferenceProfileSubmittingId((current) => (current === profileId ? null : current));
+      }
+    },
+    [loadReferenceProfiles, refreshSelectedPackageReferenceSuggestions, repository],
+  );
+
+  const deleteReferenceProfile = useCallback(
+    async (profileId: string) => {
+      setDeletingReferenceProfileIds((current) => (current.includes(profileId) ? current : [...current, profileId]));
+
+      try {
+        await repository.deleteReferenceProfile(profileId);
+        await loadReferenceProfiles();
+        await refreshSelectedPackageReferenceSuggestions();
+        setError(null);
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setDeletingReferenceProfileIds((current) => current.filter((item) => item !== profileId));
+      }
+    },
+    [loadReferenceProfiles, refreshSelectedPackageReferenceSuggestions, repository],
+  );
+
   const overview = useMemo(
     () => ({
       packages: packages.length,
+      referenceProfiles: referenceProfiles.length,
       openReviewTasks: packages.reduce((sum, item) => sum + item.summary.reviewTaskCount, 0),
       openRisks: packages.reduce((sum, item) => sum + item.summary.riskCount, 0),
       documents: packages.reduce((sum, item) => sum + item.summary.documentCount, 0),
     }),
-    [packages]
+    [packages, referenceProfiles]
   );
 
   return {
     packages,
+    referenceProfiles,
     selectedPackage,
     selectedPackageId,
     selectedPackageMissing,
     loading,
     creating,
     uploading,
+    referenceProfileSubmittingId,
+    deletingReferenceProfileIds,
     startingAnalysisPackageId,
     extractingPackageId,
     extractingDocumentIds,
     deletingDocumentIds,
     workflowUpdatingTargetIds,
+    recomputingReferenceSuggestionPackageId,
     error,
     overview,
     canCreate: hasOrganizationContext,
@@ -448,9 +569,14 @@ export function useTenderIntelligence() {
     startPackageExtraction,
     uploadDocuments,
     deleteDocument,
+    createReferenceProfile,
+    updateReferenceProfile,
+    deleteReferenceProfile,
+    recomputeReferenceSuggestions: refreshReferenceSuggestionsForPackage,
     updateRequirementWorkflow,
     updateMissingItemWorkflow,
     updateRiskFlagWorkflow,
+    updateReferenceSuggestionWorkflow,
     updateReviewTaskWorkflow,
   };
 }

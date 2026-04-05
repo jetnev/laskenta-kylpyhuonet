@@ -6,15 +6,19 @@ import type { TenderIntelligenceBackendAdapter } from './tender-intelligence-bac
 import { buildTenderAnalysisReadiness, buildTenderExtractionCoverage } from '../lib/tender-analysis';
 import {
   type CreateTenderPackageInput,
+  type CreateTenderReferenceProfileInput,
   type TenderAnalysisJobStatus,
   type TenderAnalysisJobType,
   type TenderAnalysisReadiness,
   type TenderExtractionCoverage,
+  type TenderReferenceProfile,
   type TenderResultEvidence,
   type TenderResultEvidenceTargetType,
+  type UpdateTenderReferenceProfileInput,
   type UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
 import { buildTenderWorkflowMetadataUpdate, syncTenderReviewTaskStatus } from '../lib/tender-review-workflow';
+import { buildTenderReferenceMatches } from '../lib/tender-reference-matching';
 import {
   buildTenderDocumentStoragePath,
   TENDER_INTELLIGENCE_STORAGE_BUCKET,
@@ -37,6 +41,7 @@ import {
 } from '../types/tender-document-extraction-contract';
 import {
   buildTenderPackageDetails,
+  mapCreateTenderReferenceProfileInputToInsert,
   mapTenderAnalysisJobRowToDomain,
   mapCreateTenderPackageInputToInsert,
   mapTenderDocumentChunkRowToDomain,
@@ -46,11 +51,13 @@ import {
   mapTenderMissingItemRowToDomain,
   mapTenderPackageResultsRowsToDomain,
   mapTenderPackageRowToDomain,
+  mapTenderReferenceProfileRowToDomain,
   mapTenderResultEvidenceRowToDomain,
   mapTenderReferenceSuggestionRowToDomain,
   mapTenderRequirementRowToDomain,
   mapTenderReviewTaskRowToDomain,
   mapTenderRiskFlagRowToDomain,
+  mapUpdateTenderReferenceProfileInputToPatch,
 } from '../lib/tender-intelligence-mappers';
 import {
   tenderAnalysisJobRowSchema,
@@ -66,7 +73,10 @@ import {
   tenderMissingItemRowsSchema,
   tenderPackageRowSchema,
   tenderPackageRowsSchema,
+  tenderReferenceProfileRowSchema,
+  tenderReferenceProfileRowsSchema,
   tenderResultEvidenceRowsSchema,
+  tenderReferenceSuggestionRowSchema,
   tenderReferenceSuggestionRowsSchema,
   tenderRequirementRowsSchema,
   tenderReviewTaskRowsSchema,
@@ -209,6 +219,7 @@ async function fetchPackageResultRowById<Row>(options: {
     | 'tender_requirements'
     | 'tender_missing_items'
     | 'tender_risk_flags'
+    | 'tender_reference_suggestions'
     | 'tender_review_tasks';
   rowId: string;
   schema: { parse(data: unknown): Row };
@@ -222,6 +233,35 @@ async function fetchPackageResultRowById<Row>(options: {
   }
 
   return data ? options.schema.parse(data) : null;
+}
+
+async function fetchReferenceProfileRowById(profileId: string) {
+  const client = requireConfiguredSupabase();
+  const { data, error } = await client.from('tender_reference_profiles').select('*').eq('id', profileId).maybeSingle();
+
+  if (error) {
+    throw toRepositoryError(error, 'Referenssiprofiilia ei voitu ladata.');
+  }
+
+  return data ? tenderReferenceProfileRowSchema.parse(data) : null;
+}
+
+async function fetchTenderReferenceProfileRowsForOrganization(options: {
+  client?: ReturnType<typeof requireSupabase>;
+  organizationId: string;
+}) {
+  const client = options.client ?? requireConfiguredSupabase();
+  const { data, error } = await client
+    .from('tender_reference_profiles')
+    .select('*')
+    .eq('organization_id', options.organizationId)
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    throw toRepositoryError(error, 'Organisaation referenssikorpusta ei voitu ladata.');
+  }
+
+  return tenderReferenceProfileRowsSchema.parse(data ?? []);
 }
 
 async function getAuthenticatedActorUserId() {
@@ -281,6 +321,115 @@ function mapTenderWorkflowUpdateToRowPatch(update: ReturnType<typeof buildTender
   }
 
   return patch;
+}
+
+function buildOrganizationReferenceProfileMatches<RequirementId>(options: {
+  requirements: Array<{
+    id: RequirementId;
+    title: string;
+    description: string | null;
+    sourceExcerpt: string | null;
+    evidenceLinks?: PlaceholderResultEvidenceLinkSeed[];
+  }>;
+  profiles: Array<{
+    id: string;
+    title: string;
+    client_name: string | null;
+    project_type: string | null;
+    description: string | null;
+    location: string | null;
+    completed_year: number | null;
+    contract_value?: number | null;
+    tags: string[] | null;
+  }>;
+}) {
+  return buildTenderReferenceMatches({
+    requirements: options.requirements.map((requirement) => ({
+      id: requirement.id,
+      title: requirement.title,
+      description: requirement.description,
+      sourceExcerpt: requirement.sourceExcerpt,
+      evidenceLinks: requirement.evidenceLinks,
+    })),
+    profiles: options.profiles.map((profile) => ({
+      id: profile.id,
+      title: profile.title,
+      clientName: profile.client_name,
+      projectType: profile.project_type,
+      description: profile.description,
+      location: profile.location,
+      completedYear: profile.completed_year,
+      contractValue: profile.contract_value ?? null,
+      tags: profile.tags,
+    })),
+  });
+}
+
+async function deleteEvidenceRowsForTargets(options: {
+  client: ReturnType<typeof requireSupabase>;
+  packageId: string;
+  targetEntityType: TenderResultEvidenceTargetType;
+  targetEntityIds: string[];
+  fallbackMessage: string;
+}) {
+  if (options.targetEntityIds.length < 1) {
+    return;
+  }
+
+  const { error } = await options.client
+    .from('tender_result_evidence')
+    .delete()
+    .eq('tender_package_id', options.packageId)
+    .eq('target_entity_type', options.targetEntityType)
+    .in('target_entity_id', options.targetEntityIds);
+
+  if (error) {
+    throw toRepositoryError(error, options.fallbackMessage);
+  }
+}
+
+async function insertReferenceSuggestionEvidenceFromRequirements(options: {
+  client: ReturnType<typeof requireSupabase>;
+  packageId: string;
+  suggestionRows: Array<{ id: string; related_requirement_id: string | null; confidence: number | null }>;
+  requirementEvidenceRows: Array<{ target_entity_id: string; source_document_id: string; extraction_id: string; chunk_id: string; excerpt_text: string; locator_text: string | null; confidence: number | null }>;
+  fallbackMessage: string;
+}) {
+  const requirementEvidenceById = new Map<string, typeof options.requirementEvidenceRows>();
+
+  options.requirementEvidenceRows.forEach((row) => {
+    const current = requirementEvidenceById.get(row.target_entity_id) ?? [];
+    current.push(row);
+    requirementEvidenceById.set(row.target_entity_id, current);
+  });
+
+  const payload = options.suggestionRows.flatMap((suggestionRow) => {
+    if (!suggestionRow.related_requirement_id) {
+      return [];
+    }
+
+    return (requirementEvidenceById.get(suggestionRow.related_requirement_id) ?? []).map((row) => ({
+      tender_package_id: options.packageId,
+      source_document_id: row.source_document_id,
+      extraction_id: row.extraction_id,
+      chunk_id: row.chunk_id,
+      target_entity_type: 'reference_suggestion' as const,
+      target_entity_id: suggestionRow.id,
+      excerpt_text: row.excerpt_text,
+      locator_text: row.locator_text,
+      confidence: row.confidence ?? suggestionRow.confidence ?? null,
+    }));
+  });
+
+  if (payload.length < 1) {
+    return;
+  }
+
+  const { error } = await options.client.from('tender_result_evidence').insert(payload);
+
+  if (error) {
+    throw toRepositoryError(error, options.fallbackMessage);
+  }
 }
 
 async function fetchTenderDocumentExtractionRowsForPackage(packageId: string) {
@@ -532,7 +681,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     resolved_at: string | null;
     assigned_to_user_id?: string | null;
   }, DomainEntity>(options: {
-    tableName: 'tender_requirements' | 'tender_missing_items' | 'tender_risk_flags' | 'tender_review_tasks';
+    tableName: 'tender_requirements' | 'tender_missing_items' | 'tender_risk_flags' | 'tender_reference_suggestions' | 'tender_review_tasks';
     rowId: string;
     input: UpdateTenderWorkflowInput;
     schema: { parse(data: unknown): Row };
@@ -653,6 +802,10 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     const packageRow = await assertTenderPackageAccess(packageId);
     const documentRows = await fetchTenderDocumentRowsForPackage(packageId);
     const chunkRows = await fetchTenderDocumentChunkRowsForPackage(packageId);
+    const referenceProfileRows = await fetchTenderReferenceProfileRowsForOrganization({
+      client,
+      organizationId: packageRow.organization_id,
+    });
 
     if (documentRows.length === 0) {
       throw new Error('Analyysiä ei voi kirjoittaa ilman paketin dokumentteja.');
@@ -747,6 +900,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         tableName: 'tender_reference_suggestions',
         rows: plan.referenceSuggestions.map((suggestion) => ({
           tender_package_id: packageId,
+          related_requirement_id: null,
           source_type: suggestion.sourceType,
           source_reference: suggestion.sourceReference,
           title: suggestion.title,
@@ -765,6 +919,53 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         evidenceSources: plan.evidenceSources,
         fallbackMessage: 'Referenssien evidence-rivejä ei voitu tallentaa.',
       });
+
+      const organizationReferenceSuggestionSeeds = buildOrganizationReferenceProfileMatches({
+        requirements: plan.requirements.map((requirement, requirementIndex) => ({
+          id: requirementIndex,
+          title: requirement.title,
+          description: requirement.description,
+          sourceExcerpt: requirement.sourceExcerpt,
+          evidenceLinks: requirement.evidenceLinks,
+        })),
+        profiles: referenceProfileRows,
+      }).flatMap((match) => {
+        const relatedRequirementId = requirementRows[match.requirementId]?.id ?? null;
+
+        return relatedRequirementId
+          ? [{
+              ...match,
+              relatedRequirementId,
+            }]
+          : [];
+      });
+
+      const organizationReferenceSuggestionRows = await insertPackageRowsIfAny({
+        client,
+        tableName: 'tender_reference_suggestions',
+        rows: organizationReferenceSuggestionSeeds.map((suggestion) => ({
+          tender_package_id: packageId,
+          related_requirement_id: suggestion.relatedRequirementId,
+          source_type: 'organization_reference_profile',
+          source_reference: suggestion.profileId,
+          title: suggestion.title,
+          rationale: suggestion.rationale,
+          confidence: suggestion.confidence,
+        })),
+        schema: tenderReferenceSuggestionRowsSchema,
+        fallbackMessage: 'Organisaation referenssiehdotuksia ei voitu tallentaa.',
+      });
+      await insertTenderResultEvidenceRows({
+        client,
+        packageId,
+        targetEntityType: 'reference_suggestion',
+        targetRows: organizationReferenceSuggestionRows,
+        seeds: organizationReferenceSuggestionSeeds,
+        evidenceSources: plan.evidenceSources,
+        fallbackMessage: 'Organisaation referenssiehdotusten evidence-rivejä ei voitu tallentaa.',
+      });
+
+      const allReferenceSuggestionRows = [...referenceSuggestionRows, ...organizationReferenceSuggestionRows];
 
       const draftArtifactRows = await insertPackageRowsIfAny({
         client,
@@ -836,7 +1037,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         requirementRows,
         missingItemRows,
         riskFlagRows,
-        referenceSuggestionRows,
+        referenceSuggestionRows: allReferenceSuggestionRows,
         draftArtifactRows,
         reviewTaskRows,
         goNoGoAssessmentRow,
@@ -1135,6 +1336,87 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     }
   }
 
+  async listReferenceProfiles() {
+    try {
+      const client = requireConfiguredSupabase();
+      const { data, error } = await client.from('tender_reference_profiles').select('*').order('updated_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      return tenderReferenceProfileRowsSchema.parse(data ?? []).map(mapTenderReferenceProfileRowToDomain);
+    } catch (error) {
+      throw toRepositoryError(error, 'Organisaation referenssikorpusta ei voitu ladata.');
+    }
+  }
+
+  async createReferenceProfile(input: CreateTenderReferenceProfileInput) {
+    try {
+      const client = requireConfiguredSupabase();
+      const payload = mapCreateTenderReferenceProfileInputToInsert(input);
+      const { data, error } = await client.from('tender_reference_profiles').insert(payload).select('*').single();
+
+      if (error) {
+        throw error;
+      }
+
+      this.emit();
+      return mapTenderReferenceProfileRowToDomain(tenderReferenceProfileRowSchema.parse(data));
+    } catch (error) {
+      throw toRepositoryError(error, 'Referenssiprofiilin luonti epäonnistui.');
+    }
+  }
+
+  async updateReferenceProfile(profileId: string, input: UpdateTenderReferenceProfileInput) {
+    try {
+      const existingRow = await fetchReferenceProfileRowById(profileId);
+
+      if (!existingRow) {
+        throw new Error('Referenssiprofiilia ei löytynyt tai se on jo poistettu.');
+      }
+
+      const client = requireConfiguredSupabase();
+      const patch = mapUpdateTenderReferenceProfileInputToPatch(input);
+      const { data, error } = await client
+        .from('tender_reference_profiles')
+        .update(patch)
+        .eq('id', profileId)
+        .select('*')
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      this.emit();
+      return mapTenderReferenceProfileRowToDomain(tenderReferenceProfileRowSchema.parse(data));
+    } catch (error) {
+      throw toRepositoryError(error, 'Referenssiprofiilia ei voitu päivittää.');
+    }
+  }
+
+  async deleteReferenceProfile(profileId: string) {
+    try {
+      const existingRow = await fetchReferenceProfileRowById(profileId);
+
+      if (!existingRow) {
+        throw new Error('Referenssiprofiilia ei löytynyt tai se on jo poistettu.');
+      }
+
+      const client = requireConfiguredSupabase();
+      const { error } = await client.from('tender_reference_profiles').delete().eq('id', profileId);
+
+      if (error) {
+        throw error;
+      }
+
+      this.emit();
+    } catch (error) {
+      throw toRepositoryError(error, 'Referenssiprofiilia ei voitu poistaa.');
+    }
+  }
+
   async listReferenceSuggestionsForPackage(packageId: string) {
     try {
       await assertTenderPackageAccess(packageId);
@@ -1222,6 +1504,18 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     });
   }
 
+  async updateReferenceSuggestionWorkflow(referenceSuggestionId: string, input: UpdateTenderWorkflowInput) {
+    return this.updateWorkflowRow({
+      tableName: 'tender_reference_suggestions',
+      rowId: referenceSuggestionId,
+      input,
+      schema: tenderReferenceSuggestionRowSchema,
+      mapRow: mapTenderReferenceSuggestionRowToDomain,
+      notFoundMessage: 'Referenssiehdotusta ei löytynyt tai se on jo poistettu.',
+      fallbackMessage: 'Referenssiehdotuksen katselmointia ei voitu päivittää.',
+    });
+  }
+
   async updateReviewTaskWorkflow(reviewTaskId: string, input: UpdateTenderWorkflowInput) {
     return this.updateWorkflowRow({
       tableName: 'tender_review_tasks',
@@ -1233,6 +1527,165 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       fallbackMessage: 'Tarkistustehtävän workflow-tilaa ei voitu päivittää.',
       syncLegacyReviewTaskStatus: true,
     });
+  }
+
+  async recomputeReferenceSuggestionsForPackage(packageId: string) {
+    try {
+      const client = requireConfiguredSupabase();
+      const packageRow = await assertTenderPackageAccess(packageId);
+      const [requirementRows, referenceProfileRows, existingSuggestionRows, resultEvidenceRows] = await Promise.all([
+        fetchPackageRows({
+          tableName: 'tender_requirements',
+          packageId,
+          schema: tenderRequirementRowsSchema,
+          fallbackMessage: 'Tarjouspyyntöpaketin vaatimuksia ei voitu ladata referenssimatchausta varten.',
+          orderByColumn: 'updated_at',
+        }),
+        fetchTenderReferenceProfileRowsForOrganization({ client, organizationId: packageRow.organization_id }),
+        fetchPackageRows({
+          tableName: 'tender_reference_suggestions',
+          packageId,
+          schema: tenderReferenceSuggestionRowsSchema,
+          fallbackMessage: 'Tarjouspyyntöpaketin referenssiehdotuksia ei voitu ladata referenssimatchausta varten.',
+          orderByColumn: 'updated_at',
+        }),
+        fetchTenderResultEvidenceRowsForPackage(packageId),
+      ]);
+
+      const organizationMatches = buildOrganizationReferenceProfileMatches({
+        requirements: requirementRows.map((requirement) => ({
+          id: requirement.id,
+          title: requirement.title,
+          description: requirement.description,
+          sourceExcerpt: requirement.source_excerpt,
+        })),
+        profiles: referenceProfileRows,
+      });
+      const existingOrganizationSuggestionRows = existingSuggestionRows.filter(
+        (row) => row.source_type === 'organization_reference_profile',
+      );
+      const existingByKey = new Map(
+        existingOrganizationSuggestionRows.map((row) => [
+          `${row.related_requirement_id ?? ''}:${row.source_reference ?? ''}`,
+          row,
+        ]),
+      );
+      const nextKeys = new Set(
+        organizationMatches.map((match) => `${match.requirementId}:${match.profileId}`),
+      );
+
+      await deleteEvidenceRowsForTargets({
+        client,
+        packageId,
+        targetEntityType: 'reference_suggestion',
+        targetEntityIds: existingOrganizationSuggestionRows.map((row) => row.id),
+        fallbackMessage: 'Aiemman referenssimatchauksen evidence-rivejä ei voitu tyhjentää.',
+      });
+
+      const staleRows = existingOrganizationSuggestionRows.filter(
+        (row) => !nextKeys.has(`${row.related_requirement_id ?? ''}:${row.source_reference ?? ''}`),
+      );
+
+      if (staleRows.length > 0) {
+        const { error: deleteError } = await client
+          .from('tender_reference_suggestions')
+          .delete()
+          .in('id', staleRows.map((row) => row.id));
+
+        if (deleteError) {
+          throw deleteError;
+        }
+      }
+
+      for (const match of organizationMatches) {
+        const compositeKey = `${match.requirementId}:${match.profileId}`;
+        const existingRow = existingByKey.get(compositeKey);
+
+        if (!existingRow) {
+          continue;
+        }
+
+        const patch: Record<string, unknown> = {};
+
+        if (existingRow.title !== match.title) {
+          patch.title = match.title;
+        }
+
+        if ((existingRow.rationale ?? null) !== match.rationale) {
+          patch.rationale = match.rationale;
+        }
+
+        if ((existingRow.confidence ?? null) !== match.confidence) {
+          patch.confidence = match.confidence;
+        }
+
+        if (Object.keys(patch).length < 1) {
+          continue;
+        }
+
+        const { error: updateError } = await client
+          .from('tender_reference_suggestions')
+          .update(patch)
+          .eq('id', existingRow.id);
+
+        if (updateError) {
+          throw updateError;
+        }
+      }
+
+      const newMatches = organizationMatches.filter(
+        (match) => !existingByKey.has(`${match.requirementId}:${match.profileId}`),
+      );
+
+      await insertPackageRowsIfAny({
+        client,
+        tableName: 'tender_reference_suggestions',
+        rows: newMatches.map((match) => ({
+          tender_package_id: packageId,
+          related_requirement_id: match.requirementId,
+          source_type: 'organization_reference_profile',
+          source_reference: match.profileId,
+          title: match.title,
+          rationale: match.rationale,
+          confidence: match.confidence,
+        })),
+        schema: tenderReferenceSuggestionRowsSchema,
+        fallbackMessage: 'Deterministisiä referenssiehdotuksia ei voitu tallentaa paketille.',
+      });
+
+      const { data: refreshedData, error: refreshedError } = await client
+        .from('tender_reference_suggestions')
+        .select('*')
+        .eq('tender_package_id', packageId)
+        .eq('source_type', 'organization_reference_profile')
+        .order('updated_at', { ascending: false });
+
+      if (refreshedError) {
+        throw refreshedError;
+      }
+
+      const refreshedRows = tenderReferenceSuggestionRowsSchema.parse(refreshedData ?? []);
+      const requirementEvidenceRows = resultEvidenceRows.filter(
+        (row) => row.target_entity_type === 'requirement',
+      );
+
+      await insertReferenceSuggestionEvidenceFromRequirements({
+        client,
+        packageId,
+        suggestionRows: refreshedRows.map((row) => ({
+          id: row.id,
+          related_requirement_id: row.related_requirement_id,
+          confidence: row.confidence,
+        })),
+        requirementEvidenceRows,
+        fallbackMessage: 'Referenssiehdotusten evidence-rivejä ei voitu päivittää.',
+      });
+
+      this.emit();
+      return this.listReferenceSuggestionsForPackage(packageId);
+    } catch (error) {
+      throw toRepositoryError(error, 'Organisaation referenssikorpuksen ehdotuksia ei voitu päivittää paketille.');
+    }
   }
 
   async clearAnalysisResultsForPackage(packageId: string) {

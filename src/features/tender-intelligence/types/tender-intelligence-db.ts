@@ -107,6 +107,7 @@ export const tenderResultEvidenceRowSchema = z.object({
 
 const tenderReviewStatusRowSchema = z.enum(['unreviewed', 'accepted', 'dismissed', 'needs_attention']);
 const tenderResolutionStatusRowSchema = z.enum(['open', 'in_progress', 'resolved', 'wont_fix']);
+const tenderReferenceProfileSourceKindRowSchema = z.enum(['manual', 'imported', 'other']);
 
 const tenderWorkflowRowSchema = z.object({
   review_status: tenderReviewStatusRowSchema,
@@ -176,11 +177,30 @@ export const tenderRiskFlagRowSchema = z.object({
   updated_at: z.string(),
 }).merge(tenderAssignableWorkflowRowSchema);
 
+export const tenderReferenceProfileRowSchema = z.object({
+  id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  title: z.string(),
+  client_name: z.string().nullable(),
+  project_type: z.string().nullable(),
+  description: z.string().nullable(),
+  location: z.string().nullable(),
+  completed_year: z.number().int().nullable(),
+  contract_value: z.number().nullable(),
+  tags: z.array(z.string()).nullable(),
+  source_kind: tenderReferenceProfileSourceKindRowSchema,
+  source_reference: z.string().nullable(),
+  created_by_user_id: z.string().uuid().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
 export const tenderReferenceSuggestionRowSchema = z.object({
   id: z.string().uuid(),
   tender_package_id: z.string().uuid(),
   organization_id: z.string().uuid(),
-  source_type: z.enum(['quote', 'project', 'document-template', 'manual']),
+  related_requirement_id: z.string().uuid().nullable(),
+  source_type: z.enum(['quote', 'project', 'document-template', 'manual', 'organization_reference_profile']),
   source_reference: z.string().nullable(),
   title: z.string(),
   rationale: z.string().nullable(),
@@ -224,6 +244,7 @@ export const tenderResultEvidenceRowsSchema = z.array(tenderResultEvidenceRowSch
 export const tenderRequirementRowsSchema = z.array(tenderRequirementRowSchema);
 export const tenderMissingItemRowsSchema = z.array(tenderMissingItemRowSchema);
 export const tenderRiskFlagRowsSchema = z.array(tenderRiskFlagRowSchema);
+export const tenderReferenceProfileRowsSchema = z.array(tenderReferenceProfileRowSchema);
 export const tenderReferenceSuggestionRowsSchema = z.array(tenderReferenceSuggestionRowSchema);
 export const tenderDraftArtifactRowsSchema = z.array(tenderDraftArtifactRowSchema);
 export const tenderReviewTaskRowsSchema = z.array(tenderReviewTaskRowSchema);
@@ -238,6 +259,7 @@ export type TenderGoNoGoAssessmentRow = z.infer<typeof tenderGoNoGoAssessmentRow
 export type TenderRequirementRow = z.infer<typeof tenderRequirementRowSchema>;
 export type TenderMissingItemRow = z.infer<typeof tenderMissingItemRowSchema>;
 export type TenderRiskFlagRow = z.infer<typeof tenderRiskFlagRowSchema>;
+export type TenderReferenceProfileRow = z.infer<typeof tenderReferenceProfileRowSchema>;
 export type TenderReferenceSuggestionRow = z.infer<typeof tenderReferenceSuggestionRowSchema>;
 export type TenderDraftArtifactRow = z.infer<typeof tenderDraftArtifactRowSchema>;
 export type TenderReviewTaskRow = z.infer<typeof tenderReviewTaskRowSchema>;

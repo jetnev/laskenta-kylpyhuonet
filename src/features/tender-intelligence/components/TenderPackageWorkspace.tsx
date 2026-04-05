@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 import TenderAnalysisPanel from './TenderAnalysisPanel';
 import TenderDocumentsPanel from './TenderDocumentsPanel';
+import TenderReferenceCorpusPanel from './TenderReferenceCorpusPanel';
 import TenderResultPanels from './TenderResultPanels';
 import {
   TENDER_ANALYSIS_JOB_STATUS_META,
@@ -17,7 +18,14 @@ import {
 } from '../lib/tender-intelligence-ui';
 import { TENDER_INTELLIGENCE_BACKEND_PLAN } from '../services/tender-intelligence-backend-adapter';
 import type { TenderDocumentsUploadResult } from '../hooks/use-tender-intelligence';
-import type { TenderDocumentExtraction, TenderPackageDetails, UpdateTenderWorkflowInput } from '../types/tender-intelligence';
+import type {
+  CreateTenderReferenceProfileInput,
+  TenderDocumentExtraction,
+  TenderPackageDetails,
+  TenderReferenceProfile,
+  UpdateTenderReferenceProfileInput,
+  UpdateTenderWorkflowInput,
+} from '../types/tender-intelligence';
 
 interface TenderPanelProps {
   title: string;
@@ -41,6 +49,7 @@ function TenderPanel({ title, value, description }: TenderPanelProps) {
 
 interface TenderPackageWorkspaceProps {
   selectedPackage: TenderPackageDetails | null;
+  referenceProfiles?: TenderReferenceProfile[];
   currentUserId?: string | null;
   actorNameById?: Record<string, string>;
   loading?: boolean;
@@ -50,7 +59,10 @@ interface TenderPackageWorkspaceProps {
   extractingPackage?: boolean;
   extractingDocumentIds?: string[];
   deletingDocumentIds?: string[];
+  referenceProfileSubmittingId?: string | 'new' | null;
+  deletingReferenceProfileIds?: string[];
   workflowUpdatingTargetIds?: string[];
+  recomputingReferenceSuggestionPackageId?: string | null;
   error?: string | null;
   onCreateClick: () => void;
   onStartAnalysis: (packageId: string) => Promise<void>;
@@ -58,6 +70,11 @@ interface TenderPackageWorkspaceProps {
   onStartPackageExtraction: (packageId: string) => Promise<TenderDocumentExtraction[]>;
   onUploadDocuments: (packageId: string, files: File[]) => Promise<TenderDocumentsUploadResult>;
   onDeleteDocument: (documentId: string) => Promise<void>;
+  onCreateReferenceProfile: (input: CreateTenderReferenceProfileInput) => Promise<unknown>;
+  onUpdateReferenceProfile: (profileId: string, input: UpdateTenderReferenceProfileInput) => Promise<unknown>;
+  onDeleteReferenceProfile: (profileId: string) => Promise<void>;
+  onUpdateReferenceSuggestion: (referenceSuggestionId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
+  onRecomputeReferenceSuggestions: (packageId: string) => Promise<unknown>;
   onUpdateRequirement: (requirementId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
   onUpdateMissingItem: (missingItemId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
   onUpdateRiskFlag: (riskFlagId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
@@ -66,6 +83,7 @@ interface TenderPackageWorkspaceProps {
 
 export default function TenderPackageWorkspace({
   selectedPackage,
+  referenceProfiles = [],
   currentUserId = null,
   actorNameById = {},
   loading = false,
@@ -75,7 +93,10 @@ export default function TenderPackageWorkspace({
   extractingPackage = false,
   extractingDocumentIds = [],
   deletingDocumentIds = [],
+  referenceProfileSubmittingId = null,
+  deletingReferenceProfileIds = [],
   workflowUpdatingTargetIds = [],
+  recomputingReferenceSuggestionPackageId = null,
   error = null,
   onCreateClick,
   onStartAnalysis,
@@ -83,6 +104,11 @@ export default function TenderPackageWorkspace({
   onStartPackageExtraction,
   onUploadDocuments,
   onDeleteDocument,
+  onCreateReferenceProfile,
+  onUpdateReferenceProfile,
+  onDeleteReferenceProfile,
+  onUpdateReferenceSuggestion,
+  onRecomputeReferenceSuggestions,
   onUpdateRequirement,
   onUpdateMissingItem,
   onUpdateRiskFlag,
@@ -118,11 +144,11 @@ export default function TenderPackageWorkspace({
     return (
       <Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
         <CardHeader className="space-y-4 border-b border-white/10 pb-6">
-          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 9 / Review workflow + result resolution</Badge>
+          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 10 / Reference corpus + deterministic matching</Badge>
           <div className="space-y-3">
-            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousäly on nyt käytettävä review-työkalu baseline-löydöksille</CardTitle>
+            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousäly yhdistää nyt baseline-löydökset organisaation omaan referenssikorpukseen</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Luo ensimmäinen tarjouspyyntöpaketti. Dokumenteille voidaan nyt tallentaa pysyvä extracted text ja chunkit, baseline-analyysi voi nostaa määräaika-, liite- ja referenssiosumia evidenssin kanssa, ja käyttäjä voi käsitellä löydökset hyväksyntä-, hylkäys- ja ratkaisupäätöksiksi omassa workflow-kerroksessaan.
+              Luo ensimmäinen tarjouspyyntöpaketti tai täydennä organisaation referenssikorpusta. Dokumenteille voidaan nyt tallentaa pysyvä extracted text ja chunkit, baseline-analyysi tunnistaa referenssivaatimuksia, ja deterministinen matching voi ehdottaa niihin sopivia organisaation omia referenssejä ilman AI:ta.
             </CardDescription>
           </div>
         </CardHeader>
@@ -136,7 +162,7 @@ export default function TenderPackageWorkspace({
             <TenderPanel
               title="Analyysijobit"
               value="0"
-              description="Sääntöpohjainen baseline-run suoritetaan palvelinpuolella Edge Functionin kautta ja jättää workflow-käsiteltävät rivit result-domainiin."
+              description="Sääntöpohjainen baseline-run suoritetaan palvelinpuolella Edge Functionin kautta ja voi nyt kirjoittaa myös organisaation referenssikorpukseen perustuvat suggestion-rivit result-domainiin."
             />
             <TenderPanel
               title="Extraction"
@@ -149,9 +175,9 @@ export default function TenderPackageWorkspace({
               description="Extraction-aware evidence kiinnittää sekä baseline-löydökset että myöhemmät review-päätökset oikeisiin dokumentti- ja chunk-lähteisiin."
             />
             <TenderPanel
-              title="Riskit"
-              value="0"
-              description="Riskinostot tulevat myöhemmin analyysikerroksesta. Phase 0 varaa vain oman paikkansa UI:ssa ja domainissa."
+              title="Referenssikorpus"
+              value={String(referenceProfiles.length)}
+              description="Organisaation omat referenssiprofiilit elävät nyt Tarjousälyn omassa corpus-domainissa ja niitä käytetään deterministiseen suggestion-matchaukseen."
             />
             <TenderPanel
               title="Go / No-Go"
@@ -197,7 +223,7 @@ export default function TenderPackageWorkspace({
           <div className="space-y-3">
             <CardTitle className="text-3xl tracking-[-0.03em] text-white">{selectedPackage.package.name}</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Tämä tarjouspyyntöpaketti elää omassa Tarjousäly-domainissaan. Dokumentit tallentuvat Supabase Storageen, analyysijobi toimii näkyvästi ja result-domain kirjoittuu pysyvästi omiin tauluihinsa sääntöpohjaisten löydösten, evidence-rivien ja review workflow -päätösten kanssa, mutta nykyinen quote-editori, exportit, laskentalogiikka ja raportointi eivät edelleenkään ole kytketty tähän näkymään.
+              Tämä tarjouspyyntöpaketti elää omassa Tarjousäly-domainissaan. Dokumentit tallentuvat Supabase Storageen, analyysijobi toimii näkyvästi ja result-domain kirjoittuu pysyvästi omiin tauluihinsa sääntöpohjaisten löydösten, evidence-rivien, review workflow -päätösten ja org-korpukseen sidottujen referenssiehdotusten kanssa, mutta nykyinen quote-editori, exportit, laskentalogiikka ja raportointi eivät edelleenkään ole kytketty tähän näkymään.
             </CardDescription>
           </div>
         </CardHeader>
@@ -213,7 +239,7 @@ export default function TenderPackageWorkspace({
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">Data status</p>
-            <p className="mt-2 text-sm text-slate-100">Paketti, dokumenttimetadata, extraction-data, chunkit, analyysijobit, result-domain, evidence-rivit ja review workflow -metadata luetaan nyt suoraan Supabasesta ilman kytkentää tarjousytimeen.</p>
+            <p className="mt-2 text-sm text-slate-100">Paketti, dokumenttimetadata, extraction-data, chunkit, analyysijobit, result-domain, evidence-rivit, review workflow -metadata ja organisaation referenssikorpus luetaan nyt suoraan Supabasesta ilman kytkentää tarjousytimeen.</p>
           </div>
         </CardContent>
       </Card>
@@ -290,11 +316,15 @@ export default function TenderPackageWorkspace({
         selectedPackage={selectedPackage}
         currentUserId={currentUserId}
         actorNameById={actorNameById}
+        referenceProfileTitleById={Object.fromEntries(referenceProfiles.map((profile) => [profile.id, profile.title]))}
         updatingTargetIds={workflowUpdatingTargetIds}
+        recomputingReferenceSuggestions={recomputingReferenceSuggestionPackageId === selectedPackage.package.id}
         onUpdateRequirement={onUpdateRequirement}
         onUpdateMissingItem={onUpdateMissingItem}
         onUpdateRiskFlag={onUpdateRiskFlag}
+        onUpdateReferenceSuggestion={onUpdateReferenceSuggestion}
         onUpdateReviewTask={onUpdateReviewTask}
+        onRecomputeReferenceSuggestions={() => onRecomputeReferenceSuggestions(selectedPackage.package.id)}
       />
 
       <TenderDocumentsPanel
@@ -338,7 +368,7 @@ export default function TenderPackageWorkspace({
             )}
 
             <div className="rounded-2xl border border-dashed px-4 py-8 text-sm leading-6 text-muted-foreground">
-              Baseline tunnistaa nyt deadline-, liite- ja referenssiosumia extracted tekstistä, ja Phase 9 lisää niille review/resolution-kerroksen. Referenssiehdotukset organisaation historiasta, varsinainen luonnoksen generointi ja mahdollinen AI-tulkinta jätetään silti tarkoituksella myöhempiin vaiheisiin.
+              Baseline tunnistaa nyt deadline-, liite- ja referenssiosumia extracted tekstistä, Phase 9 lisää niille review/resolution-kerroksen ja Phase 10 liittää mukaan organisaation oman referenssikorpuksen sekä deterministisen suggestion-matchauksen. Varsinainen generointi ja mahdollinen AI-tulkinta jätetään silti tarkoituksella myöhempiin vaiheisiin.
             </div>
           </CardContent>
         </Card>
@@ -373,6 +403,19 @@ export default function TenderPackageWorkspace({
           </CardContent>
         </Card>
       </div>
+
+      <TenderReferenceCorpusPanel
+        referenceProfiles={referenceProfiles}
+        selectedPackageId={selectedPackage.package.id}
+        selectedPackageName={selectedPackage.package.name}
+        submittingProfileId={referenceProfileSubmittingId}
+        deletingProfileIds={deletingReferenceProfileIds}
+        recomputingPackageId={recomputingReferenceSuggestionPackageId}
+        onCreateProfile={onCreateReferenceProfile}
+        onUpdateProfile={onUpdateReferenceProfile}
+        onDeleteProfile={onDeleteReferenceProfile}
+        onRecomputeSuggestions={onRecomputeReferenceSuggestions}
+      />
     </div>
   );
 }

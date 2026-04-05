@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 
 import CreateTenderPackageDialog from '../components/CreateTenderPackageDialog';
 import TenderPackageList from '../components/TenderPackageList';
+import TenderReferenceCorpusPanel from '../components/TenderReferenceCorpusPanel';
 import TenderPackageWorkspace from '../components/TenderPackageWorkspace';
 import { useTenderIntelligence } from '../hooks/use-tender-intelligence';
 
@@ -21,6 +22,11 @@ const SUMMARY_CARDS = [
     key: 'openReviewTasks',
     label: 'Review taskit',
     description: 'Käsittelyyn nostetut workflow-rivit',
+  },
+  {
+    key: 'referenceProfiles',
+    label: 'Referenssit',
+    description: 'Organisaation oma referenssikorpus',
   },
   {
     key: 'openRisks',
@@ -48,10 +54,13 @@ export default function TenderIntelligencePage() {
     canCreate,
     selectPackage,
     createPackage,
+    referenceProfiles,
     startAnalysis,
     uploadDocuments,
     deleteDocument,
     uploading,
+    referenceProfileSubmittingId,
+    deletingReferenceProfileIds,
     startingAnalysisPackageId,
     extractingPackageId,
     extractingDocumentIds,
@@ -59,11 +68,17 @@ export default function TenderIntelligencePage() {
     startPackageExtraction,
     deletingDocumentIds,
     workflowUpdatingTargetIds,
+    recomputingReferenceSuggestionPackageId,
     actorNameById,
     currentUserId,
+    createReferenceProfile,
+    updateReferenceProfile,
+    deleteReferenceProfile,
+    recomputeReferenceSuggestions,
     updateRequirementWorkflow,
     updateMissingItemWorkflow,
     updateRiskFlagWorkflow,
+    updateReferenceSuggestionWorkflow,
     updateReviewTaskWorkflow,
   } = useTenderIntelligence();
 
@@ -73,11 +88,11 @@ export default function TenderIntelligencePage() {
         <CardContent className="space-y-8 px-6 py-6 sm:px-8 sm:py-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4">
-              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 9</Badge>
+              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 10</Badge>
               <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Review workflow tarjouspyyntöpakettien baseline-löydöksille</h1>
+                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Organisaation referenssikorpus ja deterministinen referenssimatchaus tarjouspyyntöpaketeille</h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-200 sm:text-base">
-                  Tarjousälyllä on nyt oma review/resolution-kerros, joka rakentuu deterministisen baseline-analyysin päälle. Deadline-, liite- ja referenssilöydökset voidaan hyväksyä, hylätä tai ratkaista audit-tyyppisesti ilman että nykyinen tarjousydin muuttuu.
+                  Tarjousälyllä on nyt oma organisaatiokohtainen referenssikorpus. Deterministinen baseline-analyysi tunnistaa referenssivaatimuksia, vertaa niitä corpus-profiileihin avainsana-, projektityyppi-, vuosi- ja sijaintisäännöillä, ja kirjoittaa läpinäkyvät suggestion-rivit review-käsittelyä varten ilman että nykyinen tarjousydin muuttuu.
                 </p>
               </div>
             </div>
@@ -88,7 +103,7 @@ export default function TenderIntelligencePage() {
                 <Plus className="h-4 w-4" />
               </Button>
               <Button variant="outline" className="justify-between border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white" disabled>
-                Result-domain päivittyy baseline- ja review-ajoista
+                Result-domain päivittyy baseline-, workflow- ja reference-matchausajoista
                 <Sparkle className="h-4 w-4" />
               </Button>
             </div>
@@ -123,6 +138,7 @@ export default function TenderIntelligencePage() {
         />
         <TenderPackageWorkspace
           selectedPackage={selectedPackage}
+          referenceProfiles={referenceProfiles}
           currentUserId={currentUserId}
           actorNameById={actorNameById}
           loading={loading}
@@ -132,7 +148,10 @@ export default function TenderIntelligencePage() {
           extractingPackage={Boolean(selectedPackage && extractingPackageId === selectedPackage.package.id)}
           extractingDocumentIds={extractingDocumentIds}
           deletingDocumentIds={deletingDocumentIds}
+          referenceProfileSubmittingId={referenceProfileSubmittingId}
+          deletingReferenceProfileIds={deletingReferenceProfileIds}
           workflowUpdatingTargetIds={workflowUpdatingTargetIds}
+          recomputingReferenceSuggestionPackageId={recomputingReferenceSuggestionPackageId}
           error={error}
           onCreateClick={() => setShowCreateDialog(true)}
           onStartAnalysis={async (packageId) => {
@@ -142,12 +161,31 @@ export default function TenderIntelligencePage() {
           onStartPackageExtraction={startPackageExtraction}
           onUploadDocuments={uploadDocuments}
           onDeleteDocument={deleteDocument}
+          onCreateReferenceProfile={createReferenceProfile}
+          onUpdateReferenceProfile={updateReferenceProfile}
+          onDeleteReferenceProfile={deleteReferenceProfile}
+          onUpdateReferenceSuggestion={updateReferenceSuggestionWorkflow}
+          onRecomputeReferenceSuggestions={recomputeReferenceSuggestions}
           onUpdateRequirement={updateRequirementWorkflow}
           onUpdateMissingItem={updateMissingItemWorkflow}
           onUpdateRiskFlag={updateRiskFlagWorkflow}
           onUpdateReviewTask={updateReviewTaskWorkflow}
         />
       </div>
+
+      {!selectedPackage && (
+        <TenderReferenceCorpusPanel
+          referenceProfiles={referenceProfiles}
+          selectedPackageId={null}
+          selectedPackageName={null}
+          submittingProfileId={referenceProfileSubmittingId}
+          deletingProfileIds={deletingReferenceProfileIds}
+          recomputingPackageId={recomputingReferenceSuggestionPackageId}
+          onCreateProfile={createReferenceProfile}
+          onUpdateProfile={updateReferenceProfile}
+          onDeleteProfile={deleteReferenceProfile}
+        />
+      )}
 
       <Card className="border-dashed border-slate-200 bg-slate-50/70 shadow-none">
         <CardContent className="flex flex-col gap-4 px-6 py-5 text-sm text-slate-700 sm:flex-row sm:items-start sm:justify-between">
@@ -156,11 +194,11 @@ export default function TenderIntelligencePage() {
               <Stack className="h-4 w-4" />
               <span className="font-medium">Mitä tämä vaihe jo tekee</span>
             </div>
-            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit, extraction-data, analyysitulokset ja evidence-rivit tallentuvat Supabaseen. TXT-, Markdown-, CSV- ja XLSX-dokumenteille voidaan nyt tallentaa oikea extracted text ja chunkit, joita sääntöpohjainen baseline-analyysi käyttää provenance-lähteinä. Lisäksi käyttäjä voi nyt hyväksyä, hylätä, ratkaista ja kommentoida tuloksia omassa review workflow -kerroksessaan.</p>
+            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit, extraction-data, analyysitulokset, evidence-rivit ja organisaation referenssikorpus tallentuvat Supabaseen. TXT-, Markdown-, CSV- ja XLSX-dokumenteille voidaan nyt tallentaa oikea extracted text ja chunkit, joita sääntöpohjainen baseline-analyysi käyttää provenance-lähteinä. Lisäksi käyttäjä voi nyt hallita org-korpuksen referenssejä ja hyväksyä, hylätä tai ratkaista niihin perustuvia suggestion-rivejä samassa workflow-kerroksessa.</p>
           </div>
           <div className="space-y-2 sm:max-w-sm">
             <p className="font-medium text-slate-950">Mitä tästä puuttuu tarkoituksella</p>
-            <p>Ei vielä OCR:ää, PDF- tai DOCX-purkua, AI-provider-koodia, oikeaa analyysipalvelua, tarjousluonnoksen generointia tai kytkentää nykyiseen tarjouseditoriin. Oikea analyysimoottori voidaan vaihtaa nykyisten Edge Function -rajojen taakse niin, että evidence- ja review-domain säilyvät ennallaan.</p>
+            <p>Ei vielä OCR:ää, PDF- tai DOCX-purkua, AI-provider-koodia, semanttista hakua, tarjousluonnoksen generointia tai kytkentää nykyiseen tarjouseditoriin. Nykyinen quote-, project-, invoice- ja reporting-ydin jätetään edelleen rauhaan, ja mahdollinen myöhempi AI-kerros voidaan rakentaa tämän corpus- ja workflow-perustan päälle.</p>
           </div>
         </CardContent>
       </Card>
