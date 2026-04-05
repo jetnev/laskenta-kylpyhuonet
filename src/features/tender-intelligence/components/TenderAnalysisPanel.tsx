@@ -56,7 +56,7 @@ export default function TenderAnalysisPanel({
               Analyysi
             </CardTitle>
             <CardDescription>
-              Placeholder-ajon skeleton käyttää oikeaa analyysijobin domainia, kirjoittaa completion-vaiheessa pysyvät result-rivit omiin tauluihinsa ja jättää selkeän adapterirajan myöhemmälle worker- tai edge-function -ajolle.
+              Analyysiajo käynnistyy server-side Edge Function -rajan kautta. Orchestration, validaatio ja placeholder-resultien kirjoitus tapahtuvat palvelinpuolella.
             </CardDescription>
           </div>
 
@@ -67,7 +67,7 @@ export default function TenderAnalysisPanel({
             </Button>
             <p className="text-xs leading-5 text-muted-foreground">
               {startState.canStart
-                ? 'Tämä ajo ei vielä lue dokumenttien sisältöä. Se luo näkyvän jobin ja kirjoittaa completion-vaiheessa deterministiset placeholder-tulokset pysyviin result-tauluihin.'
+                ? 'Analyysi käynnistetään palvelinpuolella. Placeholder-tulokset kirjoitetaan pysyviin result-tauluihin server-side Edge Functionin kautta.'
                 : startState.reason}
             </p>
           </div>
@@ -107,7 +107,7 @@ export default function TenderAnalysisPanel({
               {busy && (
                 <div className="mt-4 flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-700">
                   <SpinnerGap className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
-                  <span>Jobi etenee näkyvästi tilojen pending -&gt; queued -&gt; running -&gt; completed läpi. Completion-vaihe tallentaa placeholder-vaatimukset, puutteet, riskit, tehtävät ja luonnosrungon oikeaan result-domainiin.</span>
+                  <span>Analyysiajo etenee server-sidellä tilojen pending → queued → running → completed läpi. Palvelin tallentaa placeholder-tulokset result-domainiin.</span>
                 </div>
               )}
 
@@ -121,7 +121,7 @@ export default function TenderAnalysisPanel({
           )}
 
           <div className="rounded-2xl border border-dashed px-4 py-6 text-sm leading-6 text-muted-foreground">
-            Varsinainen dokumenttien tekstinpurku, OCR, AI-providerit, vaatimusmalli, riskinosto ja tarjousluonnoksen generointi jätetään tarkoituksella myöhempiin vaiheisiin. Tämä vaihe rakentaa vain analyysijobin elinkaaren rungon ja näkyvän tilan.
+            Analyysi kulkee nyt palvelinrajan (Edge Function) kautta. Varsinainen dokumenttien tekstinpurku, OCR, AI-providerit ja tarjousluonnoksen generointi jätetään tarkoituksella myöhempiin vaiheisiin.
           </div>
         </div>
 
@@ -156,7 +156,7 @@ export default function TenderAnalysisPanel({
               <ClockCountdown className="h-4 w-4" />
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Suoritusmalli</p>
             </div>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Nykyinen placeholder-run suoritetaan kevyesti frontend-orchestrationina, mutta repository- ja adapteriraja pidetään samana, jotta toteutus voidaan vaihtaa myöhemmin oikeaan backend-worker-virtaan.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Placeholder-run suoritetaan Supabase Edge Function -rajapinnan kautta. Oikea analyysimoottori voidaan vaihtaa tämän rajan taakse ilman frontend-muutoksia.</p>
           </div>
         </div>
       </CardContent>

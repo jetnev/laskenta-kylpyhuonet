@@ -47,11 +47,11 @@ export interface TenderIntelligenceBackendAdapter {
 export interface TenderIntelligenceBackendPlan {
   persistence: 'supabase';
   documentStorage: 'metadata-only' | 'supabase-storage';
-  analysisExecution: 'none' | 'placeholder-runner' | 'worker-service';
+  analysisExecution: 'none' | 'placeholder-runner' | 'edge-function-runner' | 'worker-service';
 }
 
 export const TENDER_INTELLIGENCE_BACKEND_PLAN: TenderIntelligenceBackendPlan = {
   persistence: 'supabase',
   documentStorage: 'supabase-storage',
-  analysisExecution: 'placeholder-runner',
+  analysisExecution: 'edge-function-runner',
 };

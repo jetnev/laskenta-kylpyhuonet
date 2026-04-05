@@ -96,11 +96,11 @@ export default function TenderPackageWorkspace({
     return (
       <Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
         <CardHeader className="space-y-4 border-b border-white/10 pb-6">
-          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 4 / Analysis result domain foundation</Badge>
+          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 5 / Server-side analysis runner boundary</Badge>
           <div className="space-y-3">
-            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousälyllä on nyt pysyvä analyysitulosten domain omassa feature-rajassaan</CardTitle>
+            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousälyn analyysiajo käynnistyy nyt palvelinrajan kautta</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Luo ensimmäinen tarjouspyyntöpaketti. Dokumentit tallentuvat organisaation omaan Storage-domainiin, analyysijobi toimii näkyvästi ja completed-vaihe kirjoittaa nyt placeholder-tulokset pysyviin result-tauluihin. Parsinta, OCR, AI ja varsinainen analyysimoottori jätetään edelleen myöhempiin vaiheisiin.
+              Luo ensimmäinen tarjouspyyntöpaketti. Analyysiajon orchestration siirtyy nyt palvelinpuolen Edge Function -rajapinnan taakse. Frontend ei enää itse simuloi tilasiirtymiä.
             </CardDescription>
           </div>
         </CardHeader>
@@ -114,7 +114,7 @@ export default function TenderPackageWorkspace({
             <TenderPanel
               title="Analyysijobit"
               value="0"
-              description="Ensimmäinen placeholder-run käyttää samaa job-mallia, jonka oikea analyysipalvelu ottaa myöhemmin käyttöön."
+              description="Ensimmäinen placeholder-run suoritetaan palvelinpuolella Edge Functionin kautta."
             />
             <TenderPanel
               title="Puutteet"
@@ -129,7 +129,7 @@ export default function TenderPackageWorkspace({
             <TenderPanel
               title="Go / No-Go"
               value="Odottaa analyysiä"
-              description="Päätöstuki rakennetaan myöhemmin omaksi tulosobjektikseen. Tässä vaiheessa näkyvä analyysitila syntyy jobin elinkaaresta ja result-domainin placeholder-riveistä, ei vielä sisällön tulkinnasta."
+              description="Päätöstuki rakennetaan myöhemmin omaksi tulosobjektikseen. Näkyvä analyysitila syntyy jobin elinkaaresta ja result-domainin riveistä."
             />
             <TenderPanel
               title="Luonnos"
@@ -270,7 +270,7 @@ export default function TenderPackageWorkspace({
               Katselmointi ja jatkovaihe
             </CardTitle>
             <CardDescription>
-              Placeholder-ajon skeleton käyttää nyt samaa repository- ja adapterirajaa, johon myöhemmät analyysijobit, parsinta ja oikeat tulosmallit voidaan kytkeä ilman muutoksia nykyiseen tarjousytimeen.
+              Analyysiajo kulkee nyt Edge Function -rajan kautta. Myöhemmät analyysijobit, parsinta ja oikeat tulosmallit voidaan kytkeä saman rajan taakse ilman muutoksia nykyiseen tarjousytimeen.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
@@ -289,7 +289,7 @@ export default function TenderPackageWorkspace({
             )}
 
             <div className="rounded-2xl border border-dashed px-4 py-8 text-sm leading-6 text-muted-foreground">
-              Referenssiehdotukset, puuteanalyysi ja varsinainen luonnoksen generointi tulevat myöhemmin omasta analyysipalvelusta. Phase 4 pitää nämä riippuvuudet tietoisesti irti nykyisestä tarjouseditorista, vaikka dokumentit, analyysijobi ja pysyvä result-domain jo toimivat omassa feature-alueessaan.
+              Referenssiehdotukset, puuteanalyysi ja varsinainen luonnoksen generointi tulevat myöhemmin omasta analyysipalvelusta. Phase 5 pitää nämä riippuvuudet tietoisesti irti nykyisestä tarjouseditorista ja ajaa orchestration palvelinrajan takaa.
             </div>
           </CardContent>
         </Card>
@@ -301,7 +301,7 @@ export default function TenderPackageWorkspace({
               Adapterivalmius
             </CardTitle>
             <CardDescription>
-              Seuraava vaihe voidaan toteuttaa ilman että Tarjousälyä tarvitsee tunkea nykyiseen use-data.ts-monoliittiin tai nykyiseen tarjouseditoriin.
+              Seuraava vaihe voidaan toteuttaa saman Edge Function -rajan taakse ilman että Tarjousälyä tarvitsee tunkea nykyiseen use-data.ts-monoliittiin tai nykyiseen tarjouseditoriin.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 pt-6 text-sm text-slate-700">

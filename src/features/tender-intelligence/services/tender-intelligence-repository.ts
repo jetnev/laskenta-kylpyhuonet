@@ -13,8 +13,12 @@ import {
   TENDER_INTELLIGENCE_STORAGE_BUCKET,
   validateTenderDocumentFile,
 } from '../lib/tender-document-upload';
-import { getTenderAnalysisStartState } from '../lib/tender-analysis';
 import { buildPlaceholderAnalysisSeedPlan } from '../lib/tender-placeholder-results';
+import {
+  TENDER_ANALYSIS_RUNNER_FUNCTION_NAME,
+  parseTenderAnalysisRunnerResponse,
+  isTenderAnalysisRunnerFailure,
+} from '../types/tender-analysis-runner-contract';
 import {
   buildTenderPackageDetails,
   mapTenderAnalysisJobRowToDomain,
@@ -48,17 +52,8 @@ import {
 
 type Listener = () => void;
 
-const PLACEHOLDER_ANALYSIS_QUEUE_DELAY_MS = 300;
-const PLACEHOLDER_ANALYSIS_RUNNING_DELAY_MS = 650;
-
 export interface TenderIntelligenceRepository extends TenderIntelligenceBackendAdapter {
   subscribe(listener: Listener): () => void;
-}
-
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    globalThis.setTimeout(resolve, ms);
-  });
 }
 
 function requireConfiguredSupabase() {
@@ -804,56 +799,45 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
   }
 
   async startPlaceholderAnalysis(packageId: string) {
-    let createdJobId: string | null = null;
-
     try {
-      await assertTenderPackageAccess(packageId);
-      const documentRows = await fetchTenderDocumentRowsForPackage(packageId);
-      const latestJob = await this.getLatestAnalysisJobForPackage(packageId);
-      const startState = getTenderAnalysisStartState({
-        documentCount: documentRows.length,
-        latestAnalysisJob: latestJob,
-      });
+      const client = requireConfiguredSupabase();
 
-      if (!startState.canStart) {
-        throw new Error(startState.reason ?? 'Analyysiä ei voi käynnistää tälle paketille.');
-      }
-
-      const createdJob = await this.createAnalysisJob(packageId, {
-        jobType: 'placeholder_analysis',
-        status: 'pending',
-      });
-      createdJobId = createdJob.id;
-
-      await wait(PLACEHOLDER_ANALYSIS_QUEUE_DELAY_MS);
-      await this.updateAnalysisJob(
-        createdJob.id,
-        {
-          status: 'queued',
-          completed_at: null,
-          error_message: null,
-        },
-        'Analyysijobin jonotusta ei voitu päivittää.'
+      const { data: responseData, error: invokeError } = await client.functions.invoke(
+        TENDER_ANALYSIS_RUNNER_FUNCTION_NAME,
+        { body: { tenderPackageId: packageId } },
       );
 
-      await wait(PLACEHOLDER_ANALYSIS_QUEUE_DELAY_MS);
-      await this.markAnalysisJobRunning(createdJob.id);
-
-      await wait(PLACEHOLDER_ANALYSIS_RUNNING_DELAY_MS);
-      await this.seedPlaceholderResults(packageId, false);
-
-      return await this.markAnalysisJobCompleted(createdJob.id);
-    } catch (error) {
-      const message = getRepositoryErrorMessage(error, 'Placeholder-analyysin suoritus epäonnistui.');
-
-      if (createdJobId) {
-        try {
-          await this.markAnalysisJobFailed(createdJobId, message);
-        } catch (markFailedError) {
-          console.warn('Tender placeholder analysis failed and status could not be updated to failed.', markFailedError);
-        }
+      if (invokeError) {
+        throw new Error(
+          typeof invokeError.message === 'string' && invokeError.message
+            ? invokeError.message
+            : 'Analyysin server-side käynnistys epäonnistui.',
+        );
       }
 
+      const response = parseTenderAnalysisRunnerResponse(responseData);
+
+      if (isTenderAnalysisRunnerFailure(response)) {
+        throw new Error(
+          response.message ?? 'Palvelin hylkäsi analysointipyynnön.',
+        );
+      }
+
+      this.emit();
+
+      if (!response.analysisJobId) {
+        throw new Error('Palvelin ei palauttanut analysointijobin tunnistetta.');
+      }
+
+      const completedJob = await this.getLatestAnalysisJobForPackage(packageId);
+
+      if (!completedJob) {
+        throw new Error('Analyysijobia ei löytynyt käynnistyksen jälkeen.');
+      }
+
+      return completedJob;
+    } catch (error) {
+      const message = getRepositoryErrorMessage(error, 'Placeholder-analyysin suoritus epäonnistui.');
       throw new Error(message);
     }
   }

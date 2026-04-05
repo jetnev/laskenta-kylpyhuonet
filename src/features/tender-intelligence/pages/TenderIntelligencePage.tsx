@@ -62,11 +62,11 @@ export default function TenderIntelligencePage() {
         <CardContent className="space-y-8 px-6 py-6 sm:px-8 sm:py-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4">
-              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 4</Badge>
+              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 5</Badge>
               <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Analyysitulosten pysyvä result-domain tarjouspyyntöpaketeille ilman muutoksia Projekta-ytimeen</h1>
+                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Server-side analysis runner boundary tarjouspyyntöpaketeille ilman muutoksia Projekta-ytimeen</h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-200 sm:text-base">
-                  Tarjousäly käyttää omaa organisaatio-scoped Supabase-domainiaan dokumenteille, analyysijobeille, näkyvälle tilaseurannalle ja pysyville analyysituloksille. Tässä vaiheessa käyttäjä voi käynnistää placeholder-analyysin, joka kirjoittaa oikeisiin result-tauluihin, mutta parsinta, OCR, AI-providerit ja oikea tarjousluonnoksen generointi jätetään edelleen myöhempiin vaiheisiin.
+                  Tarjousäly käynnistää analyysiajon nyt palvelinpuolella Supabase Edge Functionin kautta. Orchestration, validaatio ja placeholder-resultien kirjoitus tapahtuvat server-sidellä. Frontend vain käynnistää ajon ja lukee tulokset.
                 </p>
               </div>
             </div>
@@ -134,11 +134,11 @@ export default function TenderIntelligencePage() {
               <Stack className="h-4 w-4" />
               <span className="font-medium">Mitä tämä vaihe jo tekee</span>
             </div>
-            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit ja analyysitulokset tallentuvat nyt oikeasti Supabaseen. Käyttäjä voi käynnistää placeholder-ajon, seurata sen tilaa ja nähdä completed-ajon kirjoittamat vaatimukset, puutteet, riskit, referenssiehdotukset, luonnosartefaktit ja tarkistustehtävät suoraan paketin työtilassa.</p>
+            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit ja analyysitulokset tallentuvat Supabaseen. Analyysiajo käynnistyy Edge Functionin kautta palvelinpuolella, ja frontend lukee tulokset ajon valmistuttua.</p>
           </div>
           <div className="space-y-2 sm:max-w-sm">
             <p className="font-medium text-slate-950">Mitä tästä puuttuu tarkoituksella</p>
-            <p>Ei vielä dokumenttien sisällön lukua, OCR:ää, AI-provider-koodia, oikeaa analyysipalvelua, backend-workeria tai kytkentää nykyiseen tarjouseditoriin.</p>
+            <p>Ei vielä dokumenttien sisällön lukua, OCR:ää, AI-provider-koodia, oikeaa analyysipalvelua tai kytkentää nykyiseen tarjouseditoriin. Oikea analyysimoottori voidaan vaihtaa nykyisen Edge Function -rajan taakse.</p>
           </div>
         </CardContent>
       </Card>
