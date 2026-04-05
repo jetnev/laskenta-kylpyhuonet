@@ -178,13 +178,21 @@ function App() {
     }
 
     try {
-      const [documents, acceptances] = await Promise.all([
+      const [documentsResult, acceptancesResult] = await Promise.allSettled([
         listPublicActiveLegalDocuments(),
-        listCurrentUserLegalAcceptances(),
+        listCurrentUserLegalAcceptances(legalAcceptanceUserId),
       ]);
 
+      if (documentsResult.status === 'rejected') {
+        throw documentsResult.reason;
+      }
+
+      if (acceptancesResult.status === 'rejected') {
+        throw acceptancesResult.reason;
+      }
+
       setLegalState(
-        evaluateLegalAcceptanceState(documents, acceptances, {
+        evaluateLegalAcceptanceState(documentsResult.value, acceptancesResult.value, {
           organizationRole: legalAcceptanceOrganizationRole,
         })
       );

@@ -1448,6 +1448,9 @@ create table if not exists public.legal_document_acceptances (
 create unique index if not exists legal_document_acceptances_user_version_idx
 on public.legal_document_acceptances(user_id, document_version_id);
 
+create index if not exists legal_document_acceptances_user_accepted_at_idx
+on public.legal_document_acceptances(user_id, accepted_at desc);
+
 create index if not exists legal_document_acceptances_user_type_idx
 on public.legal_document_acceptances(user_id, document_type, accepted_at desc);
 
