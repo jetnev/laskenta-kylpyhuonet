@@ -171,16 +171,15 @@ export function buildAppUrl(state: AppLocationState) {
 export function resolveAccessibleAppPage(
   requestedPage: AppPage | null,
   options: {
-    canManageUsers: boolean;
-    canManageSharedData: boolean;
+    canManageLegalDocuments: boolean;
   }
 ) {
   if (!requestedPage) {
     return DEFAULT_APP_PAGE;
   }
 
-  if (requestedPage === 'legal' && !options.canManageUsers) {
-    return options.canManageSharedData ? 'settings' : DEFAULT_APP_PAGE;
+  if (requestedPage === 'legal' && !options.canManageLegalDocuments) {
+    return 'account';
   }
 
   return requestedPage;
@@ -189,8 +188,7 @@ export function resolveAccessibleAppPage(
 export function resolveAccessibleAppLocation(
   requestedLocation: AppLocationState,
   options: {
-    canManageUsers: boolean;
-    canManageSharedData: boolean;
+    canManageLegalDocuments: boolean;
   }
 ) {
   const nextPage = resolveAccessibleAppPage(requestedLocation.page, options);

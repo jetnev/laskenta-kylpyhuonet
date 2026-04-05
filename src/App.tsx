@@ -87,6 +87,7 @@ function App() {
     organization,
     canManageUsers,
     canManageSharedData,
+    canManageLegalDocuments,
     logout,
     requiresPasswordReset,
   } = useAuth();
@@ -230,10 +231,10 @@ function App() {
         { id: 'reports' as const, name: 'Raportointi', icon: ChartBar, visible: true },
         { id: 'users' as const, name: 'Käyttäjät', icon: User, visible: canManageUsers },
         { id: 'settings' as const, name: 'Asetukset', icon: Gear, visible: canManageSharedData },
-        { id: 'legal' as const, name: 'Juridiset dokumentit', icon: Shield, visible: canManageUsers },
+        { id: 'legal' as const, name: 'Sopimusasiat', icon: Shield, visible: canManageLegalDocuments },
         { id: 'account' as const, name: 'Oma tili', icon: User, visible: true },
       ].filter((item) => item.visible),
-    [canManageSharedData, canManageUsers]
+    [canManageLegalDocuments, canManageSharedData, canManageUsers]
   );
 
   useEffect(() => {
@@ -295,14 +296,13 @@ function App() {
     }
 
     const nextLocation = resolveAccessibleAppLocation(currentLocation, {
-      canManageSharedData,
-      canManageUsers,
+      canManageLegalDocuments,
     });
 
     if (buildAppUrl(currentLocation) !== buildAppUrl(nextLocation)) {
       navigateWithinApp(nextLocation, { replace: true });
     }
-  }, [canManageSharedData, canManageUsers, currentLocation, currentRoute, loading, navigateWithinApp, user]);
+  }, [canManageLegalDocuments, currentLocation, currentRoute, loading, navigateWithinApp, user]);
 
   useEffect(() => {
     if (!showDesktopUpdateActions) {
@@ -491,7 +491,7 @@ function App() {
     status: user?.status,
   });
   const roleBadge = {
-    label: accessState.roleLabel,
+    label: accessState.roleBadgeLabel,
     variant: accessState.roleBadgeVariant,
   };
 

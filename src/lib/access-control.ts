@@ -14,24 +14,42 @@ export interface AccessState {
   canDelete: boolean;
   canManageUsers: boolean;
   canManageSharedData: boolean;
+  canManageLegalDocuments: boolean;
   roleLabel: string;
+  roleBadgeLabel: string;
   roleBadgeVariant: 'default' | 'secondary' | 'outline';
 }
 
 export function getOrganizationRoleLabel(role?: OrganizationRole | null) {
   if (role === 'owner') {
-    return 'Omistaja';
+    return 'Yrityksen pääkäyttäjä';
   }
 
   if (role === 'employee') {
-    return 'Työntekijä';
+    return 'Käyttäjä';
   }
 
-  return 'Ei organisaatiota';
+  return 'Ei työtilaa';
+}
+
+export function getOrganizationRoleBadgeLabel(role?: OrganizationRole | null) {
+  if (role === 'owner') {
+    return 'Pääkäyttäjä';
+  }
+
+  if (role === 'employee') {
+    return 'Käyttäjä';
+  }
+
+  return 'Ei työtilaa';
 }
 
 export function getPlatformRoleLabel(role?: UserRole | null) {
-  return role === 'admin' ? 'Pääkäyttäjä' : 'Käyttäjä';
+  return role === 'admin' ? 'Projektan ylläpito' : 'Käyttäjä';
+}
+
+export function getPlatformRoleBadgeLabel(role?: UserRole | null) {
+  return role === 'admin' ? 'Ylläpito' : 'Käyttäjä';
 }
 
 export function deriveAccessState(input: AccessStateInput): AccessState {
@@ -40,18 +58,23 @@ export function deriveAccessState(input: AccessStateInput): AccessState {
   const isOrganizationOwner = isActive && input.organizationRole === 'owner';
   const canManageUsers = isPlatformAdmin || isOrganizationOwner;
   const canManageSharedData = isPlatformAdmin || isOrganizationOwner;
+  const canManageLegalDocuments = isPlatformAdmin;
 
-  let roleLabel = 'Käyttäjä';
+  let roleLabel = getOrganizationRoleLabel('employee');
+  let roleBadgeLabel = getOrganizationRoleBadgeLabel('employee');
   let roleBadgeVariant: AccessState['roleBadgeVariant'] = 'outline';
 
   if (isPlatformAdmin) {
-    roleLabel = 'Pääkäyttäjä';
+    roleLabel = getPlatformRoleLabel(input.platformRole);
+    roleBadgeLabel = getPlatformRoleBadgeLabel(input.platformRole);
     roleBadgeVariant = 'default';
   } else if (isOrganizationOwner) {
-    roleLabel = 'Omistaja';
+    roleLabel = getOrganizationRoleLabel(input.organizationRole);
+    roleBadgeLabel = getOrganizationRoleBadgeLabel(input.organizationRole);
     roleBadgeVariant = 'secondary';
   } else if (input.organizationRole === 'employee') {
-    roleLabel = 'Työntekijä';
+    roleLabel = getOrganizationRoleLabel(input.organizationRole);
+    roleBadgeLabel = getOrganizationRoleBadgeLabel(input.organizationRole);
     roleBadgeVariant = 'outline';
   }
 
@@ -63,7 +86,9 @@ export function deriveAccessState(input: AccessStateInput): AccessState {
     canDelete: isActive,
     canManageUsers,
     canManageSharedData,
+    canManageLegalDocuments,
     roleLabel,
+    roleBadgeLabel,
     roleBadgeVariant,
   };
 }

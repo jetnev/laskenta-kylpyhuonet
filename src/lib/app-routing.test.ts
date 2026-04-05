@@ -36,17 +36,15 @@ describe('resolveAccessibleAppPage', () => {
   it('redirects ordinary users away from juridiset dokumentit', () => {
     expect(
       resolveAccessibleAppPage('legal', {
-        canManageSharedData: false,
-        canManageUsers: false,
+        canManageLegalDocuments: false,
       })
-    ).toBe('dashboard');
+    ).toBe('account');
   });
 
-  it('keeps juridiset dokumentit available for owner/admin users', () => {
+  it('keeps juridiset dokumentit available for legal managers', () => {
     expect(
       resolveAccessibleAppPage('legal', {
-        canManageSharedData: true,
-        canManageUsers: true,
+        canManageLegalDocuments: true,
       })
     ).toBe('legal');
   });
@@ -56,7 +54,7 @@ describe('resolveAccessibleAppPage', () => {
     const legalDocumentsPath = getAppPagePath('legal');
     const tenderIntelligencePath = getAppPagePath('tender-intelligence');
 
-    expect(resolveAccessibleAppPage('terms', { canManageSharedData: false, canManageUsers: false })).toBe('terms');
+    expect(resolveAccessibleAppPage('terms', { canManageLegalDocuments: false })).toBe('terms');
     expect(quoteTermsPath).toBe('/app/tarjousehdot');
     expect(legalDocumentsPath).toBe('/app/juridiset-dokumentit');
     expect(tenderIntelligencePath).toBe('/app/tarjousaly');
@@ -128,24 +126,22 @@ describe('resolveAccessibleAppLocation', () => {
           editor: 'quote',
         },
         {
-          canManageSharedData: false,
-          canManageUsers: false,
+          canManageLegalDocuments: false,
         }
       )
-    ).toEqual({ page: 'dashboard' });
+    ).toEqual({ page: 'account' });
   });
 
-  it('redirects shared-data managers without user management rights to asetukset', () => {
+  it('keeps legal routes available for legal managers', () => {
     expect(
       resolveAccessibleAppLocation(
         {
           page: 'legal',
         },
         {
-          canManageSharedData: true,
-          canManageUsers: false,
+          canManageLegalDocuments: true,
         }
       )
-    ).toEqual({ page: 'settings' });
+    ).toEqual({ page: 'legal' });
   });
 });

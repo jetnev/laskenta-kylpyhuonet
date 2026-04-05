@@ -7,7 +7,7 @@ export function ReadOnlyAlert() {
       <CardDescription className="flex items-center gap-2">
         <Lock className="h-4 w-4 flex-shrink-0" />
         <span>
-          Sinulla on vain lukuoikeus. Ainoastaan sovelluksen omistaja voi lisätä, muokata tai poistaa tietoja.
+          Sinulla on vain lukuoikeus. Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi lisätä, muokata tai poistaa tietoja.
         </span>
       </CardDescription>
     </Card>

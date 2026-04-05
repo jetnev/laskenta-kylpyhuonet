@@ -558,7 +558,7 @@ export function useInstallationGroups() {
 
   const addGroup = (group: Omit<InstallationGroup, 'id' | keyof ReturnType<typeof buildAudit>>) => {
     if (!canManageSharedData) {
-      throw new Error('Vain omistaja tai pääkäyttäjä voi lisätä hintaryhmiä.');
+      throw new Error('Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi lisätä hintaryhmiä.');
     }
     const newGroup: InstallationGroup = {
       ...group,
@@ -571,7 +571,7 @@ export function useInstallationGroups() {
 
   const updateGroup = (id: string, updates: Partial<InstallationGroup>) => {
     if (!canManageSharedData) {
-      throw new Error('Vain omistaja tai pääkäyttäjä voi muokata hintaryhmiä.');
+      throw new Error('Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi muokata hintaryhmiä.');
     }
     setGroups((current = []) =>
       current.map((group) =>
@@ -584,7 +584,7 @@ export function useInstallationGroups() {
 
   const deleteGroup = (id: string) => {
     if (!canManageSharedData) {
-      throw new Error('Vain omistaja tai pääkäyttäjä voi poistaa hintaryhmiä.');
+      throw new Error('Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi poistaa hintaryhmiä.');
     }
     setGroups((current = []) => current.filter((group) => group.id !== id));
   };
@@ -1272,7 +1272,7 @@ export function useQuoteTerms() {
   const addTerms = (input: Parameters<typeof createTermTemplate>[1]) => {
     const currentUserId = ensureSignedIn(userId);
     if (!canManageSharedData) {
-      throw new Error('Vain omistaja tai pääkäyttäjä voi lisätä ehtopohjia.');
+      throw new Error('Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi lisätä ehtopohjia.');
     }
     const result = createTermTemplate(storedTemplates, input, currentUserId);
     setStoredTemplates(result.templates);
@@ -1282,7 +1282,7 @@ export function useQuoteTerms() {
   const updateTerms = (id: string, updates: Parameters<typeof updateTermTemplate>[2]) => {
     const currentUserId = ensureSignedIn(userId);
     if (!canManageSharedData) {
-      throw new Error('Vain omistaja tai pääkäyttäjä voi muokata ehtopohjia.');
+      throw new Error('Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi muokata ehtopohjia.');
     }
     const result = updateTermTemplate(storedTemplates, id, updates, currentUserId);
     setStoredTemplates(result.templates);
@@ -1292,7 +1292,7 @@ export function useQuoteTerms() {
   const cloneTermsFromMaster = (masterId: string) => {
     const currentUserId = ensureSignedIn(userId);
     if (!canManageSharedData) {
-      throw new Error('Vain omistaja tai pääkäyttäjä voi luoda ehtopohjia.');
+      throw new Error('Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi luoda ehtopohjia.');
     }
     const result = cloneTermTemplateFromMaster(storedTemplates, masterId, currentUserId);
     setStoredTemplates(result.templates);
@@ -1302,7 +1302,7 @@ export function useQuoteTerms() {
   const duplicateTerms = (templateId: string) => {
     const currentUserId = ensureSignedIn(userId);
     if (!canManageSharedData) {
-      throw new Error('Vain omistaja tai pääkäyttäjä voi monistaa ehtopohjia.');
+      throw new Error('Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi monistaa ehtopohjia.');
     }
     const result = duplicateTermTemplate(storedTemplates, templateId, currentUserId);
     setStoredTemplates(result.templates);
@@ -1312,7 +1312,7 @@ export function useQuoteTerms() {
   const restoreTermsFromMaster = (templateId: string) => {
     const currentUserId = ensureSignedIn(userId);
     if (!canManageSharedData) {
-      throw new Error('Vain omistaja tai pääkäyttäjä voi palauttaa ehtopohjia.');
+      throw new Error('Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi palauttaa ehtopohjia.');
     }
     const result = restoreTermTemplateFromMaster(storedTemplates, templateId, currentUserId);
     setStoredTemplates(result.templates);
@@ -1322,7 +1322,7 @@ export function useQuoteTerms() {
   const archiveTerms = (templateId: string, archived = true) => {
     const currentUserId = ensureSignedIn(userId);
     if (!canManageSharedData) {
-      throw new Error('Vain omistaja tai pääkäyttäjä voi arkistoida ehtopohjia.');
+      throw new Error('Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi arkistoida ehtopohjia.');
     }
     const result = setTermTemplateArchived(storedTemplates, templateId, archived, currentUserId);
     setStoredTemplates(result.templates);
@@ -1332,7 +1332,7 @@ export function useQuoteTerms() {
   const deleteTerms = (templateId: string) => {
     const currentUserId = ensureSignedIn(userId);
     if (!canManageSharedData) {
-      throw new Error('Vain omistaja tai pääkäyttäjä voi poistaa ehtopohjia.');
+      throw new Error('Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi poistaa ehtopohjia.');
     }
     if (allVisibleQuotes.some((quote) => quote.termsId === templateId)) {
       throw new Error('Ehtopohja on valittuna tarjoukselle. Poista ehtopohja tarjoukselta ennen poistamista.');
@@ -1539,7 +1539,7 @@ export function useCompanyProfile() {
   const updateCompanyProfile = (updates: Partial<CompanyProfile>) => {
     ensureSignedIn(user?.id);
     if (!canManageSharedData) {
-      throw new Error('Yritystietoja voi muokata vain omistaja tai pääkäyttäjä.');
+      throw new Error('Yritystietoja voi muokata vain yrityksen pääkäyttäjä tai Projektan ylläpito.');
     }
     setCompanyProfile((current = DEFAULT_COMPANY_PROFILE) =>
       normalizeCompanyProfile({
@@ -1575,7 +1575,7 @@ export function useSettings() {
 
   const updateSettings = (updates: Partial<Settings>) => {
     if (!canManageSharedData) {
-      throw new Error('Vain omistaja tai pääkäyttäjä voi muokata asetuksia.');
+      throw new Error('Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi muokata asetuksia.');
     }
     setSettings((current = DEFAULT_SETTINGS) => ({
       ...DEFAULT_SETTINGS,

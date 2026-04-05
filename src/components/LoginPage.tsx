@@ -127,7 +127,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
       case 'register':
         return {
           title: 'Luo käyttäjätili',
-          description: 'Luo yrityksellesi työtila ja omistajatili.',
+          description: 'Luo yrityksellesi työtila ja yrityksen pääkäyttäjän tili.',
           actionLabel: 'Luo käyttäjätili',
           icon: UserPlus,
         };

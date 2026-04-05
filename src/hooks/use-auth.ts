@@ -93,6 +93,7 @@ interface AuthContextValue {
   canDelete: boolean;
   canManageUsers: boolean;
   canManageSharedData: boolean;
+  canManageLegalDocuments: boolean;
   requiresPasswordReset: boolean;
   backendConfigError: string | null;
   register: (input: RegisterInput) => Promise<RegisterResult>;
@@ -1172,13 +1173,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const requirePlatformAdmin = () => {
     if (!user || user.role !== 'admin') {
-      throw new Error('Toiminto vaatii pääkäyttäjän oikeudet.');
+      throw new Error('Toiminto vaatii Projektan ylläpidon oikeudet.');
     }
   };
 
   const requireOrganizationOwner = () => {
     if (!user || user.organizationRole !== 'owner') {
-      throw new Error('Toiminto vaatii yrityksen omistajan oikeudet.');
+      throw new Error('Toiminto vaatii yrityksen pääkäyttäjän oikeudet.');
     }
   };
 
@@ -1350,6 +1351,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     canDelete: accessState.canDelete,
     canManageUsers: accessState.canManageUsers,
     canManageSharedData: accessState.canManageSharedData,
+    canManageLegalDocuments: accessState.canManageLegalDocuments,
     requiresPasswordReset,
     backendConfigError,
     register,
