@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle, FileText, ShieldCheck } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useAuth } from '../../hooks/use-auth';
@@ -98,7 +98,7 @@ export default function LegalDocumentsPage() {
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -113,7 +113,7 @@ export default function LegalDocumentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isPlatformAdmin, organization?.id]);
 
   useEffect(() => {
     if (!canManageUsers) {
@@ -122,7 +122,7 @@ export default function LegalDocumentsPage() {
     }
 
     void loadData();
-  }, [canManageUsers, isPlatformAdmin, organization?.id]);
+  }, [canManageUsers, loadData]);
 
   const groupedDocuments = useMemo(() => groupLegalDocumentVersionsByType(documents), [documents]);
   const filteredAcceptances = useMemo(() => {
@@ -188,25 +188,6 @@ export default function LegalDocumentsPage() {
     }
   };
 
-  const handleSaveDraft = async () => {
-    try {
-      setSaving(true);
-      if (editingDocument) {
-        await updateLegalDocumentDraft(editingDocument.id, formData);
-        toast.success('Luonnos päivitetty.');
-      } else {
-        await createLegalDocumentDraft(formData);
-        toast.success('Luonnos luotu.');
-      }
-      setEditorOpen(false);
-      await loadData();
-    } catch (reason) {
-      toast.error(reason instanceof Error ? reason.message : 'Tallennus epäonnistui.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (!canManageUsers) {
     return (
       <div className="p-4 sm:p-8">
@@ -218,30 +199,19 @@ export default function LegalDocumentsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-8 space-y-6">
+    <div className="space-y-6 p-4 sm:p-8">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold">Juridiset dokumentit</h1>
+          <h1 className="text-2xl font-semibold sm:text-3xl">Juridiset dokumentit</h1>
           <p className="mt-1 text-muted-foreground">
-          <ResponsiveDialog
-            open={editorOpen}
-            onOpenChange={setEditorOpen}
-            title={editingDocument ? 'Muokkaa dokumenttiluonnosta' : 'Luo uusi dokumenttiluonnos'}
-            description="Julkaistut versiot ovat muuttumattomia. Tee sisällölliset muutokset aina uuden luonnoksen kautta. Pitkä sisältö scrollaa tämän näkymän sisällä ilman, että otsikko tai sulkemistoiminnot katoavat." 
-            maxWidth="full"
-            footer={(
-              <>
-                <Button type="button" variant="outline" onClick={() => setEditorOpen(false)} className="flex-1 sm:flex-initial">
-                  Sulje
-                </Button>
-                <Button type="button" disabled={saving} onClick={() => void handleSaveDraft()} className="flex-1 sm:flex-initial">
-                  {saving ? 'Tallennetaan...' : editingDocument ? 'Tallenna muutokset' : 'Luo luonnos'}
-                </Button>
-              </>
-            )}
-          >
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-                <div className="min-w-0 space-y-4">
+            Hallitse juridisten dokumenttien versioita, julkaisuja ja hyväksyntäauditointia samasta näkymästä.
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
