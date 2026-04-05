@@ -8,16 +8,27 @@ import type {
   TenderEditorImportPayload,
   TenderEditorImportPreview,
   TenderEditorImportResult,
+  TenderEditorImportTargetKind,
+  TenderEditorManagedBlock,
 } from '../types/tender-editor-import';
+import {
+  buildTenderEditorManagedSurfaceFromPayload,
+  buildTenderEditorManagedBlockMarkerKey,
+} from '../lib/tender-editor-managed-surface';
 
 const DEFAULT_VAT_PERCENT = 25.5;
 const DEFAULT_MARGIN_PERCENT = 30;
 const DEFAULT_VALIDITY_DAYS = 30;
 const DEFAULT_REGION_COEFFICIENT = 1;
-const MANAGED_QUOTE_NOTES_BLOCK_ID = 'quote_notes';
-const MANAGED_INTERNAL_NOTES_BLOCK_ID = 'quote_internal_notes';
+const LEGACY_MANAGED_QUOTE_NOTES_BLOCK_ID = 'quote_notes';
+const LEGACY_MANAGED_INTERNAL_NOTES_BLOCK_ID = 'quote_internal_notes';
 const MANAGED_TEXT_BLOCK_PREFIX = 'tender-editor-import';
 const MANAGED_SECTION_ROW_NOTE_PREFIX = 'tender-editor-import';
+
+const LEGACY_MANAGED_FIELD_MARKER_KEYS: Record<TenderEditorImportTargetKind, string[]> = {
+  quote_notes_section: [LEGACY_MANAGED_QUOTE_NOTES_BLOCK_ID],
+  quote_internal_notes_section: [LEGACY_MANAGED_INTERNAL_NOTES_BLOCK_ID],
+};
 
 type UserBucketKey = 'customers' | 'projects' | 'quotes' | 'quote-rows';
 
@@ -145,33 +156,34 @@ function compactTextBlocks(value: string | null | undefined) {
   return nextValue ? nextValue : undefined;
 }
 
-function getManagedTextBlockMarkers(blockId: string) {
+function getManagedTextBlockMarkers(markerKey: string, options?: { legacy?: boolean }) {
+  const markerPrefix = options?.legacy ? MANAGED_TEXT_BLOCK_PREFIX : `${MANAGED_TEXT_BLOCK_PREFIX}:block`;
+
   return {
-    start: `<!-- ${MANAGED_TEXT_BLOCK_PREFIX}:${blockId}:start -->`,
-    end: `<!-- ${MANAGED_TEXT_BLOCK_PREFIX}:${blockId}:end -->`,
+    start: `<!-- ${markerPrefix}:${markerKey}:start -->`,
+    end: `<!-- ${markerPrefix}:${markerKey}:end -->`,
   };
 }
 
-function buildManagedTextBlock(blockId: string, content: string | null | undefined) {
+function buildManagedTextBlock(markerKey: string, content: string | null | undefined, options?: { legacy?: boolean }) {
   const nextContent = normalizeContent(content);
 
   if (!nextContent) {
     return null;
   }
 
-  const markers = getManagedTextBlockMarkers(blockId);
+  const markers = getManagedTextBlockMarkers(markerKey, options);
   return `${markers.start}\n${nextContent}\n${markers.end}`;
 }
 
 function upsertManagedTextBlock(options: {
   existingValue?: string | null;
-  blockId: string;
+  markerKey: string;
   content: string | null | undefined;
-  legacyCandidates?: Array<string | null | undefined>;
 }) {
   const existingValue = options.existingValue ?? '';
-  const nextBlock = buildManagedTextBlock(options.blockId, options.content);
-  const markers = getManagedTextBlockMarkers(options.blockId);
+  const nextBlock = buildManagedTextBlock(options.markerKey, options.content);
+  const markers = getManagedTextBlockMarkers(options.markerKey);
   const blockPattern = new RegExp(`${escapeRegex(markers.start)}[\\s\\S]*?${escapeRegex(markers.end)}`, 'm');
 
   if (blockPattern.test(existingValue)) {
@@ -183,20 +195,75 @@ function upsertManagedTextBlock(options: {
     return compactTextBlocks(existingValue);
   }
 
-  const normalizedExisting = normalizeContent(existingValue);
-  const normalizedLegacyCandidates = (options.legacyCandidates ?? [])
-    .map((candidate) => normalizeContent(candidate))
-    .filter((candidate): candidate is string => Boolean(candidate));
-
-  if (!normalizedExisting || normalizedLegacyCandidates.some((candidate) => candidate === normalizedExisting)) {
-    return nextBlock;
-  }
-
-  return compactTextBlocks(`${nextBlock}\n\n${existingValue}`);
+  return compactTextBlocks(existingValue ? `${existingValue}\n\n${nextBlock}` : nextBlock);
 }
 
-function buildManagedSectionRowNote(draftPackageId: string, sectionKey: string) {
-  return `${MANAGED_SECTION_ROW_NOTE_PREFIX}:${draftPackageId}:${sectionKey}`;
+function removeManagedTextBlock(existingValue: string | null | undefined, markerKey: string, options?: { legacy?: boolean }) {
+  const currentValue = existingValue ?? '';
+  const markers = getManagedTextBlockMarkers(markerKey, options);
+  const blockPattern = new RegExp(`${escapeRegex(markers.start)}[\\s\\S]*?${escapeRegex(markers.end)}`, 'm');
+
+  if (!blockPattern.test(currentValue)) {
+    return compactTextBlocks(currentValue);
+  }
+
+  return compactTextBlocks(currentValue.replace(blockPattern, ''));
+}
+
+function extractOwnedManagedTextMarkerKeys(existingValue: string | null | undefined, draftPackageId: string) {
+  const currentValue = existingValue ?? '';
+  const markerPattern = new RegExp(`${escapeRegex(`<!-- ${MANAGED_TEXT_BLOCK_PREFIX}:block:`)}(.+?)${escapeRegex(':start -->')}`, 'g');
+  const markerKeys = new Set<string>();
+
+  let match = markerPattern.exec(currentValue);
+
+  while (match) {
+    const markerKey = match[1]?.trim();
+
+    if (markerKey && markerKey.startsWith(`${draftPackageId}:`)) {
+      markerKeys.add(markerKey);
+    }
+
+    match = markerPattern.exec(currentValue);
+  }
+
+  return [...markerKeys];
+}
+
+export function syncTenderEditorManagedBlocks(options: {
+  existingValue?: string | null;
+  draftPackageId: string;
+  targetKind: TenderEditorImportTargetKind;
+  blocks: TenderEditorManagedBlock[];
+}) {
+  let nextValue = options.existingValue ?? '';
+
+  LEGACY_MANAGED_FIELD_MARKER_KEYS[options.targetKind].forEach((markerKey) => {
+    nextValue = removeManagedTextBlock(nextValue, markerKey, { legacy: true }) ?? '';
+  });
+
+  const targetBlocks = options.blocks.filter((block) => block.target_kind === options.targetKind);
+  const desiredMarkerKeys = new Set(targetBlocks.map((block) => block.marker_key));
+
+  extractOwnedManagedTextMarkerKeys(nextValue, options.draftPackageId).forEach((markerKey) => {
+    if (!desiredMarkerKeys.has(markerKey)) {
+      nextValue = removeManagedTextBlock(nextValue, markerKey) ?? '';
+    }
+  });
+
+  targetBlocks.forEach((block) => {
+    nextValue = upsertManagedTextBlock({
+      existingValue: nextValue,
+      markerKey: block.marker_key,
+      content: block.content_md,
+    }) ?? '';
+  });
+
+  return compactTextBlocks(nextValue);
+}
+
+function buildManagedSectionRowNote(draftPackageId: string, blockId: TenderEditorManagedBlock['block_id']) {
+  return `${MANAGED_SECTION_ROW_NOTE_PREFIX}:${buildTenderEditorManagedBlockMarkerKey(draftPackageId, blockId)}`;
 }
 
 function parseManagedSectionRowNote(value?: string | null) {
@@ -206,13 +273,13 @@ function parseManagedSectionRowNote(value?: string | null) {
     return null;
   }
 
-  const [, draftPackageId = '', sectionKey = ''] = nextValue.split(':');
+  const [, draftPackageId = '', blockId = ''] = nextValue.split(':');
 
-  if (!draftPackageId || !sectionKey) {
+  if (!draftPackageId || !blockId) {
     return null;
   }
 
-  return { draftPackageId, sectionKey };
+  return { draftPackageId, blockId };
 }
 
 function isManagedSectionRow(row: QuoteRow, draftPackageId: string) {
@@ -237,6 +304,7 @@ function buildQuoteDraft(options: {
   preview: TenderEditorImportPreview;
   timestamp: string;
 }): Quote {
+  const managedSurface = buildTenderEditorManagedSurfaceFromPayload(options.preview.payload);
   const validUntil = new Date();
   validUntil.setDate(validUntil.getDate() + DEFAULT_VALIDITY_DAYS);
 
@@ -252,13 +320,15 @@ function buildQuoteDraft(options: {
     sentAt: undefined,
     acceptedAt: undefined,
     rejectedAt: undefined,
-    notes: upsertManagedTextBlock({
-      blockId: MANAGED_QUOTE_NOTES_BLOCK_ID,
-      content: options.preview.payload.sections.quote_notes_md,
+    notes: syncTenderEditorManagedBlocks({
+      draftPackageId: options.preview.payload.source_draft_package_id,
+      targetKind: 'quote_notes_section',
+      blocks: managedSurface.blocks,
     }),
-    internalNotes: upsertManagedTextBlock({
-      blockId: MANAGED_INTERNAL_NOTES_BLOCK_ID,
-      content: options.preview.payload.sections.quote_internal_notes_md,
+    internalNotes: syncTenderEditorManagedBlocks({
+      draftPackageId: options.preview.payload.source_draft_package_id,
+      targetKind: 'quote_internal_notes_section',
+      blocks: managedSurface.blocks,
     }),
     schedule: undefined,
     scheduleMilestones: [],
@@ -288,14 +358,13 @@ function buildSectionRows(options: {
   draftPackageId: string;
   quoteId: string;
   regionCoefficient: number;
-  preview: TenderEditorImportPreview;
+  blocks: TenderEditorManagedBlock[];
   timestamp: string;
-  existingRowsBySectionKey?: Map<string, QuoteRow>;
+  existingRowsByBlockId?: Map<string, QuoteRow>;
 }): QuoteRow[] {
-  return options.preview.sections
-    .filter((section) => section.item_count > 0)
-    .map((section, index) => {
-      const existingRow = options.existingRowsBySectionKey?.get(section.key);
+  return options.blocks
+    .map((block, index) => {
+      const existingRow = options.existingRowsByBlockId?.get(block.block_id);
 
       return {
         id: existingRow?.id ?? crypto.randomUUID(),
@@ -307,7 +376,7 @@ function buildSectionRows(options: {
         chargeType: undefined,
         source: 'manual',
         productId: undefined,
-        productName: section.title,
+        productName: block.title,
         productCode: '',
         description: '',
         quantity: 0,
@@ -320,7 +389,7 @@ function buildSectionRows(options: {
         priceAdjustment: 0,
         regionMultiplier: options.regionCoefficient || DEFAULT_REGION_COEFFICIENT,
         installationGroupId: undefined,
-        notes: buildManagedSectionRowNote(options.draftPackageId, section.key),
+        notes: buildManagedSectionRowNote(options.draftPackageId, block.block_id),
         manualSalesPrice: true,
         ownerUserId: existingRow?.ownerUserId ?? options.actorUserId,
         createdAt: existingRow?.createdAt ?? options.timestamp,
@@ -353,6 +422,7 @@ function replaceManagedSectionRows(options: {
   existingRows: QuoteRow[];
   timestamp: string;
 }) {
+  const managedSurface = buildTenderEditorManagedSurfaceFromPayload(options.preview.payload);
   const currentRows = options.existingRows
     .filter((row) => row.quoteId === options.quoteId)
     .sort((left, right) => left.sortOrder - right.sortOrder);
@@ -363,13 +433,13 @@ function replaceManagedSectionRows(options: {
   const rowsToReplace = managedRows.length > 0 ? managedRows : legacyManagedRows;
   const insertionIndex = rowsToReplace.length > 0 ? Math.min(...rowsToReplace.map((row) => row.sortOrder)) : 0;
   const unmanagedRows = currentRows.filter((row) => !rowsToReplace.some((candidate) => candidate.id === row.id));
-  const existingRowsBySectionKey = new Map<string, QuoteRow>();
+  const existingRowsByBlockId = new Map<string, QuoteRow>();
 
   managedRows.forEach((row) => {
     const marker = parseManagedSectionRowNote(row.notes);
 
     if (marker) {
-      existingRowsBySectionKey.set(marker.sectionKey, row);
+      existingRowsByBlockId.set(marker.blockId, row);
     }
   });
 
@@ -378,9 +448,9 @@ function replaceManagedSectionRows(options: {
     draftPackageId: options.draftPackageId,
     quoteId: options.quoteId,
     regionCoefficient: options.regionCoefficient,
-    preview: options.preview,
+    blocks: managedSurface.blocks,
     timestamp: options.timestamp,
-    existingRowsBySectionKey,
+    existingRowsByBlockId,
   });
   const beforeRows = unmanagedRows.filter((row) => row.sortOrder < insertionIndex);
   const afterRows = unmanagedRows.filter((row) => row.sortOrder >= insertionIndex);
@@ -423,6 +493,7 @@ async function updateExistingImportedQuote(options: {
   resolvedTarget: ResolvedImportTarget;
 }): Promise<TenderEditorImportResult | null> {
   const timestamp = nowIso();
+  const managedSurface = buildTenderEditorManagedSurfaceFromPayload(options.preview.payload);
   const quotes = await readUserBucket<Quote[]>(options.client, 'quotes', options.actorUserId, []);
   const existingRows = await readUserBucket<QuoteRow[]>(options.client, 'quote-rows', options.actorUserId, []);
   const quote = quotes.find((candidate) => candidate.id === options.quoteId) ?? null;
@@ -431,23 +502,17 @@ async function updateExistingImportedQuote(options: {
     return null;
   }
 
-  const nextNotes = upsertManagedTextBlock({
+  const nextNotes = syncTenderEditorManagedBlocks({
     existingValue: quote.notes,
-    blockId: MANAGED_QUOTE_NOTES_BLOCK_ID,
-    content: options.preview.payload.sections.quote_notes_md,
-    legacyCandidates: [
-      options.previousPayloadSnapshot?.sections.quote_notes_md,
-      options.preview.payload.sections.quote_notes_md,
-    ],
+    draftPackageId: options.preview.payload.source_draft_package_id,
+    targetKind: 'quote_notes_section',
+    blocks: managedSurface.blocks,
   });
-  const nextInternalNotes = upsertManagedTextBlock({
+  const nextInternalNotes = syncTenderEditorManagedBlocks({
     existingValue: quote.internalNotes,
-    blockId: MANAGED_INTERNAL_NOTES_BLOCK_ID,
-    content: options.preview.payload.sections.quote_internal_notes_md,
-    legacyCandidates: [
-      options.previousPayloadSnapshot?.sections.quote_internal_notes_md,
-      options.preview.payload.sections.quote_internal_notes_md,
-    ],
+    draftPackageId: options.preview.payload.source_draft_package_id,
+    targetKind: 'quote_internal_notes_section',
+    blocks: managedSurface.blocks,
   });
   const nextManagedRows = replaceManagedSectionRows({
     actorUserId: options.actorUserId,
@@ -639,7 +704,7 @@ async function createNewImportedQuote(options: {
     draftPackageId: options.preview.payload.source_draft_package_id,
     quoteId: quote.id,
     regionCoefficient: target.projectRegionCoefficient,
-    preview: options.preview,
+    blocks: buildTenderEditorManagedSurfaceFromPayload(options.preview.payload).blocks,
     timestamp,
   });
 

@@ -190,7 +190,7 @@ function createEditorImportPreview(): TenderEditorImportPreview {
     importable_item_count: 1,
     payload_hash: 'cafebabe',
     payload: {
-      schema_version: 'tender-editor-import/v1',
+      schema_version: 'tender-editor-import/v2',
       generated_at: '2026-04-05T13:05:00.000Z',
       source_draft_package_id: '66666666-6666-4666-8666-666666666666',
       source_tender_package_id: '11111111-1111-4111-8111-111111111111',
@@ -207,8 +207,25 @@ function createEditorImportPreview(): TenderEditorImportPreview {
         imported_quote_id: '61616161-6161-4616-8616-616161616161',
         will_create_placeholder_target: false,
       },
+      managed_surface: {
+        contract_version: 'tender-editor-managed-surface/v1',
+        ownership_notice: 'Tarjousäly päivittää vain nämä hallitut lohkot. Muu editorin sisältö ei kuulu adapterin hallintaan.',
+        blocks: [
+          {
+            block_id: 'requirements_and_quote_notes',
+            marker_key: '66666666-6666-4666-8666-666666666666:requirements_and_quote_notes',
+            import_group: 'requirements_and_quote_notes',
+            target_kind: 'quote_notes_section',
+            target_label: 'Tarjouksen notes-kenttä',
+            title: 'Tarjoushuomiot',
+            content_md: '## Tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nTämä on hyväksytty.',
+            item_count: 1,
+            owned_by_adapter: true,
+          },
+        ],
+      },
       sections: {
-        quote_notes_md: '## Vaatimukset / tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nTämä on hyväksytty.',
+        quote_notes_md: '## Tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nTämä on hyväksytty.',
         quote_internal_notes_md: null,
       },
       items: [
@@ -235,15 +252,15 @@ function createEditorImportPreview(): TenderEditorImportPreview {
     sections: [
       {
         key: 'requirements_and_quote_notes',
-        title: 'Vaatimukset / tarjoushuomiot',
+        title: 'Tarjoushuomiot',
         target_kind: 'quote_notes_section',
         target_label: 'Tarjouksen notes-kenttä',
         item_count: 1,
-        preview_md: '## Vaatimukset / tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nTämä on hyväksytty.',
+        preview_md: '## Tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nTämä on hyväksytty.',
       },
       {
         key: 'selected_references',
-        title: 'Valitut referenssit',
+        title: 'Referenssiyhteenveto',
         target_kind: 'quote_notes_section',
         target_label: 'Tarjouksen notes-kenttä',
         item_count: 0,
@@ -251,7 +268,7 @@ function createEditorImportPreview(): TenderEditorImportPreview {
       },
       {
         key: 'resolved_missing_items_and_attachment_notes',
-        title: 'Ratkaistut puutteet / liitehuomiot',
+        title: 'Liitehuomiot ja ratkaistut puutteet',
         target_kind: 'quote_internal_notes_section',
         target_label: 'Tarjouksen internalNotes-kenttä',
         item_count: 0,
@@ -259,7 +276,7 @@ function createEditorImportPreview(): TenderEditorImportPreview {
       },
       {
         key: 'notes_for_editor',
-        title: 'Notes for editor',
+        title: 'Sisäiset editorihuomiot',
         target_kind: 'quote_internal_notes_section',
         target_label: 'Tarjouksen internalNotes-kenttä',
         item_count: 0,
@@ -303,8 +320,42 @@ function createReimportPreview(): TenderEditorReconciliationPreview {
     changed_count: 1,
     removed_count: 0,
     unchanged_count: 0,
+    added_blocks: 1,
+    changed_blocks: 1,
+    removed_blocks: 0,
+    unchanged_blocks: 0,
     can_reimport: true,
-    warnings: ['Managed surface muuttui section-koosteen tasolla.'],
+    warnings: [],
+    blocks: [
+      {
+        block_id: 'requirements_and_quote_notes',
+        marker_key: '66666666-6666-4666-8666-666666666666:requirements_and_quote_notes',
+        import_group: 'requirements_and_quote_notes',
+        target_kind: 'quote_notes_section',
+        target_label: 'Tarjouksen notes-kenttä',
+        title: 'Tarjoushuomiot',
+        change_type: 'changed',
+        current_content_md: '## Tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nTämä on hyväksytty.',
+        previous_content_md: '## Tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nVanha sisältö.',
+        current_item_count: 1,
+        previous_item_count: 1,
+        owned_by_adapter: true,
+      },
+      {
+        block_id: 'notes_for_editor',
+        marker_key: '66666666-6666-4666-8666-666666666666:notes_for_editor',
+        import_group: 'notes_for_editor',
+        target_kind: 'quote_internal_notes_section',
+        target_label: 'Tarjouksen internalNotes-kenttä',
+        title: 'Sisäiset editorihuomiot',
+        change_type: 'added',
+        current_content_md: '## Sisäiset editorihuomiot\n\n### Avoin editor-note\n\nPidä tämä mukana editorissa.',
+        previous_content_md: null,
+        current_item_count: 1,
+        previous_item_count: null,
+        owned_by_adapter: true,
+      },
+    ],
     entries: [
       {
         key: 'requirements_and_quote_notes:accepted_requirement:requirement:44444444-4444-4444-8444-444444444444',
@@ -359,11 +410,14 @@ describe('TenderDraftPackagePanel', () => {
       />,
     );
 
-    expect(markup).toContain('Imported quote handoff + re-import reconciliation');
+    expect(markup).toContain('Managed import surface hardening');
     expect(markup).toContain('Päivitä samaan quoteen');
     expect(markup).toContain('Avaa importoitu quote');
     expect(markup).toContain('Import handoff');
     expect(markup).toContain('Re-import reconciliation');
+    expect(markup).toContain('Adapterin hallitsema pinta');
+    expect(markup).toContain('Tarjousäly hallitsee vain alla näkyviä lohkoja');
+    expect(markup).toContain('Tarjoushuomiot');
     expect(markup).toContain('Import-ajohistoria');
     expect(markup).toContain('Draft muuttunut importin jälkeen');
     expect(markup).toContain('Revision 2');

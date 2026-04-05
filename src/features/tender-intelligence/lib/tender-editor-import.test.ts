@@ -83,9 +83,23 @@ describe('tender-editor-import', () => {
 
     expect(preview.importable_item_count).toBe(2);
     expect(preview.payload_hash).toHaveLength(8);
+    expect(preview.payload.schema_version).toBe('tender-editor-import/v2');
+    expect(preview.payload.managed_surface).toMatchObject({
+      contract_version: 'tender-editor-managed-surface/v1',
+      blocks: [
+        expect.objectContaining({
+          block_id: 'requirements_and_quote_notes',
+          marker_key: '66666666-6666-4666-8666-666666666666:requirements_and_quote_notes',
+        }),
+        expect.objectContaining({
+          block_id: 'notes_for_editor',
+          marker_key: '66666666-6666-4666-8666-666666666666:notes_for_editor',
+        }),
+      ],
+    });
     expect(preview.payload.metadata.target_quote_title).toBe('Tarjouspaketti / editor import');
-    expect(preview.payload.sections.quote_notes_md).toContain('Vaatimukset / tarjoushuomiot');
-    expect(preview.payload.sections.quote_internal_notes_md).toContain('Notes for editor');
+    expect(preview.payload.sections.quote_notes_md).toContain('Tarjoushuomiot');
+    expect(preview.payload.sections.quote_internal_notes_md).toContain('Sisäiset editorihuomiot');
     expect(preview.sections.find((section) => section.key === 'requirements_and_quote_notes')).toMatchObject({
       item_count: 1,
       target_kind: 'quote_notes_section',

@@ -6,11 +6,14 @@ import {
   type TenderEditorImportMode,
   type TenderEditorImportPayload,
   type TenderEditorImportPreview,
+  type TenderEditorManagedBlock,
   type TenderEditorReconciliationEntry,
+  type TenderEditorReconciliationBlock,
   type TenderEditorReconciliationPreview,
   tenderDraftPackageImportStateSchema,
   tenderEditorReconciliationPreviewSchema,
 } from '../types/tender-editor-import';
+import { buildTenderEditorManagedSurfaceFromPayload } from './tender-editor-managed-surface';
 
 function normalizeContent(value: string | null | undefined) {
   const nextValue = value?.trim();
@@ -56,9 +59,17 @@ function buildManagedEntries(items: TenderEditorImportItem[]) {
 }
 
 function buildManagedSurface(payload: TenderEditorImportPayload) {
+  const managedSurface = buildTenderEditorManagedSurfaceFromPayload(payload);
+
   return {
-    quote_notes_md: normalizeContent(payload.sections.quote_notes_md),
-    quote_internal_notes_md: normalizeContent(payload.sections.quote_internal_notes_md),
+    blocks: managedSurface.blocks.map((block) => ({
+      block_id: block.block_id,
+      import_group: block.import_group,
+      target_kind: block.target_kind,
+      title: block.title,
+      content_md: normalizeContent(block.content_md),
+      item_count: block.item_count,
+    })),
     items: buildManagedEntries(payload.items),
   };
 }
@@ -82,6 +93,33 @@ function mapChangedEntry(options: {
     change_type: options.changeType,
     current_content_md: options.current?.content_md ?? null,
     previous_content_md: options.previous?.content_md ?? null,
+  };
+}
+
+function mapChangedBlock(options: {
+  current?: TenderEditorManagedBlock;
+  previous?: TenderEditorManagedBlock;
+  changeType: TenderEditorReconciliationBlock['change_type'];
+}): TenderEditorReconciliationBlock {
+  const basis = options.current ?? options.previous;
+
+  if (!basis) {
+    throw new Error('Reconciliation block requires current or previous managed block.');
+  }
+
+  return {
+    block_id: basis.block_id,
+    marker_key: basis.marker_key,
+    import_group: basis.import_group,
+    target_kind: basis.target_kind,
+    target_label: basis.target_label,
+    title: basis.title,
+    change_type: options.changeType,
+    current_content_md: options.current?.content_md ?? null,
+    previous_content_md: options.previous?.content_md ?? null,
+    current_item_count: options.current?.item_count ?? null,
+    previous_item_count: options.previous?.item_count ?? null,
+    owned_by_adapter: true,
   };
 }
 
@@ -160,16 +198,58 @@ export function buildTenderEditorReconciliationPreview(options: {
   targetQuoteTitle?: string | null;
   importMode: TenderEditorImportMode;
 }): TenderEditorReconciliationPreview {
+  const currentManagedBlocks = buildTenderEditorManagedSurfaceFromPayload(options.preview.payload).blocks;
   const currentEntries = buildManagedEntries(options.preview.payload.items);
   const previousPayload = options.latestSuccessfulRun?.payload_snapshot ?? null;
+  const previousManagedBlocks = previousPayload ? buildTenderEditorManagedSurfaceFromPayload(previousPayload).blocks : [];
   const previousEntries = previousPayload ? buildManagedEntries(previousPayload.items) : [];
+  const previousBlocksById = new Map(previousManagedBlocks.map((block) => [block.block_id, block]));
   const previousEntriesByKey = new Map(previousEntries.map((entry) => [entry.key, entry]));
+  const currentBlocksById = new Map(currentManagedBlocks.map((block) => [block.block_id, block]));
   const currentEntriesByKey = new Map(currentEntries.map((entry) => [entry.key, entry]));
+  const blocks: TenderEditorReconciliationBlock[] = [];
   const entries: TenderEditorReconciliationEntry[] = [];
   let addedCount = 0;
   let changedCount = 0;
   let removedCount = 0;
   let unchangedCount = 0;
+  let addedBlocks = 0;
+  let changedBlocks = 0;
+  let removedBlocks = 0;
+  let unchangedBlocks = 0;
+
+  currentManagedBlocks.forEach((block) => {
+    const previousBlock = previousBlocksById.get(block.block_id);
+
+    if (!previousBlock) {
+      blocks.push(mapChangedBlock({ current: block, changeType: 'added' }));
+      addedBlocks += 1;
+      return;
+    }
+
+    if (
+      previousBlock.title !== block.title
+      || previousBlock.target_kind !== block.target_kind
+      || previousBlock.content_md !== block.content_md
+      || previousBlock.item_count !== block.item_count
+    ) {
+      blocks.push(mapChangedBlock({ current: block, previous: previousBlock, changeType: 'changed' }));
+      changedBlocks += 1;
+      return;
+    }
+
+    blocks.push(mapChangedBlock({ current: block, previous: previousBlock, changeType: 'unchanged' }));
+    unchangedBlocks += 1;
+  });
+
+  previousManagedBlocks.forEach((block) => {
+    if (currentBlocksById.has(block.block_id)) {
+      return;
+    }
+
+    blocks.push(mapChangedBlock({ previous: block, changeType: 'removed' }));
+    removedBlocks += 1;
+  });
 
   currentEntries.forEach((entry) => {
     const previousEntry = previousEntriesByKey.get(entry.key);
@@ -213,11 +293,11 @@ export function buildTenderEditorReconciliationPreview(options: {
   if (
     previousPayload
     && options.preview.payload_hash !== options.latestSuccessfulRun?.payload_hash
-    && addedCount === 0
-    && changedCount === 0
-    && removedCount === 0
+    && addedBlocks === 0
+    && changedBlocks === 0
+    && removedBlocks === 0
   ) {
-    warnings.push('Managed surface muuttui vain järjestyksen tai koostetun section-tekstin tasolla.');
+    warnings.push('Managed surface muuttui vain lohkojen järjestyksen tai koostetun tekstin tasolla.');
   }
 
   if (reimportStatus === 'up_to_date') {
@@ -240,8 +320,13 @@ export function buildTenderEditorReconciliationPreview(options: {
     changed_count: changedCount,
     removed_count: removedCount,
     unchanged_count: unchangedCount,
+    added_blocks: addedBlocks,
+    changed_blocks: changedBlocks,
+    removed_blocks: removedBlocks,
+    unchanged_blocks: unchangedBlocks,
     can_reimport: options.preview.validation.can_import && options.importMode === 'update_existing_quote',
     warnings,
+    blocks,
     entries,
   });
 }

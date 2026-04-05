@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { buildTenderDraftPackageReadiness } from '../lib/tender-draft-package';
+import { buildTenderEditorManagedSurfaceFromPayload } from '../lib/tender-editor-managed-surface';
 import {
   formatTenderTimestamp,
   getTenderTextPreview,
@@ -81,6 +82,36 @@ function resolvePrimaryImportActionLabel(importState: TenderDraftPackageImportSt
   }
 
   return 'Tuo editoriin';
+}
+
+function resolveReconciliationChangeLabel(changeType: 'added' | 'changed' | 'removed' | 'unchanged') {
+  switch (changeType) {
+    case 'added':
+      return 'Uusi lohko';
+    case 'changed':
+      return 'Muuttuu';
+    case 'removed':
+      return 'Poistuu';
+    case 'unchanged':
+      return 'Ennallaan';
+    default:
+      return changeType;
+  }
+}
+
+function resolveReconciliationChangeVariant(changeType: 'added' | 'changed' | 'removed' | 'unchanged') {
+  switch (changeType) {
+    case 'added':
+      return 'default' as const;
+    case 'changed':
+      return 'outline' as const;
+    case 'removed':
+      return 'destructive' as const;
+    case 'unchanged':
+      return 'secondary' as const;
+    default:
+      return 'outline' as const;
+  }
 }
 
 function ReadinessCard({ title, value, description }: { title: string; value: string; description: string }) {
@@ -205,6 +236,11 @@ export default function TenderDraftPackagePanel({
   const excludedItems = selectedDraftPackage?.items.filter((item) => !item.isIncluded) ?? [];
   const payload = selectedDraftPackage?.exportPayload ?? null;
   const importValidation = editorImportValidation ?? editorImportPreview?.validation ?? null;
+  const managedSurface = useMemo(
+    () => (editorImportPreview ? buildTenderEditorManagedSurfaceFromPayload(editorImportPreview.payload) : null),
+    [editorImportPreview],
+  );
+  const managedBlocks = managedSurface?.blocks ?? [];
   const latestImportRun = draftPackageImportRuns[0] ?? draftPackageImportState?.latest_run ?? null;
   const canOpenImportedQuote = Boolean(selectedDraftPackage?.importedQuoteId && selectedPackage.package.linkedProjectId);
 
@@ -221,10 +257,10 @@ export default function TenderDraftPackagePanel({
           <div className="space-y-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <FileText className="h-4.5 w-4.5 text-slate-500" />
-              Imported quote handoff + re-import reconciliation
+              Managed import surface hardening
             </CardTitle>
             <CardDescription>
-              Tämä vaihe näyttää importoidun quoten handoffin, vertaa nykyistä draft packagea viimeiseen onnistuneeseen importiin ja päivittää saman tarjousluonnoksen vain adapterin omistamilta notes-, internalNotes- ja section-pinnoilta.
+              Tämä vaihe rajaa Tarjousälyn hallitsemat editorilohkot eksplisiittisesti, näyttää niiden block-level diffit ja päivittää re-importissa vain adapterin varmasti omistaman notes-, internalNotes- ja section-pinnan.
             </CardDescription>
           </div>
 
@@ -392,6 +428,7 @@ export default function TenderDraftPackagePanel({
                     <p>Kohdeproject: {draftPackageImportState?.target_project_id ?? selectedPackage.package.linkedProjectId ?? 'Luodaan tai ratkaistaan importissa'}</p>
                     <p>Kohdeasiakas: {draftPackageImportState?.target_customer_id ?? selectedPackage.package.linkedCustomerId ?? 'Luodaan tai ratkaistaan importissa'}</p>
                     <p>Nykyinen payload hash: {editorImportPreview ? shortenHash(editorImportPreview.payload_hash) : 'Ladataan...'}</p>
+                    <p>Hallittuja lohkoja: {managedBlocks.length}</p>
                   </div>
                 </div>
 
@@ -570,6 +607,8 @@ export default function TenderDraftPackagePanel({
                           {draftPackageImportState && <p>Mode: {TENDER_EDITOR_IMPORT_MODE_META[draftPackageImportState.suggested_import_mode].label}</p>}
                           <p>Placeholder-kohde: {editorImportPreview.payload.metadata.will_create_placeholder_target ? 'Kyllä' : 'Ei'}</p>
                           <p>Payload hash: {shortenHash(editorImportPreview.payload_hash)}</p>
+                          {managedSurface && <p>Managed contract: {managedSurface.contract_version}</p>}
+                          {managedSurface && <p>{managedSurface.ownership_notice}</p>}
                         </div>
                       </div>
 
@@ -596,6 +635,34 @@ export default function TenderDraftPackagePanel({
                       </div>
                     </div>
 
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+                        <FileText className="h-4 w-4 text-slate-500" />
+                        Adapterin hallitsema pinta
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-700">
+                        Tarjousäly hallitsee vain alla näkyviä lohkoja. Kaikki muu quoten sisältö jää re-importissa rauhaan.
+                      </p>
+                      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                        {managedBlocks.length > 0 ? managedBlocks.map((block) => (
+                          <div key={block.marker_key} className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="outline">{block.title}</Badge>
+                              <Badge variant="outline">{block.target_label}</Badge>
+                              <Badge variant="outline">{block.item_count} riviä</Badge>
+                            </div>
+                            <p className="mt-3 text-xs uppercase tracking-[0.14em] text-slate-500">Marker</p>
+                            <p className="mt-1 text-sm text-slate-700">{block.marker_key}</p>
+                            <p className="mt-3 text-sm leading-6 text-slate-700 whitespace-pre-line">
+                              {getTenderTextPreview(block.content_md, 320)}
+                            </p>
+                          </div>
+                        )) : (
+                          <p className="text-sm leading-6 text-slate-700">Tassa import-previewssa ei ole hallittuja lohkoja.</p>
+                        )}
+                      </div>
+                    </div>
+
                     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
                       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                         <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
@@ -610,20 +677,20 @@ export default function TenderDraftPackagePanel({
                             </div>
                             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                               <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Added</p>
-                                <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.added_count}</p>
+                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Lisätyt lohkot</p>
+                                <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.added_blocks}</p>
                               </div>
                               <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Changed</p>
-                                <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.changed_count}</p>
+                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Muuttuvat lohkot</p>
+                                <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.changed_blocks}</p>
                               </div>
                               <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Removed</p>
-                                <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.removed_count}</p>
+                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Poistuvat lohkot</p>
+                                <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.removed_blocks}</p>
                               </div>
                               <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Unchanged</p>
-                                <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.unchanged_count}</p>
+                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Ennallaan</p>
+                                <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.unchanged_blocks}</p>
                               </div>
                             </div>
 
@@ -639,20 +706,39 @@ export default function TenderDraftPackagePanel({
                             )}
 
                             <div className="space-y-2">
-                              <p className="text-sm font-medium text-slate-950">Keskeiset muutokset</p>
-                              {draftPackageReimportPreview.entries.slice(0, 6).map((entry) => (
-                                <div key={entry.key} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p className="text-sm font-medium text-slate-950">Lohkokohtaiset muutokset</p>
+                              {draftPackageReimportPreview.blocks.slice(0, 6).map((block) => (
+                                <div key={block.marker_key} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <Badge variant="outline">{entry.change_type}</Badge>
-                                    <Badge variant="outline">{entry.import_group}</Badge>
+                                    <Badge variant={resolveReconciliationChangeVariant(block.change_type)}>{resolveReconciliationChangeLabel(block.change_type)}</Badge>
+                                    <Badge variant="outline">{block.target_label}</Badge>
                                   </div>
-                                  <p className="mt-2 text-sm font-medium text-slate-950">{entry.title}</p>
+                                  <p className="mt-2 text-sm font-medium text-slate-950">{block.title}</p>
+                                  <p className="mt-2 text-sm leading-6 text-slate-700">Marker {block.marker_key}</p>
+                                  <p className="mt-2 text-sm leading-6 text-slate-700 whitespace-pre-line">
+                                    {getTenderTextPreview(block.current_content_md ?? block.previous_content_md ?? '', 240)}
+                                  </p>
                                 </div>
                               ))}
-                              {draftPackageReimportPreview.entries.length === 0 && (
-                                <p className="text-sm leading-6 text-slate-700">Reconciliation ei löytänyt item-tason eroja. Tila voi silti olla ajan tasalla tai muuttunut vain section-koosteen järjestyksen tasolla.</p>
+                              {draftPackageReimportPreview.blocks.length === 0 && (
+                                <p className="text-sm leading-6 text-slate-700">Reconciliation ei löytänyt block-tason eroja. Tila voi silti olla ajan tasalla tai muuttunut vain payloadin koostetasolla.</p>
                               )}
                             </div>
+
+                            {draftPackageReimportPreview.entries.length > 0 && (
+                              <div className="space-y-2">
+                                <p className="text-sm font-medium text-slate-950">Item-tason detaljit</p>
+                                {draftPackageReimportPreview.entries.slice(0, 4).map((entry) => (
+                                  <div key={entry.key} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <Badge variant="outline">{entry.import_group}</Badge>
+                                      <Badge variant="outline">{entry.change_type}</Badge>
+                                    </div>
+                                    <p className="mt-2 font-medium text-slate-950">{entry.title}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <p className="mt-3 text-sm leading-6 text-slate-700">Re-import previewta ei ole saatavilla tälle luonnospaketille.</p>

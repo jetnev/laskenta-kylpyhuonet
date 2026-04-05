@@ -2,9 +2,9 @@ import type { TenderDraftPackage, TenderDraftPackageItem } from '../types/tender
 import {
   type TenderEditorImportGroup,
   type TenderEditorImportItem,
+  type TenderEditorManagedSurface,
   type TenderEditorImportPreview,
   type TenderEditorImportPreviewSection,
-  type TenderEditorImportTargetKind,
   type TenderEditorImportValidationIssue,
   type TenderEditorImportValidationResult,
   tenderEditorImportPayloadSchema,
@@ -13,32 +13,11 @@ import {
   TENDER_EDITOR_IMPORT_SCHEMA_VERSION,
 } from '../types/tender-editor-import';
 import { buildTenderEditorImportPayloadHash } from './tender-editor-reconciliation';
-
-const GROUP_META: Record<
-  TenderEditorImportGroup,
-  { title: string; targetKind: TenderEditorImportTargetKind; targetLabel: string }
-> = {
-  requirements_and_quote_notes: {
-    title: 'Vaatimukset / tarjoushuomiot',
-    targetKind: 'quote_notes_section',
-    targetLabel: 'Tarjouksen notes-kenttä',
-  },
-  selected_references: {
-    title: 'Valitut referenssit',
-    targetKind: 'quote_notes_section',
-    targetLabel: 'Tarjouksen notes-kenttä',
-  },
-  resolved_missing_items_and_attachment_notes: {
-    title: 'Ratkaistut puutteet / liitehuomiot',
-    targetKind: 'quote_internal_notes_section',
-    targetLabel: 'Tarjouksen internalNotes-kenttä',
-  },
-  notes_for_editor: {
-    title: 'Notes for editor',
-    targetKind: 'quote_internal_notes_section',
-    targetLabel: 'Tarjouksen internalNotes-kenttä',
-  },
-};
+import {
+  buildTenderEditorManagedFieldContent,
+  buildTenderEditorManagedSurface,
+  TENDER_EDITOR_MANAGED_BLOCK_META,
+} from './tender-editor-managed-surface';
 
 function normalizeContent(value: string | null | undefined) {
   const nextValue = value?.trim();
@@ -63,7 +42,7 @@ function resolveImportGroup(item: TenderDraftPackageItem): TenderEditorImportGro
 
 function mapDraftPackageItemToImportItem(item: TenderDraftPackageItem): TenderEditorImportItem {
   const importGroup = resolveImportGroup(item);
-  const groupMeta = GROUP_META[importGroup];
+  const groupMeta = TENDER_EDITOR_MANAGED_BLOCK_META[importGroup];
 
   return {
     draft_package_item_id: item.id,
@@ -78,48 +57,19 @@ function mapDraftPackageItemToImportItem(item: TenderDraftPackageItem): TenderEd
   };
 }
 
-function buildSectionPreview(section: TenderEditorImportPreviewSection, items: TenderEditorImportItem[]) {
-  if (items.length < 1) {
-    return null;
-  }
+function buildPreviewSections(managedSurface: TenderEditorManagedSurface) {
+  return (Object.keys(TENDER_EDITOR_MANAGED_BLOCK_META) as TenderEditorImportGroup[]).map((key) => {
+    const block = managedSurface.blocks.find((candidate) => candidate.import_group === key);
 
-  return [`## ${section.title}`]
-    .concat(
-      items.flatMap((item) => {
-        const content = normalizeContent(item.content_md);
-        return content ? [`### ${item.title}`, content] : [`### ${item.title}`];
-      }),
-    )
-    .join('\n\n');
-}
-
-function buildPreviewSections(items: TenderEditorImportItem[]) {
-  return (Object.keys(GROUP_META) as TenderEditorImportGroup[]).map((key) => {
-    const sectionItems = items.filter((item) => item.import_group === key);
-    const section: TenderEditorImportPreviewSection = {
+    return {
       key,
-      title: GROUP_META[key].title,
-      target_kind: GROUP_META[key].targetKind,
-      target_label: GROUP_META[key].targetLabel,
-      item_count: sectionItems.length,
-      preview_md: null,
-    };
-
-    section.preview_md = buildSectionPreview(section, sectionItems);
-    return section;
+      title: TENDER_EDITOR_MANAGED_BLOCK_META[key].title,
+      target_kind: TENDER_EDITOR_MANAGED_BLOCK_META[key].targetKind,
+      target_label: TENDER_EDITOR_MANAGED_BLOCK_META[key].targetLabel,
+      item_count: block?.item_count ?? 0,
+      preview_md: block?.content_md ?? null,
+    } satisfies TenderEditorImportPreviewSection;
   });
-}
-
-function joinSectionPreviews(title: string, sections: TenderEditorImportPreviewSection[]) {
-  const previews = sections
-    .map((section) => section.preview_md)
-    .filter((section): section is string => Boolean(section));
-
-  if (previews.length < 1) {
-    return null;
-  }
-
-  return [`# ${title}`].concat(previews).join('\n\n');
 }
 
 export function validateTenderEditorImport(options: {
@@ -200,9 +150,11 @@ export function buildTenderEditorImportPreview(options: {
   const items = options.draftPackage.items
     .filter((item) => item.isIncluded)
     .map(mapDraftPackageItemToImportItem);
-  const sections = buildPreviewSections(items);
-  const quoteNotesSections = sections.filter((section) => section.target_kind === 'quote_notes_section');
-  const quoteInternalNotesSections = sections.filter((section) => section.target_kind === 'quote_internal_notes_section');
+  const managedSurface = buildTenderEditorManagedSurface({
+    draftPackageId: options.draftPackage.id,
+    items,
+  });
+  const sections = buildPreviewSections(managedSurface);
   const payload = tenderEditorImportPayloadSchema.parse({
     schema_version: TENDER_EDITOR_IMPORT_SCHEMA_VERSION,
     generated_at: generatedAt,
@@ -221,9 +173,10 @@ export function buildTenderEditorImportPreview(options: {
       imported_quote_id: options.draftPackage.importedQuoteId ?? null,
       will_create_placeholder_target: options.willCreatePlaceholderTarget,
     },
+    managed_surface: managedSurface,
     sections: {
-      quote_notes_md: joinSectionPreviews('Tarjousäly / tarjoushuomiot', quoteNotesSections),
-      quote_internal_notes_md: joinSectionPreviews('Tarjousäly / sisäiset editorimuistiot', quoteInternalNotesSections),
+      quote_notes_md: buildTenderEditorManagedFieldContent(managedSurface, 'quote_notes_section'),
+      quote_internal_notes_md: buildTenderEditorManagedFieldContent(managedSurface, 'quote_internal_notes_section'),
     },
     items,
   });

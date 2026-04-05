@@ -11,7 +11,9 @@ import {
 const entityIdSchema = z.string().trim().min(1);
 const timestampSchema = z.string().min(1);
 
-export const TENDER_EDITOR_IMPORT_SCHEMA_VERSION = 'tender-editor-import/v1' as const;
+export const TENDER_EDITOR_IMPORT_SCHEMA_VERSION = 'tender-editor-import/v2' as const;
+export const TENDER_EDITOR_MANAGED_SURFACE_CONTRACT_VERSION = 'tender-editor-managed-surface/v1' as const;
+export const tenderEditorImportSchemaVersionSchema = z.enum(['tender-editor-import/v1', 'tender-editor-import/v2']);
 
 export const tenderEditorImportGroupSchema = z.enum([
   'requirements_and_quote_notes',
@@ -25,6 +27,8 @@ export const tenderEditorImportModeSchema = z.enum(['create_new_quote', 'update_
 export const tenderEditorImportRunResultStatusSchema = z.enum(['success', 'failed']);
 export const tenderEditorImportExecutionStatusSchema = z.enum(['created', 'updated', 'no_changes']);
 export const tenderEditorImportIssueSeveritySchema = z.enum(['info', 'warning', 'error']);
+export const tenderEditorManagedBlockIdSchema = tenderEditorImportGroupSchema;
+export const tenderEditorManagedSurfaceContractVersionSchema = z.literal(TENDER_EDITOR_MANAGED_SURFACE_CONTRACT_VERSION);
 export const tenderEditorImportIssueCodeSchema = z.enum([
   'empty_package',
   'no_importable_items',
@@ -46,8 +50,26 @@ export const tenderEditorImportItemSchema = z.object({
   content_md: z.string().trim().nullable().optional(),
 });
 
+export const tenderEditorManagedBlockSchema = z.object({
+  block_id: tenderEditorManagedBlockIdSchema,
+  marker_key: z.string().trim().min(1),
+  import_group: tenderEditorImportGroupSchema,
+  target_kind: tenderEditorImportTargetKindSchema,
+  target_label: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  content_md: z.string().trim().min(1),
+  item_count: z.number().int().min(0),
+  owned_by_adapter: z.literal(true),
+});
+
+export const tenderEditorManagedSurfaceSchema = z.object({
+  contract_version: tenderEditorManagedSurfaceContractVersionSchema,
+  ownership_notice: z.string().trim().min(1),
+  blocks: z.array(tenderEditorManagedBlockSchema),
+});
+
 export const tenderEditorImportPayloadSchema = z.object({
-  schema_version: z.literal(TENDER_EDITOR_IMPORT_SCHEMA_VERSION),
+  schema_version: tenderEditorImportSchemaVersionSchema,
   generated_at: timestampSchema,
   source_draft_package_id: entityIdSchema,
   source_tender_package_id: entityIdSchema,
@@ -64,6 +86,7 @@ export const tenderEditorImportPayloadSchema = z.object({
     imported_quote_id: entityIdSchema.nullable().optional(),
     will_create_placeholder_target: z.boolean(),
   }),
+  managed_surface: tenderEditorManagedSurfaceSchema.optional(),
   sections: z.object({
     quote_notes_md: z.string().trim().nullable().optional(),
     quote_internal_notes_md: z.string().trim().nullable().optional(),
@@ -159,6 +182,21 @@ export const tenderEditorReconciliationEntrySchema = z.object({
   previous_content_md: z.string().trim().nullable().optional(),
 });
 
+export const tenderEditorReconciliationBlockSchema = z.object({
+  block_id: tenderEditorManagedBlockIdSchema,
+  marker_key: z.string().trim().min(1),
+  import_group: tenderEditorImportGroupSchema,
+  target_kind: tenderEditorImportTargetKindSchema,
+  target_label: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  change_type: tenderEditorReconciliationChangeTypeSchema,
+  current_content_md: z.string().trim().nullable().optional(),
+  previous_content_md: z.string().trim().nullable().optional(),
+  current_item_count: z.number().int().min(0).nullable().optional(),
+  previous_item_count: z.number().int().min(0).nullable().optional(),
+  owned_by_adapter: z.literal(true),
+});
+
 export const tenderEditorReconciliationPreviewSchema = z.object({
   draft_package_id: entityIdSchema,
   target_quote_id: entityIdSchema.nullable().optional(),
@@ -171,8 +209,13 @@ export const tenderEditorReconciliationPreviewSchema = z.object({
   changed_count: z.number().int().min(0),
   removed_count: z.number().int().min(0),
   unchanged_count: z.number().int().min(0),
+  added_blocks: z.number().int().min(0),
+  changed_blocks: z.number().int().min(0),
+  removed_blocks: z.number().int().min(0),
+  unchanged_blocks: z.number().int().min(0),
   can_reimport: z.boolean(),
   warnings: z.array(z.string().trim().min(1)),
+  blocks: z.array(tenderEditorReconciliationBlockSchema),
   entries: z.array(tenderEditorReconciliationEntrySchema),
 });
 
@@ -181,7 +224,10 @@ export type TenderEditorImportTargetKind = z.infer<typeof tenderEditorImportTarg
 export type TenderEditorImportMode = z.infer<typeof tenderEditorImportModeSchema>;
 export type TenderEditorImportRunResultStatus = z.infer<typeof tenderEditorImportRunResultStatusSchema>;
 export type TenderEditorImportExecutionStatus = z.infer<typeof tenderEditorImportExecutionStatusSchema>;
+export type TenderEditorManagedBlockId = z.infer<typeof tenderEditorManagedBlockIdSchema>;
 export type TenderEditorImportItem = z.infer<typeof tenderEditorImportItemSchema>;
+export type TenderEditorManagedBlock = z.infer<typeof tenderEditorManagedBlockSchema>;
+export type TenderEditorManagedSurface = z.infer<typeof tenderEditorManagedSurfaceSchema>;
 export type TenderEditorImportPayload = z.infer<typeof tenderEditorImportPayloadSchema>;
 export type TenderEditorImportValidationIssue = z.infer<typeof tenderEditorImportValidationIssueSchema>;
 export type TenderEditorImportValidationResult = z.infer<typeof tenderEditorImportValidationResultSchema>;
@@ -192,4 +238,5 @@ export type TenderDraftPackageImportRun = z.infer<typeof tenderDraftPackageImpor
 export type TenderDraftPackageImportState = z.infer<typeof tenderDraftPackageImportStateSchema>;
 export type TenderEditorReconciliationChangeType = z.infer<typeof tenderEditorReconciliationChangeTypeSchema>;
 export type TenderEditorReconciliationEntry = z.infer<typeof tenderEditorReconciliationEntrySchema>;
+export type TenderEditorReconciliationBlock = z.infer<typeof tenderEditorReconciliationBlockSchema>;
 export type TenderEditorReconciliationPreview = z.infer<typeof tenderEditorReconciliationPreviewSchema>;

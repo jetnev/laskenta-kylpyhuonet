@@ -132,15 +132,15 @@ function createSuccessfulRun(overrides: Partial<TenderDraftPackageImportRun> = {
           content_md: 'Vanha sisältö.',
         },
         {
-          draft_package_item_id: '88888888-8888-4888-8888-888888888888',
-          source_entity_type: 'review_task',
-          source_entity_id: '55555555-5555-4555-8555-555555555555',
-          item_type: 'review_note',
-          import_group: 'notes_for_editor',
-          target_kind: 'quote_internal_notes_section',
-          target_label: 'Tarjouksen internalNotes-kenttä',
-          title: 'Pidä rajaus näkyvillä',
-          content_md: 'Vanha note sisältö.',
+          draft_package_item_id: 'old-reference-item',
+          source_entity_type: 'reference_suggestion',
+          source_entity_id: 'old-reference',
+          item_type: 'selected_reference',
+          import_group: 'selected_references',
+          target_kind: 'quote_notes_section',
+          target_label: 'Tarjouksen notes-kenttä',
+          title: 'Vanha referenssi',
+          content_md: 'Poistuva referenssiyhteenveto.',
         },
       ],
     },
@@ -221,10 +221,15 @@ describe('tender-editor-reconciliation', () => {
       importMode: 'update_existing_quote',
     });
 
-    expect(reconciliation.added_count).toBe(1);
-    expect(reconciliation.changed_count).toBe(1);
-    expect(reconciliation.removed_count).toBe(1);
+    expect(reconciliation.added_count).toBe(2);
+    expect(reconciliation.changed_count).toBe(0);
+    expect(reconciliation.removed_count).toBe(2);
     expect(reconciliation.unchanged_count).toBe(0);
+    expect(reconciliation.added_blocks).toBe(1);
+    expect(reconciliation.changed_blocks).toBe(1);
+    expect(reconciliation.removed_blocks).toBe(1);
+    expect(reconciliation.unchanged_blocks).toBe(0);
+    expect(reconciliation.blocks.map((block) => block.change_type)).toEqual(['changed', 'added', 'removed']);
     expect(reconciliation.can_reimport).toBe(true);
     expect(reconciliation.warnings).toEqual([]);
   });
