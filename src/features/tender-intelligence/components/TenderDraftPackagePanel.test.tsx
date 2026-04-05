@@ -302,6 +302,11 @@ function createImportState(): TenderDraftPackageImportState {
     target_customer_id: '12121212-1212-4212-8212-121212121212',
     can_import: true,
     can_reimport: true,
+    owned_block_count: 2,
+    owned_block_last_synced_at: '2026-04-05T13:07:00.000Z',
+    ownership_registry_status: 'stale',
+    selective_reimport_available: true,
+    registry_warning_count: 1,
     suggested_import_mode: 'update_existing_quote',
     latest_run: createImportRuns()[0],
   };
@@ -325,6 +330,12 @@ function createReimportPreview(): TenderEditorReconciliationPreview {
     removed_blocks: 0,
     unchanged_blocks: 0,
     can_reimport: true,
+    registry_status: 'stale',
+    registry_active_block_count: 2,
+    registry_last_synced_at: '2026-04-05T13:07:00.000Z',
+    selective_reimport_available: true,
+    default_update_block_ids: ['requirements_and_quote_notes', 'notes_for_editor'],
+    default_remove_block_ids: [],
     warnings: [],
     blocks: [
       {
@@ -339,6 +350,17 @@ function createReimportPreview(): TenderEditorReconciliationPreview {
         previous_content_md: '## Tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nVanha sisältö.',
         current_item_count: 1,
         previous_item_count: 1,
+        registry_entry_id: '11111111-1111-4111-8111-111111111111',
+        registry_revision: 2,
+        registry_last_synced_at: '2026-04-05T13:07:00.000Z',
+        ownership_source: 'registry',
+        text_marker_present: true,
+        section_row_present: true,
+        can_select_for_update: true,
+        can_select_for_removal: false,
+        selected_for_update: true,
+        selected_for_removal: false,
+        warnings: [],
         owned_by_adapter: true,
       },
       {
@@ -353,6 +375,17 @@ function createReimportPreview(): TenderEditorReconciliationPreview {
         previous_content_md: null,
         current_item_count: 1,
         previous_item_count: null,
+        registry_entry_id: null,
+        registry_revision: null,
+        registry_last_synced_at: null,
+        ownership_source: 'current_payload',
+        text_marker_present: false,
+        section_row_present: false,
+        can_select_for_update: true,
+        can_select_for_removal: false,
+        selected_for_update: true,
+        selected_for_removal: false,
+        warnings: [],
         owned_by_adapter: true,
       },
     ],
@@ -417,6 +450,9 @@ describe('TenderDraftPackagePanel', () => {
     expect(markup).toContain('Re-import reconciliation');
     expect(markup).toContain('Adapterin hallitsema pinta');
     expect(markup).toContain('Tarjousäly hallitsee vain alla näkyviä lohkoja');
+    expect(markup).toContain('Selective block re-import');
+    expect(markup).toContain('Valitse päivitettäväksi');
+    expect(markup).toContain('Registry vaatii päivityksen');
     expect(markup).toContain('Tarjoushuomiot');
     expect(markup).toContain('Import-ajohistoria');
     expect(markup).toContain('Draft muuttunut importin jälkeen');

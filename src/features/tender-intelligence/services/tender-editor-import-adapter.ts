@@ -4,17 +4,21 @@ import type { Customer, Project, Quote, QuoteRow } from '@/lib/types';
 
 import type { TenderPackageDetails } from '../types/tender-intelligence';
 import type {
+  TenderEditorManagedBlockId,
   TenderEditorImportMode,
-  TenderEditorImportPayload,
   TenderEditorImportPreview,
   TenderEditorImportResult,
   TenderEditorImportTargetKind,
   TenderEditorManagedBlock,
+  TenderImportOwnedBlock,
 } from '../types/tender-editor-import';
+import { buildTenderEditorManagedSurfaceFromPayload } from '../lib/tender-editor-managed-surface';
 import {
-  buildTenderEditorManagedSurfaceFromPayload,
-  buildTenderEditorManagedBlockMarkerKey,
-} from '../lib/tender-editor-managed-surface';
+  buildTenderEditorManagedSectionRowKey,
+  getTenderEditorManagedTextBlockMarkers,
+  parseTenderEditorManagedSectionRowKey,
+} from '../lib/tender-editor-managed-markers';
+import { buildTenderImportOwnedBlockBaselines } from '../lib/tender-import-ownership-registry';
 
 const DEFAULT_VAT_PERCENT = 25.5;
 const DEFAULT_MARGIN_PERCENT = 30;
@@ -22,13 +26,13 @@ const DEFAULT_VALIDITY_DAYS = 30;
 const DEFAULT_REGION_COEFFICIENT = 1;
 const LEGACY_MANAGED_QUOTE_NOTES_BLOCK_ID = 'quote_notes';
 const LEGACY_MANAGED_INTERNAL_NOTES_BLOCK_ID = 'quote_internal_notes';
-const MANAGED_TEXT_BLOCK_PREFIX = 'tender-editor-import';
-const MANAGED_SECTION_ROW_NOTE_PREFIX = 'tender-editor-import';
 
 const LEGACY_MANAGED_FIELD_MARKER_KEYS: Record<TenderEditorImportTargetKind, string[]> = {
   quote_notes_section: [LEGACY_MANAGED_QUOTE_NOTES_BLOCK_ID],
   quote_internal_notes_section: [LEGACY_MANAGED_INTERNAL_NOTES_BLOCK_ID],
 };
+
+type ManagedOwnershipBaseline = ReturnType<typeof buildTenderImportOwnedBlockBaselines>[number];
 
 type UserBucketKey = 'customers' | 'projects' | 'quotes' | 'quote-rows';
 
@@ -108,6 +112,20 @@ async function writeUserBucket<T>(client: SupabaseClient, key: UserBucketKey, us
   }
 }
 
+export async function readTenderEditorImportTargetSnapshot(options: {
+  client: SupabaseClient;
+  actorUserId: string;
+  quoteId: string;
+}) {
+  const quotes = await readUserBucket<Quote[]>(options.client, 'quotes', options.actorUserId, []);
+  const rows = await readUserBucket<QuoteRow[]>(options.client, 'quote-rows', options.actorUserId, []);
+
+  return {
+    quote: quotes.find((candidate) => candidate.id === options.quoteId) ?? null,
+    rows: rows.filter((row) => row.quoteId === options.quoteId),
+  };
+}
+
 function generateQuoteNumber(prefix = 'TAR') {
   const date = new Date();
   const datePart = [
@@ -156,15 +174,6 @@ function compactTextBlocks(value: string | null | undefined) {
   return nextValue ? nextValue : undefined;
 }
 
-function getManagedTextBlockMarkers(markerKey: string, options?: { legacy?: boolean }) {
-  const markerPrefix = options?.legacy ? MANAGED_TEXT_BLOCK_PREFIX : `${MANAGED_TEXT_BLOCK_PREFIX}:block`;
-
-  return {
-    start: `<!-- ${markerPrefix}:${markerKey}:start -->`,
-    end: `<!-- ${markerPrefix}:${markerKey}:end -->`,
-  };
-}
-
 function buildManagedTextBlock(markerKey: string, content: string | null | undefined, options?: { legacy?: boolean }) {
   const nextContent = normalizeContent(content);
 
@@ -172,7 +181,7 @@ function buildManagedTextBlock(markerKey: string, content: string | null | undef
     return null;
   }
 
-  const markers = getManagedTextBlockMarkers(markerKey, options);
+  const markers = getTenderEditorManagedTextBlockMarkers(markerKey, options);
   return `${markers.start}\n${nextContent}\n${markers.end}`;
 }
 
@@ -183,7 +192,7 @@ function upsertManagedTextBlock(options: {
 }) {
   const existingValue = options.existingValue ?? '';
   const nextBlock = buildManagedTextBlock(options.markerKey, options.content);
-  const markers = getManagedTextBlockMarkers(options.markerKey);
+  const markers = getTenderEditorManagedTextBlockMarkers(options.markerKey);
   const blockPattern = new RegExp(`${escapeRegex(markers.start)}[\\s\\S]*?${escapeRegex(markers.end)}`, 'm');
 
   if (blockPattern.test(existingValue)) {
@@ -200,7 +209,7 @@ function upsertManagedTextBlock(options: {
 
 function removeManagedTextBlock(existingValue: string | null | undefined, markerKey: string, options?: { legacy?: boolean }) {
   const currentValue = existingValue ?? '';
-  const markers = getManagedTextBlockMarkers(markerKey, options);
+  const markers = getTenderEditorManagedTextBlockMarkers(markerKey, options);
   const blockPattern = new RegExp(`${escapeRegex(markers.start)}[\\s\\S]*?${escapeRegex(markers.end)}`, 'm');
 
   if (!blockPattern.test(currentValue)) {
@@ -210,81 +219,42 @@ function removeManagedTextBlock(existingValue: string | null | undefined, marker
   return compactTextBlocks(currentValue.replace(blockPattern, ''));
 }
 
-function extractOwnedManagedTextMarkerKeys(existingValue: string | null | undefined, draftPackageId: string) {
-  const currentValue = existingValue ?? '';
-  const markerPattern = new RegExp(`${escapeRegex(`<!-- ${MANAGED_TEXT_BLOCK_PREFIX}:block:`)}(.+?)${escapeRegex(':start -->')}`, 'g');
-  const markerKeys = new Set<string>();
-
-  let match = markerPattern.exec(currentValue);
-
-  while (match) {
-    const markerKey = match[1]?.trim();
-
-    if (markerKey && markerKey.startsWith(`${draftPackageId}:`)) {
-      markerKeys.add(markerKey);
-    }
-
-    match = markerPattern.exec(currentValue);
-  }
-
-  return [...markerKeys];
-}
-
 export function syncTenderEditorManagedBlocks(options: {
   existingValue?: string | null;
-  draftPackageId: string;
   targetKind: TenderEditorImportTargetKind;
-  blocks: TenderEditorManagedBlock[];
+  currentBlocks: TenderEditorManagedBlock[];
+  effectiveOwnedBlocks: ManagedOwnershipBaseline[];
+  selectedUpdateBlockIds: TenderEditorManagedBlockId[];
+  selectedRemoveBlockIds: TenderEditorManagedBlockId[];
 }) {
   let nextValue = options.existingValue ?? '';
+  const selectedUpdateSet = new Set(options.selectedUpdateBlockIds);
+  const selectedRemoveSet = new Set(options.selectedRemoveBlockIds);
+  const ownedBlocksForTarget = options.effectiveOwnedBlocks.filter((block) => block.targetField === options.targetKind);
 
   LEGACY_MANAGED_FIELD_MARKER_KEYS[options.targetKind].forEach((markerKey) => {
     nextValue = removeManagedTextBlock(nextValue, markerKey, { legacy: true }) ?? '';
   });
 
-  const targetBlocks = options.blocks.filter((block) => block.target_kind === options.targetKind);
-  const desiredMarkerKeys = new Set(targetBlocks.map((block) => block.marker_key));
-
-  extractOwnedManagedTextMarkerKeys(nextValue, options.draftPackageId).forEach((markerKey) => {
-    if (!desiredMarkerKeys.has(markerKey)) {
-      nextValue = removeManagedTextBlock(nextValue, markerKey) ?? '';
+  ownedBlocksForTarget.forEach((block) => {
+    if (!selectedRemoveSet.has(block.blockId)) {
+      return;
     }
+
+    nextValue = removeManagedTextBlock(nextValue, block.markerKey) ?? '';
   });
 
-  targetBlocks.forEach((block) => {
+  options.currentBlocks
+    .filter((block) => block.target_kind === options.targetKind && selectedUpdateSet.has(block.block_id))
+    .forEach((block) => {
     nextValue = upsertManagedTextBlock({
       existingValue: nextValue,
       markerKey: block.marker_key,
       content: block.content_md,
     }) ?? '';
-  });
+    });
 
   return compactTextBlocks(nextValue);
-}
-
-function buildManagedSectionRowNote(draftPackageId: string, blockId: TenderEditorManagedBlock['block_id']) {
-  return `${MANAGED_SECTION_ROW_NOTE_PREFIX}:${buildTenderEditorManagedBlockMarkerKey(draftPackageId, blockId)}`;
-}
-
-function parseManagedSectionRowNote(value?: string | null) {
-  const nextValue = value?.trim();
-
-  if (!nextValue || !nextValue.startsWith(`${MANAGED_SECTION_ROW_NOTE_PREFIX}:`)) {
-    return null;
-  }
-
-  const [, draftPackageId = '', blockId = ''] = nextValue.split(':');
-
-  if (!draftPackageId || !blockId) {
-    return null;
-  }
-
-  return { draftPackageId, blockId };
-}
-
-function isManagedSectionRow(row: QuoteRow, draftPackageId: string) {
-  const marker = parseManagedSectionRowNote(row.notes);
-  return row.mode === 'section' && marker?.draftPackageId === draftPackageId;
 }
 
 function isLikelyLegacyImportSectionRow(row: QuoteRow) {
@@ -305,6 +275,7 @@ function buildQuoteDraft(options: {
   timestamp: string;
 }): Quote {
   const managedSurface = buildTenderEditorManagedSurfaceFromPayload(options.preview.payload);
+  const selectedUpdateBlockIds = managedSurface.blocks.map((block) => block.block_id);
   const validUntil = new Date();
   validUntil.setDate(validUntil.getDate() + DEFAULT_VALIDITY_DAYS);
 
@@ -321,14 +292,18 @@ function buildQuoteDraft(options: {
     acceptedAt: undefined,
     rejectedAt: undefined,
     notes: syncTenderEditorManagedBlocks({
-      draftPackageId: options.preview.payload.source_draft_package_id,
       targetKind: 'quote_notes_section',
-      blocks: managedSurface.blocks,
+      currentBlocks: managedSurface.blocks,
+      effectiveOwnedBlocks: [],
+      selectedUpdateBlockIds,
+      selectedRemoveBlockIds: [],
     }),
     internalNotes: syncTenderEditorManagedBlocks({
-      draftPackageId: options.preview.payload.source_draft_package_id,
       targetKind: 'quote_internal_notes_section',
-      blocks: managedSurface.blocks,
+      currentBlocks: managedSurface.blocks,
+      effectiveOwnedBlocks: [],
+      selectedUpdateBlockIds,
+      selectedRemoveBlockIds: [],
     }),
     schedule: undefined,
     scheduleMilestones: [],
@@ -353,50 +328,75 @@ function buildQuoteDraft(options: {
   };
 }
 
+function buildSectionRow(options: {
+  actorUserId: string;
+  draftPackageId: string;
+  quoteId: string;
+  regionCoefficient: number;
+  blockId: TenderEditorManagedBlockId;
+  title: string;
+  timestamp: string;
+  sortOrder: number;
+  existingRow?: QuoteRow;
+}) {
+  return {
+    id: options.existingRow?.id ?? crypto.randomUUID(),
+    quoteId: options.quoteId,
+    sortOrder: options.sortOrder,
+    mode: 'section' as const,
+    pricingModel: 'unit_price' as const,
+    unitPricingMode: 'manual' as const,
+    chargeType: undefined,
+    source: 'manual' as const,
+    productId: undefined,
+    productName: options.title,
+    productCode: '',
+    description: '',
+    quantity: 0,
+    unit: 'erä',
+    purchasePrice: 0,
+    salesPrice: 0,
+    installationPrice: 0,
+    marginPercent: 0,
+    overridePrice: undefined,
+    priceAdjustment: 0,
+    regionMultiplier: options.regionCoefficient || DEFAULT_REGION_COEFFICIENT,
+    installationGroupId: undefined,
+    notes: buildTenderEditorManagedSectionRowKey(options.draftPackageId, options.blockId),
+    manualSalesPrice: true,
+    ownerUserId: options.existingRow?.ownerUserId ?? options.actorUserId,
+    createdAt: options.existingRow?.createdAt ?? options.timestamp,
+    updatedAt: options.timestamp,
+    createdByUserId: options.existingRow?.createdByUserId ?? options.actorUserId,
+    updatedByUserId: options.actorUserId,
+  } satisfies QuoteRow;
+}
+
 function buildSectionRows(options: {
   actorUserId: string;
   draftPackageId: string;
   quoteId: string;
   regionCoefficient: number;
-  blocks: TenderEditorManagedBlock[];
+  blocks: Array<{ block_id: TenderEditorManagedBlockId; title: string }>;
   timestamp: string;
   existingRowsByBlockId?: Map<string, QuoteRow>;
+  startSortOrder?: number;
 }): QuoteRow[] {
   return options.blocks
     .map((block, index) => {
       const existingRow = options.existingRowsByBlockId?.get(block.block_id);
 
-      return {
-        id: existingRow?.id ?? crypto.randomUUID(),
+      return buildSectionRow({
+        actorUserId: options.actorUserId,
+        draftPackageId: options.draftPackageId,
         quoteId: options.quoteId,
-        sortOrder: index,
-        mode: 'section',
-        pricingModel: 'unit_price',
-        unitPricingMode: 'manual',
-        chargeType: undefined,
-        source: 'manual',
-        productId: undefined,
-        productName: block.title,
-        productCode: '',
-        description: '',
-        quantity: 0,
-        unit: 'erä',
-        purchasePrice: 0,
-        salesPrice: 0,
-        installationPrice: 0,
-        marginPercent: 0,
-        overridePrice: undefined,
-        priceAdjustment: 0,
-        regionMultiplier: options.regionCoefficient || DEFAULT_REGION_COEFFICIENT,
-        installationGroupId: undefined,
-        notes: buildManagedSectionRowNote(options.draftPackageId, block.block_id),
-        manualSalesPrice: true,
-        ownerUserId: existingRow?.ownerUserId ?? options.actorUserId,
-        createdAt: existingRow?.createdAt ?? options.timestamp,
-        updatedAt: options.timestamp,
-        createdByUserId: existingRow?.createdByUserId ?? options.actorUserId,
-        updatedByUserId: options.actorUserId,
-      };
+        regionCoefficient: options.regionCoefficient,
+        blockId: block.block_id,
+        title: block.title,
+        timestamp: options.timestamp,
+        sortOrder: (options.startSortOrder ?? 0) + index,
+        existingRow,
+      });
     });
 }
 
@@ -418,52 +418,142 @@ function replaceManagedSectionRows(options: {
   draftPackageId: string;
   quoteId: string;
   regionCoefficient: number;
-  preview: TenderEditorImportPreview;
+  currentBlocks: TenderEditorManagedBlock[];
+  effectiveOwnedBlocks: ManagedOwnershipBaseline[];
   existingRows: QuoteRow[];
   timestamp: string;
+  selectedUpdateBlockIds: TenderEditorManagedBlockId[];
+  selectedRemoveBlockIds: TenderEditorManagedBlockId[];
 }) {
-  const managedSurface = buildTenderEditorManagedSurfaceFromPayload(options.preview.payload);
   const currentRows = options.existingRows
     .filter((row) => row.quoteId === options.quoteId)
     .sort((left, right) => left.sortOrder - right.sortOrder);
-  const managedRows = currentRows.filter((row) => isManagedSectionRow(row, options.draftPackageId));
-  const legacyManagedRows = managedRows.length === 0 && currentRows.length > 0 && currentRows.every(isLikelyLegacyImportSectionRow)
+  const currentBlocksById = new Map(options.currentBlocks.map((block) => [block.block_id, block]));
+  const effectiveOwnedBlocksById = new Map(options.effectiveOwnedBlocks.map((block) => [block.blockId, block]));
+  const selectedUpdateSet = new Set(options.selectedUpdateBlockIds);
+  const selectedRemoveSet = new Set(options.selectedRemoveBlockIds);
+  const hasPersistedRegistry = options.effectiveOwnedBlocks.some((block) => block.source === 'registry');
+  const managedRows = currentRows.filter((row) => {
+    const marker = parseTenderEditorManagedSectionRowKey(row.notes);
+    return row.mode === 'section'
+      && marker?.draftPackageId === options.draftPackageId
+      && effectiveOwnedBlocksById.has(marker.blockId as TenderEditorManagedBlockId);
+  });
+  const legacyManagedRows = !hasPersistedRegistry && managedRows.length === 0 && currentRows.length > 0 && currentRows.every(isLikelyLegacyImportSectionRow)
     ? currentRows
     : [];
   const rowsToReplace = managedRows.length > 0 ? managedRows : legacyManagedRows;
   const insertionIndex = rowsToReplace.length > 0 ? Math.min(...rowsToReplace.map((row) => row.sortOrder)) : 0;
   const unmanagedRows = currentRows.filter((row) => !rowsToReplace.some((candidate) => candidate.id === row.id));
+  const currentRowsById = new Map(currentRows.map((row) => [row.id, row]));
+
+  const finalizeRows = (managedZoneRows: QuoteRow[]) => {
+    const beforeRows = unmanagedRows.filter((row) => row.sortOrder < insertionIndex);
+    const afterRows = unmanagedRows.filter((row) => row.sortOrder >= insertionIndex);
+    const nextRows = [...beforeRows, ...managedZoneRows, ...afterRows].map((row, index) => {
+      const previousRow = currentRowsById.get(row.id);
+      const reindexedRow = {
+        ...row,
+        sortOrder: index,
+      };
+
+      if (previousRow && getQuoteRowSignature(previousRow) === getQuoteRowSignature(reindexedRow)) {
+        return {
+          ...reindexedRow,
+          updatedAt: previousRow.updatedAt,
+          updatedByUserId: previousRow.updatedByUserId,
+        };
+      }
+
+      return {
+        ...reindexedRow,
+        updatedAt: options.timestamp,
+        updatedByUserId: options.actorUserId,
+      };
+    });
+    const changed = currentRows.length !== nextRows.length
+      || currentRows.some((row, index) => getQuoteRowSignature(row) !== getQuoteRowSignature(nextRows[index]));
+
+    return { rows: nextRows, changed };
+  };
+
+  if (legacyManagedRows.length > 0) {
+    const orderedBlockIds = [...new Set([
+      ...options.currentBlocks.map((block) => block.block_id),
+      ...options.effectiveOwnedBlocks.map((block) => block.blockId),
+    ])];
+    const legacyBlocks = orderedBlockIds.flatMap((blockId) => {
+      const currentBlock = currentBlocksById.get(blockId) ?? null;
+      const ownedBlock = effectiveOwnedBlocksById.get(blockId) ?? null;
+
+      if (!ownedBlock && currentBlock && selectedUpdateSet.has(blockId)) {
+        return [{ block_id: blockId, title: currentBlock.title }];
+      }
+
+      if (!currentBlock && ownedBlock && selectedRemoveSet.has(blockId)) {
+        return [];
+      }
+
+      if (currentBlock && selectedUpdateSet.has(blockId)) {
+        return [{ block_id: blockId, title: currentBlock.title }];
+      }
+
+      if (ownedBlock) {
+        return [{ block_id: blockId, title: ownedBlock.blockTitle }];
+      }
+
+      return [];
+    });
+
+    return finalizeRows(buildSectionRows({
+      actorUserId: options.actorUserId,
+      draftPackageId: options.draftPackageId,
+      quoteId: options.quoteId,
+      regionCoefficient: options.regionCoefficient,
+      blocks: legacyBlocks,
+      timestamp: options.timestamp,
+    }));
+  }
+
   const existingRowsByBlockId = new Map<string, QuoteRow>();
 
   managedRows.forEach((row) => {
-    const marker = parseManagedSectionRowNote(row.notes);
+    const marker = parseTenderEditorManagedSectionRowKey(row.notes);
 
     if (marker) {
       existingRowsByBlockId.set(marker.blockId, row);
     }
   });
 
-  const nextManagedRows = buildSectionRows({
-    actorUserId: options.actorUserId,
-    draftPackageId: options.draftPackageId,
-    quoteId: options.quoteId,
-    regionCoefficient: options.regionCoefficient,
-    blocks: managedSurface.blocks,
-    timestamp: options.timestamp,
-    existingRowsByBlockId,
+  const retainedManagedRows = managedRows.filter((row) => {
+    const marker = parseTenderEditorManagedSectionRowKey(row.notes);
+    return Boolean(marker)
+      && !selectedUpdateSet.has(marker!.blockId as TenderEditorManagedBlockId)
+      && !selectedRemoveSet.has(marker!.blockId as TenderEditorManagedBlockId);
   });
-  const beforeRows = unmanagedRows.filter((row) => row.sortOrder < insertionIndex);
-  const afterRows = unmanagedRows.filter((row) => row.sortOrder >= insertionIndex);
-  const nextRows = [...beforeRows, ...nextManagedRows, ...afterRows].map((row, index) => ({
-    ...row,
-    sortOrder: index,
-    updatedAt: row.id === currentRows[index]?.id && row.sortOrder === index ? row.updatedAt : options.timestamp,
-    updatedByUserId: row.id === currentRows[index]?.id && row.sortOrder === index ? row.updatedByUserId : options.actorUserId,
-  }));
-  const changed = currentRows.length !== nextRows.length
-    || currentRows.some((row, index) => getQuoteRowSignature(row) !== getQuoteRowSignature(nextRows[index]));
+  const maxManagedSortOrder = rowsToReplace.length > 0 ? Math.max(...rowsToReplace.map((row) => row.sortOrder)) : insertionIndex - 1;
+  const updatedRows = options.currentBlocks
+    .filter((block) => selectedUpdateSet.has(block.block_id))
+    .map((block, index) => {
+      const existingRow = existingRowsByBlockId.get(block.block_id);
 
-  return { rows: nextRows, changed };
+      return buildSectionRow({
+        actorUserId: options.actorUserId,
+        draftPackageId: options.draftPackageId,
+        quoteId: options.quoteId,
+        regionCoefficient: options.regionCoefficient,
+        blockId: block.block_id,
+        title: block.title,
+        timestamp: options.timestamp,
+        sortOrder: existingRow?.sortOrder ?? (maxManagedSortOrder + index + 1),
+        existingRow,
+      });
+    });
+
+  return finalizeRows([
+    ...retainedManagedRows,
+    ...updatedRows,
+  ].sort((left, right) => left.sortOrder - right.sortOrder));
 }
 
 function buildImportSummary(options: {
@@ -489,7 +579,12 @@ async function updateExistingImportedQuote(options: {
   actorUserId: string;
   quoteId: string;
   currentImportRevision: number;
-  previousPayloadSnapshot?: TenderEditorImportPayload | null;
+  ownedBlocks?: TenderImportOwnedBlock[];
+  fallbackBlocks?: TenderEditorManagedBlock[];
+  previousImportRunId?: string | null;
+  previousImportSyncedAt?: string | null;
+  selectedUpdateBlockIds?: TenderEditorManagedBlockId[];
+  selectedRemoveBlockIds?: TenderEditorManagedBlockId[];
   resolvedTarget: ResolvedImportTarget;
 }): Promise<TenderEditorImportResult | null> {
   const timestamp = nowIso();
@@ -502,26 +597,49 @@ async function updateExistingImportedQuote(options: {
     return null;
   }
 
+  const selectedUpdateBlockIds = options.selectedUpdateBlockIds ?? managedSurface.blocks.map((block) => block.block_id);
+  const selectedRemoveBlockIds = options.selectedRemoveBlockIds ?? [];
+  const quoteRows = existingRows.filter((row) => row.quoteId === quote.id);
+  const effectiveOwnedBlocks = buildTenderImportOwnedBlockBaselines({
+    draftPackageId: options.preview.payload.source_draft_package_id,
+    ownedBlocks: options.ownedBlocks ?? [],
+    fallbackBlocks: options.fallbackBlocks ?? [],
+    fallbackMeta: {
+      importRunId: options.previousImportRunId ?? null,
+      revision: Math.max(options.currentImportRevision, 1),
+      lastSyncedAt: options.previousImportSyncedAt ?? null,
+    },
+    quote,
+    rows: quoteRows,
+  });
+
   const nextNotes = syncTenderEditorManagedBlocks({
     existingValue: quote.notes,
-    draftPackageId: options.preview.payload.source_draft_package_id,
     targetKind: 'quote_notes_section',
-    blocks: managedSurface.blocks,
+    currentBlocks: managedSurface.blocks,
+    effectiveOwnedBlocks,
+    selectedUpdateBlockIds,
+    selectedRemoveBlockIds,
   });
   const nextInternalNotes = syncTenderEditorManagedBlocks({
     existingValue: quote.internalNotes,
-    draftPackageId: options.preview.payload.source_draft_package_id,
     targetKind: 'quote_internal_notes_section',
-    blocks: managedSurface.blocks,
+    currentBlocks: managedSurface.blocks,
+    effectiveOwnedBlocks,
+    selectedUpdateBlockIds,
+    selectedRemoveBlockIds,
   });
   const nextManagedRows = replaceManagedSectionRows({
     actorUserId: options.actorUserId,
     draftPackageId: options.preview.payload.source_draft_package_id,
     quoteId: quote.id,
     regionCoefficient: options.resolvedTarget.projectRegionCoefficient,
-    preview: options.preview,
+    currentBlocks: managedSurface.blocks,
+    effectiveOwnedBlocks,
     existingRows,
     timestamp,
+    selectedUpdateBlockIds,
+    selectedRemoveBlockIds,
   });
   const notesChanged = (quote.notes ?? '') !== (nextNotes ?? '');
   const internalNotesChanged = (quote.internalNotes ?? '') !== (nextInternalNotes ?? '');
@@ -735,7 +853,12 @@ export async function importTenderDraftPackageToEditor(options: {
   preview: TenderEditorImportPreview;
   actorUserId: string;
   currentImportRevision: number;
-  previousPayloadSnapshot?: TenderEditorImportPayload | null;
+  ownedBlocks?: TenderImportOwnedBlock[];
+  fallbackBlocks?: TenderEditorManagedBlock[];
+  previousImportRunId?: string | null;
+  previousImportSyncedAt?: string | null;
+  selectedUpdateBlockIds?: TenderEditorManagedBlockId[];
+  selectedRemoveBlockIds?: TenderEditorManagedBlockId[];
 }): Promise<TenderEditorImportResult> {
   const resolvedTarget = await resolveTenderEditorImportTarget({
     client: options.client,
@@ -752,7 +875,12 @@ export async function importTenderDraftPackageToEditor(options: {
       actorUserId: options.actorUserId,
       quoteId: resolvedTarget.quoteId,
       currentImportRevision: options.currentImportRevision,
-      previousPayloadSnapshot: options.previousPayloadSnapshot,
+      ownedBlocks: options.ownedBlocks,
+      fallbackBlocks: options.fallbackBlocks,
+      previousImportRunId: options.previousImportRunId ?? null,
+      previousImportSyncedAt: options.previousImportSyncedAt ?? null,
+      selectedUpdateBlockIds: options.selectedUpdateBlockIds,
+      selectedRemoveBlockIds: options.selectedRemoveBlockIds,
       resolvedTarget,
     });
 

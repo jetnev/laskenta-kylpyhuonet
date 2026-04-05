@@ -27,7 +27,11 @@ import type {
   TenderReviewTaskStatus,
   TenderSeverity,
 } from '../types/tender-intelligence';
-import type { TenderEditorImportMode, TenderEditorImportRunResultStatus } from '../types/tender-editor-import';
+import type {
+  TenderEditorImportMode,
+  TenderEditorImportRunResultStatus,
+  TenderImportOwnershipRegistryStatus,
+} from '../types/tender-editor-import';
 
 export type TenderBadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
 
@@ -161,6 +165,17 @@ export const TENDER_DRAFT_PACKAGE_REIMPORT_STATUS_META: Record<
   stale: { label: 'Draft muuttunut importin jälkeen', variant: 'outline' },
   never_imported: { label: 'Ei vielä importoitu', variant: 'secondary' },
   import_failed: { label: 'Viimeisin import epäonnistui', variant: 'destructive' },
+};
+
+export const TENDER_IMPORT_OWNERSHIP_REGISTRY_STATUS_META: Record<
+  TenderImportOwnershipRegistryStatus,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  current: { label: 'Registry ajan tasalla', variant: 'default' },
+  stale: { label: 'Registry vaatii päivityksen', variant: 'outline' },
+  missing: { label: 'Registry puuttuu', variant: 'secondary' },
+  conflicted: { label: 'Registry ristiriidassa', variant: 'destructive' },
+  not_available: { label: 'Registry ei vielä käytössä', variant: 'secondary' },
 };
 
 export const TENDER_EDITOR_IMPORT_MODE_META: Record<TenderEditorImportMode, { label: string; variant: TenderBadgeVariant }> = {

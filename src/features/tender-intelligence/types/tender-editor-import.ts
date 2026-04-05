@@ -37,6 +37,8 @@ export const tenderEditorImportIssueCodeSchema = z.enum([
 ]);
 
 export const tenderEditorReconciliationChangeTypeSchema = z.enum(['added', 'changed', 'removed', 'unchanged']);
+export const tenderImportOwnershipRegistryStatusSchema = z.enum(['current', 'stale', 'missing', 'conflicted', 'not_available']);
+export const tenderEditorOwnedBlockSourceSchema = z.enum(['registry', 'latest_successful_run', 'current_payload']);
 
 export const tenderEditorImportItemSchema = z.object({
   draft_package_item_id: entityIdSchema,
@@ -66,6 +68,30 @@ export const tenderEditorManagedSurfaceSchema = z.object({
   contract_version: tenderEditorManagedSurfaceContractVersionSchema,
   ownership_notice: z.string().trim().min(1),
   blocks: z.array(tenderEditorManagedBlockSchema),
+});
+
+export const tenderImportOwnedBlockSchema = z.object({
+  id: entityIdSchema,
+  organization_id: entityIdSchema,
+  tender_draft_package_id: entityIdSchema,
+  target_quote_id: entityIdSchema,
+  import_run_id: entityIdSchema.nullable().optional(),
+  block_id: tenderEditorManagedBlockIdSchema,
+  marker_key: z.string().trim().min(1),
+  target_field: tenderEditorImportTargetKindSchema,
+  target_section_key: z.string().trim().nullable().optional(),
+  block_title: z.string().trim().min(1),
+  payload_hash: z.string().trim().min(1),
+  revision: z.number().int().min(0),
+  last_synced_at: timestampSchema,
+  is_active: z.boolean(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+export const tenderEditorSelectiveReimportSelectionSchema = z.object({
+  update_block_ids: z.array(tenderEditorManagedBlockIdSchema),
+  remove_block_ids: z.array(tenderEditorManagedBlockIdSchema),
 });
 
 export const tenderEditorImportPayloadSchema = z.object({
@@ -168,6 +194,11 @@ export const tenderDraftPackageImportStateSchema = z.object({
   target_customer_id: entityIdSchema.nullable().optional(),
   can_import: z.boolean(),
   can_reimport: z.boolean(),
+  owned_block_count: z.number().int().min(0),
+  owned_block_last_synced_at: timestampSchema.nullable().optional(),
+  ownership_registry_status: tenderImportOwnershipRegistryStatusSchema,
+  selective_reimport_available: z.boolean(),
+  registry_warning_count: z.number().int().min(0),
   suggested_import_mode: tenderEditorImportModeSchema,
   latest_run: tenderDraftPackageImportRunSchema.nullable().optional(),
 });
@@ -194,6 +225,17 @@ export const tenderEditorReconciliationBlockSchema = z.object({
   previous_content_md: z.string().trim().nullable().optional(),
   current_item_count: z.number().int().min(0).nullable().optional(),
   previous_item_count: z.number().int().min(0).nullable().optional(),
+  registry_entry_id: entityIdSchema.nullable().optional(),
+  registry_revision: z.number().int().min(0).nullable().optional(),
+  registry_last_synced_at: timestampSchema.nullable().optional(),
+  ownership_source: tenderEditorOwnedBlockSourceSchema,
+  text_marker_present: z.boolean(),
+  section_row_present: z.boolean(),
+  can_select_for_update: z.boolean(),
+  can_select_for_removal: z.boolean(),
+  selected_for_update: z.boolean(),
+  selected_for_removal: z.boolean(),
+  warnings: z.array(z.string().trim().min(1)),
   owned_by_adapter: z.literal(true),
 });
 
@@ -214,6 +256,12 @@ export const tenderEditorReconciliationPreviewSchema = z.object({
   removed_blocks: z.number().int().min(0),
   unchanged_blocks: z.number().int().min(0),
   can_reimport: z.boolean(),
+  registry_status: tenderImportOwnershipRegistryStatusSchema,
+  registry_active_block_count: z.number().int().min(0),
+  registry_last_synced_at: timestampSchema.nullable().optional(),
+  selective_reimport_available: z.boolean(),
+  default_update_block_ids: z.array(tenderEditorManagedBlockIdSchema),
+  default_remove_block_ids: z.array(tenderEditorManagedBlockIdSchema),
   warnings: z.array(z.string().trim().min(1)),
   blocks: z.array(tenderEditorReconciliationBlockSchema),
   entries: z.array(tenderEditorReconciliationEntrySchema),
@@ -228,6 +276,8 @@ export type TenderEditorManagedBlockId = z.infer<typeof tenderEditorManagedBlock
 export type TenderEditorImportItem = z.infer<typeof tenderEditorImportItemSchema>;
 export type TenderEditorManagedBlock = z.infer<typeof tenderEditorManagedBlockSchema>;
 export type TenderEditorManagedSurface = z.infer<typeof tenderEditorManagedSurfaceSchema>;
+export type TenderImportOwnedBlock = z.infer<typeof tenderImportOwnedBlockSchema>;
+export type TenderEditorSelectiveReimportSelection = z.infer<typeof tenderEditorSelectiveReimportSelectionSchema>;
 export type TenderEditorImportPayload = z.infer<typeof tenderEditorImportPayloadSchema>;
 export type TenderEditorImportValidationIssue = z.infer<typeof tenderEditorImportValidationIssueSchema>;
 export type TenderEditorImportValidationResult = z.infer<typeof tenderEditorImportValidationResultSchema>;
@@ -237,6 +287,8 @@ export type TenderEditorImportResult = z.infer<typeof tenderEditorImportResultSc
 export type TenderDraftPackageImportRun = z.infer<typeof tenderDraftPackageImportRunSchema>;
 export type TenderDraftPackageImportState = z.infer<typeof tenderDraftPackageImportStateSchema>;
 export type TenderEditorReconciliationChangeType = z.infer<typeof tenderEditorReconciliationChangeTypeSchema>;
+export type TenderImportOwnershipRegistryStatus = z.infer<typeof tenderImportOwnershipRegistryStatusSchema>;
+export type TenderEditorOwnedBlockSource = z.infer<typeof tenderEditorOwnedBlockSourceSchema>;
 export type TenderEditorReconciliationEntry = z.infer<typeof tenderEditorReconciliationEntrySchema>;
 export type TenderEditorReconciliationBlock = z.infer<typeof tenderEditorReconciliationBlockSchema>;
 export type TenderEditorReconciliationPreview = z.infer<typeof tenderEditorReconciliationPreviewSchema>;

@@ -32,6 +32,7 @@ import type {
   TenderDraftPackageImportState,
   TenderEditorImportPreview,
   TenderEditorImportResult,
+  TenderEditorSelectiveReimportSelection,
   TenderEditorReconciliationPreview,
   TenderEditorImportValidationResult,
 } from '../types/tender-editor-import';
@@ -64,7 +65,7 @@ export interface TenderIntelligenceBackendAdapter {
   getDraftPackageImportStatus(draftPackageId: string): Promise<TenderDraftPackageImportState>;
   previewDraftPackageReimport(draftPackageId: string): Promise<TenderEditorReconciliationPreview>;
   importDraftPackageToEditor(draftPackageId: string): Promise<TenderEditorImportResult>;
-  reimportDraftPackageToEditor(draftPackageId: string): Promise<TenderEditorImportResult>;
+  reimportDraftPackageToEditor(draftPackageId: string, selection?: TenderEditorSelectiveReimportSelection): Promise<TenderEditorImportResult>;
   markDraftPackageImported(draftPackageId: string, importedQuoteId: string, importStatus?: TenderDraftPackageImportStatus): Promise<TenderDraftPackage>;
   listDraftPackageImportRuns(draftPackageId: string): Promise<TenderDraftPackageImportRun[]>;
   listReferenceSuggestionsForPackage(packageId: string): Promise<TenderReferenceSuggestion[]>;

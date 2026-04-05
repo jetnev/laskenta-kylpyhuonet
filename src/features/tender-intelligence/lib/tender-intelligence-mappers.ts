@@ -43,6 +43,7 @@ import type {
   TenderDraftArtifactRow,
   TenderGoNoGoAssessmentRow,
   TenderMissingItemRow,
+  TenderImportOwnedBlockRow,
   TenderPackageRow,
   TenderReferenceProfileRow,
   TenderResultEvidenceRow,
@@ -327,6 +328,27 @@ export function mapTenderDraftPackageImportRunRowToDomain(row: TenderDraftPackag
     summary: row.summary,
     created_by_user_id: row.created_by_user_id,
     created_at: row.created_at,
+  };
+}
+
+export function mapTenderImportOwnedBlockRowToDomain(row: TenderImportOwnedBlockRow) {
+  return {
+    id: row.id,
+    organization_id: row.organization_id,
+    tender_draft_package_id: row.tender_draft_package_id,
+    target_quote_id: row.target_quote_id,
+    import_run_id: row.import_run_id,
+    block_id: row.block_id,
+    marker_key: row.marker_key,
+    target_field: row.target_field,
+    target_section_key: row.target_section_key,
+    block_title: row.block_title,
+    payload_hash: row.payload_hash,
+    revision: row.revision,
+    last_synced_at: row.last_synced_at,
+    is_active: row.is_active,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 

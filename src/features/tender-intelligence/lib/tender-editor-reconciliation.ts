@@ -1,3 +1,5 @@
+import type { Quote, QuoteRow } from '@/lib/types';
+
 import type { TenderDraftPackage } from '../types/tender-intelligence';
 import {
   type TenderDraftPackageImportRun,
@@ -7,13 +9,21 @@ import {
   type TenderEditorImportPayload,
   type TenderEditorImportPreview,
   type TenderEditorManagedBlock,
-  type TenderEditorReconciliationEntry,
   type TenderEditorReconciliationBlock,
+  type TenderEditorReconciliationEntry,
   type TenderEditorReconciliationPreview,
+  type TenderImportOwnedBlock,
   tenderDraftPackageImportStateSchema,
   tenderEditorReconciliationPreviewSchema,
 } from '../types/tender-editor-import';
 import { buildTenderEditorManagedSurfaceFromPayload } from './tender-editor-managed-surface';
+import {
+  buildTenderImportOwnedBlockBaselines,
+  buildTenderImportOwnedBlockPayloadHash,
+  buildTenderImportOwnedBlockPresence,
+  listTenderEditorManagedMarkerConflicts,
+  resolveTenderImportOwnershipRegistryStatus,
+} from './tender-import-ownership-registry';
 
 function normalizeContent(value: string | null | undefined) {
   const nextValue = value?.trim();
@@ -96,31 +106,10 @@ function mapChangedEntry(options: {
   };
 }
 
-function mapChangedBlock(options: {
-  current?: TenderEditorManagedBlock;
-  previous?: TenderEditorManagedBlock;
-  changeType: TenderEditorReconciliationBlock['change_type'];
-}): TenderEditorReconciliationBlock {
-  const basis = options.current ?? options.previous;
-
-  if (!basis) {
-    throw new Error('Reconciliation block requires current or previous managed block.');
-  }
-
-  return {
-    block_id: basis.block_id,
-    marker_key: basis.marker_key,
-    import_group: basis.import_group,
-    target_kind: basis.target_kind,
-    target_label: basis.target_label,
-    title: basis.title,
-    change_type: options.changeType,
-    current_content_md: options.current?.content_md ?? null,
-    previous_content_md: options.previous?.content_md ?? null,
-    current_item_count: options.current?.item_count ?? null,
-    previous_item_count: options.previous?.item_count ?? null,
-    owned_by_adapter: true,
-  };
+function getLatestTimestamp(values: Array<string | null | undefined>) {
+  return values
+    .filter((value): value is string => Boolean(value?.trim()))
+    .sort((left, right) => right.localeCompare(left))[0] ?? null;
 }
 
 export function buildTenderEditorImportPayloadHash(payload: TenderEditorImportPayload) {
@@ -131,13 +120,26 @@ export function resolveTenderDraftPackageReimportStatus(options: {
   draftPackage: TenderDraftPackage;
   currentPayloadHash: string;
   latestSuccessfulRun?: TenderDraftPackageImportRun | null;
+  reconciliation?: TenderEditorReconciliationPreview | null;
 }) {
   if (options.draftPackage.importStatus === 'failed') {
     return 'import_failed' as const;
   }
 
-  if (!options.draftPackage.importedQuoteId || options.draftPackage.importStatus === 'not_imported') {
+  if (!options.draftPackage.importedQuoteId) {
     return 'never_imported' as const;
+  }
+
+  if (options.reconciliation) {
+    if (options.reconciliation.registry_status !== 'current') {
+      return 'stale' as const;
+    }
+
+    return options.reconciliation.added_blocks > 0
+      || options.reconciliation.changed_blocks > 0
+      || options.reconciliation.removed_blocks > 0
+      ? 'stale' as const
+      : 'up_to_date' as const;
   }
 
   const lastKnownHash = options.draftPackage.lastImportPayloadHash
@@ -160,6 +162,7 @@ export function buildTenderDraftPackageImportState(options: {
   targetQuoteTitle?: string | null;
   targetProjectId?: string | null;
   targetCustomerId?: string | null;
+  reconciliation?: TenderEditorReconciliationPreview | null;
 }): TenderDraftPackageImportState {
   const suggestedImportMode: TenderEditorImportMode = options.draftPackage.importedQuoteId && options.targetQuoteId
     ? 'update_existing_quote'
@@ -168,6 +171,7 @@ export function buildTenderDraftPackageImportState(options: {
     draftPackage: options.draftPackage,
     currentPayloadHash: options.preview.payload_hash,
     latestSuccessfulRun: options.latestSuccessfulRun,
+    reconciliation: options.reconciliation ?? null,
   });
 
   return tenderDraftPackageImportStateSchema.parse({
@@ -184,7 +188,14 @@ export function buildTenderDraftPackageImportState(options: {
     target_project_id: options.targetProjectId ?? null,
     target_customer_id: options.targetCustomerId ?? null,
     can_import: options.preview.validation.can_import,
-    can_reimport: options.preview.validation.can_import && suggestedImportMode === 'update_existing_quote',
+    can_reimport: options.preview.validation.can_import
+      && suggestedImportMode === 'update_existing_quote'
+      && Boolean(options.reconciliation?.can_reimport),
+    owned_block_count: options.reconciliation?.registry_active_block_count ?? 0,
+    owned_block_last_synced_at: options.reconciliation?.registry_last_synced_at ?? null,
+    ownership_registry_status: options.reconciliation?.registry_status ?? 'not_available',
+    selective_reimport_available: Boolean(options.reconciliation?.selective_reimport_available),
+    registry_warning_count: options.reconciliation?.warnings.length ?? 0,
     suggested_import_mode: suggestedImportMode,
     latest_run: options.latestRun ?? null,
   });
@@ -197,16 +208,34 @@ export function buildTenderEditorReconciliationPreview(options: {
   targetQuoteId?: string | null;
   targetQuoteTitle?: string | null;
   importMode: TenderEditorImportMode;
+  ownedBlocks?: TenderImportOwnedBlock[];
+  targetQuoteSnapshot?: { quote: Quote | null; rows: QuoteRow[] } | null;
 }): TenderEditorReconciliationPreview {
   const currentManagedBlocks = buildTenderEditorManagedSurfaceFromPayload(options.preview.payload).blocks;
   const currentEntries = buildManagedEntries(options.preview.payload.items);
   const previousPayload = options.latestSuccessfulRun?.payload_snapshot ?? null;
   const previousManagedBlocks = previousPayload ? buildTenderEditorManagedSurfaceFromPayload(previousPayload).blocks : [];
   const previousEntries = previousPayload ? buildManagedEntries(previousPayload.items) : [];
+  const currentBlocksById = new Map(currentManagedBlocks.map((block) => [block.block_id, block]));
   const previousBlocksById = new Map(previousManagedBlocks.map((block) => [block.block_id, block]));
   const previousEntriesByKey = new Map(previousEntries.map((entry) => [entry.key, entry]));
-  const currentBlocksById = new Map(currentManagedBlocks.map((block) => [block.block_id, block]));
   const currentEntriesByKey = new Map(currentEntries.map((entry) => [entry.key, entry]));
+  const quote = options.targetQuoteSnapshot?.quote ?? null;
+  const rows = options.targetQuoteSnapshot?.rows ?? [];
+  const ownedBlocks = options.ownedBlocks ?? [];
+  const effectiveOwnedBlocks = buildTenderImportOwnedBlockBaselines({
+    draftPackageId: options.preview.payload.source_draft_package_id,
+    ownedBlocks,
+    fallbackBlocks: previousManagedBlocks,
+    fallbackMeta: {
+      importRunId: options.latestSuccessfulRun?.id ?? null,
+      revision: Math.max(options.draftPackage.importRevision, 1),
+      lastSyncedAt: options.latestSuccessfulRun?.created_at ?? options.draftPackage.importedAt ?? null,
+    },
+    quote,
+    rows,
+  });
+  const effectiveOwnedBlocksById = new Map(effectiveOwnedBlocks.map((block) => [block.blockId, block]));
   const blocks: TenderEditorReconciliationBlock[] = [];
   const entries: TenderEditorReconciliationEntry[] = [];
   let addedCount = 0;
@@ -218,37 +247,83 @@ export function buildTenderEditorReconciliationPreview(options: {
   let removedBlocks = 0;
   let unchangedBlocks = 0;
 
-  currentManagedBlocks.forEach((block) => {
-    const previousBlock = previousBlocksById.get(block.block_id);
+  const blockIds = [...new Set([
+    ...currentManagedBlocks.map((block) => block.block_id),
+    ...effectiveOwnedBlocks.map((block) => block.blockId),
+  ])];
 
-    if (!previousBlock) {
-      blocks.push(mapChangedBlock({ current: block, changeType: 'added' }));
+  blockIds.forEach((blockId) => {
+    const currentBlock = currentBlocksById.get(blockId) ?? null;
+    const previousBlock = previousBlocksById.get(blockId) ?? null;
+    const effectiveOwnedBlock = effectiveOwnedBlocksById.get(blockId) ?? null;
+    const currentPayloadHash = currentBlock ? buildTenderImportOwnedBlockPayloadHash(currentBlock) : null;
+    const presence = buildTenderImportOwnedBlockPresence({
+      quote,
+      rows,
+      markerKey: currentBlock?.marker_key ?? effectiveOwnedBlock?.markerKey ?? previousBlock?.marker_key ?? '',
+      targetField: currentBlock?.target_kind ?? effectiveOwnedBlock?.targetField ?? previousBlock?.target_kind ?? 'quote_notes_section',
+      targetSectionKey: effectiveOwnedBlock?.targetSectionKey ?? null,
+    });
+    const warnings: string[] = [];
+
+    if (effectiveOwnedBlock?.source === 'registry') {
+      if (!presence.textMarkerPresent) {
+        warnings.push('Registryn tekstilohkomarkkeria ei löydy editorin nykyisestä kentästä.');
+      }
+
+      if (!presence.sectionRowPresent) {
+        warnings.push('Registryn section-riviä ei löydy editorin nykyisestä quote-rivilistasta.');
+      }
+    }
+
+    if (effectiveOwnedBlock?.source === 'latest_successful_run') {
+      warnings.push('Ownership registry puuttuu; lohkon ownership perustuu viimeisimpään onnistuneeseen import-snapshotiin.');
+    }
+
+    let changeType: TenderEditorReconciliationBlock['change_type'] = 'unchanged';
+
+    if (currentBlock && !effectiveOwnedBlock) {
+      changeType = 'added';
       addedBlocks += 1;
-      return;
-    }
-
-    if (
-      previousBlock.title !== block.title
-      || previousBlock.target_kind !== block.target_kind
-      || previousBlock.content_md !== block.content_md
-      || previousBlock.item_count !== block.item_count
-    ) {
-      blocks.push(mapChangedBlock({ current: block, previous: previousBlock, changeType: 'changed' }));
+    } else if (!currentBlock && effectiveOwnedBlock) {
+      changeType = 'removed';
+      removedBlocks += 1;
+    } else if (currentBlock && effectiveOwnedBlock && currentPayloadHash !== effectiveOwnedBlock.payloadHash) {
+      changeType = 'changed';
       changedBlocks += 1;
-      return;
+    } else {
+      unchangedBlocks += 1;
     }
 
-    blocks.push(mapChangedBlock({ current: block, previous: previousBlock, changeType: 'unchanged' }));
-    unchangedBlocks += 1;
-  });
-
-  previousManagedBlocks.forEach((block) => {
-    if (currentBlocksById.has(block.block_id)) {
-      return;
-    }
-
-    blocks.push(mapChangedBlock({ previous: block, changeType: 'removed' }));
-    removedBlocks += 1;
+    blocks.push({
+      block_id: blockId,
+      marker_key: currentBlock?.marker_key ?? effectiveOwnedBlock?.markerKey ?? previousBlock?.marker_key ?? `${options.preview.payload.source_draft_package_id}:${blockId}`,
+      import_group: currentBlock?.import_group ?? previousBlock?.import_group ?? blockId,
+      target_kind: currentBlock?.target_kind ?? effectiveOwnedBlock?.targetField ?? previousBlock?.target_kind ?? 'quote_notes_section',
+      target_label: currentBlock?.target_label
+        ?? previousBlock?.target_label
+        ?? (currentBlock?.target_kind ?? effectiveOwnedBlock?.targetField ?? previousBlock?.target_kind) === 'quote_internal_notes_section'
+          ? 'Tarjouksen internalNotes-kenttä'
+          : 'Tarjouksen notes-kenttä',
+      title: currentBlock?.title ?? previousBlock?.title ?? effectiveOwnedBlock?.blockTitle ?? blockId,
+      change_type: changeType,
+      current_content_md: currentBlock?.content_md ?? null,
+      previous_content_md: previousBlock?.content_md ?? null,
+      current_item_count: currentBlock?.item_count ?? null,
+      previous_item_count: previousBlock?.item_count ?? null,
+      registry_entry_id: effectiveOwnedBlock?.persistedRow?.id ?? null,
+      registry_revision: effectiveOwnedBlock?.revision ?? null,
+      registry_last_synced_at: effectiveOwnedBlock?.lastSyncedAt ?? null,
+      ownership_source: effectiveOwnedBlock?.source ?? 'current_payload',
+      text_marker_present: presence.textMarkerPresent,
+      section_row_present: presence.sectionRowPresent,
+      can_select_for_update: changeType === 'added' || changeType === 'changed',
+      can_select_for_removal: changeType === 'removed',
+      selected_for_update: changeType === 'added' || changeType === 'changed',
+      selected_for_removal: changeType === 'removed',
+      warnings,
+      owned_by_adapter: true,
+    });
   });
 
   currentEntries.forEach((entry) => {
@@ -279,10 +354,19 @@ export function buildTenderEditorReconciliationPreview(options: {
     removedCount += 1;
   });
 
-  const reimportStatus = resolveTenderDraftPackageReimportStatus({
-    draftPackage: options.draftPackage,
-    currentPayloadHash: options.preview.payload_hash,
-    latestSuccessfulRun: options.latestSuccessfulRun,
+  const actionableBlocks = blocks.filter((block) => block.can_select_for_update || block.can_select_for_removal);
+  const defaultUpdateBlockIds = actionableBlocks
+    .filter((block) => block.selected_for_update)
+    .map((block) => block.block_id);
+  const defaultRemoveBlockIds = actionableBlocks
+    .filter((block) => block.selected_for_removal)
+    .map((block) => block.block_id);
+  const markerConflicts = listTenderEditorManagedMarkerConflicts({
+    draftPackageId: options.preview.payload.source_draft_package_id,
+    quote,
+    rows,
+    expectedMarkerKeys: effectiveOwnedBlocks.map((block) => block.markerKey),
+    expectedSectionRowKeys: effectiveOwnedBlocks.map((block) => block.targetSectionKey ?? ''),
   });
   const warnings: string[] = [];
 
@@ -290,30 +374,54 @@ export function buildTenderEditorReconciliationPreview(options: {
     warnings.push('Aiemman importin payload-snapshot puuttuu, joten diff on best-effort-muotoinen.');
   }
 
-  if (
-    previousPayload
-    && options.preview.payload_hash !== options.latestSuccessfulRun?.payload_hash
-    && addedBlocks === 0
-    && changedBlocks === 0
-    && removedBlocks === 0
-  ) {
-    warnings.push('Managed surface muuttui vain lohkojen järjestyksen tai koostetun tekstin tasolla.');
+  if (effectiveOwnedBlocks.some((block) => block.source === 'latest_successful_run')) {
+    warnings.push('Ownership registry puuttuu vielä tältä importilta. Ensimmäinen Phase 15 -re-import bootstraptaa registryrivistön viimeisimmän onnistuneen import-snapshotin pohjalta.');
   }
 
-  if (reimportStatus === 'up_to_date') {
-    warnings.push('Luonnospaketti vastaa viimeisintä onnistunutta importia. Re-import olisi no-op.');
+  if (markerConflicts.extraMarkerKeys.length > 0) {
+    warnings.push(`Quote sisältää ${markerConflicts.extraMarkerKeys.length} Tarjousälyn markeria, joille ei löytynyt aktiivista ownership registry -riviä.`);
+  }
+
+  if (markerConflicts.extraSectionKeys.length > 0) {
+    warnings.push(`Quote sisältää ${markerConflicts.extraSectionKeys.length} Tarjousälyn section-riviä, joita registry ei enää tunne.`);
+  }
+
+  const registryConflictCount = blocks.filter((block) => block.warnings.length > 0 && block.ownership_source === 'registry').length;
+
+  if (registryConflictCount > 0) {
+    warnings.push(`${registryConflictCount} registry-lohkolla editorin nykyinen managed surface ei vastaa tallennettua ownership-mappia.`);
   }
 
   if (options.importMode === 'create_new_quote') {
     warnings.push('Tälle luonnospaketille ei ole vielä importoitua target-quotea, joten seuraava ajo luo uuden turvallisen tarjousluonnoksen.');
   }
 
+  const registryStatus = resolveTenderImportOwnershipRegistryStatus({
+    importedQuoteId: options.draftPackage.importedQuoteId,
+    registryRows: ownedBlocks,
+    effectiveOwnedBlocks,
+    warnings,
+    actionableBlockIds: actionableBlocks.map((block) => block.block_id),
+  });
+  const registryLastSyncedAt = getLatestTimestamp([
+    ...ownedBlocks.filter((row) => row.is_active).map((row) => row.last_synced_at),
+    ...effectiveOwnedBlocks.map((block) => block.lastSyncedAt),
+  ]);
+  const selectiveReimportAvailable = options.importMode === 'update_existing_quote'
+    && Boolean(options.targetQuoteId)
+    && options.preview.validation.can_import;
+  const canReimport = selectiveReimportAvailable && actionableBlocks.length > 0;
+
   return tenderEditorReconciliationPreviewSchema.parse({
     draft_package_id: options.draftPackage.id,
     target_quote_id: options.targetQuoteId ?? null,
     target_quote_title: options.targetQuoteTitle ?? options.preview.payload.metadata.target_quote_title,
     import_mode: options.importMode,
-    reimport_status: reimportStatus,
+    reimport_status: resolveTenderDraftPackageReimportStatus({
+      draftPackage: options.draftPackage,
+      currentPayloadHash: options.preview.payload_hash,
+      latestSuccessfulRun: options.latestSuccessfulRun,
+    }),
     current_payload_hash: options.preview.payload_hash,
     previous_payload_hash: options.latestSuccessfulRun?.payload_hash ?? null,
     added_count: addedCount,
@@ -324,7 +432,13 @@ export function buildTenderEditorReconciliationPreview(options: {
     changed_blocks: changedBlocks,
     removed_blocks: removedBlocks,
     unchanged_blocks: unchangedBlocks,
-    can_reimport: options.preview.validation.can_import && options.importMode === 'update_existing_quote',
+    can_reimport: canReimport,
+    registry_status: registryStatus,
+    registry_active_block_count: effectiveOwnedBlocks.length,
+    registry_last_synced_at: registryLastSyncedAt,
+    selective_reimport_available: selectiveReimportAvailable,
+    default_update_block_ids: defaultUpdateBlockIds,
+    default_remove_block_ids: defaultRemoveBlockIds,
     warnings,
     blocks,
     entries,

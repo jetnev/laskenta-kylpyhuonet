@@ -115,6 +115,13 @@ const tenderDraftPackageImportRunModeRowSchema = z.enum(['create_new_quote', 'up
 const tenderDraftPackageImportRunResultStatusRowSchema = z.enum(['success', 'failed']);
 const tenderDraftPackageItemTypeRowSchema = z.enum(['accepted_requirement', 'selected_reference', 'resolved_missing_item', 'review_note', 'draft_artifact']);
 const tenderDraftPackageSourceEntityTypeRowSchema = z.enum(['requirement', 'missing_item', 'reference_suggestion', 'review_task', 'draft_artifact']);
+const tenderImportOwnedBlockIdRowSchema = z.enum([
+  'requirements_and_quote_notes',
+  'selected_references',
+  'resolved_missing_items_and_attachment_notes',
+  'notes_for_editor',
+]);
+const tenderImportOwnedBlockTargetFieldRowSchema = z.enum(['quote_notes_section', 'quote_internal_notes_section']);
 
 const tenderWorkflowRowSchema = z.object({
   review_status: tenderReviewStatusRowSchema,
@@ -251,6 +258,25 @@ export const tenderDraftPackageImportRunRowSchema = z.object({
   created_at: z.string(),
 });
 
+export const tenderImportOwnedBlockRowSchema = z.object({
+  id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  tender_draft_package_id: z.string().uuid(),
+  target_quote_id: z.string().uuid(),
+  import_run_id: z.string().uuid().nullable(),
+  block_id: tenderImportOwnedBlockIdRowSchema,
+  marker_key: z.string(),
+  target_field: tenderImportOwnedBlockTargetFieldRowSchema,
+  target_section_key: z.string().nullable(),
+  block_title: z.string(),
+  payload_hash: z.string(),
+  revision: z.number().int().min(0),
+  last_synced_at: z.string(),
+  is_active: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
 export const tenderDraftPackageItemRowSchema = z.object({
   id: z.string().uuid(),
   organization_id: z.string().uuid(),
@@ -305,6 +331,7 @@ export const tenderReferenceProfileRowsSchema = z.array(tenderReferenceProfileRo
 export const tenderReferenceSuggestionRowsSchema = z.array(tenderReferenceSuggestionRowSchema);
 export const tenderDraftPackageRowsSchema = z.array(tenderDraftPackageRowSchema);
 export const tenderDraftPackageImportRunRowsSchema = z.array(tenderDraftPackageImportRunRowSchema);
+export const tenderImportOwnedBlockRowsSchema = z.array(tenderImportOwnedBlockRowSchema);
 export const tenderDraftPackageItemRowsSchema = z.array(tenderDraftPackageItemRowSchema);
 export const tenderDraftArtifactRowsSchema = z.array(tenderDraftArtifactRowSchema);
 export const tenderReviewTaskRowsSchema = z.array(tenderReviewTaskRowSchema);
@@ -323,6 +350,7 @@ export type TenderReferenceProfileRow = z.infer<typeof tenderReferenceProfileRow
 export type TenderReferenceSuggestionRow = z.infer<typeof tenderReferenceSuggestionRowSchema>;
 export type TenderDraftPackageRow = z.infer<typeof tenderDraftPackageRowSchema>;
 export type TenderDraftPackageImportRunRow = z.infer<typeof tenderDraftPackageImportRunRowSchema>;
+export type TenderImportOwnedBlockRow = z.infer<typeof tenderImportOwnedBlockRowSchema>;
 export type TenderDraftPackageItemRow = z.infer<typeof tenderDraftPackageItemRowSchema>;
 export type TenderDraftArtifactRow = z.infer<typeof tenderDraftArtifactRowSchema>;
 export type TenderReviewTaskRow = z.infer<typeof tenderReviewTaskRowSchema>;

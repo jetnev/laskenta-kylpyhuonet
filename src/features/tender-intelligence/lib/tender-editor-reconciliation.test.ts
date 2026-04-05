@@ -8,7 +8,7 @@ import {
   resolveTenderDraftPackageReimportStatus,
 } from './tender-editor-reconciliation';
 import type { TenderDraftPackage } from '../types/tender-intelligence';
-import type { TenderDraftPackageImportRun } from '../types/tender-editor-import';
+import type { TenderDraftPackageImportRun, TenderImportOwnedBlock } from '../types/tender-editor-import';
 
 function createDraftPackage(overrides: Partial<TenderDraftPackage> = {}): TenderDraftPackage {
   return {
@@ -152,6 +152,138 @@ function createSuccessfulRun(overrides: Partial<TenderDraftPackageImportRun> = {
   };
 }
 
+function createOwnedBlocks(): TenderImportOwnedBlock[] {
+  return [
+    {
+      id: '11111111-1111-4111-8111-111111111111',
+      organization_id: '22222222-2222-4222-8222-222222222222',
+      tender_draft_package_id: '66666666-6666-4666-8666-666666666666',
+      target_quote_id: '99999999-9999-4999-8999-999999999999',
+      import_run_id: '91919191-9191-4919-8919-919191919191',
+      block_id: 'requirements_and_quote_notes',
+      marker_key: '66666666-6666-4666-8666-666666666666:requirements_and_quote_notes',
+      target_field: 'quote_notes_section',
+      target_section_key: 'tender-editor-import:66666666-6666-4666-8666-666666666666:requirements_and_quote_notes',
+      block_title: 'Vanha tarjoushuomio',
+      payload_hash: 'old-requirement-hash',
+      revision: 1,
+      last_synced_at: '2026-04-05T14:01:00.000Z',
+      is_active: true,
+      created_at: '2026-04-05T14:01:00.000Z',
+      updated_at: '2026-04-05T14:01:00.000Z',
+    },
+    {
+      id: '22222222-2222-4222-8222-222222222222',
+      organization_id: '22222222-2222-4222-8222-222222222222',
+      tender_draft_package_id: '66666666-6666-4666-8666-666666666666',
+      target_quote_id: '99999999-9999-4999-8999-999999999999',
+      import_run_id: '91919191-9191-4919-8919-919191919191',
+      block_id: 'selected_references',
+      marker_key: '66666666-6666-4666-8666-666666666666:selected_references',
+      target_field: 'quote_notes_section',
+      target_section_key: 'tender-editor-import:66666666-6666-4666-8666-666666666666:selected_references',
+      block_title: 'Vanha referenssiyhteenveto',
+      payload_hash: 'old-reference-hash',
+      revision: 1,
+      last_synced_at: '2026-04-05T14:01:00.000Z',
+      is_active: true,
+      created_at: '2026-04-05T14:01:00.000Z',
+      updated_at: '2026-04-05T14:01:00.000Z',
+    },
+  ];
+}
+
+function createTargetQuoteSnapshot() {
+  return {
+    quote: {
+      id: '99999999-9999-4999-8999-999999999999',
+      projectId: '13131313-1313-4313-8313-131313131313',
+      title: 'Aiemmin importoitu tarjous',
+      quoteNumber: 'TAR-001',
+      revisionNumber: 1,
+      status: 'draft',
+      vatPercent: 25.5,
+      discountType: 'none',
+      discountValue: 0,
+      projectCosts: 0,
+      deliveryCosts: 0,
+      installationCosts: 0,
+      travelKilometers: 0,
+      travelRatePerKm: 0,
+      disposalCosts: 0,
+      demolitionCosts: 0,
+      protectionCosts: 0,
+      permitCosts: 0,
+      selectedMarginPercent: 30,
+      pricingMode: 'margin',
+      ownerUserId: '22222222-2222-4222-8222-222222222222',
+      createdAt: '2026-04-05T14:01:00.000Z',
+      updatedAt: '2026-04-05T14:01:00.000Z',
+      createdByUserId: '22222222-2222-4222-8222-222222222222',
+      updatedByUserId: '22222222-2222-4222-8222-222222222222',
+      notes: [
+        '<!-- tender-editor-import:block:66666666-6666-4666-8666-666666666666:requirements_and_quote_notes:start -->',
+        'Vanha tarjoushuomio.',
+        '<!-- tender-editor-import:block:66666666-6666-4666-8666-666666666666:requirements_and_quote_notes:end -->',
+        '<!-- tender-editor-import:block:66666666-6666-4666-8666-666666666666:selected_references:start -->',
+        'Vanha referenssi.',
+        '<!-- tender-editor-import:block:66666666-6666-4666-8666-666666666666:selected_references:end -->',
+      ].join('\n'),
+      internalNotes: null,
+    },
+    rows: [
+      {
+        id: '31313131-3131-4313-8313-313131313131',
+        quoteId: '99999999-9999-4999-8999-999999999999',
+        sortOrder: 0,
+        mode: 'section',
+        pricingModel: 'unit_price',
+        unitPricingMode: 'manual',
+        source: 'manual',
+        productName: 'Vanha tarjoushuomio',
+        quantity: 0,
+        unit: 'erä',
+        purchasePrice: 0,
+        salesPrice: 0,
+        installationPrice: 0,
+        marginPercent: 0,
+        regionMultiplier: 1,
+        notes: 'tender-editor-import:66666666-6666-4666-8666-666666666666:requirements_and_quote_notes',
+        manualSalesPrice: true,
+        ownerUserId: '22222222-2222-4222-8222-222222222222',
+        createdAt: '2026-04-05T14:01:00.000Z',
+        updatedAt: '2026-04-05T14:01:00.000Z',
+        createdByUserId: '22222222-2222-4222-8222-222222222222',
+        updatedByUserId: '22222222-2222-4222-8222-222222222222',
+      },
+      {
+        id: '41414141-4141-4414-8414-414141414141',
+        quoteId: '99999999-9999-4999-8999-999999999999',
+        sortOrder: 1,
+        mode: 'section',
+        pricingModel: 'unit_price',
+        unitPricingMode: 'manual',
+        source: 'manual',
+        productName: 'Vanha referenssiyhteenveto',
+        quantity: 0,
+        unit: 'erä',
+        purchasePrice: 0,
+        salesPrice: 0,
+        installationPrice: 0,
+        marginPercent: 0,
+        regionMultiplier: 1,
+        notes: 'tender-editor-import:66666666-6666-4666-8666-666666666666:selected_references',
+        manualSalesPrice: true,
+        ownerUserId: '22222222-2222-4222-8222-222222222222',
+        createdAt: '2026-04-05T14:01:00.000Z',
+        updatedAt: '2026-04-05T14:01:00.000Z',
+        createdByUserId: '22222222-2222-4222-8222-222222222222',
+        updatedByUserId: '22222222-2222-4222-8222-222222222222',
+      },
+    ],
+  };
+}
+
 describe('tender-editor-reconciliation', () => {
   it('builds a deterministic payload hash from the managed import surface', () => {
     const preview = createPreview(createDraftPackage());
@@ -182,6 +314,16 @@ describe('tender-editor-reconciliation', () => {
     });
     const preview = createPreview(draftPackage);
     const latestSuccessfulRun = createSuccessfulRun();
+    const reconciliation = buildTenderEditorReconciliationPreview({
+      draftPackage,
+      preview,
+      latestSuccessfulRun,
+      targetQuoteId: '99999999-9999-4999-8999-999999999999',
+      targetQuoteTitle: 'Aiemmin importoitu tarjous',
+      importMode: 'update_existing_quote',
+      ownedBlocks: createOwnedBlocks(),
+      targetQuoteSnapshot: createTargetQuoteSnapshot(),
+    });
     const importState = buildTenderDraftPackageImportState({
       draftPackage,
       preview,
@@ -191,6 +333,7 @@ describe('tender-editor-reconciliation', () => {
       targetQuoteTitle: 'Aiemmin importoitu tarjous',
       targetProjectId: '13131313-1313-4313-8313-131313131313',
       targetCustomerId: '12121212-1212-4212-8212-121212121212',
+      reconciliation,
     });
 
     expect(resolveTenderDraftPackageReimportStatus({
@@ -200,6 +343,8 @@ describe('tender-editor-reconciliation', () => {
     })).toBe('stale');
     expect(importState.reimport_status).toBe('stale');
     expect(importState.can_reimport).toBe(true);
+    expect(importState.ownership_registry_status).toBe('stale');
+    expect(importState.owned_block_count).toBe(2);
     expect(importState.suggested_import_mode).toBe('update_existing_quote');
   });
 
@@ -219,6 +364,8 @@ describe('tender-editor-reconciliation', () => {
       targetQuoteId: '99999999-9999-4999-8999-999999999999',
       targetQuoteTitle: 'Aiemmin importoitu tarjous',
       importMode: 'update_existing_quote',
+      ownedBlocks: createOwnedBlocks(),
+      targetQuoteSnapshot: createTargetQuoteSnapshot(),
     });
 
     expect(reconciliation.added_count).toBe(2);
@@ -230,6 +377,9 @@ describe('tender-editor-reconciliation', () => {
     expect(reconciliation.removed_blocks).toBe(1);
     expect(reconciliation.unchanged_blocks).toBe(0);
     expect(reconciliation.blocks.map((block) => block.change_type)).toEqual(['changed', 'added', 'removed']);
+    expect(reconciliation.registry_status).toBe('stale');
+    expect(reconciliation.default_update_block_ids).toEqual(['requirements_and_quote_notes', 'notes_for_editor']);
+    expect(reconciliation.default_remove_block_ids).toEqual(['selected_references']);
     expect(reconciliation.can_reimport).toBe(true);
     expect(reconciliation.warnings).toEqual([]);
   });

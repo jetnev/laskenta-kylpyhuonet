@@ -8,6 +8,7 @@ import type {
   TenderDraftPackageImportState,
   TenderEditorImportPreview,
   TenderEditorImportResult,
+  TenderEditorSelectiveReimportSelection,
   TenderEditorReconciliationPreview,
   TenderEditorImportValidationResult,
 } from '../types/tender-editor-import';
@@ -739,11 +740,14 @@ export function useTenderIntelligence() {
   );
 
   const reimportDraftPackageToEditor = useCallback(
-    async (draftPackageId: string): Promise<TenderEditorImportResult> => {
+    async (
+      draftPackageId: string,
+      selection?: TenderEditorSelectiveReimportSelection,
+    ): Promise<TenderEditorImportResult> => {
       setImportingDraftPackageId(draftPackageId);
 
       try {
-        const result = await repository.reimportDraftPackageToEditor(draftPackageId);
+        const result = await repository.reimportDraftPackageToEditor(draftPackageId, selection);
         const packageId = selectedPackage?.package.id ?? selectedPackageId;
 
         if (packageId) {

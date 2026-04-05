@@ -85,9 +85,38 @@ describe('tender-editor-import-adapter', () => {
 
     const nextNotes = syncTenderEditorManagedBlocks({
       existingValue: existingNotes,
-      draftPackageId: '66666666-6666-4666-8666-666666666666',
       targetKind: 'quote_notes_section',
-      blocks,
+      currentBlocks: blocks,
+      effectiveOwnedBlocks: [
+        {
+          persistedRow: null,
+          blockId: 'requirements_and_quote_notes',
+          markerKey: '66666666-6666-4666-8666-666666666666:requirements_and_quote_notes',
+          targetField: 'quote_notes_section',
+          targetSectionKey: 'tender-editor-import:66666666-6666-4666-8666-666666666666:requirements_and_quote_notes',
+          blockTitle: 'Tarjoushuomiot',
+          payloadHash: 'current-hash',
+          revision: 1,
+          lastSyncedAt: '2026-04-05T14:05:00.000Z',
+          importRunId: '71717171-7171-4717-8717-717171717171',
+          source: 'registry',
+        },
+        {
+          persistedRow: null,
+          blockId: 'selected_references',
+          markerKey: '66666666-6666-4666-8666-666666666666:selected_references',
+          targetField: 'quote_notes_section',
+          targetSectionKey: 'tender-editor-import:66666666-6666-4666-8666-666666666666:selected_references',
+          blockTitle: 'Referenssiyhteenveto',
+          payloadHash: 'old-reference-hash',
+          revision: 1,
+          lastSyncedAt: '2026-04-05T14:05:00.000Z',
+          importRunId: '71717171-7171-4717-8717-717171717171',
+          source: 'registry',
+        },
+      ],
+      selectedUpdateBlockIds: ['requirements_and_quote_notes'],
+      selectedRemoveBlockIds: ['selected_references'],
     });
 
     expect(nextNotes).toContain('Käyttäjän oma aloitus.');

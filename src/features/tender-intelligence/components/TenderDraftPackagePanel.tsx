@@ -1,9 +1,10 @@
 import { ArrowSquareOut, ArrowsClockwise, ClockCounterClockwise, FileText, ListChecks, Note, Sparkle, WarningCircle } from '@phosphor-icons/react';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { buildTenderDraftPackageReadiness } from '../lib/tender-draft-package';
@@ -15,6 +16,7 @@ import {
   TENDER_DRAFT_PACKAGE_REIMPORT_STATUS_META,
   TENDER_EDITOR_IMPORT_MODE_META,
   TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META,
+  TENDER_IMPORT_OWNERSHIP_REGISTRY_STATUS_META,
   TENDER_DRAFT_PACKAGE_ITEM_TYPE_META,
   TENDER_DRAFT_PACKAGE_STATUS_META,
   TENDER_RESOLUTION_STATUS_META,
@@ -24,6 +26,8 @@ import type {
   TenderDraftPackageImportRun,
   TenderDraftPackageImportState,
   TenderEditorImportPreview,
+  TenderEditorManagedBlockId,
+  TenderEditorSelectiveReimportSelection,
   TenderEditorReconciliationPreview,
   TenderEditorImportValidationResult,
 } from '../types/tender-editor-import';
@@ -52,7 +56,7 @@ interface TenderDraftPackagePanelProps {
   onSelectDraftPackage: (draftPackageId: string) => void;
   onCreateDraftPackage: (packageId: string) => Promise<unknown>;
   onImportDraftPackageToEditor: (draftPackageId: string) => Promise<unknown>;
-  onReimportDraftPackageToEditor: (draftPackageId: string) => Promise<unknown>;
+  onReimportDraftPackageToEditor: (draftPackageId: string, selection?: TenderEditorSelectiveReimportSelection) => Promise<unknown>;
   onOpenImportedQuote: (projectId: string, quoteId: string) => void;
   onUpdateDraftPackageItem: (itemId: string, input: UpdateTenderDraftPackageItemInput) => Promise<unknown>;
   onMarkDraftPackageReviewed: (draftPackageId: string) => Promise<unknown>;
@@ -111,6 +115,19 @@ function resolveReconciliationChangeVariant(changeType: 'added' | 'changed' | 'r
       return 'secondary' as const;
     default:
       return 'outline' as const;
+  }
+}
+
+function resolveOwnershipSourceLabel(source: 'registry' | 'latest_successful_run' | 'current_payload') {
+  switch (source) {
+    case 'registry':
+      return 'Registry';
+    case 'latest_successful_run':
+      return 'Viimeisin onnistunut import';
+    case 'current_payload':
+      return 'Nykyinen payload';
+    default:
+      return source;
   }
 }
 
@@ -243,12 +260,57 @@ export default function TenderDraftPackagePanel({
   const managedBlocks = managedSurface?.blocks ?? [];
   const latestImportRun = draftPackageImportRuns[0] ?? draftPackageImportState?.latest_run ?? null;
   const canOpenImportedQuote = Boolean(selectedDraftPackage?.importedQuoteId && selectedPackage.package.linkedProjectId);
+  const [selectedUpdateBlockIds, setSelectedUpdateBlockIds] = useState<TenderEditorManagedBlockId[]>([]);
+  const [selectedRemoveBlockIds, setSelectedRemoveBlockIds] = useState<TenderEditorManagedBlockId[]>([]);
+  const [confirmSelectiveReimport, setConfirmSelectiveReimport] = useState(false);
+  const selectedUpdateBlockIdSet = useMemo(() => new Set(selectedUpdateBlockIds), [selectedUpdateBlockIds]);
+  const selectedRemoveBlockIdSet = useMemo(() => new Set(selectedRemoveBlockIds), [selectedRemoveBlockIds]);
+  const selectedSelectiveBlockCount = selectedUpdateBlockIds.length + selectedRemoveBlockIds.length;
+  const canExecuteSelectiveReimport = Boolean(
+    selectedDraftPackage
+    && draftPackageImportState?.suggested_import_mode === 'update_existing_quote'
+    && draftPackageReimportPreview?.selective_reimport_available
+    && confirmSelectiveReimport
+    && selectedSelectiveBlockCount > 0,
+  );
+  const selectiveReimportSelection = useMemo<TenderEditorSelectiveReimportSelection>(
+    () => ({
+      update_block_ids: selectedUpdateBlockIds,
+      remove_block_ids: selectedRemoveBlockIds,
+    }),
+    [selectedRemoveBlockIds, selectedUpdateBlockIds],
+  );
+
+  const updateSelectedBlockIds = (
+    setIds: typeof setSelectedUpdateBlockIds,
+    blockId: TenderEditorManagedBlockId,
+    checked: boolean,
+  ) => {
+    setIds((current) => {
+      if (checked) {
+        return current.includes(blockId) ? current : [...current, blockId];
+      }
+
+      return current.filter((candidate) => candidate !== blockId);
+    });
+  };
 
   useEffect(() => {
     if (!selectedDraftPackageId && draftPackages[0]) {
       onSelectDraftPackage(draftPackages[0].id);
     }
   }, [draftPackages, onSelectDraftPackage, selectedDraftPackageId]);
+
+  useEffect(() => {
+    setSelectedUpdateBlockIds(draftPackageReimportPreview?.default_update_block_ids ?? []);
+    setSelectedRemoveBlockIds(draftPackageReimportPreview?.default_remove_block_ids ?? []);
+    setConfirmSelectiveReimport(false);
+  }, [
+    draftPackageReimportPreview?.current_payload_hash,
+    draftPackageReimportPreview?.previous_payload_hash,
+    draftPackageReimportPreview?.registry_status,
+    selectedDraftPackage?.id,
+  ]);
 
   return (
     <Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
@@ -303,10 +365,14 @@ export default function TenderDraftPackagePanel({
                     previewingEditorImportDraftPackageId === selectedDraftPackage.id
                     || importingDraftPackageId === selectedDraftPackage.id
                     || !importValidation?.can_import
+                    || (
+                      draftPackageImportState?.suggested_import_mode === 'update_existing_quote'
+                      && !canExecuteSelectiveReimport
+                    )
                   }
                   onClick={() => {
                     if (draftPackageImportState?.suggested_import_mode === 'update_existing_quote') {
-                      void onReimportDraftPackageToEditor(selectedDraftPackage.id);
+                      void onReimportDraftPackageToEditor(selectedDraftPackage.id, selectiveReimportSelection);
                       return;
                     }
 
@@ -422,6 +488,11 @@ export default function TenderDraftPackagePanel({
                   <div className="flex flex-wrap items-center gap-2">
                     {draftPackageImportState && <Badge variant={TENDER_EDITOR_IMPORT_MODE_META[draftPackageImportState.suggested_import_mode].variant}>{TENDER_EDITOR_IMPORT_MODE_META[draftPackageImportState.suggested_import_mode].label}</Badge>}
                     {latestImportRun && <Badge variant={TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[latestImportRun.result_status].variant}>{TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[latestImportRun.result_status].label}</Badge>}
+                    {draftPackageImportState && (
+                      <Badge variant={TENDER_IMPORT_OWNERSHIP_REGISTRY_STATUS_META[draftPackageImportState.ownership_registry_status].variant}>
+                        {TENDER_IMPORT_OWNERSHIP_REGISTRY_STATUS_META[draftPackageImportState.ownership_registry_status].label}
+                      </Badge>
+                    )}
                   </div>
                   <div className="mt-3 space-y-2 text-sm text-slate-700">
                     <p>Kohdequote: {draftPackageImportState?.target_quote_title ?? editorImportPreview?.payload.metadata.target_quote_title ?? 'Luodaan importissa'}</p>
@@ -429,6 +500,9 @@ export default function TenderDraftPackagePanel({
                     <p>Kohdeasiakas: {draftPackageImportState?.target_customer_id ?? selectedPackage.package.linkedCustomerId ?? 'Luodaan tai ratkaistaan importissa'}</p>
                     <p>Nykyinen payload hash: {editorImportPreview ? shortenHash(editorImportPreview.payload_hash) : 'Ladataan...'}</p>
                     <p>Hallittuja lohkoja: {managedBlocks.length}</p>
+                    {draftPackageImportState && <p>Aktiivisia owned blockeja: {draftPackageImportState.owned_block_count}</p>}
+                    {draftPackageImportState?.owned_block_last_synced_at && <p>Registry syncattu viimeksi: {formatTenderTimestamp(draftPackageImportState.owned_block_last_synced_at)}</p>}
+                    {draftPackageImportState && <p>Selective re-import mahdollinen: {draftPackageImportState.selective_reimport_available ? 'Kyllä' : 'Ei vielä'}</p>}
                   </div>
                 </div>
 
@@ -609,6 +683,10 @@ export default function TenderDraftPackagePanel({
                           <p>Payload hash: {shortenHash(editorImportPreview.payload_hash)}</p>
                           {managedSurface && <p>Managed contract: {managedSurface.contract_version}</p>}
                           {managedSurface && <p>{managedSurface.ownership_notice}</p>}
+                          {draftPackageImportState && <p>Owned blockeja registryssä: {draftPackageImportState.owned_block_count}</p>}
+                          {draftPackageImportState && <p>Registry-status: {TENDER_IMPORT_OWNERSHIP_REGISTRY_STATUS_META[draftPackageImportState.ownership_registry_status].label}</p>}
+                          {draftPackageImportState?.owned_block_last_synced_at && <p>Viimeisin registry-sync: {formatTenderTimestamp(draftPackageImportState.owned_block_last_synced_at)}</p>}
+                          {draftPackageImportState && <p>Selective re-import: {draftPackageImportState.selective_reimport_available ? 'Mahdollinen' : 'Ei käytettävissä'}</p>}
                         </div>
                       </div>
 
@@ -674,8 +752,9 @@ export default function TenderDraftPackagePanel({
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge variant={TENDER_DRAFT_PACKAGE_REIMPORT_STATUS_META[draftPackageReimportPreview.reimport_status].variant}>{TENDER_DRAFT_PACKAGE_REIMPORT_STATUS_META[draftPackageReimportPreview.reimport_status].label}</Badge>
                               <Badge variant={TENDER_EDITOR_IMPORT_MODE_META[draftPackageReimportPreview.import_mode].variant}>{TENDER_EDITOR_IMPORT_MODE_META[draftPackageReimportPreview.import_mode].label}</Badge>
+                              <Badge variant={TENDER_IMPORT_OWNERSHIP_REGISTRY_STATUS_META[draftPackageReimportPreview.registry_status].variant}>{TENDER_IMPORT_OWNERSHIP_REGISTRY_STATUS_META[draftPackageReimportPreview.registry_status].label}</Badge>
                             </div>
-                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                               <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Lisätyt lohkot</p>
                                 <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.added_blocks}</p>
@@ -692,6 +771,10 @@ export default function TenderDraftPackagePanel({
                                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Ennallaan</p>
                                 <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.unchanged_blocks}</p>
                               </div>
+                              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Aktiivinen registry</p>
+                                <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.registry_active_block_count}</p>
+                              </div>
                             </div>
 
                             {draftPackageReimportPreview.warnings.length > 0 && (
@@ -705,19 +788,149 @@ export default function TenderDraftPackagePanel({
                               </div>
                             )}
 
+                            {draftPackageReimportPreview.selective_reimport_available && (
+                              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                  <div>
+                                    <p className="text-sm font-medium text-slate-950">Selective block re-import</p>
+                                    <p className="mt-1 text-sm leading-6 text-slate-700">
+                                      Valitse vain ne Tarjousälyn omistamat lohkot, jotka päivitetään tai poistetaan. Valitsemattomat lohkot jätetään nykyiseen tilaansa.
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setSelectedUpdateBlockIds(draftPackageReimportPreview.default_update_block_ids);
+                                        setSelectedRemoveBlockIds(draftPackageReimportPreview.default_remove_block_ids);
+                                        setConfirmSelectiveReimport(false);
+                                      }}
+                                    >
+                                      Valitse oletusmuutokset
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setSelectedUpdateBlockIds([]);
+                                        setSelectedRemoveBlockIds([]);
+                                        setConfirmSelectiveReimport(false);
+                                      }}
+                                    >
+                                      Tyhjennä valinnat
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Valitut päivitykset</p>
+                                    <p className="mt-1 text-xl font-semibold text-slate-950">{selectedUpdateBlockIds.length}</p>
+                                  </div>
+                                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Valitut poistot</p>
+                                    <p className="mt-1 text-xl font-semibold text-slate-950">{selectedRemoveBlockIds.length}</p>
+                                  </div>
+                                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Registry warnings</p>
+                                    <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageImportState?.registry_warning_count ?? draftPackageReimportPreview.warnings.length}</p>
+                                  </div>
+                                </div>
+
+                                <label className="mt-4 flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                                  <Checkbox
+                                    checked={confirmSelectiveReimport}
+                                    onCheckedChange={(checked) => setConfirmSelectiveReimport(checked === true)}
+                                  />
+                                  <span className="text-sm leading-6 text-slate-700">
+                                    Hyväksyn, että selective re-import päivittää tai poistaa vain valitsemani Tarjousälyn omistamat blockit ja jättää muun editorisisällön rauhaan.
+                                  </span>
+                                </label>
+
+                                {draftPackageReimportPreview.registry_last_synced_at && (
+                                  <p className="mt-3 text-sm leading-6 text-slate-700">
+                                    Registryssä viimeisin tunnettu block-sync: {formatTenderTimestamp(draftPackageReimportPreview.registry_last_synced_at)}
+                                  </p>
+                                )}
+
+                                <Button
+                                  type="button"
+                                  className="mt-4"
+                                  disabled={!canExecuteSelectiveReimport || importingDraftPackageId === selectedDraftPackage?.id}
+                                  onClick={() => {
+                                    if (!selectedDraftPackage) {
+                                      return;
+                                    }
+
+                                    void onReimportDraftPackageToEditor(selectedDraftPackage.id, selectiveReimportSelection);
+                                  }}
+                                >
+                                  {importingDraftPackageId === selectedDraftPackage?.id ? 'Synkronoidaan...' : 'Suorita selective re-import'}
+                                </Button>
+                              </div>
+                            )}
+
                             <div className="space-y-2">
                               <p className="text-sm font-medium text-slate-950">Lohkokohtaiset muutokset</p>
-                              {draftPackageReimportPreview.blocks.slice(0, 6).map((block) => (
+                              {draftPackageReimportPreview.blocks.map((block) => (
                                 <div key={block.marker_key} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <Badge variant={resolveReconciliationChangeVariant(block.change_type)}>{resolveReconciliationChangeLabel(block.change_type)}</Badge>
-                                    <Badge variant="outline">{block.target_label}</Badge>
+                                  <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                                    <div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <Badge variant={resolveReconciliationChangeVariant(block.change_type)}>{resolveReconciliationChangeLabel(block.change_type)}</Badge>
+                                        <Badge variant="outline">{block.target_label}</Badge>
+                                        <Badge variant="outline">{resolveOwnershipSourceLabel(block.ownership_source)}</Badge>
+                                        {block.registry_revision != null && <Badge variant="outline">Rev {block.registry_revision}</Badge>}
+                                      </div>
+                                      <p className="mt-2 text-sm font-medium text-slate-950">{block.title}</p>
+                                      <p className="mt-2 text-sm leading-6 text-slate-700">Marker {block.marker_key}</p>
+                                      {block.registry_last_synced_at && <p className="mt-1 text-xs leading-5 text-slate-500">Viimeksi synkattu {formatTenderTimestamp(block.registry_last_synced_at)}</p>}
+                                    </div>
+
+                                    {(block.can_select_for_update || block.can_select_for_removal) ? (
+                                      <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                                        <Checkbox
+                                          checked={block.can_select_for_removal ? selectedRemoveBlockIdSet.has(block.block_id) : selectedUpdateBlockIdSet.has(block.block_id)}
+                                          onCheckedChange={(checked) => {
+                                            updateSelectedBlockIds(
+                                              block.can_select_for_removal ? setSelectedRemoveBlockIds : setSelectedUpdateBlockIds,
+                                              block.block_id,
+                                              checked === true,
+                                            );
+                                            setConfirmSelectiveReimport(false);
+                                          }}
+                                        />
+                                        <span className="text-sm leading-6 text-slate-700">
+                                          {block.can_select_for_removal ? 'Valitse poistettavaksi' : 'Valitse päivitettäväksi'}
+                                        </span>
+                                      </label>
+                                    ) : (
+                                      <Badge variant="secondary">Ei valittavaa muutosta</Badge>
+                                    )}
                                   </div>
-                                  <p className="mt-2 text-sm font-medium text-slate-950">{block.title}</p>
-                                  <p className="mt-2 text-sm leading-6 text-slate-700">Marker {block.marker_key}</p>
-                                  <p className="mt-2 text-sm leading-6 text-slate-700 whitespace-pre-line">
-                                    {getTenderTextPreview(block.current_content_md ?? block.previous_content_md ?? '', 240)}
-                                  </p>
+
+                                  <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_220px]">
+                                    <p className="text-sm leading-6 text-slate-700 whitespace-pre-line">
+                                      {getTenderTextPreview(block.current_content_md ?? block.previous_content_md ?? '', 240)}
+                                    </p>
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
+                                      <p>Text marker: {block.text_marker_present ? 'Löytyy' : 'Puuttuu'}</p>
+                                      <p className="mt-1">Section row: {block.section_row_present ? 'Löytyy' : 'Puuttuu'}</p>
+                                    </div>
+                                  </div>
+
+                                  {block.warnings.length > 0 && (
+                                    <div className="mt-3 space-y-2">
+                                      {block.warnings.map((warning, index) => (
+                                        <div key={`${block.block_id}-warning-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-700">
+                                          {warning}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                               {draftPackageReimportPreview.blocks.length === 0 && (
