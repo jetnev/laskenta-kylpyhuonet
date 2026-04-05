@@ -58,6 +58,22 @@ const persistedSnapshots = new Map<string, string | null>();
 const pendingWrites = new Map<string, PendingWrite>();
 const pendingWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+export function resolvePreferredRecordValue<T>(options: {
+  fallback: T;
+  pendingValue?: T;
+  persistedValue?: T;
+}) {
+  if (options.pendingValue !== undefined) {
+    return options.pendingValue;
+  }
+
+  if (options.persistedValue !== undefined) {
+    return options.persistedValue;
+  }
+
+  return options.fallback;
+}
+
 function getScopeForKey(key: string): AppKvScope {
   return ORGANIZATION_KEYS.has(key) ? 'organization' : 'user';
 }
@@ -133,6 +149,11 @@ function writeFallbackValue<T>(recordId: string, value: T) {
   window.localStorage.setItem(getLocalFallbackKey(recordId), JSON.stringify(value));
 }
 
+function getPendingValue<T>(recordId: string) {
+  const pendingWrite = pendingWrites.get(recordId);
+  return pendingWrite ? (pendingWrite.value as T) : undefined;
+}
+
 async function readRemoteRecordById<T>(recordId: string): Promise<T | undefined> {
   const client = requireSupabase();
   const { data, error } = await client
@@ -188,8 +209,20 @@ async function readLegacyValue<T>(key: string, userId: string | null | undefined
 }
 
 async function readRecordValue<T>(args: RecordContext & { fallback: T }): Promise<T> {
+  const initialPendingValue = getPendingValue<T>(args.recordId);
+  if (initialPendingValue !== undefined) {
+    writeFallbackValue(args.recordId, initialPendingValue);
+    return initialPendingValue;
+  }
+
   if (!isSupabaseConfigured) {
     let nextValue = readFallbackValue(args.recordId, args.fallback);
+
+    const latestPendingValue = getPendingValue<T>(args.recordId);
+    if (latestPendingValue !== undefined) {
+      writeFallbackValue(args.recordId, latestPendingValue);
+      return latestPendingValue;
+    }
 
     if (args.scope === 'organization' && safeSerialize(nextValue) === safeSerialize(args.fallback)) {
       nextValue = await readLegacyValue(args.key, args.userId, args.fallback);
@@ -201,6 +234,12 @@ async function readRecordValue<T>(args: RecordContext & { fallback: T }): Promis
   }
 
   const remoteValue = await readRemoteRecordById<T>(args.recordId);
+  const latestPendingValue = getPendingValue<T>(args.recordId);
+  if (latestPendingValue !== undefined) {
+    writeFallbackValue(args.recordId, latestPendingValue);
+    return latestPendingValue;
+  }
+
   if (remoteValue !== undefined) {
     persistedSnapshots.set(args.recordId, safeSerialize(remoteValue));
     writeFallbackValue(args.recordId, remoteValue);
