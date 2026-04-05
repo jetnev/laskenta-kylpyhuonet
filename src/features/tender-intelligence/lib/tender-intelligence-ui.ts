@@ -3,6 +3,7 @@ import type {
   TenderAnalysisJobStatus,
   TenderDocumentExtractionStatus,
   TenderDocumentExtractorType,
+  TenderDraftPackageImportStatus,
   TenderDraftPackageItemType,
   TenderDraftPackageStatus,
   TenderDraftArtifactStatus,
@@ -139,6 +140,15 @@ export const TENDER_DRAFT_PACKAGE_STATUS_META: Record<TenderDraftPackageStatus, 
   reviewed: { label: 'Tarkistettu', variant: 'outline' },
   exported: { label: 'Merkitty viedyksi', variant: 'default' },
   archived: { label: 'Arkistoitu', variant: 'secondary' },
+};
+
+export const TENDER_DRAFT_PACKAGE_IMPORT_STATUS_META: Record<
+  TenderDraftPackageImportStatus,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  not_imported: { label: 'Ei importoitu', variant: 'secondary' },
+  imported: { label: 'Importoitu editoriin', variant: 'default' },
+  failed: { label: 'Import epäonnistui', variant: 'destructive' },
 };
 
 export const TENDER_DRAFT_PACKAGE_ITEM_TYPE_META: Record<TenderDraftPackageItemType, { label: string; variant: TenderBadgeVariant }> = {

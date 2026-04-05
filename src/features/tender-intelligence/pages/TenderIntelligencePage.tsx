@@ -45,6 +45,8 @@ export default function TenderIntelligencePage() {
   const {
     packages,
     draftPackages,
+    editorImportPreview,
+    editorImportValidation,
     selectedPackage,
     selectedPackageId,
     selectedDraftPackageId,
@@ -52,6 +54,8 @@ export default function TenderIntelligencePage() {
     loading,
     creating,
     creatingDraftPackagePackageId,
+    previewingEditorImportDraftPackageId,
+    importingDraftPackageId,
     error,
     overview,
     canCreate,
@@ -79,6 +83,7 @@ export default function TenderIntelligencePage() {
     actorNameById,
     currentUserId,
     createDraftPackage,
+    importDraftPackageToEditor,
     updateDraftPackageItem,
     markDraftPackageReviewed,
     markDraftPackageExported,
@@ -99,11 +104,11 @@ export default function TenderIntelligencePage() {
         <CardContent className="space-y-8 px-6 py-6 sm:px-8 sm:py-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4">
-              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 11</Badge>
+              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 12</Badge>
               <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Draft package export foundation reviewed Tarjousäly-löydöksille</h1>
+                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Editor import boundary reviewed Tarjousäly-draft packageille</h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-200 sm:text-base">
-                  Tarjousäly muodostaa nyt reviewed löydöksistä versionoidun draft package -payloadin. Hyväksytyt vaatimukset, referenssit, ratkaistut puutteet ja editor-notet voidaan koota erilliseksi staging-paketiksi myöhempää editor-importtia varten ilman että nykyinen tarjousydin muuttuu.
+                  Tarjousäly muodostaa nyt reviewed löydöksistä draft package -stagingin, validioi sen editori-importtia varten ja voi tuoda sisällön hallittuun tarjousluonnokseen notes- ja section-rakenteena ilman riskialtista syväkirjoitusta nykyiseen tarjousytimeen.
                 </p>
               </div>
             </div>
@@ -114,7 +119,7 @@ export default function TenderIntelligencePage() {
                 <Plus className="h-4 w-4" />
               </Button>
               <Button variant="outline" className="justify-between border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white" disabled>
-                Result-domain päivittyy baseline-, workflow-, reference-matchaus- ja draft package -ajoista
+                Result-domain päivittyy baseline-, workflow-, reference-matchaus-, draft package- ja editor import -ajoista
                 <Sparkle className="h-4 w-4" />
               </Button>
             </div>
@@ -162,6 +167,10 @@ export default function TenderIntelligencePage() {
           deletingDocumentIds={deletingDocumentIds}
           selectedDraftPackageId={selectedDraftPackageId}
           creatingDraftPackagePackageId={creatingDraftPackagePackageId}
+          editorImportPreview={editorImportPreview}
+          editorImportValidation={editorImportValidation}
+          previewingEditorImportDraftPackageId={previewingEditorImportDraftPackageId}
+          importingDraftPackageId={importingDraftPackageId}
           updatingDraftPackageItemIds={updatingDraftPackageItemIds}
           reviewingDraftPackageId={reviewingDraftPackageId}
           exportingDraftPackageId={exportingDraftPackageId}
@@ -180,6 +189,7 @@ export default function TenderIntelligencePage() {
           onDeleteDocument={deleteDocument}
           onSelectDraftPackage={selectDraftPackage}
           onCreateDraftPackage={createDraftPackage}
+          onImportDraftPackageToEditor={importDraftPackageToEditor}
           onUpdateDraftPackageItem={updateDraftPackageItem}
           onMarkDraftPackageReviewed={markDraftPackageReviewed}
           onMarkDraftPackageExported={markDraftPackageExported}
@@ -216,11 +226,11 @@ export default function TenderIntelligencePage() {
               <Stack className="h-4 w-4" />
               <span className="font-medium">Mitä tämä vaihe jo tekee</span>
             </div>
-            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit, extraction-data, analyysitulokset, evidence-rivit, review workflow, referenssikorpus ja uudet draft package -staging-paketit tallentuvat Supabaseen. Reviewed löydöksistä voidaan nyt muodostaa versionoitu export payload, jonka sisältöä käyttäjä voi vielä säätää item-kohtaisesti ennen varsinaista editori-importtia.</p>
+            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit, extraction-data, analyysitulokset, evidence-rivit, review workflow, referenssikorpus ja draft package -staging tallentuvat Supabaseen. Reviewed löydöksistä voidaan nyt muodostaa editor import preview, nähdä validointihuomiot ja tuoda sisältö eksplisiittisesti turvalliseen tarjousluonnokseen.</p>
           </div>
           <div className="space-y-2 sm:max-w-sm">
             <p className="font-medium text-slate-950">Mitä tästä puuttuu tarkoituksella</p>
-            <p>Ei vielä OCR:ää, PDF- tai DOCX-purkua, AI-provider-koodia, tarjousluonnoksen oikeaa generointia tai suoraa editor-importtia. Nykyinen quote-, project-, invoice- ja reporting-ydin jätetään edelleen rauhaan, ja myöhempi editori-integraatio rakennetaan tämän staging-domainin päälle.</p>
+            <p>Ei vielä OCR:ää, AI-provider-koodia, täydellistä automaattista tarjousgenerointia tai riskialtista syväkirjoitusta quote-riveihin. Nykyinen quote-, project-, invoice- ja reporting-ydin jätetään edelleen mahdollisimman koskemattomaksi, ja import rakentuu notes-pohjaisen adapterin kautta.</p>
           </div>
         </CardContent>
       </Card>

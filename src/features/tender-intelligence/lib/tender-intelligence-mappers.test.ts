@@ -711,8 +711,12 @@ describe('draft package mappers', () => {
       tender_package_id: '11111111-1111-4111-8111-111111111111',
       title: 'Tarjouspaketti / draft package',
       status: 'draft',
+      import_status: 'imported',
       generated_from_analysis_job_id: '33333333-3333-4333-8333-333333333333',
       generated_by_user_id: '22222222-2222-4222-8222-222222222222',
+      imported_quote_id: '61616161-6161-4616-8616-616161616161',
+      imported_at: '2026-04-05T12:42:00.000Z',
+      imported_by_user_id: '22222222-2222-4222-8222-222222222222',
       summary: 'Luonnospaketti sisältää 1 hyväksyttyä vaatimusta.',
       payload_json: {
         schema_version: 'tender-draft-package/v1',
@@ -751,6 +755,8 @@ describe('draft package mappers', () => {
       id: packageRow.id,
       tenderPackageId: packageRow.tender_package_id,
       status: 'draft',
+      importStatus: 'imported',
+      importedQuoteId: '61616161-6161-4616-8616-616161616161',
       items: [
         expect.objectContaining({
           id: itemRow.id,

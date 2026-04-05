@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import TenderDraftPackagePanel from './TenderDraftPackagePanel';
+import type { TenderEditorImportPreview } from '../types/tender-editor-import';
 import type { TenderDraftPackage, TenderPackageDetails } from '../types/tender-intelligence';
 
 function createPackageDetails(): TenderPackageDetails {
@@ -106,8 +107,12 @@ function createDraftPackage(): TenderDraftPackage {
     tenderPackageId: '11111111-1111-4111-8111-111111111111',
     title: 'Tarjouspaketti / draft package',
     status: 'draft',
+    importStatus: 'not_imported',
     generatedFromAnalysisJobId: null,
     generatedByUserId: '22222222-2222-4222-8222-222222222222',
+    importedQuoteId: null,
+    importedAt: null,
+    importedByUserId: null,
     summary: 'Luonnospaketti sisältää 1 hyväksyttyä vaatimusta, 1 editor-notea.',
     exportPayload: {
       schema_version: 'tender-draft-package/v1',
@@ -171,29 +176,117 @@ function createDraftPackage(): TenderDraftPackage {
   };
 }
 
+function createEditorImportPreview(): TenderEditorImportPreview {
+  return {
+    draft_item_count: 2,
+    importable_item_count: 1,
+    payload: {
+      schema_version: 'tender-editor-import/v1',
+      generated_at: '2026-04-05T13:05:00.000Z',
+      source_draft_package_id: '66666666-6666-4666-8666-666666666666',
+      source_tender_package_id: '11111111-1111-4111-8111-111111111111',
+      source_analysis_job_id: null,
+      metadata: {
+        draft_package_title: 'Tarjouspaketti / draft package',
+        draft_package_status: 'draft',
+        import_status: 'not_imported',
+        target_quote_title: 'Tarjouspaketti / editor import',
+        target_customer_id: null,
+        target_project_id: null,
+        imported_quote_id: null,
+        will_create_placeholder_target: true,
+      },
+      sections: {
+        quote_notes_md: '## Vaatimukset / tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nTämä on hyväksytty.',
+        quote_internal_notes_md: null,
+      },
+      items: [
+        {
+          draft_package_item_id: '77777777-7777-4777-8777-777777777777',
+          source_entity_type: 'requirement',
+          source_entity_id: '44444444-4444-4444-8444-444444444444',
+          item_type: 'accepted_requirement',
+          import_group: 'requirements_and_quote_notes',
+          target_kind: 'quote_notes_section',
+          target_label: 'Tarjouksen notes-kenttä',
+          title: 'Mukana oleva vaatimus',
+          content_md: 'Tämä on hyväksytty.',
+        },
+      ],
+    },
+    validation: {
+      is_valid: true,
+      can_import: true,
+      warning_count: 0,
+      error_count: 0,
+      issues: [],
+    },
+    sections: [
+      {
+        key: 'requirements_and_quote_notes',
+        title: 'Vaatimukset / tarjoushuomiot',
+        target_kind: 'quote_notes_section',
+        target_label: 'Tarjouksen notes-kenttä',
+        item_count: 1,
+        preview_md: '## Vaatimukset / tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nTämä on hyväksytty.',
+      },
+      {
+        key: 'selected_references',
+        title: 'Valitut referenssit',
+        target_kind: 'quote_notes_section',
+        target_label: 'Tarjouksen notes-kenttä',
+        item_count: 0,
+        preview_md: null,
+      },
+      {
+        key: 'resolved_missing_items_and_attachment_notes',
+        title: 'Ratkaistut puutteet / liitehuomiot',
+        target_kind: 'quote_internal_notes_section',
+        target_label: 'Tarjouksen internalNotes-kenttä',
+        item_count: 0,
+        preview_md: null,
+      },
+      {
+        key: 'notes_for_editor',
+        title: 'Notes for editor',
+        target_kind: 'quote_internal_notes_section',
+        target_label: 'Tarjouksen internalNotes-kenttä',
+        item_count: 0,
+        preview_md: null,
+      },
+    ],
+  };
+}
+
 describe('TenderDraftPackagePanel', () => {
   it('renders readiness, included and excluded preview sections for draft packages', () => {
     const markup = renderToStaticMarkup(
       <TenderDraftPackagePanel
         selectedPackage={createPackageDetails()}
         draftPackages={[createDraftPackage()]}
+        editorImportPreview={createEditorImportPreview()}
+        editorImportValidation={createEditorImportPreview().validation}
         selectedDraftPackageId="66666666-6666-4666-8666-666666666666"
         onSelectDraftPackage={async () => undefined as unknown as void}
         onCreateDraftPackage={async () => undefined}
+        onImportDraftPackageToEditor={async () => undefined}
         onUpdateDraftPackageItem={async () => undefined}
         onMarkDraftPackageReviewed={async () => undefined}
         onMarkDraftPackageExported={async () => undefined}
       />,
     );
 
-    expect(markup).toContain('Draft package export foundation');
+    expect(markup).toContain('Editor import boundary');
     expect(markup).toContain('Hyväksytyt vaatimukset');
     expect(markup).toContain('Mukana (1)');
     expect(markup).toContain('Ulkona (1)');
     expect(markup).toContain('Export preview');
+    expect(markup).toContain('Editor import');
     expect(markup).toContain('Mukana oleva vaatimus');
     expect(markup).toContain('Avoin editor-note');
     expect(markup).toContain('accepted_requirements');
     expect(markup).toContain('notes_for_editor');
+    expect(markup).toContain('Import preview');
+    expect(markup).toContain('Tarjouspaketti / editor import');
   });
 });

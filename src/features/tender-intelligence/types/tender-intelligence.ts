@@ -51,6 +51,7 @@ export const tenderGoNoGoRecommendationSchema = z.enum(['pending', 'go', 'condit
 export const tenderReferenceSuggestionSourceTypeSchema = z.enum(['quote', 'project', 'document-template', 'manual', 'organization_reference_profile']);
 export const tenderReferenceProfileSourceKindSchema = z.enum(['manual', 'imported', 'other']);
 export const tenderDraftPackageStatusSchema = z.enum(['draft', 'reviewed', 'exported', 'archived']);
+export const tenderDraftPackageImportStatusSchema = z.enum(['not_imported', 'imported', 'failed']);
 export const tenderDraftPackageItemTypeSchema = z.enum(['accepted_requirement', 'selected_reference', 'resolved_missing_item', 'review_note', 'draft_artifact']);
 export const tenderDraftPackageSourceEntityTypeSchema = z.enum(['requirement', 'missing_item', 'reference_suggestion', 'review_task', 'draft_artifact']);
 export const tenderDraftArtifactTypeSchema = z.enum(['quote-outline', 'response-summary', 'clarification-list']);
@@ -308,8 +309,12 @@ export const tenderDraftPackageSchema = z.object({
   tenderPackageId: entityIdSchema,
   title: z.string().trim().min(1),
   status: tenderDraftPackageStatusSchema,
+  importStatus: tenderDraftPackageImportStatusSchema.default('not_imported'),
   generatedFromAnalysisJobId: entityIdSchema.nullable().optional(),
   generatedByUserId: entityIdSchema.nullable().optional(),
+  importedQuoteId: entityIdSchema.nullable().optional(),
+  importedAt: timestampSchema.nullable().optional(),
+  importedByUserId: entityIdSchema.nullable().optional(),
   summary: z.string().trim().nullable().optional(),
   exportPayload: tenderDraftExportPayloadSchema,
   items: z.array(tenderDraftPackageItemSchema).default([]),
@@ -451,6 +456,7 @@ export type TenderGoNoGoRecommendation = z.infer<typeof tenderGoNoGoRecommendati
 export type TenderReferenceSuggestionSourceType = z.infer<typeof tenderReferenceSuggestionSourceTypeSchema>;
 export type TenderReferenceProfileSourceKind = z.infer<typeof tenderReferenceProfileSourceKindSchema>;
 export type TenderDraftPackageStatus = z.infer<typeof tenderDraftPackageStatusSchema>;
+export type TenderDraftPackageImportStatus = z.infer<typeof tenderDraftPackageImportStatusSchema>;
 export type TenderDraftPackageItemType = z.infer<typeof tenderDraftPackageItemTypeSchema>;
 export type TenderDraftPackageSourceEntityType = z.infer<typeof tenderDraftPackageSourceEntityTypeSchema>;
 export type TenderDraftArtifactType = z.infer<typeof tenderDraftArtifactTypeSchema>;

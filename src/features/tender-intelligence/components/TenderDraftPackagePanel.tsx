@@ -10,11 +10,16 @@ import { buildTenderDraftPackageReadiness } from '../lib/tender-draft-package';
 import {
   formatTenderTimestamp,
   getTenderTextPreview,
+  TENDER_DRAFT_PACKAGE_IMPORT_STATUS_META,
   TENDER_DRAFT_PACKAGE_ITEM_TYPE_META,
   TENDER_DRAFT_PACKAGE_STATUS_META,
   TENDER_RESOLUTION_STATUS_META,
   TENDER_REVIEW_STATUS_META,
 } from '../lib/tender-intelligence-ui';
+import type {
+  TenderEditorImportPreview,
+  TenderEditorImportValidationResult,
+} from '../types/tender-editor-import';
 import type {
   TenderDraftPackage,
   TenderDraftPackageItem,
@@ -27,14 +32,31 @@ interface TenderDraftPackagePanelProps {
   draftPackages: TenderDraftPackage[];
   selectedDraftPackageId?: string | null;
   creatingDraftPackage?: boolean;
+  editorImportPreview?: TenderEditorImportPreview | null;
+  editorImportValidation?: TenderEditorImportValidationResult | null;
+  previewingEditorImportDraftPackageId?: string | null;
+  importingDraftPackageId?: string | null;
   reviewingDraftPackageId?: string | null;
   exportingDraftPackageId?: string | null;
   updatingDraftPackageItemIds?: string[];
   onSelectDraftPackage: (draftPackageId: string) => void;
   onCreateDraftPackage: (packageId: string) => Promise<unknown>;
+  onImportDraftPackageToEditor: (draftPackageId: string) => Promise<unknown>;
   onUpdateDraftPackageItem: (itemId: string, input: UpdateTenderDraftPackageItemInput) => Promise<unknown>;
   onMarkDraftPackageReviewed: (draftPackageId: string) => Promise<unknown>;
   onMarkDraftPackageExported: (draftPackageId: string) => Promise<unknown>;
+}
+
+function resolveIssueVariant(severity: 'info' | 'warning' | 'error') {
+  if (severity === 'error') {
+    return 'destructive' as const;
+  }
+
+  if (severity === 'warning') {
+    return 'outline' as const;
+  }
+
+  return 'secondary' as const;
 }
 
 function ReadinessCard({ title, value, description }: { title: string; value: string; description: string }) {
@@ -131,11 +153,16 @@ export default function TenderDraftPackagePanel({
   draftPackages,
   selectedDraftPackageId = null,
   creatingDraftPackage = false,
+  editorImportPreview = null,
+  editorImportValidation = null,
+  previewingEditorImportDraftPackageId = null,
+  importingDraftPackageId = null,
   reviewingDraftPackageId = null,
   exportingDraftPackageId = null,
   updatingDraftPackageItemIds = [],
   onSelectDraftPackage,
   onCreateDraftPackage,
+  onImportDraftPackageToEditor,
   onUpdateDraftPackageItem,
   onMarkDraftPackageReviewed,
   onMarkDraftPackageExported,
@@ -148,6 +175,7 @@ export default function TenderDraftPackagePanel({
   const includedItems = selectedDraftPackage?.items.filter((item) => item.isIncluded) ?? [];
   const excludedItems = selectedDraftPackage?.items.filter((item) => !item.isIncluded) ?? [];
   const payload = selectedDraftPackage?.exportPayload ?? null;
+  const importValidation = editorImportValidation ?? editorImportPreview?.validation ?? null;
 
   useEffect(() => {
     if (!selectedDraftPackageId && draftPackages[0]) {
@@ -162,10 +190,10 @@ export default function TenderDraftPackagePanel({
           <div className="space-y-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <FileText className="h-4.5 w-4.5 text-slate-500" />
-              Draft package export foundation
+              Editor import boundary
             </CardTitle>
             <CardDescription>
-              Tämä vaihe muodostaa Tarjousälyn reviewed löydöksistä editoriin vietävän staging-paketin. Draft package elää edelleen Tarjousälyn omassa domainissa eikä kirjoita mitään suoraan nykyiseen tarjouseditoriin.
+              Tämä vaihe validoi Tarjousälyn draft packagen, näyttää editori-importin previewn ja tuo sisällön turvalliseen tarjousluonnokseen vain käyttäjän eksplisiittisestä toiminnosta. Import kirjoittaa tässä vaiheessa hallittuihin notes- ja section-rakenteisiin.
             </CardDescription>
           </div>
 
@@ -201,6 +229,23 @@ export default function TenderDraftPackagePanel({
                   }}
                 >
                   {exportingDraftPackageId === selectedDraftPackage.id ? 'Tallennetaan...' : 'Merkitse viedyksi'}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={
+                    previewingEditorImportDraftPackageId === selectedDraftPackage.id
+                    || importingDraftPackageId === selectedDraftPackage.id
+                    || !importValidation?.can_import
+                  }
+                  onClick={() => {
+                    void onImportDraftPackageToEditor(selectedDraftPackage.id);
+                  }}
+                >
+                  {previewingEditorImportDraftPackageId === selectedDraftPackage.id
+                    ? 'Validoidaan...'
+                    : importingDraftPackageId === selectedDraftPackage.id
+                      ? 'Importoidaan...'
+                      : 'Tuo editoriin'}
                 </Button>
               </>
             )}
@@ -271,23 +316,27 @@ export default function TenderDraftPackagePanel({
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={TENDER_DRAFT_PACKAGE_STATUS_META[selectedDraftPackage.status].variant}>{TENDER_DRAFT_PACKAGE_STATUS_META[selectedDraftPackage.status].label}</Badge>
+                    <Badge variant={TENDER_DRAFT_PACKAGE_IMPORT_STATUS_META[selectedDraftPackage.importStatus].variant}>{TENDER_DRAFT_PACKAGE_IMPORT_STATUS_META[selectedDraftPackage.importStatus].label}</Badge>
                     <Badge variant="outline">Päivitetty {formatTenderTimestamp(selectedDraftPackage.updatedAt)}</Badge>
+                    {selectedDraftPackage.importedQuoteId && <Badge variant="outline">Quote {selectedDraftPackage.importedQuoteId}</Badge>}
                   </div>
                   <p className="text-sm font-medium text-slate-950">{selectedDraftPackage.title}</p>
                 </div>
                 <div className="text-xs leading-5 text-muted-foreground">
                   <p>Skeema {payload.schema_version}</p>
                   <p>Generoitu {formatTenderTimestamp(payload.generated_at)}</p>
+                  {selectedDraftPackage.importedAt && <p>Importoitu {formatTenderTimestamp(selectedDraftPackage.importedAt)}</p>}
                 </div>
               </div>
               {selectedDraftPackage.summary && <p className="mt-3 text-sm leading-6 text-slate-700">{selectedDraftPackage.summary}</p>}
             </div>
 
             <Tabs defaultValue="included" className="space-y-4">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="included">Mukana ({includedItems.length})</TabsTrigger>
                 <TabsTrigger value="excluded">Ulkona ({excludedItems.length})</TabsTrigger>
                 <TabsTrigger value="payload">Export preview</TabsTrigger>
+                <TabsTrigger value="import">Editor import</TabsTrigger>
               </TabsList>
 
               <TabsContent value="included" className="space-y-3" forceMount>
@@ -417,6 +466,70 @@ export default function TenderDraftPackagePanel({
                     </div>
                   </div>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="import" className="space-y-4" forceMount>
+                {editorImportPreview ? (
+                  <>
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+                          <ListChecks className="h-4 w-4 text-slate-500" />
+                          Import preview
+                        </div>
+                        <div className="mt-3 space-y-2 text-sm text-slate-700">
+                          <p>Draft package rivejä: {editorImportPreview.draft_item_count}</p>
+                          <p>Importoitavia rivejä: {editorImportPreview.importable_item_count}</p>
+                          <p>Kohdetarjous: {editorImportPreview.payload.metadata.target_quote_title}</p>
+                          <p>Kohdeprojekti: {editorImportPreview.payload.metadata.target_project_id ?? 'Luodaan importin yhteydessä'}</p>
+                          <p>Kohdeasiakas: {editorImportPreview.payload.metadata.target_customer_id ?? 'Luodaan importin yhteydessä'}</p>
+                          <p>Placeholder-kohde: {editorImportPreview.payload.metadata.will_create_placeholder_target ? 'Kyllä' : 'Ei'}</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+                          <WarningCircle className="h-4 w-4 text-slate-500" />
+                          Validointihuomiot
+                        </div>
+                        {importValidation && importValidation.issues.length > 0 ? (
+                          <div className="mt-3 space-y-3">
+                            {importValidation.issues.map((issue, index) => (
+                              <div key={`${issue.code}-${issue.draft_package_item_id ?? 'package'}-${index}`} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant={resolveIssueVariant(issue.severity)}>{issue.severity}</Badge>
+                                  <p className="text-sm font-medium text-slate-950">{issue.code}</p>
+                                </div>
+                                <p className="mt-2 text-sm leading-6 text-slate-700">{issue.message}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm leading-6 text-slate-700">Ei blokkaavia validointihuomioita. Import voidaan käynnistää eksplisiittisesti tästä näkymästä.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      {editorImportPreview.sections.map((section) => (
+                        <div key={section.key} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline">{section.target_label}</Badge>
+                            <Badge variant="outline">{section.item_count} riviä</Badge>
+                          </div>
+                          <p className="mt-3 text-sm font-medium text-slate-950">{section.title}</p>
+                          <p className="mt-2 text-sm leading-6 text-slate-700 whitespace-pre-line">
+                            {section.preview_md ? getTenderTextPreview(section.preview_md, 480) : 'Tähän osioon ei tuoda tässä importissa rivejä.'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-2xl border border-dashed px-4 py-8 text-sm leading-6 text-muted-foreground">
+                    Editori-importin previewta ei ole vielä saatavilla tälle luonnospaketille.
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </>

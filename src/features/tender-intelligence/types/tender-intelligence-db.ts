@@ -109,6 +109,7 @@ const tenderReviewStatusRowSchema = z.enum(['unreviewed', 'accepted', 'dismissed
 const tenderResolutionStatusRowSchema = z.enum(['open', 'in_progress', 'resolved', 'wont_fix']);
 const tenderReferenceProfileSourceKindRowSchema = z.enum(['manual', 'imported', 'other']);
 const tenderDraftPackageStatusRowSchema = z.enum(['draft', 'reviewed', 'exported', 'archived']);
+const tenderDraftPackageImportStatusRowSchema = z.enum(['not_imported', 'imported', 'failed']);
 const tenderDraftPackageItemTypeRowSchema = z.enum(['accepted_requirement', 'selected_reference', 'resolved_missing_item', 'review_note', 'draft_artifact']);
 const tenderDraftPackageSourceEntityTypeRowSchema = z.enum(['requirement', 'missing_item', 'reference_suggestion', 'review_task', 'draft_artifact']);
 
@@ -218,8 +219,12 @@ export const tenderDraftPackageRowSchema = z.object({
   tender_package_id: z.string().uuid(),
   title: z.string(),
   status: tenderDraftPackageStatusRowSchema,
+  import_status: tenderDraftPackageImportStatusRowSchema,
   generated_from_analysis_job_id: z.string().uuid().nullable(),
   generated_by_user_id: z.string().uuid().nullable(),
+  imported_quote_id: z.string().uuid().nullable(),
+  imported_at: z.string().nullable(),
+  imported_by_user_id: z.string().uuid().nullable(),
   summary: z.string().nullable(),
   payload_json: z.unknown(),
   created_at: z.string(),
