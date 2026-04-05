@@ -41,8 +41,10 @@ import HelpTooltip from './quote-editor/HelpTooltip';
 import QuoteCompletionChecklist from './quote-editor/QuoteCompletionChecklist';
 import QuoteEditorSection from './quote-editor/QuoteEditorSection';
 import QuoteEditorStepper from './quote-editor/QuoteEditorStepper';
+import QuoteManagedSectionBadge from './quote-editor/QuoteManagedSectionBadge';
 import QuoteNotesPanels from './quote-editor/QuoteNotesPanels';
 import QuotePricingModeSelector from './quote-editor/QuotePricingModeSelector';
+import QuoteTenderImportInspector, { type QuoteTenderImportSourceSummary } from './quote-editor/QuoteTenderImportInspector';
 import VisibilityBadge from './quote-editor/VisibilityBadge';
 import { useAuth } from '../hooks/use-auth';
 import {
@@ -79,9 +81,15 @@ import {
   exportQuoteToInternalExcel,
   exportQuoteToPDF,
 } from '../lib/export';
+import { buildAppUrl } from '../lib/app-routing';
 import { getQuoteCompletionChecklist, getQuoteEditorSteps, type QuoteEditorStepId } from '../lib/quote-editor-ux';
 import { getResponsibleUserLabel } from '../lib/ownership';
 import { resolveQuoteTermsSnapshotTemplate, resolveTermTemplatePlaceholders } from '../lib/term-templates';
+import {
+  inspectQuoteTenderManagedSurface,
+  resolveQuoteTenderManagedSectionState,
+} from '../features/tender-intelligence/lib/quote-managed-surface-inspector';
+import { getTenderIntelligenceRepository } from '../features/tender-intelligence/services/tender-intelligence-repository';
 
 interface QuoteEditorProps {
   projectId: string;
@@ -317,6 +325,7 @@ function formatScheduleMilestoneDate(value?: string) {
 
 export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditorProps) {
   const { user, users, canManageUsers } = useAuth();
+  const tenderIntelligenceRepository = useMemo(() => getTenderIntelligenceRepository(), []);
   const { products } = useProducts();
   const { groups } = useInstallationGroups();
   const { getSubstitutesForProduct } = useSubstituteProducts();
@@ -339,6 +348,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [activeStep, setActiveStep] = useState<QuoteEditorStepId>('basics');
   const [additionalCostsOpen, setAdditionalCostsOpen] = useState(false);
+  const [quoteTenderImportSource, setQuoteTenderImportSource] = useState<QuoteTenderImportSourceSummary | null>(null);
   const initializedDraftRef = useRef(false);
   const initializedQuoteUiRef = useRef<string | null>(null);
 
@@ -412,6 +422,23 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     () => (quote ? resolveQuoteTermsSnapshotTemplate(quote, selectedTermsTemplate) : null),
     [quote, selectedTermsTemplate]
   );
+  const quoteTenderManagedDiagnostics = useMemo(
+    () => inspectQuoteTenderManagedSurface({ quote, rows: quoteRows }),
+    [quote, quoteRows]
+  );
+  const quoteTenderSectionStateByRowId = useMemo(() => {
+    const entries = new Map<string, ReturnType<typeof resolveQuoteTenderManagedSectionState>>();
+
+    quoteRows.forEach((row) => {
+      const sectionState = resolveQuoteTenderManagedSectionState(row, quoteTenderManagedDiagnostics);
+
+      if (sectionState) {
+        entries.set(row.id, sectionState);
+      }
+    });
+
+    return entries;
+  }, [quoteRows, quoteTenderManagedDiagnostics]);
   const resolvedQuoteTermsContent = useMemo(
     () => (quote && quoteTerms ? resolveTermTemplatePlaceholders(quoteTerms.contentMd, { customer, project, quote, settings: documentSettings }) : ''),
     [customer, documentSettings, project, quote, quoteTerms]
@@ -513,6 +540,67 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   }, [productSearch, products]);
   const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
   const allRowsSelected = quoteRows.length > 0 && selectedRowIds.length === quoteRows.length;
+
+  useEffect(() => {
+    let active = true;
+
+    if (
+      !quoteTenderManagedDiagnostics.has_tarjousaly_managed_surface
+      || quoteTenderManagedDiagnostics.multiple_draft_package_sources
+      || !quoteTenderManagedDiagnostics.primary_draft_package_id
+    ) {
+      setQuoteTenderImportSource(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    const draftPackageId = quoteTenderManagedDiagnostics.primary_draft_package_id;
+
+    const loadTenderImportSource = async () => {
+      try {
+        const draftPackage = await tenderIntelligenceRepository.getDraftPackageById(draftPackageId);
+
+        if (!draftPackage) {
+          if (active) {
+            setQuoteTenderImportSource({
+              draftPackageId,
+              draftPackageTitle: null,
+              tenderPackageId: null,
+              tenderPackageTitle: null,
+            });
+          }
+          return;
+        }
+
+        const tenderPackage = await tenderIntelligenceRepository.getTenderPackageById(draftPackage.tenderPackageId);
+
+        if (active) {
+          setQuoteTenderImportSource({
+            draftPackageId: draftPackage.id,
+            draftPackageTitle: draftPackage.title,
+            tenderPackageId: draftPackage.tenderPackageId,
+            tenderPackageTitle: tenderPackage?.package.name ?? null,
+          });
+        }
+      } catch {
+        if (active) {
+          setQuoteTenderImportSource({
+            draftPackageId,
+            draftPackageTitle: null,
+            tenderPackageId: null,
+            tenderPackageTitle: null,
+          });
+        }
+      }
+    };
+
+    void loadTenderImportSource();
+
+    return () => {
+      active = false;
+    };
+  }, [quoteTenderManagedDiagnostics, tenderIntelligenceRepository]);
 
   useEffect(() => {
     if (!quote || initializedQuoteUiRef.current === quote.id) {
@@ -1089,6 +1177,12 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
               </Alert>
             )}
 
+            <QuoteTenderImportInspector
+              diagnostics={quoteTenderManagedDiagnostics}
+              source={quoteTenderImportSource}
+              tenderIntelligenceUrl={buildAppUrl({ page: 'tender-intelligence' })}
+            />
+
             <div className="grid gap-4 xl:grid-cols-3">
               <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
                 <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Päätyövaihe</div>
@@ -1342,6 +1436,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                     {quoteRows.map((row, index) => {
                       const rowCalculation = calculateQuoteRow(row);
                       const pricingDetails = getQuoteRowPricingDetails(row, quoteVatPercent);
+                      const managedSectionState = quoteTenderSectionStateByRowId.get(row.id) ?? null;
                       const pricingWorkflow = getRowPricingWorkflow(row);
                       const priceSource = getRowPriceSource(row);
                       const isMarginWorkflow = pricingWorkflow === 'margin';
@@ -1392,6 +1487,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                 />
                                 <Badge variant="outline">#{index + 1}</Badge>
                                 <Badge variant="secondary">{ROW_MODE_LABELS[row.mode]}</Badge>
+                                <QuoteManagedSectionBadge sectionState={managedSectionState} />
                                 <Badge variant="outline">{ROW_PRICING_WORKFLOW_LABELS[pricingWorkflow]}</Badge>
                                 {priceSource !== pricingWorkflow && <Badge variant="outline">{ROW_PRICE_SOURCE_LABELS[priceSource]}</Badge>}
                                 {rowCalculation.usesLegacyPricing && <Badge variant="outline">Vanha rivi, hinnoittelu muunnettu näkyvään malliin</Badge>}
