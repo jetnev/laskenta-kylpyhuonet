@@ -5,10 +5,23 @@ import { TENDER_EDITOR_MANAGED_BLOCK_META, TENDER_EDITOR_MANAGED_BLOCK_ORDER } f
 import {
   TENDER_EDITOR_MANAGED_SECTION_ROW_PREFIX,
   TENDER_EDITOR_MANAGED_TEXT_BLOCK_PREFIX,
+  extractTenderEditorManagedTextBlockContent,
 } from './tender-editor-managed-markers';
 
 export type QuoteTenderManagedSurfaceHealthStatus = 'clean' | 'needs_attention' | 'inconsistent';
 export type QuoteTenderManagedField = 'notes' | 'internalNotes' | 'sections';
+export type QuoteTenderManagedEditorStateStatus = 'clean' | 'warning' | 'danger';
+export type QuoteTenderManagedEditorIssueSeverity = 'warning' | 'danger';
+export type QuoteTenderManagedEditorIssueCode =
+  | 'managed_notes_block_changed'
+  | 'managed_internal_notes_block_changed'
+  | 'managed_section_changed'
+  | 'marker_missing'
+  | 'marker_duplicated'
+  | 'block_moved_to_wrong_field'
+  | 'unknown_marker'
+  | 'multiple_draft_package_sources';
+export type QuoteTenderManagedSaveGuardDecision = 'allow' | 'confirm' | 'block';
 
 export interface QuoteTenderManagedBlockDiagnostics {
   marker_key: string;
@@ -56,6 +69,23 @@ export interface QuoteTenderManagedSectionState {
   draft_package_id: string | null;
   health_status: QuoteTenderManagedSurfaceHealthStatus;
   label: string;
+}
+
+export interface QuoteTenderManagedEditorIssue {
+  code: QuoteTenderManagedEditorIssueCode;
+  severity: QuoteTenderManagedEditorIssueSeverity;
+  message: string;
+  marker_key?: string;
+  block_id?: string;
+  field?: 'notes' | 'internalNotes' | 'sections';
+}
+
+export interface QuoteTenderManagedEditorState {
+  has_tarjousaly_managed_surface: boolean;
+  status: QuoteTenderManagedEditorStateStatus;
+  warning_count: number;
+  danger_count: number;
+  issues: QuoteTenderManagedEditorIssue[];
 }
 
 interface MutableBlockDiagnostics {
@@ -250,6 +280,47 @@ function buildBlockDiagnostics(records: MutableBlockDiagnostics[]) {
     .sort((left, right) => left.marker_key.localeCompare(right.marker_key));
 }
 
+function normalizeManagedTitle(value: string | null | undefined) {
+  return (value ?? '').trim().replace(/\s+/g, ' ');
+}
+
+function resolveQuoteManagedTextFieldValue(quote: Quote, field: 'notes' | 'internalNotes') {
+  return field === 'internalNotes' ? quote.internalNotes : quote.notes;
+}
+
+function hasExpectedManagedBlockStructure(content: string | null, title: string) {
+  const firstMeaningfulLine = (content ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+
+  if (!firstMeaningfulLine) {
+    return false;
+  }
+
+  const headingMatch = firstMeaningfulLine.match(/^#{1,6}\s+(.+)$/);
+  if (!headingMatch) {
+    return false;
+  }
+
+  return normalizeManagedTitle(headingMatch[1]) === normalizeManagedTitle(title);
+}
+
+function dedupeManagedEditorIssues(issues: QuoteTenderManagedEditorIssue[]) {
+  const seen = new Set<string>();
+
+  return issues.filter((issue) => {
+    const key = [issue.code, issue.marker_key ?? '', issue.field ?? ''].join('::');
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
 export function inspectQuoteTenderManagedSurface(options: {
   quote: Quote | null | undefined;
   rows: QuoteRow[];
@@ -337,6 +408,157 @@ export function inspectQuoteTenderManagedSurface(options: {
     detected_fields: [...detectedFields],
     blocks,
   } satisfies QuoteTenderManagedSurfaceDiagnostics;
+}
+
+export function resolveQuoteTenderManagedEditorState(options: {
+  quote: Quote | null | undefined;
+  rows: QuoteRow[];
+  diagnostics?: QuoteTenderManagedSurfaceDiagnostics;
+}): QuoteTenderManagedEditorState {
+  const diagnostics = options.diagnostics ?? inspectQuoteTenderManagedSurface(options);
+  const quote = options.quote;
+
+  if (!quote || !diagnostics.has_tarjousaly_managed_surface) {
+    return {
+      has_tarjousaly_managed_surface: false,
+      status: 'clean',
+      warning_count: 0,
+      danger_count: 0,
+      issues: [],
+    };
+  }
+
+  const issues: QuoteTenderManagedEditorIssue[] = [];
+
+  if (diagnostics.multiple_draft_package_sources) {
+    issues.push({
+      code: 'multiple_draft_package_sources',
+      severity: 'danger',
+      field: 'sections',
+      message: 'Quote sisältää useamman Tarjousäly-lähteen markkereita. Managed surface ei ole enää turvallisesti tulkittavissa.',
+    });
+  }
+
+  diagnostics.blocks.forEach((block) => {
+    if (block.unknown_marker) {
+      issues.push({
+        code: 'unknown_marker',
+        severity: 'danger',
+        marker_key: block.marker_key,
+        block_id: block.block_id,
+        message: `Managed marker "${block.marker_key}" ei vastaa tunnettua Tarjousäly-lohkoa.`,
+      });
+    }
+
+    if (block.duplicate_marker) {
+      issues.push({
+        code: 'marker_duplicated',
+        severity: 'danger',
+        marker_key: block.marker_key,
+        block_id: block.block_id,
+        message: `Managed marker "${block.title}" esiintyy useammin kuin kerran tai useassa kohdassa.`,
+      });
+    }
+
+    if (!block.known_block_id) {
+      return;
+    }
+
+    const missingMarkerLink = block.text_marker_count < 1 || block.section_row_count < 1;
+    if (missingMarkerLink) {
+      issues.push({
+        code: 'marker_missing',
+        severity: 'danger',
+        marker_key: block.marker_key,
+        block_id: block.block_id,
+        message: `Managed marker tai siihen sidottu section-linkki puuttuu lohkosta "${block.title}".`,
+      });
+    }
+
+    if (
+      !block.duplicate_marker
+      && block.expected_text_field
+      && block.text_fields.length === 1
+      && block.text_fields[0] !== block.expected_text_field
+    ) {
+      issues.push({
+        code: 'block_moved_to_wrong_field',
+        severity: 'warning',
+        marker_key: block.marker_key,
+        block_id: block.block_id,
+        field: block.text_fields[0],
+        message: `Managed lohko "${block.title}" löytyi kentästä ${block.text_fields[0]}, vaikka sen pitäisi olla kentässä ${block.expected_text_field}.`,
+      });
+    }
+
+    block.text_fields.forEach((field) => {
+      const content = extractTenderEditorManagedTextBlockContent(
+        resolveQuoteManagedTextFieldValue(quote, field),
+        block.marker_key,
+      );
+
+      if (content === null) {
+        issues.push({
+          code: 'marker_missing',
+          severity: 'danger',
+          marker_key: block.marker_key,
+          block_id: block.block_id,
+          field,
+          message: `Managed lohkon "${block.title}" start/end-markerit eivät enää muodosta eheää ${field}-lohkoa.`,
+        });
+        return;
+      }
+
+      if (!hasExpectedManagedBlockStructure(content, block.title)) {
+        issues.push({
+          code: field === 'internalNotes' ? 'managed_internal_notes_block_changed' : 'managed_notes_block_changed',
+          severity: 'warning',
+          marker_key: block.marker_key,
+          block_id: block.block_id,
+          field,
+          message: `Managed ${field === 'internalNotes' ? 'internalNotes' : 'notes'} -lohkon "${block.title}" rakenne on muuttunut editorissa.`,
+        });
+      }
+    });
+
+    if (block.section_row_titles.some((title) => normalizeManagedTitle(title) !== normalizeManagedTitle(block.title))) {
+      issues.push({
+        code: 'managed_section_changed',
+        severity: 'warning',
+        marker_key: block.marker_key,
+        block_id: block.block_id,
+        field: 'sections',
+        message: `Managed section "${block.title}" on muuttunut tai otsikko ei enää vastaa odotettua rakennetta.`,
+      });
+    }
+  });
+
+  const dedupedIssues = dedupeManagedEditorIssues(issues);
+  const dangerCount = dedupedIssues.filter((issue) => issue.severity === 'danger').length;
+  const warningCount = dedupedIssues.filter((issue) => issue.severity === 'warning').length;
+
+  return {
+    has_tarjousaly_managed_surface: diagnostics.has_tarjousaly_managed_surface,
+    status: dangerCount > 0 ? 'danger' : warningCount > 0 ? 'warning' : 'clean',
+    warning_count: warningCount,
+    danger_count: dangerCount,
+    issues: dedupedIssues,
+  };
+}
+
+export function resolveQuoteTenderManagedSaveGuardDecision(
+  state: Pick<QuoteTenderManagedEditorState, 'has_tarjousaly_managed_surface' | 'status'>,
+  warningConfirmed = false,
+): QuoteTenderManagedSaveGuardDecision {
+  if (!state.has_tarjousaly_managed_surface || state.status === 'clean') {
+    return 'allow';
+  }
+
+  if (state.status === 'warning') {
+    return warningConfirmed ? 'allow' : 'confirm';
+  }
+
+  return 'block';
 }
 
 export function resolveQuoteTenderManagedSectionState(

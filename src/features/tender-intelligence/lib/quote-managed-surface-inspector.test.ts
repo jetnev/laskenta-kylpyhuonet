@@ -4,6 +4,8 @@ import type { Quote, QuoteRow } from '@/lib/types';
 
 import {
   inspectQuoteTenderManagedSurface,
+  resolveQuoteTenderManagedEditorState,
+  resolveQuoteTenderManagedSaveGuardDecision,
   resolveQuoteTenderManagedSectionState,
 } from './quote-managed-surface-inspector';
 import {
@@ -101,6 +103,28 @@ describe('quote-managed-surface-inspector', () => {
     expect(diagnostics.primary_draft_package_id).toBe(DRAFT_PACKAGE_ID);
     expect(diagnostics.detected_fields).toEqual(expect.arrayContaining(['notes', 'sections']));
 
+    const editorState = resolveQuoteTenderManagedEditorState({
+      quote: createQuote({
+        notes: buildManagedTextBlock(markerKey, '### Tarjoushuomiot\nSisalto'),
+      }),
+      rows: [
+        createRow({
+          id: 'section-1',
+          productName: TENDER_EDITOR_MANAGED_BLOCK_META.requirements_and_quote_notes.title,
+          notes: buildTenderEditorManagedSectionRowKey(DRAFT_PACKAGE_ID, 'requirements_and_quote_notes'),
+        }),
+      ],
+      diagnostics,
+    });
+
+    expect(editorState).toMatchObject({
+      has_tarjousaly_managed_surface: true,
+      status: 'clean',
+      warning_count: 0,
+      danger_count: 0,
+    });
+    expect(resolveQuoteTenderManagedSaveGuardDecision(editorState)).toBe('allow');
+
     const sectionState = resolveQuoteTenderManagedSectionState(
       createRow({
         id: 'section-1',
@@ -115,6 +139,31 @@ describe('quote-managed-surface-inspector', () => {
       health_status: 'clean',
       label: 'Tarjousäly',
     });
+  });
+
+  it('classifies recognizable managed drift as warning and requires save confirmation', () => {
+    const markerKey = buildTenderEditorManagedBlockMarkerKey(DRAFT_PACKAGE_ID, 'requirements_and_quote_notes');
+    const quote = createQuote({
+      internalNotes: buildManagedTextBlock(markerKey, '### Tarjoushuomiot\nSisalto'),
+    });
+    const rows = [
+      createRow({
+        id: 'section-warning',
+        productName: 'Tarjoushuomiot (muokattu)',
+        notes: buildTenderEditorManagedSectionRowKey(DRAFT_PACKAGE_ID, 'requirements_and_quote_notes'),
+      }),
+    ];
+    const diagnostics = inspectQuoteTenderManagedSurface({ quote, rows });
+    const editorState = resolveQuoteTenderManagedEditorState({ quote, rows, diagnostics });
+
+    expect(diagnostics.health_status).toBe('needs_attention');
+    expect(editorState.status).toBe('warning');
+    expect(editorState.warning_count).toBeGreaterThan(0);
+    expect(editorState.issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(['block_moved_to_wrong_field', 'managed_section_changed'])
+    );
+    expect(resolveQuoteTenderManagedSaveGuardDecision(editorState)).toBe('confirm');
+    expect(resolveQuoteTenderManagedSaveGuardDecision(editorState, true)).toBe('allow');
   });
 
   it('marks duplicate, unknown, and drifting managed blocks for attention', () => {
@@ -173,5 +222,53 @@ describe('quote-managed-surface-inspector', () => {
       health_status: 'inconsistent',
       unknown_marker: true,
     });
+
+    const editorState = resolveQuoteTenderManagedEditorState({
+      quote: createQuote({
+        notes: buildManagedTextBlock(unknownKey, 'Tuntematon lohko'),
+        internalNotes: [
+          buildManagedTextBlock(driftKey, 'Tarjoushuomiot vaarassa'),
+          buildManagedTextBlock(duplicateKey, 'Sisainen huomio'),
+        ].join('\n\n'),
+      }),
+      rows: [
+        createRow({
+          id: 'section-drift',
+          productName: TENDER_EDITOR_MANAGED_BLOCK_META.requirements_and_quote_notes.title,
+          notes: buildTenderEditorManagedSectionRowKey(DRAFT_PACKAGE_ID, 'requirements_and_quote_notes'),
+        }),
+        createRow({
+          id: 'section-duplicate-a',
+          productName: TENDER_EDITOR_MANAGED_BLOCK_META.notes_for_editor.title,
+          notes: buildTenderEditorManagedSectionRowKey(DRAFT_PACKAGE_ID, 'notes_for_editor'),
+        }),
+        createRow({
+          id: 'section-duplicate-b',
+          productName: TENDER_EDITOR_MANAGED_BLOCK_META.notes_for_editor.title,
+          notes: buildTenderEditorManagedSectionRowKey(DRAFT_PACKAGE_ID, 'notes_for_editor'),
+        }),
+      ],
+      diagnostics,
+    });
+
+    expect(editorState.status).toBe('danger');
+    expect(editorState.issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(['unknown_marker', 'marker_duplicated'])
+    );
+    expect(resolveQuoteTenderManagedSaveGuardDecision(editorState)).toBe('block');
+  });
+
+  it('does not affect quotes without tarjousaly managed surface', () => {
+    const quote = createQuote();
+    const editorState = resolveQuoteTenderManagedEditorState({ quote, rows: [] });
+
+    expect(editorState).toEqual({
+      has_tarjousaly_managed_surface: false,
+      status: 'clean',
+      warning_count: 0,
+      danger_count: 0,
+      issues: [],
+    });
+    expect(resolveQuoteTenderManagedSaveGuardDecision(editorState)).toBe('allow');
   });
 });

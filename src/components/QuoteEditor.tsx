@@ -40,6 +40,7 @@ import AdditionalCostsSection from './quote-editor/AdditionalCostsSection';
 import HelpTooltip from './quote-editor/HelpTooltip';
 import QuoteCompletionChecklist from './quote-editor/QuoteCompletionChecklist';
 import QuoteEditorSection from './quote-editor/QuoteEditorSection';
+import QuoteManagedSaveGuard from './quote-editor/QuoteManagedSaveGuard';
 import QuoteEditorStepper from './quote-editor/QuoteEditorStepper';
 import QuoteManagedSectionBadge from './quote-editor/QuoteManagedSectionBadge';
 import QuoteNotesPanels from './quote-editor/QuoteNotesPanels';
@@ -87,6 +88,7 @@ import { getResponsibleUserLabel } from '../lib/ownership';
 import { resolveQuoteTermsSnapshotTemplate, resolveTermTemplatePlaceholders } from '../lib/term-templates';
 import {
   inspectQuoteTenderManagedSurface,
+  resolveQuoteTenderManagedEditorState,
   resolveQuoteTenderManagedSectionState,
 } from '../features/tender-intelligence/lib/quote-managed-surface-inspector';
 import { getTenderIntelligenceRepository } from '../features/tender-intelligence/services/tender-intelligence-repository';
@@ -426,6 +428,10 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     () => inspectQuoteTenderManagedSurface({ quote, rows: quoteRows }),
     [quote, quoteRows]
   );
+  const quoteTenderManagedEditorState = useMemo(
+    () => resolveQuoteTenderManagedEditorState({ quote, rows: quoteRows, diagnostics: quoteTenderManagedDiagnostics }),
+    [quote, quoteRows, quoteTenderManagedDiagnostics]
+  );
   const quoteTenderSectionStateByRowId = useMemo(() => {
     const entries = new Map<string, ReturnType<typeof resolveQuoteTenderManagedSectionState>>();
 
@@ -458,6 +464,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     () => (quote ? (quote.scheduleMilestones || []).filter(hasScheduleMilestoneContent) : []),
     [quote]
   );
+  const tenderIntelligenceUrl = buildAppUrl({ page: 'tender-intelligence' });
   const applyTermsTemplateSelection = (value: string) => {
     if (!quote) {
       return;
@@ -696,6 +703,15 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
 
   const touchQuote = () => {
     updateQuote(quote.id, {});
+  };
+
+  const saveManagedAwareDraft = () => {
+    touchQuote();
+    toast.success(
+      quoteTenderManagedEditorState.status === 'warning'
+        ? 'Tarjous tallennettu käyttäjän vahvistuksella Tarjousälyn hallinnoitujen muutosten jälkeen.'
+        : 'Tarjouksen luonnos tallennettu.'
+    );
   };
 
   const getDefaultMargin = (product?: Product, installationGroupId?: string) => {
@@ -1177,10 +1193,17 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
               </Alert>
             )}
 
+            <QuoteManagedSaveGuard
+              state={quoteTenderManagedEditorState}
+              isEditable={isEditable}
+              onSave={saveManagedAwareDraft}
+              tenderIntelligenceUrl={tenderIntelligenceUrl}
+            />
+
             <QuoteTenderImportInspector
               diagnostics={quoteTenderManagedDiagnostics}
               source={quoteTenderImportSource}
-              tenderIntelligenceUrl={buildAppUrl({ page: 'tender-intelligence' })}
+              tenderIntelligenceUrl={tenderIntelligenceUrl}
             />
 
             <div className="grid gap-4 xl:grid-cols-3">
