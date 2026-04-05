@@ -151,6 +151,18 @@ function requireConfiguredSupabase() {
   return requireSupabase();
 }
 
+function getLegalQueryTimerNow() {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+    return performance.now();
+  }
+
+  return Date.now();
+}
+
+function getLegalQueryDurationMs(startedAt: number) {
+  return Math.round((getLegalQueryTimerNow() - startedAt) * 10) / 10;
+}
+
 function getDocumentTypeSortIndex(documentType: LegalDocumentType) {
   const index = LEGAL_DOCUMENT_TYPE_ORDER.indexOf(documentType);
   return index === -1 ? LEGAL_DOCUMENT_TYPE_ORDER.length : index;
@@ -452,6 +464,7 @@ export function suggestNextLegalVersionLabel(previousVersionLabel?: string | nul
 
 export async function listPublicActiveLegalDocuments() {
   const client = requireConfiguredSupabase();
+  const startedAt = getLegalQueryTimerNow();
   const { data, error } = await client
     .from('legal_document_versions')
     .select('*')
@@ -460,24 +473,45 @@ export async function listPublicActiveLegalDocuments() {
     .order('created_at', { ascending: true });
 
   if (error) {
-    console.error('listPublicActiveLegalDocuments failed:', error);
+    console.error('[legal-check] documents query failed.', {
+      durationMs: getLegalQueryDurationMs(startedAt),
+    }, error);
     throw new Error('Sopimusasiakirjojen lataus epäonnistui.');
   }
+
+  console.info('[legal-check] documents query completed.', {
+    durationMs: getLegalQueryDurationMs(startedAt),
+    rowCount: Array.isArray(data) ? data.length : 0,
+  });
 
   return sortLegalDocumentVersions((data as LegalDocumentVersionRow[]) || []);
 }
 
-export async function listCurrentUserLegalAcceptances() {
+export async function listCurrentUserLegalAcceptances(userId: string) {
+  const trimmedUserId = userId.trim();
+  if (!trimmedUserId) {
+    throw new Error('Hyväksyntätietojen lataus epäonnistui.');
+  }
+
   const client = requireConfiguredSupabase();
+  const startedAt = getLegalQueryTimerNow();
   const { data, error } = await client
     .from('legal_document_acceptances')
     .select('*')
+    .eq('user_id', trimmedUserId)
     .order('accepted_at', { ascending: false });
 
   if (error) {
-    console.error('listCurrentUserLegalAcceptances failed:', error);
+    console.error('[legal-check] acceptances query failed.', {
+      durationMs: getLegalQueryDurationMs(startedAt),
+    }, error);
     throw new Error('Hyväksyntätietojen lataus epäonnistui.');
   }
+
+  console.info('[legal-check] acceptances query completed.', {
+    durationMs: getLegalQueryDurationMs(startedAt),
+    rowCount: Array.isArray(data) ? data.length : 0,
+  });
 
   return (data as LegalDocumentAcceptanceRow[]) || [];
 }
