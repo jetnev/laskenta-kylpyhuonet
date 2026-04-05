@@ -29,6 +29,9 @@ import type {
 } from '../types/tender-intelligence';
 import type {
   TenderEditorImportMode,
+  TenderImportRegistryDiagnosticStatus,
+  TenderImportRegistryRepairAction,
+  TenderImportRunType,
   TenderEditorManagedBlockDriftStatus,
   TenderEditorImportRunResultStatus,
   TenderImportOwnershipRegistryStatus,
@@ -203,6 +206,36 @@ export const TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META: Record<
 > = {
   success: { label: 'Onnistui', variant: 'default' },
   failed: { label: 'Epäonnistui', variant: 'destructive' },
+};
+
+export const TENDER_IMPORT_RUN_TYPE_META: Record<TenderImportRunType, { label: string; variant: TenderBadgeVariant }> = {
+  import: { label: 'Import', variant: 'default' },
+  reimport: { label: 'Re-import', variant: 'outline' },
+  diagnostics_refresh: { label: 'Diagnostiikan päivitys', variant: 'secondary' },
+  registry_repair: { label: 'Registry repair', variant: 'outline' },
+};
+
+export const TENDER_IMPORT_REGISTRY_DIAGNOSTIC_STATUS_META: Record<
+  TenderImportRegistryDiagnosticStatus,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  healthy: { label: 'Terve', variant: 'default' },
+  stale: { label: 'Stale', variant: 'outline' },
+  orphaned: { label: 'Orpo', variant: 'secondary' },
+  missing_quote: { label: 'Puuttuu quotesta', variant: 'destructive' },
+  conflict: { label: 'Konflikti', variant: 'destructive' },
+  drifted_quote: { label: 'Quote driftannut', variant: 'destructive' },
+  drifted_draft: { label: 'Draft driftannut', variant: 'outline' },
+};
+
+export const TENDER_IMPORT_REGISTRY_REPAIR_ACTION_META: Record<
+  TenderImportRegistryRepairAction,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  refresh_registry_metadata: { label: 'Päivitä registry-metadata', variant: 'outline' },
+  mark_orphaned_registry_entries: { label: 'Merkitse orphaned', variant: 'secondary' },
+  prune_inactive_registry_entries: { label: 'Siivoa inaktiiviset', variant: 'outline' },
+  resync_registry_hashes_from_live_quote_markers: { label: 'Resynkkaa hashit markereista', variant: 'default' },
 };
 
 export const TENDER_DRAFT_PACKAGE_ITEM_TYPE_META: Record<TenderDraftPackageItemType, { label: string; variant: TenderBadgeVariant }> = {

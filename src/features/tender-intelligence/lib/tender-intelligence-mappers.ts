@@ -324,6 +324,7 @@ export function mapTenderDraftPackageImportRunRowToDomain(row: TenderDraftPackag
     id: row.id,
     tender_draft_package_id: row.tender_draft_package_id,
     target_quote_id: row.target_quote_id,
+    run_type: row.run_type,
     import_mode: row.import_mode,
     payload_hash: row.payload_hash,
     payload_snapshot: tenderEditorImportPayloadSchema.parse(row.payload_snapshot),

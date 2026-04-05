@@ -112,6 +112,7 @@ const tenderDraftPackageStatusRowSchema = z.enum(['draft', 'reviewed', 'exported
 const tenderDraftPackageImportStatusRowSchema = z.enum(['not_imported', 'imported', 'failed']);
 const tenderDraftPackageReimportStatusRowSchema = z.enum(['up_to_date', 'stale', 'never_imported', 'import_failed']);
 const tenderDraftPackageImportRunModeRowSchema = z.enum(['create_new_quote', 'update_existing_quote']);
+const tenderDraftPackageImportRunTypeRowSchema = z.enum(['import', 'reimport', 'diagnostics_refresh', 'registry_repair']);
 const tenderDraftPackageImportRunResultStatusRowSchema = z.enum(['success', 'failed']);
 const tenderDraftPackageItemTypeRowSchema = z.enum(['accepted_requirement', 'selected_reference', 'resolved_missing_item', 'review_note', 'draft_artifact']);
 const tenderDraftPackageSourceEntityTypeRowSchema = z.enum(['requirement', 'missing_item', 'reference_suggestion', 'review_task', 'draft_artifact']);
@@ -258,6 +259,7 @@ export const tenderDraftPackageImportRunRowSchema = z.object({
   organization_id: z.string().uuid(),
   tender_draft_package_id: z.string().uuid(),
   target_quote_id: z.string().uuid().nullable(),
+  run_type: tenderDraftPackageImportRunTypeRowSchema,
   import_mode: tenderDraftPackageImportRunModeRowSchema,
   payload_hash: z.string(),
   payload_snapshot: z.unknown(),

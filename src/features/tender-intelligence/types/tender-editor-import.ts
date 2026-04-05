@@ -39,6 +39,7 @@ export const tenderEditorImportIssueCodeSchema = z.enum([
 export const tenderEditorReconciliationChangeTypeSchema = z.enum(['added', 'changed', 'removed', 'unchanged']);
 export const tenderImportOwnershipRegistryStatusSchema = z.enum(['current', 'stale', 'missing', 'conflicted', 'not_available']);
 export const tenderEditorOwnedBlockSourceSchema = z.enum(['registry', 'latest_successful_run', 'current_payload']);
+export const tenderImportRunTypeSchema = z.enum(['import', 'reimport', 'diagnostics_refresh', 'registry_repair']);
 export const tenderEditorManagedBlockDriftStatusSchema = z.enum([
   'up_to_date',
   'changed_in_draft',
@@ -50,6 +51,22 @@ export const tenderEditorManagedBlockDriftStatusSchema = z.enum([
 ]);
 export const tenderEditorReimportConflictPolicySchema = z.enum(['protect_conflicts', 'override_selected_conflicts']);
 export const tenderEditorImportRunModeSchema = z.enum(['create_new_quote', 'protected_reimport', 'protected_reimport_with_override']);
+export const tenderImportRegistryDiagnosticStatusSchema = z.enum([
+  'healthy',
+  'stale',
+  'orphaned',
+  'missing_quote',
+  'conflict',
+  'drifted_quote',
+  'drifted_draft',
+]);
+export const tenderImportRegistryRepairActionSchema = z.enum([
+  'refresh_registry_metadata',
+  'mark_orphaned_registry_entries',
+  'prune_inactive_registry_entries',
+  'resync_registry_hashes_from_live_quote_markers',
+]);
+export const tenderImportRegistryRepairResultStatusSchema = z.enum(['updated', 'no_changes']);
 
 export const tenderEditorImportItemSchema = z.object({
   draft_package_item_id: entityIdSchema,
@@ -111,6 +128,17 @@ export const tenderEditorSelectiveReimportSelectionSchema = z.object({
   conflict_policy: tenderEditorReimportConflictPolicySchema.default('protect_conflicts'),
 });
 
+export const tenderImportRegistryHealthSummarySchema = z.object({
+  healthy_blocks: z.number().int().min(0).default(0),
+  stale_blocks: z.number().int().min(0).default(0),
+  orphaned_registry_blocks: z.number().int().min(0).default(0),
+  missing_quote_blocks: z.number().int().min(0).default(0),
+  conflict_blocks: z.number().int().min(0).default(0),
+  drifted_quote_blocks: z.number().int().min(0).default(0),
+  drifted_draft_blocks: z.number().int().min(0).default(0),
+  total_registry_blocks: z.number().int().min(0).default(0),
+});
+
 export const tenderEditorImportRunSummaryCountsSchema = z.object({
   selected_blocks: z.number().int().min(0).default(0),
   conflict_blocks: z.number().int().min(0).default(0),
@@ -119,9 +147,21 @@ export const tenderEditorImportRunSummaryCountsSchema = z.object({
   removed_blocks: z.number().int().min(0).default(0),
   missing_in_quote_blocks: z.number().int().min(0).default(0),
   untouched_blocks: z.number().int().min(0).default(0),
+  affected_blocks: z.number().int().min(0).default(0),
+  orphaned_blocks: z.number().int().min(0).default(0),
+  refreshed_hash_blocks: z.number().int().min(0).default(0),
+  pruned_registry_blocks: z.number().int().min(0).default(0),
+  skipped_blocks: z.number().int().min(0).default(0),
+  healthy_blocks: z.number().int().min(0).default(0),
+  stale_blocks: z.number().int().min(0).default(0),
+  orphaned_registry_blocks: z.number().int().min(0).default(0),
+  drifted_quote_blocks: z.number().int().min(0).default(0),
+  drifted_draft_blocks: z.number().int().min(0).default(0),
+  total_registry_blocks: z.number().int().min(0).default(0),
 });
 
 export const tenderEditorImportRunExecutionMetadataSchema = z.object({
+  run_type: tenderImportRunTypeSchema.default('import'),
   selected_block_ids: z.array(tenderEditorManagedBlockIdSchema).default([]),
   selected_update_block_ids: z.array(tenderEditorManagedBlockIdSchema).default([]),
   selected_remove_block_ids: z.array(tenderEditorManagedBlockIdSchema).default([]),
@@ -132,8 +172,24 @@ export const tenderEditorImportRunExecutionMetadataSchema = z.object({
   removed_block_ids: z.array(tenderEditorManagedBlockIdSchema).default([]),
   missing_in_quote_block_ids: z.array(tenderEditorManagedBlockIdSchema).default([]),
   untouched_block_ids: z.array(tenderEditorManagedBlockIdSchema).default([]),
+  affected_block_ids: z.array(tenderEditorManagedBlockIdSchema).default([]),
+  orphaned_block_ids: z.array(tenderEditorManagedBlockIdSchema).default([]),
+  refreshed_hash_block_ids: z.array(tenderEditorManagedBlockIdSchema).default([]),
+  pruned_registry_block_ids: z.array(tenderEditorManagedBlockIdSchema).default([]),
+  skipped_block_ids: z.array(tenderEditorManagedBlockIdSchema).default([]),
+  repair_action: tenderImportRegistryRepairActionSchema.nullable().default(null),
   run_mode: tenderEditorImportRunModeSchema.default('protected_reimport'),
   conflict_policy: tenderEditorReimportConflictPolicySchema.default('protect_conflicts'),
+  diagnostics_summary: tenderImportRegistryHealthSummarySchema.default({
+    healthy_blocks: 0,
+    stale_blocks: 0,
+    orphaned_registry_blocks: 0,
+    missing_quote_blocks: 0,
+    conflict_blocks: 0,
+    drifted_quote_blocks: 0,
+    drifted_draft_blocks: 0,
+    total_registry_blocks: 0,
+  }),
   summary_counts: tenderEditorImportRunSummaryCountsSchema.default({
     selected_blocks: 0,
     conflict_blocks: 0,
@@ -142,6 +198,17 @@ export const tenderEditorImportRunExecutionMetadataSchema = z.object({
     removed_blocks: 0,
     missing_in_quote_blocks: 0,
     untouched_blocks: 0,
+    affected_blocks: 0,
+    orphaned_blocks: 0,
+    refreshed_hash_blocks: 0,
+    pruned_registry_blocks: 0,
+    skipped_blocks: 0,
+    healthy_blocks: 0,
+    stale_blocks: 0,
+    orphaned_registry_blocks: 0,
+    drifted_quote_blocks: 0,
+    drifted_draft_blocks: 0,
+    total_registry_blocks: 0,
   }),
 });
 
@@ -222,6 +289,7 @@ export const tenderDraftPackageImportRunSchema = z.object({
   id: entityIdSchema,
   tender_draft_package_id: entityIdSchema,
   target_quote_id: entityIdSchema.nullable().optional(),
+  run_type: tenderImportRunTypeSchema,
   import_mode: tenderEditorImportModeSchema,
   payload_hash: z.string().trim().min(1),
   payload_snapshot: tenderEditorImportPayloadSchema,
@@ -230,6 +298,96 @@ export const tenderDraftPackageImportRunSchema = z.object({
   execution_metadata: tenderEditorImportRunExecutionMetadataSchema,
   created_by_user_id: entityIdSchema.nullable().optional(),
   created_at: timestampSchema,
+});
+
+export const tenderImportRegistryDiagnosticBlockSchema = z.object({
+  block_id: tenderEditorManagedBlockIdSchema,
+  marker_key: z.string().trim().min(1),
+  target_kind: tenderEditorImportTargetKindSchema,
+  target_label: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  registry_entry_id: entityIdSchema.nullable().optional(),
+  registry_revision: z.number().int().min(0).nullable().optional(),
+  registry_is_active: z.boolean(),
+  registry_last_synced_at: timestampSchema.nullable().optional(),
+  registry_last_drift_checked_at: timestampSchema.nullable().optional(),
+  registry_payload_hash: z.string().trim().nullable().optional(),
+  registry_last_applied_content_hash: z.string().trim().nullable().optional(),
+  registry_last_seen_quote_content_hash: z.string().trim().nullable().optional(),
+  latest_payload_present: z.boolean(),
+  latest_payload_hash: z.string().trim().nullable().optional(),
+  latest_payload_applied_content_hash: z.string().trim().nullable().optional(),
+  live_quote_content_md: z.string().trim().nullable().optional(),
+  live_quote_section_title: z.string().trim().nullable().optional(),
+  live_quote_content_hash: z.string().trim().nullable().optional(),
+  live_quote_marker_present: z.boolean(),
+  live_quote_section_row_present: z.boolean(),
+  latest_import_run_id: entityIdSchema.nullable().optional(),
+  drift_status: tenderEditorManagedBlockDriftStatusSchema,
+  diagnostic_status: tenderImportRegistryDiagnosticStatusSchema,
+  is_conflict: z.boolean(),
+  repair_recommended_before_reimport: z.boolean(),
+  recommended_repair_action: tenderImportRegistryRepairActionSchema.nullable().optional(),
+  can_refresh_registry_metadata: z.boolean(),
+  can_mark_orphaned: z.boolean(),
+  can_prune_inactive: z.boolean(),
+  can_resync_hashes_from_live_quote_markers: z.boolean(),
+  requires_reimport: z.boolean(),
+  warnings: z.array(z.string().trim().min(1)),
+});
+
+export const tenderImportRegistryRepairPreviewActionSummarySchema = z.object({
+  action: tenderImportRegistryRepairActionSchema,
+  description: z.string().trim().min(1),
+  eligible_block_ids: z.array(tenderEditorManagedBlockIdSchema),
+  skipped_block_ids: z.array(tenderEditorManagedBlockIdSchema),
+});
+
+export const tenderDraftPackageImportDiagnosticsSchema = z.object({
+  draft_package_id: entityIdSchema,
+  target_quote_id: entityIdSchema.nullable().optional(),
+  target_quote_title: z.string().trim().nullable().optional(),
+  generated_at: timestampSchema,
+  registry_status: tenderImportOwnershipRegistryStatusSchema,
+  summary: tenderImportRegistryHealthSummarySchema,
+  blocks: z.array(tenderImportRegistryDiagnosticBlockSchema),
+  latest_import_run: tenderDraftPackageImportRunSchema.nullable().optional(),
+  latest_diagnostics_refresh_run: tenderDraftPackageImportRunSchema.nullable().optional(),
+  latest_registry_repair_run: tenderDraftPackageImportRunSchema.nullable().optional(),
+  last_live_drift_checked_at: timestampSchema.nullable().optional(),
+  last_registry_sync_at: timestampSchema.nullable().optional(),
+  safe_reimport_now: z.boolean(),
+  manual_quote_edit_detected: z.boolean(),
+  repair_recommended: z.boolean(),
+  warnings: z.array(z.string().trim().min(1)),
+});
+
+export const tenderImportRegistryRepairPreviewBlockSchema = tenderImportRegistryDiagnosticBlockSchema.extend({
+  available_repair_actions: z.array(tenderImportRegistryRepairActionSchema),
+  selected_repair_action: tenderImportRegistryRepairActionSchema.nullable().optional(),
+  skip_reason: z.string().trim().nullable().optional(),
+});
+
+export const tenderImportRegistryRepairPreviewSchema = z.object({
+  draft_package_id: entityIdSchema,
+  target_quote_id: entityIdSchema.nullable().optional(),
+  target_quote_title: z.string().trim().nullable().optional(),
+  generated_at: timestampSchema,
+  summary: tenderImportRegistryHealthSummarySchema,
+  actions: z.array(tenderImportRegistryRepairPreviewActionSummarySchema),
+  blocks: z.array(tenderImportRegistryRepairPreviewBlockSchema),
+  warnings: z.array(z.string().trim().min(1)),
+});
+
+export const tenderImportRegistryRepairResultSchema = z.object({
+  draft_package_id: entityIdSchema,
+  target_quote_id: entityIdSchema.nullable().optional(),
+  repair_action: tenderImportRegistryRepairActionSchema,
+  result_status: tenderImportRegistryRepairResultStatusSchema,
+  summary: z.string().trim().min(1),
+  execution_metadata: tenderEditorImportRunExecutionMetadataSchema,
+  summary_after: tenderImportRegistryHealthSummarySchema,
+  run: tenderDraftPackageImportRunSchema.nullable().optional(),
 });
 
 export const tenderDraftPackageImportStateSchema = z.object({
@@ -349,6 +507,7 @@ export type TenderEditorImportMode = z.infer<typeof tenderEditorImportModeSchema
 export type TenderEditorImportRunResultStatus = z.infer<typeof tenderEditorImportRunResultStatusSchema>;
 export type TenderEditorImportExecutionStatus = z.infer<typeof tenderEditorImportExecutionStatusSchema>;
 export type TenderEditorManagedBlockId = z.infer<typeof tenderEditorManagedBlockIdSchema>;
+export type TenderImportRunType = z.infer<typeof tenderImportRunTypeSchema>;
 export type TenderEditorImportItem = z.infer<typeof tenderEditorImportItemSchema>;
 export type TenderEditorManagedBlock = z.infer<typeof tenderEditorManagedBlockSchema>;
 export type TenderEditorManagedSurface = z.infer<typeof tenderEditorManagedSurfaceSchema>;
@@ -357,6 +516,10 @@ export type TenderEditorSelectiveReimportSelection = z.infer<typeof tenderEditor
 export type TenderEditorManagedBlockDriftStatus = z.infer<typeof tenderEditorManagedBlockDriftStatusSchema>;
 export type TenderEditorReimportConflictPolicy = z.infer<typeof tenderEditorReimportConflictPolicySchema>;
 export type TenderEditorImportRunMode = z.infer<typeof tenderEditorImportRunModeSchema>;
+export type TenderImportRegistryDiagnosticStatus = z.infer<typeof tenderImportRegistryDiagnosticStatusSchema>;
+export type TenderImportRegistryRepairAction = z.infer<typeof tenderImportRegistryRepairActionSchema>;
+export type TenderImportRegistryRepairResultStatus = z.infer<typeof tenderImportRegistryRepairResultStatusSchema>;
+export type TenderImportRegistryHealthSummary = z.infer<typeof tenderImportRegistryHealthSummarySchema>;
 export type TenderEditorImportRunSummaryCounts = z.infer<typeof tenderEditorImportRunSummaryCountsSchema>;
 export type TenderEditorImportRunExecutionMetadata = z.infer<typeof tenderEditorImportRunExecutionMetadataSchema>;
 export type TenderEditorImportPayload = z.infer<typeof tenderEditorImportPayloadSchema>;
@@ -366,6 +529,12 @@ export type TenderEditorImportPreviewSection = z.infer<typeof tenderEditorImport
 export type TenderEditorImportPreview = z.infer<typeof tenderEditorImportPreviewSchema>;
 export type TenderEditorImportResult = z.infer<typeof tenderEditorImportResultSchema>;
 export type TenderDraftPackageImportRun = z.infer<typeof tenderDraftPackageImportRunSchema>;
+export type TenderImportRegistryDiagnosticBlock = z.infer<typeof tenderImportRegistryDiagnosticBlockSchema>;
+export type TenderImportRegistryRepairPreviewActionSummary = z.infer<typeof tenderImportRegistryRepairPreviewActionSummarySchema>;
+export type TenderDraftPackageImportDiagnostics = z.infer<typeof tenderDraftPackageImportDiagnosticsSchema>;
+export type TenderImportRegistryRepairPreviewBlock = z.infer<typeof tenderImportRegistryRepairPreviewBlockSchema>;
+export type TenderImportRegistryRepairPreview = z.infer<typeof tenderImportRegistryRepairPreviewSchema>;
+export type TenderImportRegistryRepairResult = z.infer<typeof tenderImportRegistryRepairResultSchema>;
 export type TenderDraftPackageImportState = z.infer<typeof tenderDraftPackageImportStateSchema>;
 export type TenderEditorReconciliationChangeType = z.infer<typeof tenderEditorReconciliationChangeTypeSchema>;
 export type TenderImportOwnershipRegistryStatus = z.infer<typeof tenderImportOwnershipRegistryStatusSchema>;

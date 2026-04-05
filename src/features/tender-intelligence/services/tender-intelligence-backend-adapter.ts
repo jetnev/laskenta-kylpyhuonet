@@ -28,10 +28,14 @@ import type {
   UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
 import type {
+  TenderDraftPackageImportDiagnostics,
   TenderDraftPackageImportRun,
   TenderDraftPackageImportState,
   TenderEditorImportPreview,
   TenderEditorImportResult,
+  TenderImportRegistryRepairAction,
+  TenderImportRegistryRepairPreview,
+  TenderImportRegistryRepairResult,
   TenderEditorSelectiveReimportSelection,
   TenderEditorReconciliationPreview,
   TenderEditorImportValidationResult,
@@ -63,9 +67,13 @@ export interface TenderIntelligenceBackendAdapter {
   previewEditorImportForDraftPackage(draftPackageId: string): Promise<TenderEditorImportPreview>;
   validateEditorImportForDraftPackage(draftPackageId: string): Promise<TenderEditorImportValidationResult>;
   getDraftPackageImportStatus(draftPackageId: string): Promise<TenderDraftPackageImportState>;
+  getDraftPackageImportDiagnostics(draftPackageId: string): Promise<TenderDraftPackageImportDiagnostics>;
   previewDraftPackageReimport(draftPackageId: string): Promise<TenderEditorReconciliationPreview>;
+  previewDraftPackageImportRegistryRepair(draftPackageId: string): Promise<TenderImportRegistryRepairPreview>;
   importDraftPackageToEditor(draftPackageId: string): Promise<TenderEditorImportResult>;
   reimportDraftPackageToEditor(draftPackageId: string, selection?: TenderEditorSelectiveReimportSelection): Promise<TenderEditorImportResult>;
+  refreshDraftPackageImportDiagnosticsFromQuote(draftPackageId: string): Promise<TenderDraftPackageImportDiagnostics>;
+  repairDraftPackageImportRegistry(draftPackageId: string, action: TenderImportRegistryRepairAction): Promise<TenderImportRegistryRepairResult>;
   markDraftPackageImported(draftPackageId: string, importedQuoteId: string, importStatus?: TenderDraftPackageImportStatus): Promise<TenderDraftPackage>;
   listDraftPackageImportRuns(draftPackageId: string): Promise<TenderDraftPackageImportRun[]>;
   listReferenceSuggestionsForPackage(packageId: string): Promise<TenderReferenceSuggestion[]>;

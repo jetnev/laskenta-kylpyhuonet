@@ -54,6 +54,8 @@ export default function TenderIntelligencePage({ onNavigate }: TenderIntelligenc
     editorImportValidation,
     draftPackageImportState,
     draftPackageReimportPreview,
+    draftPackageImportDiagnostics,
+    draftPackageImportRepairPreview,
     draftPackageImportRuns,
     selectedPackage,
     selectedPackageId,
@@ -64,6 +66,9 @@ export default function TenderIntelligencePage({ onNavigate }: TenderIntelligenc
     creatingDraftPackagePackageId,
     previewingEditorImportDraftPackageId,
     importingDraftPackageId,
+    refreshingDraftPackageImportDiagnosticsId,
+    repairingDraftPackageId,
+    repairingDraftPackageRegistryAction,
     error,
     overview,
     canCreate,
@@ -93,6 +98,9 @@ export default function TenderIntelligencePage({ onNavigate }: TenderIntelligenc
     createDraftPackage,
     importDraftPackageToEditor,
     reimportDraftPackageToEditor,
+    refreshDraftPackageImportRegistryRepairPreview,
+    refreshDraftPackageImportDiagnosticsFromQuote,
+    repairDraftPackageImportRegistry,
     updateDraftPackageItem,
     markDraftPackageReviewed,
     markDraftPackageExported,
@@ -189,9 +197,14 @@ export default function TenderIntelligencePage({ onNavigate }: TenderIntelligenc
           editorImportValidation={editorImportValidation}
           draftPackageImportState={draftPackageImportState}
           draftPackageReimportPreview={draftPackageReimportPreview}
+          draftPackageImportDiagnostics={draftPackageImportDiagnostics}
+          draftPackageImportRepairPreview={draftPackageImportRepairPreview}
           draftPackageImportRuns={draftPackageImportRuns}
           previewingEditorImportDraftPackageId={previewingEditorImportDraftPackageId}
           importingDraftPackageId={importingDraftPackageId}
+          refreshingDraftPackageImportDiagnosticsId={refreshingDraftPackageImportDiagnosticsId}
+          repairingDraftPackageId={repairingDraftPackageId}
+          repairingDraftPackageRegistryAction={repairingDraftPackageRegistryAction}
           updatingDraftPackageItemIds={updatingDraftPackageItemIds}
           reviewingDraftPackageId={reviewingDraftPackageId}
           exportingDraftPackageId={exportingDraftPackageId}
@@ -215,8 +228,23 @@ export default function TenderIntelligencePage({ onNavigate }: TenderIntelligenc
             toast.success(result.summary);
             return result;
           }}
-          onReimportDraftPackageToEditor={async (draftPackageId) => {
-            const result = await reimportDraftPackageToEditor(draftPackageId);
+          onReimportDraftPackageToEditor={async (draftPackageId, selection) => {
+            const result = await reimportDraftPackageToEditor(draftPackageId, selection);
+            toast.success(result.summary);
+            return result;
+          }}
+          onRefreshDraftPackageImportRegistryRepairPreview={async (draftPackageId) => {
+            const preview = await refreshDraftPackageImportRegistryRepairPreview(draftPackageId);
+            toast.success('Registry repair -preview päivitettiin.');
+            return preview;
+          }}
+          onRefreshDraftPackageImportDiagnosticsFromQuote={async (draftPackageId) => {
+            const diagnostics = await refreshDraftPackageImportDiagnosticsFromQuote(draftPackageId);
+            toast.success('Import-diagnostiikka päivitettiin live quotesta.');
+            return diagnostics;
+          }}
+          onRepairDraftPackageImportRegistry={async (draftPackageId, action) => {
+            const result = await repairDraftPackageImportRegistry(draftPackageId, action);
             toast.success(result.summary);
             return result;
           }}

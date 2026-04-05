@@ -4,10 +4,14 @@ import { useAuth } from '@/hooks/use-auth';
 
 import { getTenderIntelligenceRepository } from '../services/tender-intelligence-repository';
 import type {
+  TenderDraftPackageImportDiagnostics,
   TenderDraftPackageImportRun,
   TenderDraftPackageImportState,
   TenderEditorImportPreview,
   TenderEditorImportResult,
+  TenderImportRegistryRepairAction,
+  TenderImportRegistryRepairPreview,
+  TenderImportRegistryRepairResult,
   TenderEditorSelectiveReimportSelection,
   TenderEditorReconciliationPreview,
   TenderEditorImportValidationResult,
@@ -37,6 +41,16 @@ export interface TenderDocumentsUploadResult {
   failed: TenderDocumentsUploadFailure[];
 }
 
+interface DraftPackageImportArtifacts {
+  preview: TenderEditorImportPreview;
+  validation: TenderEditorImportValidationResult;
+  importState: TenderDraftPackageImportState;
+  reimportPreview: TenderEditorReconciliationPreview;
+  diagnostics: TenderDraftPackageImportDiagnostics;
+  repairPreview: TenderImportRegistryRepairPreview;
+  importRuns: TenderDraftPackageImportRun[];
+}
+
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Tarjousälyn dataa ei voitu ladata.';
 }
@@ -54,6 +68,8 @@ export function useTenderIntelligence() {
   const [editorImportValidation, setEditorImportValidation] = useState<TenderEditorImportValidationResult | null>(null);
   const [draftPackageImportState, setDraftPackageImportState] = useState<TenderDraftPackageImportState | null>(null);
   const [draftPackageReimportPreview, setDraftPackageReimportPreview] = useState<TenderEditorReconciliationPreview | null>(null);
+  const [draftPackageImportDiagnostics, setDraftPackageImportDiagnostics] = useState<TenderDraftPackageImportDiagnostics | null>(null);
+  const [draftPackageImportRepairPreview, setDraftPackageImportRepairPreview] = useState<TenderImportRegistryRepairPreview | null>(null);
   const [draftPackageImportRuns, setDraftPackageImportRuns] = useState<TenderDraftPackageImportRun[]>([]);
   const [selectedPackageMissing, setSelectedPackageMissing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -62,6 +78,9 @@ export function useTenderIntelligence() {
   const [creatingDraftPackagePackageId, setCreatingDraftPackagePackageId] = useState<string | null>(null);
   const [previewingEditorImportDraftPackageId, setPreviewingEditorImportDraftPackageId] = useState<string | null>(null);
   const [importingDraftPackageId, setImportingDraftPackageId] = useState<string | null>(null);
+  const [refreshingDraftPackageImportDiagnosticsId, setRefreshingDraftPackageImportDiagnosticsId] = useState<string | null>(null);
+  const [repairingDraftPackageId, setRepairingDraftPackageId] = useState<string | null>(null);
+  const [repairingDraftPackageRegistryAction, setRepairingDraftPackageRegistryAction] = useState<TenderImportRegistryRepairAction | null>(null);
   const [updatingDraftPackageItemIds, setUpdatingDraftPackageItemIds] = useState<string[]>([]);
   const [reviewingDraftPackageId, setReviewingDraftPackageId] = useState<string | null>(null);
   const [exportingDraftPackageId, setExportingDraftPackageId] = useState<string | null>(null);
@@ -149,6 +168,72 @@ export function useTenderIntelligence() {
     [hasOrganizationContext, repository]
   );
 
+  const applyDraftPackageImportArtifacts = useCallback((artifacts: DraftPackageImportArtifacts) => {
+    setEditorImportPreview(artifacts.preview);
+    setEditorImportValidation(artifacts.validation);
+    setDraftPackageImportState(artifacts.importState);
+    setDraftPackageReimportPreview(artifacts.reimportPreview);
+    setDraftPackageImportDiagnostics(artifacts.diagnostics);
+    setDraftPackageImportRepairPreview(artifacts.repairPreview);
+    setDraftPackageImportRuns(artifacts.importRuns);
+  }, []);
+
+  const clearDraftPackageImportArtifacts = useCallback(() => {
+    setEditorImportPreview(null);
+    setEditorImportValidation(null);
+    setDraftPackageImportState(null);
+    setDraftPackageReimportPreview(null);
+    setDraftPackageImportDiagnostics(null);
+    setDraftPackageImportRepairPreview(null);
+    setDraftPackageImportRuns([]);
+  }, []);
+
+  const fetchDraftPackageImportArtifacts = useCallback(
+    async (draftPackageId: string): Promise<DraftPackageImportArtifacts> => {
+      const [preview, validation, importState, reimportPreview, diagnostics, repairPreview, importRuns] = await Promise.all([
+        repository.previewEditorImportForDraftPackage(draftPackageId),
+        repository.validateEditorImportForDraftPackage(draftPackageId),
+        repository.getDraftPackageImportStatus(draftPackageId),
+        repository.previewDraftPackageReimport(draftPackageId),
+        repository.getDraftPackageImportDiagnostics(draftPackageId),
+        repository.previewDraftPackageImportRegistryRepair(draftPackageId),
+        repository.listDraftPackageImportRuns(draftPackageId),
+      ]);
+
+      return {
+        preview,
+        validation,
+        importState,
+        reimportPreview,
+        diagnostics,
+        repairPreview,
+        importRuns,
+      };
+    },
+    [repository],
+  );
+
+  const loadDraftPackageImportArtifacts = useCallback(
+    async (draftPackageId: string) => {
+      setPreviewingEditorImportDraftPackageId(draftPackageId);
+
+      try {
+        const artifacts = await fetchDraftPackageImportArtifacts(draftPackageId);
+        applyDraftPackageImportArtifacts(artifacts);
+        setError(null);
+        return artifacts;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        clearDraftPackageImportArtifacts();
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setPreviewingEditorImportDraftPackageId((current) => (current === draftPackageId ? null : current));
+      }
+    },
+    [applyDraftPackageImportArtifacts, clearDraftPackageImportArtifacts, fetchDraftPackageImportArtifacts],
+  );
+
   useEffect(() => {
     let active = true;
 
@@ -232,11 +317,7 @@ export function useTenderIntelligence() {
     let active = true;
 
     if (!selectedDraftPackageId) {
-      setEditorImportPreview(null);
-      setEditorImportValidation(null);
-      setDraftPackageImportState(null);
-      setDraftPackageReimportPreview(null);
-      setDraftPackageImportRuns([]);
+      clearDraftPackageImportArtifacts();
       setPreviewingEditorImportDraftPackageId(null);
       return () => {
         active = false;
@@ -246,29 +327,15 @@ export function useTenderIntelligence() {
     const hydrateEditorImportPreview = async () => {
       try {
         setPreviewingEditorImportDraftPackageId(selectedDraftPackageId);
-        const [preview, validation, importState, reimportPreview, importRuns] = await Promise.all([
-          repository.previewEditorImportForDraftPackage(selectedDraftPackageId),
-          repository.validateEditorImportForDraftPackage(selectedDraftPackageId),
-          repository.getDraftPackageImportStatus(selectedDraftPackageId),
-          repository.previewDraftPackageReimport(selectedDraftPackageId),
-          repository.listDraftPackageImportRuns(selectedDraftPackageId),
-        ]);
+        const artifacts = await fetchDraftPackageImportArtifacts(selectedDraftPackageId);
 
         if (active) {
-          setEditorImportPreview(preview);
-          setEditorImportValidation(validation);
-          setDraftPackageImportState(importState);
-          setDraftPackageReimportPreview(reimportPreview);
-          setDraftPackageImportRuns(importRuns);
+          applyDraftPackageImportArtifacts(artifacts);
           setError(null);
         }
       } catch (nextError) {
         if (active) {
-          setEditorImportPreview(null);
-          setEditorImportValidation(null);
-          setDraftPackageImportState(null);
-          setDraftPackageReimportPreview(null);
-          setDraftPackageImportRuns([]);
+          clearDraftPackageImportArtifacts();
           setError(getErrorMessage(nextError));
         }
       } finally {
@@ -283,7 +350,7 @@ export function useTenderIntelligence() {
     return () => {
       active = false;
     };
-  }, [repository, selectedDraftPackageId]);
+  }, [applyDraftPackageImportArtifacts, clearDraftPackageImportArtifacts, draftPackages, fetchDraftPackageImportArtifacts, selectedDraftPackageId]);
 
   const createPackage = useCallback(
     async (input: CreateTenderPackageInput) => {
@@ -767,6 +834,59 @@ export function useTenderIntelligence() {
     [loadDraftPackages, loadSelectedPackage, repository, selectedPackage, selectedPackageId],
   );
 
+  const refreshDraftPackageImportRegistryRepairPreview = useCallback(
+    async (draftPackageId: string): Promise<TenderImportRegistryRepairPreview> => {
+      const artifacts = await loadDraftPackageImportArtifacts(draftPackageId);
+      return artifacts.repairPreview;
+    },
+    [loadDraftPackageImportArtifacts],
+  );
+
+  const refreshDraftPackageImportDiagnosticsFromQuote = useCallback(
+    async (draftPackageId: string): Promise<TenderDraftPackageImportDiagnostics> => {
+      setRefreshingDraftPackageImportDiagnosticsId(draftPackageId);
+
+      try {
+        await repository.refreshDraftPackageImportDiagnosticsFromQuote(draftPackageId);
+        const artifacts = await loadDraftPackageImportArtifacts(draftPackageId);
+        setError(null);
+        return artifacts.diagnostics;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setRefreshingDraftPackageImportDiagnosticsId((current) => (current === draftPackageId ? null : current));
+      }
+    },
+    [loadDraftPackageImportArtifacts, repository],
+  );
+
+  const repairDraftPackageImportRegistry = useCallback(
+    async (
+      draftPackageId: string,
+      action: TenderImportRegistryRepairAction,
+    ): Promise<TenderImportRegistryRepairResult> => {
+      setRepairingDraftPackageId(draftPackageId);
+      setRepairingDraftPackageRegistryAction(action);
+
+      try {
+        const result = await repository.repairDraftPackageImportRegistry(draftPackageId, action);
+        await loadDraftPackageImportArtifacts(draftPackageId);
+        setError(null);
+        return result;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setRepairingDraftPackageId((current) => (current === draftPackageId ? null : current));
+        setRepairingDraftPackageRegistryAction((current) => (current === action ? null : current));
+      }
+    },
+    [loadDraftPackageImportArtifacts, repository],
+  );
+
   const overview = useMemo(
     () => ({
       packages: packages.length,
@@ -785,6 +905,8 @@ export function useTenderIntelligence() {
     editorImportValidation,
     draftPackageImportState,
     draftPackageReimportPreview,
+    draftPackageImportDiagnostics,
+    draftPackageImportRepairPreview,
     draftPackageImportRuns,
     referenceProfiles,
     selectedPackage,
@@ -797,6 +919,9 @@ export function useTenderIntelligence() {
     creatingDraftPackagePackageId,
     previewingEditorImportDraftPackageId,
     importingDraftPackageId,
+    refreshingDraftPackageImportDiagnosticsId,
+    repairingDraftPackageId,
+    repairingDraftPackageRegistryAction,
     updatingDraftPackageItemIds,
     reviewingDraftPackageId,
     exportingDraftPackageId,
@@ -825,6 +950,9 @@ export function useTenderIntelligence() {
     createDraftPackage,
     importDraftPackageToEditor,
     reimportDraftPackageToEditor,
+    refreshDraftPackageImportRegistryRepairPreview,
+    refreshDraftPackageImportDiagnosticsFromQuote,
+    repairDraftPackageImportRegistry,
     updateDraftPackageItem,
     markDraftPackageReviewed,
     markDraftPackageExported,

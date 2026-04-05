@@ -13,6 +13,9 @@ import {
   formatTenderTimestamp,
   getTenderTextPreview,
   TENDER_DRAFT_PACKAGE_IMPORT_STATUS_META,
+  TENDER_IMPORT_REGISTRY_DIAGNOSTIC_STATUS_META,
+  TENDER_IMPORT_REGISTRY_REPAIR_ACTION_META,
+  TENDER_IMPORT_RUN_TYPE_META,
   TENDER_DRAFT_PACKAGE_REIMPORT_STATUS_META,
   TENDER_EDITOR_MANAGED_BLOCK_DRIFT_STATUS_META,
   TENDER_EDITOR_IMPORT_MODE_META,
@@ -24,10 +27,13 @@ import {
   TENDER_REVIEW_STATUS_META,
 } from '../lib/tender-intelligence-ui';
 import type {
+  TenderDraftPackageImportDiagnostics,
   TenderDraftPackageImportRun,
   TenderDraftPackageImportState,
   TenderEditorImportPreview,
   TenderEditorManagedBlockId,
+  TenderImportRegistryRepairAction,
+  TenderImportRegistryRepairPreview,
   TenderEditorSelectiveReimportSelection,
   TenderEditorReconciliationPreview,
   TenderEditorImportValidationResult,
@@ -48,9 +54,14 @@ interface TenderDraftPackagePanelProps {
   editorImportValidation?: TenderEditorImportValidationResult | null;
   draftPackageImportState?: TenderDraftPackageImportState | null;
   draftPackageReimportPreview?: TenderEditorReconciliationPreview | null;
+  draftPackageImportDiagnostics?: TenderDraftPackageImportDiagnostics | null;
+  draftPackageImportRepairPreview?: TenderImportRegistryRepairPreview | null;
   draftPackageImportRuns?: TenderDraftPackageImportRun[];
   previewingEditorImportDraftPackageId?: string | null;
   importingDraftPackageId?: string | null;
+  refreshingDraftPackageImportDiagnosticsId?: string | null;
+  repairingDraftPackageId?: string | null;
+  repairingDraftPackageRegistryAction?: TenderImportRegistryRepairAction | null;
   reviewingDraftPackageId?: string | null;
   exportingDraftPackageId?: string | null;
   updatingDraftPackageItemIds?: string[];
@@ -58,6 +69,9 @@ interface TenderDraftPackagePanelProps {
   onCreateDraftPackage: (packageId: string) => Promise<unknown>;
   onImportDraftPackageToEditor: (draftPackageId: string) => Promise<unknown>;
   onReimportDraftPackageToEditor: (draftPackageId: string, selection?: TenderEditorSelectiveReimportSelection) => Promise<unknown>;
+  onRefreshDraftPackageImportRegistryRepairPreview: (draftPackageId: string) => Promise<unknown>;
+  onRefreshDraftPackageImportDiagnosticsFromQuote: (draftPackageId: string) => Promise<unknown>;
+  onRepairDraftPackageImportRegistry: (draftPackageId: string, action: TenderImportRegistryRepairAction) => Promise<unknown>;
   onOpenImportedQuote: (projectId: string, quoteId: string) => void;
   onUpdateDraftPackageItem: (itemId: string, input: UpdateTenderDraftPackageItemInput) => Promise<unknown>;
   onMarkDraftPackageReviewed: (draftPackageId: string) => Promise<unknown>;
@@ -130,6 +144,10 @@ function resolveOwnershipSourceLabel(source: 'registry' | 'latest_successful_run
     default:
       return source;
   }
+}
+
+function formatOptionalTimestamp(value?: string | null) {
+  return value ? formatTenderTimestamp(value) : 'Ei vielä';
 }
 
 function ReadinessCard({ title, value, description }: { title: string; value: string; description: string }) {
@@ -230,9 +248,14 @@ export default function TenderDraftPackagePanel({
   editorImportValidation = null,
   draftPackageImportState = null,
   draftPackageReimportPreview = null,
+  draftPackageImportDiagnostics = null,
+  draftPackageImportRepairPreview = null,
   draftPackageImportRuns = [],
   previewingEditorImportDraftPackageId = null,
   importingDraftPackageId = null,
+  refreshingDraftPackageImportDiagnosticsId = null,
+  repairingDraftPackageId = null,
+  repairingDraftPackageRegistryAction = null,
   reviewingDraftPackageId = null,
   exportingDraftPackageId = null,
   updatingDraftPackageItemIds = [],
@@ -240,6 +263,9 @@ export default function TenderDraftPackagePanel({
   onCreateDraftPackage,
   onImportDraftPackageToEditor,
   onReimportDraftPackageToEditor,
+  onRefreshDraftPackageImportRegistryRepairPreview,
+  onRefreshDraftPackageImportDiagnosticsFromQuote,
+  onRepairDraftPackageImportRegistry,
   onOpenImportedQuote,
   onUpdateDraftPackageItem,
   onMarkDraftPackageReviewed,
@@ -259,8 +285,28 @@ export default function TenderDraftPackagePanel({
     [editorImportPreview],
   );
   const managedBlocks = managedSurface?.blocks ?? [];
-  const latestImportRun = draftPackageImportRuns[0] ?? draftPackageImportState?.latest_run ?? null;
+  const latestImportRun = draftPackageImportDiagnostics?.latest_import_run
+    ?? draftPackageImportRuns.find((run) => run.run_type === 'import' || run.run_type === 'reimport')
+    ?? draftPackageImportState?.latest_run
+    ?? null;
+  const latestDiagnosticsRefreshRun = draftPackageImportDiagnostics?.latest_diagnostics_refresh_run
+    ?? draftPackageImportRuns.find((run) => run.run_type === 'diagnostics_refresh')
+    ?? null;
+  const latestRegistryRepairRun = draftPackageImportDiagnostics?.latest_registry_repair_run
+    ?? draftPackageImportRuns.find((run) => run.run_type === 'registry_repair')
+    ?? null;
   const canOpenImportedQuote = Boolean(selectedDraftPackage?.importedQuoteId && selectedPackage.package.linkedProjectId);
+  const repairPreviewActions = draftPackageImportRepairPreview?.actions ?? [];
+  const repairPreviewBlocks = draftPackageImportRepairPreview?.blocks ?? [];
+  const repairActionKeys: TenderImportRegistryRepairAction[] = [
+    'refresh_registry_metadata',
+    'mark_orphaned_registry_entries',
+    'prune_inactive_registry_entries',
+    'resync_registry_hashes_from_live_quote_markers',
+  ];
+  const isRefreshingDiagnostics = Boolean(selectedDraftPackage && refreshingDraftPackageImportDiagnosticsId === selectedDraftPackage.id);
+  const isRefreshingRepairPreview = Boolean(selectedDraftPackage && previewingEditorImportDraftPackageId === selectedDraftPackage.id);
+  const isRepairRunning = Boolean(selectedDraftPackage && repairingDraftPackageId === selectedDraftPackage.id);
   const [selectedUpdateBlockIds, setSelectedUpdateBlockIds] = useState<TenderEditorManagedBlockId[]>([]);
   const [selectedRemoveBlockIds, setSelectedRemoveBlockIds] = useState<TenderEditorManagedBlockId[]>([]);
   const [selectedOverrideConflictBlockIds, setSelectedOverrideConflictBlockIds] = useState<TenderEditorManagedBlockId[]>([]);
@@ -525,6 +571,7 @@ export default function TenderDraftPackagePanel({
                   {latestImportRun ? (
                     <div className="mt-3 space-y-2 text-sm text-slate-700">
                       <p>Aika: {formatTenderTimestamp(latestImportRun.created_at)}</p>
+                      <p>Run type: {TENDER_IMPORT_RUN_TYPE_META[latestImportRun.run_type].label}</p>
                       <p>Mode: {TENDER_EDITOR_IMPORT_MODE_META[latestImportRun.import_mode].label}</p>
                       <p>Status: {TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[latestImportRun.result_status].label}</p>
                       <p>Summary: {latestImportRun.summary ?? 'Ei erillistä yhteenvetoa.'}</p>
@@ -729,6 +776,165 @@ export default function TenderDraftPackagePanel({
                       </div>
                     </div>
 
+                    {draftPackageImportDiagnostics && (
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                          <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-950">
+                            <WarningCircle className="h-4 w-4 text-slate-500" />
+                            Import ownership diagnostics
+                            <Badge variant={TENDER_IMPORT_OWNERSHIP_REGISTRY_STATUS_META[draftPackageImportDiagnostics.registry_status].variant}>
+                              {TENDER_IMPORT_OWNERSHIP_REGISTRY_STATUS_META[draftPackageImportDiagnostics.registry_status].label}
+                            </Badge>
+                            {draftPackageImportDiagnostics.repair_recommended && <Badge variant="outline">Repair suositeltu</Badge>}
+                            {draftPackageImportDiagnostics.manual_quote_edit_detected && <Badge variant="destructive">Manuaalisia quote-muutoksia</Badge>}
+                          </div>
+
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Healthy</p>
+                              <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageImportDiagnostics.summary.healthy_blocks}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Stale</p>
+                              <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageImportDiagnostics.summary.stale_blocks}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Orphaned registry</p>
+                              <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageImportDiagnostics.summary.orphaned_registry_blocks}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Missing in quote</p>
+                              <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageImportDiagnostics.summary.missing_quote_blocks}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Conflicts</p>
+                              <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageImportDiagnostics.summary.conflict_blocks}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Drifted quote</p>
+                              <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageImportDiagnostics.summary.drifted_quote_blocks}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Drifted draft</p>
+                              <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageImportDiagnostics.summary.drifted_draft_blocks}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Total registry</p>
+                              <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageImportDiagnostics.summary.total_registry_blocks}</p>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm text-slate-700">
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p>Viimeisin live drift-check: {formatOptionalTimestamp(draftPackageImportDiagnostics.last_live_drift_checked_at)}</p>
+                              <p className="mt-1">Viimeisin registry sync: {formatOptionalTimestamp(draftPackageImportDiagnostics.last_registry_sync_at)}</p>
+                              <p className="mt-1">Turvallinen re-import nyt: {draftPackageImportDiagnostics.safe_reimport_now ? 'Kyllä' : 'Ei'}</p>
+                              <p className="mt-1">Repair ennen re-importia: {draftPackageImportDiagnostics.repair_recommended ? 'Suositeltu' : 'Ei välttämätön'}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p>Viimeisin import/run: {latestImportRun ? formatTenderTimestamp(latestImportRun.created_at) : 'Ei vielä'}</p>
+                              <p className="mt-1">Viimeisin diagnostics refresh: {latestDiagnosticsRefreshRun ? formatTenderTimestamp(latestDiagnosticsRefreshRun.created_at) : 'Ei vielä'}</p>
+                              <p className="mt-1">Viimeisin registry repair: {latestRegistryRepairRun ? formatTenderTimestamp(latestRegistryRepairRun.created_at) : 'Ei vielä'}</p>
+                              <p className="mt-1">Warningeja: {draftPackageImportDiagnostics.warnings.length}</p>
+                            </div>
+                          </div>
+
+                          {draftPackageImportDiagnostics.warnings.length > 0 && (
+                            <div className="mt-4 space-y-2">
+                              {draftPackageImportDiagnostics.warnings.map((warning, index) => (
+                                <div key={`${warning}-${index}`} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-700">
+                                  {warning}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                          <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+                            <ArrowsClockwise className="h-4 w-4 text-slate-500" />
+                            Registry repair tools
+                          </div>
+                          <p className="mt-3 text-sm leading-6 text-slate-700">
+                            Phase 17 repair päivittää vain registry-metadataa, drift-tilaa, hasheja ja inaktiivisten rivien siivousta. Se ei kirjoita quote-sisältöä eikä adoptoi uutta sisältöä live-quotesta.
+                          </p>
+
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={!selectedDraftPackage || isRefreshingDiagnostics || isRepairRunning}
+                              onClick={() => {
+                                if (!selectedDraftPackage) {
+                                  return;
+                                }
+
+                                void onRefreshDraftPackageImportDiagnosticsFromQuote(selectedDraftPackage.id);
+                              }}
+                            >
+                              {isRefreshingDiagnostics ? 'Päivitetään live-tilaa...' : 'Päivitä tila quotesta'}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={!selectedDraftPackage || isRefreshingRepairPreview || isRepairRunning}
+                              onClick={() => {
+                                if (!selectedDraftPackage) {
+                                  return;
+                                }
+
+                                void onRefreshDraftPackageImportRegistryRepairPreview(selectedDraftPackage.id);
+                              }}
+                            >
+                              {isRefreshingRepairPreview ? 'Päivitetään previewta...' : 'Päivitä repair-preview'}
+                            </Button>
+                          </div>
+
+                          <div className="mt-4 grid gap-2">
+                            {repairActionKeys.map((action) => {
+                              const actionSummary = repairPreviewActions.find((item) => item.action === action);
+                              const actionMeta = TENDER_IMPORT_REGISTRY_REPAIR_ACTION_META[action];
+                              const eligibleCount = actionSummary?.eligible_block_ids.length ?? 0;
+                              const isCurrentAction = repairingDraftPackageRegistryAction === action && isRepairRunning;
+
+                              return (
+                                <Button
+                                  key={action}
+                                  type="button"
+                                  variant={actionMeta.variant === 'default' ? 'default' : 'outline'}
+                                  disabled={!selectedDraftPackage || isRefreshingDiagnostics || isRefreshingRepairPreview || isRepairRunning || eligibleCount < 1}
+                                  onClick={() => {
+                                    if (!selectedDraftPackage) {
+                                      return;
+                                    }
+
+                                    void onRepairDraftPackageImportRegistry(selectedDraftPackage.id, action);
+                                  }}
+                                >
+                                  {isCurrentAction ? 'Suoritetaan...' : actionMeta.label}
+                                </Button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="mt-4 space-y-3">
+                            {repairPreviewActions.map((action) => (
+                              <div key={action.action} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant={TENDER_IMPORT_REGISTRY_REPAIR_ACTION_META[action.action].variant}>
+                                    {TENDER_IMPORT_REGISTRY_REPAIR_ACTION_META[action.action].label}
+                                  </Badge>
+                                  <Badge variant="outline">Eligible {action.eligible_block_ids.length}</Badge>
+                                  <Badge variant="outline">Skipped {action.skipped_block_ids.length}</Badge>
+                                </div>
+                                <p className="mt-2 leading-6">{action.description}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                       <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
                         <FileText className="h-4 w-4 text-slate-500" />
@@ -756,6 +962,110 @@ export default function TenderDraftPackagePanel({
                         )}
                       </div>
                     </div>
+
+                    {draftPackageImportDiagnostics && (
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+                          <ListChecks className="h-4 w-4 text-slate-500" />
+                          Registry block status
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-slate-700">
+                          Jokainen rivi näyttää registryn, latest payloadin ja live quote -markerien nykyisen suhteen. Tasta näkymästä näkee, vaatiiko blokki vain metadata-refreshin vai aidon re-importin.
+                        </p>
+
+                        <div className="mt-4 space-y-3">
+                          {repairPreviewBlocks.length > 0 ? repairPreviewBlocks.map((block) => (
+                            <div key={block.marker_key} className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                              <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Badge variant={TENDER_IMPORT_REGISTRY_DIAGNOSTIC_STATUS_META[block.diagnostic_status].variant}>
+                                      {TENDER_IMPORT_REGISTRY_DIAGNOSTIC_STATUS_META[block.diagnostic_status].label}
+                                    </Badge>
+                                    <Badge variant={TENDER_EDITOR_MANAGED_BLOCK_DRIFT_STATUS_META[block.drift_status].variant}>
+                                      {TENDER_EDITOR_MANAGED_BLOCK_DRIFT_STATUS_META[block.drift_status].label}
+                                    </Badge>
+                                    <Badge variant="outline">{block.target_label}</Badge>
+                                    {!block.registry_is_active && <Badge variant="secondary">Registry inactive</Badge>}
+                                    {block.is_conflict && <Badge variant="destructive">Konflikti</Badge>}
+                                    {block.requires_reimport && <Badge variant="destructive">Vaatii re-importin</Badge>}
+                                    {block.recommended_repair_action && (
+                                      <Badge variant={TENDER_IMPORT_REGISTRY_REPAIR_ACTION_META[block.recommended_repair_action].variant}>
+                                        {TENDER_IMPORT_REGISTRY_REPAIR_ACTION_META[block.recommended_repair_action].label}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="mt-2 text-sm font-medium text-slate-950">{block.title}</p>
+                                  <p className="mt-1 text-sm text-slate-700">Marker {block.marker_key}</p>
+                                </div>
+
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
+                                  <p>Registry rev: {block.registry_revision ?? 'Ei riviä'}</p>
+                                  <p className="mt-1">Registry sync: {formatOptionalTimestamp(block.registry_last_synced_at)}</p>
+                                  <p className="mt-1">Drift-check: {formatOptionalTimestamp(block.registry_last_drift_checked_at)}</p>
+                                  <p className="mt-1">Live marker: {block.live_quote_marker_present ? 'Löytyy' : 'Puuttuu'}</p>
+                                  <p className="mt-1">Section row: {block.live_quote_section_row_present ? 'Löytyy' : 'Puuttuu'}</p>
+                                </div>
+                              </div>
+
+                              <div className="mt-3 grid gap-3 xl:grid-cols-2 text-sm text-slate-700">
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                                  <p>Latest payload mukana: {block.latest_payload_present ? 'Kyllä' : 'Ei'}</p>
+                                  <p className="mt-1">Registry payload hash: {shortenHash(block.registry_payload_hash)}</p>
+                                  <p className="mt-1">Latest payload hash: {shortenHash(block.latest_payload_hash)}</p>
+                                  <p className="mt-1">Last applied hash: {shortenHash(block.registry_last_applied_content_hash)}</p>
+                                  <p className="mt-1">Last seen quote hash: {shortenHash(block.registry_last_seen_quote_content_hash)}</p>
+                                  <p className="mt-1">Live quote hash: {shortenHash(block.live_quote_content_hash)}</p>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                                  <p>Live quote title: {block.live_quote_section_title ?? 'Ei riviä'}</p>
+                                  <p className="mt-1">Repair before re-import: {block.repair_recommended_before_reimport ? 'Kyllä' : 'Ei'}</p>
+                                  <p className="mt-1">Metadata refresh: {block.can_refresh_registry_metadata ? 'Mahdollinen' : 'Ei'}</p>
+                                  <p className="mt-1">Mark orphaned: {block.can_mark_orphaned ? 'Mahdollinen' : 'Ei'}</p>
+                                  <p className="mt-1">Prune inactive: {block.can_prune_inactive ? 'Mahdollinen' : 'Ei'}</p>
+                                  <p className="mt-1">Resync hashes: {block.can_resync_hashes_from_live_quote_markers ? 'Mahdollinen' : 'Ei'}</p>
+                                </div>
+                              </div>
+
+                              {block.available_repair_actions.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {block.available_repair_actions.map((action) => (
+                                    <Badge key={`${block.block_id}-${action}`} variant={TENDER_IMPORT_REGISTRY_REPAIR_ACTION_META[action].variant}>
+                                      {TENDER_IMPORT_REGISTRY_REPAIR_ACTION_META[action].label}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+
+                              {block.skip_reason && (
+                                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-700">
+                                  {block.skip_reason}
+                                </div>
+                              )}
+
+                              {block.live_quote_content_md && (
+                                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-700 whitespace-pre-line">
+                                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Live quote -sisalto</p>
+                                  {getTenderTextPreview(block.live_quote_content_md, 280)}
+                                </div>
+                              )}
+
+                              {block.warnings.length > 0 && (
+                                <div className="mt-3 space-y-2">
+                                  {block.warnings.map((warning, index) => (
+                                    <div key={`${block.block_id}-diagnostic-warning-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-700">
+                                      {warning}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )) : (
+                            <p className="text-sm leading-6 text-slate-700">Registry block diagnostics ei löytänyt yhtään hallittua blokkia tälle draft package -versiolle.</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
                       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
@@ -1054,13 +1364,14 @@ export default function TenderDraftPackagePanel({
                               <div key={run.id} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <Badge variant={TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[run.result_status].variant}>{TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[run.result_status].label}</Badge>
+                                  <Badge variant={TENDER_IMPORT_RUN_TYPE_META[run.run_type].variant}>{TENDER_IMPORT_RUN_TYPE_META[run.run_type].label}</Badge>
                                   <Badge variant={TENDER_EDITOR_IMPORT_MODE_META[run.import_mode].variant}>{TENDER_EDITOR_IMPORT_MODE_META[run.import_mode].label}</Badge>
                                 </div>
                                 <p className="mt-2 text-sm font-medium text-slate-950">{formatTenderTimestamp(run.created_at)}</p>
                                 <p className="mt-1 text-sm leading-6 text-slate-700">{run.summary ?? 'Ei erillistä yhteenvetoa.'}</p>
-                                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                                      Päivitetyt {run.execution_metadata?.summary_counts.updated_blocks ?? 0}, skipatut konfliktit {run.execution_metadata?.summary_counts.skipped_conflicts ?? 0}, poistot {run.execution_metadata?.summary_counts.removed_blocks ?? 0}
-                                    </p>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">
+                                  Vaikutetut {run.execution_metadata?.summary_counts.affected_blocks ?? 0}, päivitetyt {run.execution_metadata?.summary_counts.updated_blocks ?? 0}, orphaned {run.execution_metadata?.summary_counts.orphaned_blocks ?? 0}, siivotut {run.execution_metadata?.summary_counts.pruned_registry_blocks ?? 0}
+                                </p>
                               </div>
                             ))}
                           </div>

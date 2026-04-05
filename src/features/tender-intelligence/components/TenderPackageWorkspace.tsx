@@ -20,9 +20,12 @@ import {
 import { TENDER_INTELLIGENCE_BACKEND_PLAN } from '../services/tender-intelligence-backend-adapter';
 import type { TenderDocumentsUploadResult } from '../hooks/use-tender-intelligence';
 import type {
+  TenderDraftPackageImportDiagnostics,
   TenderDraftPackageImportRun,
   TenderDraftPackageImportState,
   TenderEditorImportPreview,
+  TenderImportRegistryRepairAction,
+  TenderImportRegistryRepairPreview,
   TenderEditorReconciliationPreview,
   TenderEditorImportValidationResult,
 } from '../types/tender-editor-import';
@@ -76,9 +79,14 @@ interface TenderPackageWorkspaceProps {
   editorImportValidation?: TenderEditorImportValidationResult | null;
   draftPackageImportState?: TenderDraftPackageImportState | null;
   draftPackageReimportPreview?: TenderEditorReconciliationPreview | null;
+  draftPackageImportDiagnostics?: TenderDraftPackageImportDiagnostics | null;
+  draftPackageImportRepairPreview?: TenderImportRegistryRepairPreview | null;
   draftPackageImportRuns?: TenderDraftPackageImportRun[];
   previewingEditorImportDraftPackageId?: string | null;
   importingDraftPackageId?: string | null;
+  refreshingDraftPackageImportDiagnosticsId?: string | null;
+  repairingDraftPackageId?: string | null;
+  repairingDraftPackageRegistryAction?: TenderImportRegistryRepairAction | null;
   updatingDraftPackageItemIds?: string[];
   reviewingDraftPackageId?: string | null;
   exportingDraftPackageId?: string | null;
@@ -96,7 +104,10 @@ interface TenderPackageWorkspaceProps {
   onSelectDraftPackage: (draftPackageId: string) => void;
   onCreateDraftPackage: (packageId: string) => Promise<unknown>;
   onImportDraftPackageToEditor: (draftPackageId: string) => Promise<unknown>;
-  onReimportDraftPackageToEditor: (draftPackageId: string) => Promise<unknown>;
+  onReimportDraftPackageToEditor: (draftPackageId: string, selection?: TenderEditorSelectiveReimportSelection) => Promise<unknown>;
+  onRefreshDraftPackageImportRegistryRepairPreview: (draftPackageId: string) => Promise<unknown>;
+  onRefreshDraftPackageImportDiagnosticsFromQuote: (draftPackageId: string) => Promise<unknown>;
+  onRepairDraftPackageImportRegistry: (draftPackageId: string, action: TenderImportRegistryRepairAction) => Promise<unknown>;
   onOpenImportedQuote: (projectId: string, quoteId: string) => void;
   onUpdateDraftPackageItem: (itemId: string, input: UpdateTenderDraftPackageItemInput) => Promise<unknown>;
   onMarkDraftPackageReviewed: (draftPackageId: string) => Promise<unknown>;
@@ -131,9 +142,14 @@ export default function TenderPackageWorkspace({
   editorImportValidation = null,
   draftPackageImportState = null,
   draftPackageReimportPreview = null,
+  draftPackageImportDiagnostics = null,
+  draftPackageImportRepairPreview = null,
   draftPackageImportRuns = [],
   previewingEditorImportDraftPackageId = null,
   importingDraftPackageId = null,
+  refreshingDraftPackageImportDiagnosticsId = null,
+  repairingDraftPackageId = null,
+  repairingDraftPackageRegistryAction = null,
   updatingDraftPackageItemIds = [],
   reviewingDraftPackageId = null,
   exportingDraftPackageId = null,
@@ -152,6 +168,9 @@ export default function TenderPackageWorkspace({
   onCreateDraftPackage,
   onImportDraftPackageToEditor,
   onReimportDraftPackageToEditor,
+  onRefreshDraftPackageImportRegistryRepairPreview,
+  onRefreshDraftPackageImportDiagnosticsFromQuote,
+  onRepairDraftPackageImportRegistry,
   onOpenImportedQuote,
   onUpdateDraftPackageItem,
   onMarkDraftPackageReviewed,
@@ -388,9 +407,14 @@ export default function TenderPackageWorkspace({
         editorImportValidation={editorImportValidation}
         draftPackageImportState={draftPackageImportState}
         draftPackageReimportPreview={draftPackageReimportPreview}
+        draftPackageImportDiagnostics={draftPackageImportDiagnostics}
+        draftPackageImportRepairPreview={draftPackageImportRepairPreview}
         draftPackageImportRuns={draftPackageImportRuns}
         previewingEditorImportDraftPackageId={previewingEditorImportDraftPackageId}
         importingDraftPackageId={importingDraftPackageId}
+        refreshingDraftPackageImportDiagnosticsId={refreshingDraftPackageImportDiagnosticsId}
+        repairingDraftPackageId={repairingDraftPackageId}
+        repairingDraftPackageRegistryAction={repairingDraftPackageRegistryAction}
         updatingDraftPackageItemIds={updatingDraftPackageItemIds}
         reviewingDraftPackageId={reviewingDraftPackageId}
         exportingDraftPackageId={exportingDraftPackageId}
@@ -398,6 +422,9 @@ export default function TenderPackageWorkspace({
         onCreateDraftPackage={onCreateDraftPackage}
         onImportDraftPackageToEditor={onImportDraftPackageToEditor}
         onReimportDraftPackageToEditor={onReimportDraftPackageToEditor}
+        onRefreshDraftPackageImportRegistryRepairPreview={onRefreshDraftPackageImportRegistryRepairPreview}
+        onRefreshDraftPackageImportDiagnosticsFromQuote={onRefreshDraftPackageImportDiagnosticsFromQuote}
+        onRepairDraftPackageImportRegistry={onRepairDraftPackageImportRegistry}
         onOpenImportedQuote={onOpenImportedQuote}
         onUpdateDraftPackageItem={onUpdateDraftPackageItem}
         onMarkDraftPackageReviewed={onMarkDraftPackageReviewed}
