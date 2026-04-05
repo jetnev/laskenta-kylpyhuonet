@@ -3,14 +3,18 @@ import type {
   TenderAnalysisJob,
   TenderAnalysisJobStatus,
   TenderAnalysisJobType,
+  TenderAnalysisReadiness,
   TenderDocumentChunk,
   TenderDocumentExtraction,
   TenderDraftArtifact,
   TenderDocument,
+  TenderExtractionCoverage,
   TenderMissingItem,
   TenderPackage,
   TenderPackageDetails,
   TenderPackageResults,
+  TenderResultEvidence,
+  TenderResultEvidenceTargetType,
   TenderReferenceSuggestion,
   TenderRequirement,
   TenderReviewTask,
@@ -45,6 +49,14 @@ export interface TenderIntelligenceBackendAdapter {
   listDocumentExtractionsForPackage(packageId: string): Promise<TenderDocumentExtraction[]>;
   getDocumentExtractionForDocument(documentId: string): Promise<TenderDocumentExtraction | null>;
   listDocumentChunksForDocument(documentId: string): Promise<TenderDocumentChunk[]>;
+  listEvidenceForPackage(packageId: string): Promise<TenderResultEvidence[]>;
+  listEvidenceForTarget(
+    packageId: string,
+    targetEntityType: TenderResultEvidenceTargetType,
+    targetEntityId: string
+  ): Promise<TenderResultEvidence[]>;
+  getExtractionCoverageForPackage(packageId: string): Promise<TenderExtractionCoverage>;
+  getAnalysisReadinessForPackage(packageId: string): Promise<TenderAnalysisReadiness>;
   clearDocumentExtractionForDocument(documentId: string): Promise<void>;
   deleteTenderDocument(documentId: string): Promise<void>;
   getTenderAnalysisStatus(packageId: string): Promise<TenderAnalysisJob | null>;

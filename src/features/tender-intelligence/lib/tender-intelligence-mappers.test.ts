@@ -8,6 +8,7 @@ import {
   mapTenderDraftArtifactRowToDomain,
   mapTenderMissingItemRowToDomain,
   mapTenderPackageRowToDomain,
+  mapTenderResultEvidenceRowToDomain,
   mapTenderReferenceSuggestionRowToDomain,
   mapTenderRequirementRowToDomain,
   mapTenderReviewTaskRowToDomain,
@@ -22,6 +23,7 @@ import type {
   TenderGoNoGoAssessmentRow,
   TenderMissingItemRow,
   TenderPackageRow,
+  TenderResultEvidenceRow,
   TenderReferenceSuggestionRow,
   TenderRequirementRow,
   TenderReviewTaskRow,
@@ -180,6 +182,21 @@ describe('result row mappers', () => {
       created_at: '2026-04-05T09:09:31.000Z',
       updated_at: '2026-04-05T09:09:31.000Z',
     };
+    const resultEvidenceRow: TenderResultEvidenceRow = {
+      id: '30303030-3030-4030-8030-303030303030',
+      tender_package_id: requirementRow.tender_package_id,
+      organization_id: requirementRow.organization_id,
+      source_document_id: requirementRow.source_document_id!,
+      extraction_id: extractionRow.id,
+      chunk_id: chunkRow.id,
+      target_entity_type: 'requirement',
+      target_entity_id: requirementRow.id,
+      excerpt_text: 'Sheet data chunk',
+      locator_text: 'A-liite.pdf / chunk 1',
+      confidence: 0.68,
+      created_at: '2026-04-05T09:09:32.000Z',
+      updated_at: '2026-04-05T09:09:32.000Z',
+    };
 
     expect(mapTenderRequirementRowToDomain(requirementRow)).toMatchObject({
       requirementType: 'technical',
@@ -221,6 +238,12 @@ describe('result row mappers', () => {
       chunkIndex: 0,
       textContent: 'Sheet data chunk',
     });
+    expect(mapTenderResultEvidenceRowToDomain(resultEvidenceRow)).toMatchObject({
+      targetEntityType: 'requirement',
+      targetEntityId: requirementRow.id,
+      locatorText: 'A-liite.pdf / chunk 1',
+      confidence: 0.68,
+    });
   });
 });
 
@@ -234,13 +257,13 @@ describe('buildTenderPackageDetails', () => {
         organization_id: packageRow.organization_id,
         created_by_user_id: packageRow.created_by_user_id,
         file_name: 'tarjouspyynto.pdf',
-        mime_type: 'application/pdf',
+        mime_type: 'text/plain',
         storage_bucket: 'tender-intelligence',
-        storage_path: null,
+        storage_path: 'org/package/tarjouspyynto.txt',
         file_size_bytes: null,
         checksum: null,
         upload_error: null,
-        upload_status: 'placeholder',
+        upload_status: 'uploaded',
         parse_status: 'not-started',
         created_at: '2026-04-05T09:05:00.000Z',
         updated_at: '2026-04-05T09:05:00.000Z',
@@ -376,11 +399,29 @@ describe('buildTenderPackageDetails', () => {
       created_at: '2026-04-05T09:18:00.000Z',
       updated_at: '2026-04-05T09:18:00.000Z',
     };
+    const resultEvidenceRows: TenderResultEvidenceRow[] = [
+      {
+        id: '15151515-1515-4515-8515-151515151516',
+        tender_package_id: packageRow.id,
+        organization_id: packageRow.organization_id,
+        source_document_id: documentRows[0].id,
+        extraction_id: documentExtractionRows[0].id,
+        chunk_id: '16161616-1616-4616-8616-161616161616',
+        target_entity_type: 'requirement',
+        target_entity_id: requirementRows[0].id,
+        excerpt_text: 'Purettu teksti',
+        locator_text: 'tarjouspyynto.pdf / chunk 1',
+        confidence: 0.55,
+        created_at: '2026-04-05T09:18:30.000Z',
+        updated_at: '2026-04-05T09:18:30.000Z',
+      },
+    ];
 
     const details = buildTenderPackageDetails({
       packageRow,
       documentRows,
       documentExtractionRows,
+      resultEvidenceRows,
       analysisJobRows: jobRows,
       requirementRows,
       missingItemRows,
@@ -408,6 +449,19 @@ describe('buildTenderPackageDetails', () => {
       documentId: documentRows[0].id,
       extractionStatus: 'extracted',
       chunkCount: 1,
+    });
+    expect(details.resultEvidence[0]).toMatchObject({
+      targetEntityType: 'requirement',
+      targetEntityId: requirementRows[0].id,
+      locatorText: 'tarjouspyynto.pdf / chunk 1',
+    });
+    expect(details.analysisReadiness).toMatchObject({
+      canStart: false,
+      blockedReason: 'Paketille on jo käynnissä analyysiajo. Odota nykyisen ajon valmistumista.',
+    });
+    expect(details.analysisReadiness.coverage).toMatchObject({
+      extractedDocuments: 1,
+      extractedChunks: 1,
     });
     expect(details.results.requirements[0]).toMatchObject({
       requirementType: 'technical',

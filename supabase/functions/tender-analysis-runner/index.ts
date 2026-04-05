@@ -2,18 +2,24 @@
 /**
  * Supabase Edge Function — Tarjousäly server-side analysis runner boundary
  *
- * Phase 5 entry-point.
- * Receives `{ tenderPackageId }`, validates auth + org access + documents,
+ * Phase 7 entry-point.
+ * Receives `{ tenderPackageId }`, validates auth + org access + extraction
+ * readiness,
  * creates and transitions an analysis job through pending → queued → running →
- * completed, seeds placeholder results, and returns a structured response.
+ * completed, seeds placeholder results plus evidence rows, and returns a
+ * structured response.
  *
- * No AI, OCR, or document parsing happens here — the analysis is still a
- * deterministic placeholder run. The function exists solely to move
- * orchestration behind a server-side boundary.
+ * No AI, OCR, or semantic analysis happens here — the analysis is still a
+ * deterministic placeholder run. The function now requires real extracted
+ * chunk data so that placeholder results can point to persistent provenance.
  */
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
-import { buildPlaceholderAnalysisSeedPlan } from './placeholder-seed.ts';
+import {
+  buildPlaceholderAnalysisSeedPlan,
+  type PlaceholderEvidenceSourceSeed,
+  type PlaceholderResultEvidenceLinkSeed,
+} from './placeholder-seed.ts';
 
 /* ------------------------------------------------------------------ */
 /*  CORS                                                               */
@@ -56,6 +62,7 @@ function rejected(
 
 async function clearAnalysisResults(client: SupabaseClient, packageId: string) {
   const resultTables = [
+    'tender_result_evidence',
     'tender_review_tasks',
     'tender_draft_artifacts',
     'tender_reference_suggestions',
@@ -82,13 +89,69 @@ async function clearAnalysisResults(client: SupabaseClient, packageId: string) {
   if (assessmentError) throw assessmentError;
 }
 
+async function insertTenderResultEvidenceRows<TSeed extends { evidenceLinks: PlaceholderResultEvidenceLinkSeed[] }>(
+  client: SupabaseClient,
+  options: {
+    packageId: string;
+    targetEntityType: 'requirement' | 'missing_item' | 'risk_flag' | 'reference_suggestion' | 'draft_artifact' | 'review_task';
+    targetRows: { id: string }[];
+    seeds: TSeed[];
+    evidenceSources: PlaceholderEvidenceSourceSeed[];
+  },
+) {
+  const payload = options.seeds.flatMap((seed, index) => {
+    const targetId = options.targetRows[index]?.id;
+
+    if (!targetId) {
+      return [];
+    }
+
+    return seed.evidenceLinks.flatMap((link) => {
+      const source = options.evidenceSources[link.sourceIndex];
+
+      if (!source) {
+        return [];
+      }
+
+      return {
+        tender_package_id: options.packageId,
+        source_document_id: source.documentId,
+        extraction_id: source.extractionId,
+        chunk_id: source.chunkId,
+        target_entity_type: options.targetEntityType,
+        target_entity_id: targetId,
+        excerpt_text: source.excerptText,
+        locator_text: source.locatorText,
+        confidence: link.confidence,
+      };
+    });
+  });
+
+  if (payload.length < 1) {
+    return;
+  }
+
+  const { error } = await client.from('tender_result_evidence').insert(payload);
+
+  if (error) {
+    throw error;
+  }
+}
+
 async function seedPlaceholderResults(
   client: SupabaseClient,
   packageId: string,
   packageRow: { id: string; title: string; organization_id: string },
   documentRows: { id: string; file_name: string; tender_package_id: string }[],
+  chunkRows: {
+    id: string;
+    tender_document_id: string;
+    extraction_id: string;
+    chunk_index: number;
+    text_content: string;
+  }[],
 ) {
-  const plan = buildPlaceholderAnalysisSeedPlan({ packageRow, documentRows });
+  const plan = buildPlaceholderAnalysisSeedPlan({ packageRow, documentRows, chunkRows });
 
   await clearAnalysisResults(client, packageId);
 
@@ -111,9 +174,16 @@ async function seedPlaceholderResults(
 
   if (reqErr) throw reqErr;
   const reqIds: string[] = (requirementData ?? []).map((r: any) => r.id);
+  await insertTenderResultEvidenceRows(client, {
+    packageId,
+    targetEntityType: 'requirement',
+    targetRows: reqIds.map((id) => ({ id })),
+    seeds: plan.requirements,
+    evidenceSources: plan.evidenceSources,
+  });
 
   // 2. Missing items (FK-linked to requirements)
-  const { error: misErr } = await client.from('tender_missing_items').insert(
+  const { data: missingItemData, error: misErr } = await client.from('tender_missing_items').insert(
     plan.missingItems.map((m) => ({
       tender_package_id: packageId,
       related_requirement_id:
@@ -124,11 +194,18 @@ async function seedPlaceholderResults(
       severity: m.severity,
       status: m.status,
     })),
-  );
+  ).select('id');
   if (misErr) throw misErr;
+  await insertTenderResultEvidenceRows(client, {
+    packageId,
+    targetEntityType: 'missing_item',
+    targetRows: (missingItemData ?? []) as { id: string }[],
+    seeds: plan.missingItems,
+    evidenceSources: plan.evidenceSources,
+  });
 
   // 3. Risk flags
-  const { error: riskErr } = await client.from('tender_risk_flags').insert(
+  const { data: riskFlagData, error: riskErr } = await client.from('tender_risk_flags').insert(
     plan.riskFlags.map((r) => ({
       tender_package_id: packageId,
       risk_type: r.riskType,
@@ -137,11 +214,18 @@ async function seedPlaceholderResults(
       severity: r.severity,
       status: r.status,
     })),
-  );
+  ).select('id');
   if (riskErr) throw riskErr;
+  await insertTenderResultEvidenceRows(client, {
+    packageId,
+    targetEntityType: 'risk_flag',
+    targetRows: (riskFlagData ?? []) as { id: string }[],
+    seeds: plan.riskFlags,
+    evidenceSources: plan.evidenceSources,
+  });
 
   // 4. Reference suggestions
-  const { error: refErr } = await client.from('tender_reference_suggestions').insert(
+  const { data: referenceSuggestionData, error: refErr } = await client.from('tender_reference_suggestions').insert(
     plan.referenceSuggestions.map((s) => ({
       tender_package_id: packageId,
       source_type: s.sourceType,
@@ -150,11 +234,18 @@ async function seedPlaceholderResults(
       rationale: s.rationale,
       confidence: s.confidence,
     })),
-  );
+  ).select('id');
   if (refErr) throw refErr;
+  await insertTenderResultEvidenceRows(client, {
+    packageId,
+    targetEntityType: 'reference_suggestion',
+    targetRows: (referenceSuggestionData ?? []) as { id: string }[],
+    seeds: plan.referenceSuggestions,
+    evidenceSources: plan.evidenceSources,
+  });
 
   // 5. Draft artifacts
-  const { error: draftErr } = await client.from('tender_draft_artifacts').insert(
+  const { data: draftArtifactData, error: draftErr } = await client.from('tender_draft_artifacts').insert(
     plan.draftArtifacts.map((a) => ({
       tender_package_id: packageId,
       artifact_type: a.artifactType,
@@ -162,11 +253,18 @@ async function seedPlaceholderResults(
       content_md: a.contentMd,
       status: a.status,
     })),
-  );
+  ).select('id');
   if (draftErr) throw draftErr;
+  await insertTenderResultEvidenceRows(client, {
+    packageId,
+    targetEntityType: 'draft_artifact',
+    targetRows: (draftArtifactData ?? []) as { id: string }[],
+    seeds: plan.draftArtifacts,
+    evidenceSources: plan.evidenceSources,
+  });
 
   // 6. Review tasks
-  const { error: taskErr } = await client.from('tender_review_tasks').insert(
+  const { data: reviewTaskData, error: taskErr } = await client.from('tender_review_tasks').insert(
     plan.reviewTasks.map((t) => ({
       tender_package_id: packageId,
       task_type: t.taskType,
@@ -175,8 +273,15 @@ async function seedPlaceholderResults(
       status: t.status,
       assigned_to_user_id: null,
     })),
-  );
+  ).select('id');
   if (taskErr) throw taskErr;
+  await insertTenderResultEvidenceRows(client, {
+    packageId,
+    targetEntityType: 'review_task',
+    targetRows: (reviewTaskData ?? []) as { id: string }[],
+    seeds: plan.reviewTasks,
+    evidenceSources: plan.evidenceSources,
+  });
 
   // 7. Go / No-Go assessment
   const { error: goErr } = await client.from('tender_go_no_go_assessments').upsert(
@@ -305,19 +410,55 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    /* ---- extraction readiness (non-blocking in Phase 6) ---- */
+    /* ---- extraction readiness ---- */
     const { data: extractionRows, error: extractionError } = await client
       .from('tender_document_extractions')
-      .select('tender_document_id, extraction_status')
+      .select('id, tender_document_id, extraction_status, chunk_count')
       .eq('tender_package_id', tenderPackageId);
 
     if (extractionError) {
       return rejected(500, 'Dokumenttien extraction-tilaa ei voitu tarkistaa.');
     }
 
-    const extractedDocumentCount = (extractionRows ?? []).filter(
+    const extractedRows = (extractionRows ?? []).filter(
       (row: any) => row.extraction_status === 'extracted',
-    ).length;
+    );
+    const extractedDocumentCount = extractedRows.length;
+    const extractedChunkCount = extractedRows.reduce(
+      (sum: number, row: any) => sum + Math.max(0, Number(row.chunk_count ?? 0)),
+      0,
+    );
+
+    if (extractedDocumentCount < 1) {
+      return rejected(
+        422,
+        'Käynnistä extraction vähintään yhdelle tuetulle dokumentille ennen analyysin käynnistämistä.',
+      );
+    }
+
+    if (extractedChunkCount < 1) {
+      return rejected(
+        422,
+        'Puretuista dokumenteista ei löytynyt yhtään analyysiin kelpaavaa chunkia, joten evidence-pohjaista analyysiä ei voi vielä käynnistää.',
+      );
+    }
+
+    const { data: chunkRows, error: chunkError } = await client
+      .from('tender_document_chunks')
+      .select('id, tender_document_id, extraction_id, chunk_index, text_content')
+      .eq('tender_package_id', tenderPackageId)
+      .order('created_at', { ascending: true });
+
+    if (chunkError) {
+      return rejected(500, 'Dokumenttien extraction-chunkeja ei voitu ladata analyysiä varten.');
+    }
+
+    if (!chunkRows || chunkRows.length === 0) {
+      return rejected(
+        422,
+        'Puretuista dokumenteista ei löytynyt yhtään analyysiin kelpaavaa chunkia, joten evidence-pohjaista analyysiä ei voi vielä käynnistää.',
+      );
+    }
 
     /* ---- active job guard ---- */
     const { data: activeJobs } = await client
@@ -373,7 +514,7 @@ Deno.serve(async (req: Request) => {
       });
 
       /* ---- seed placeholder results ---- */
-      await seedPlaceholderResults(client, tenderPackageId, packageRow, documentRows);
+      await seedPlaceholderResults(client, tenderPackageId, packageRow, documentRows, chunkRows);
 
       /* ---- running → completed ---- */
       const completedAt = new Date().toISOString();
@@ -390,9 +531,7 @@ Deno.serve(async (req: Request) => {
           accepted: true,
           analysisJobId: jobId,
           status: 'completed',
-          message: extractedDocumentCount > 0
-            ? null
-            : 'Placeholder-analyysi suoritettiin ilman extraction-dataa. Myöhemmät vaiheet voivat nojata tähän rajaan ilman frontend-uusintakirjoitusta.',
+          message: null,
         },
         200,
       );

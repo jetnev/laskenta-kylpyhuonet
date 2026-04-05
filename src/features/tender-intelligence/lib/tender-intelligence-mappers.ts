@@ -1,3 +1,4 @@
+import { buildTenderAnalysisReadiness } from './tender-analysis';
 import {
   createTenderPackageInputSchema,
   tenderPackageDetailsSchema,
@@ -12,6 +13,7 @@ import {
   type TenderPackage,
   type TenderPackageDetails,
   type TenderPackageResults,
+  type TenderResultEvidence,
   type TenderReferenceSuggestion,
   type TenderRequirement,
   type TenderReviewTask,
@@ -21,11 +23,12 @@ import type {
   TenderAnalysisJobRow,
   TenderDocumentChunkRow,
   TenderDocumentExtractionRow,
-  TenderDraftArtifactRow,
   TenderDocumentRow,
+  TenderDraftArtifactRow,
   TenderGoNoGoAssessmentRow,
   TenderMissingItemRow,
   TenderPackageRow,
+  TenderResultEvidenceRow,
   TenderReferenceSuggestionRow,
   TenderRequirementRow,
   TenderReviewTaskRow,
@@ -111,6 +114,23 @@ export function mapTenderDocumentChunkRowToDomain(row: TenderDocumentChunkRow): 
     chunkIndex: row.chunk_index,
     textContent: row.text_content,
     characterCount: row.character_count,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapTenderResultEvidenceRowToDomain(row: TenderResultEvidenceRow): TenderResultEvidence {
+  return {
+    id: row.id,
+    packageId: row.tender_package_id,
+    sourceDocumentId: row.source_document_id,
+    extractionId: row.extraction_id,
+    chunkId: row.chunk_id,
+    targetEntityType: row.target_entity_type,
+    targetEntityId: row.target_entity_id,
+    excerptText: row.excerpt_text,
+    locatorText: row.locator_text,
+    confidence: row.confidence,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -286,6 +306,7 @@ export function buildTenderPackageDetails(input: {
   packageRow: TenderPackageRow;
   documentRows: TenderDocumentRow[];
   documentExtractionRows: TenderDocumentExtractionRow[];
+  resultEvidenceRows: TenderResultEvidenceRow[];
   analysisJobRows: TenderAnalysisJobRow[];
   requirementRows: TenderRequirementRow[];
   missingItemRows: TenderMissingItemRow[];
@@ -298,8 +319,16 @@ export function buildTenderPackageDetails(input: {
   const sortedJobRows = [...input.analysisJobRows].sort(
     (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
   );
+  const documents = input.documentRows.map(mapTenderDocumentRowToDomain);
+  const documentExtractions = input.documentExtractionRows.map(mapTenderDocumentExtractionRowToDomain);
   const analysisJobs = sortedJobRows.map(mapTenderAnalysisJobRowToDomain);
   const latestAnalysisJob = analysisJobs[0] ?? null;
+  const resultEvidence = input.resultEvidenceRows.map(mapTenderResultEvidenceRowToDomain);
+  const analysisReadiness = buildTenderAnalysisReadiness({
+    documents,
+    documentExtractions,
+    latestAnalysisJob,
+  });
   const results = mapTenderPackageResultsRowsToDomain({
     requirementRows: input.requirementRows,
     missingItemRows: input.missingItemRows,
@@ -319,10 +348,12 @@ export function buildTenderPackageDetails(input: {
       reviewTaskCount: results.reviewTasks.length,
       currentJobId: latestAnalysisJob?.id ?? null,
     }),
-    documents: input.documentRows.map(mapTenderDocumentRowToDomain),
-    documentExtractions: input.documentExtractionRows.map(mapTenderDocumentExtractionRowToDomain),
+    documents,
+    documentExtractions,
+    resultEvidence,
     analysisJobs,
     latestAnalysisJob,
+    analysisReadiness,
     results,
   });
 }

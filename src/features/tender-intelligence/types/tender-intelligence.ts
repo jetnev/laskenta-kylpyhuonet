@@ -135,6 +135,48 @@ export const tenderDocumentChunkSchema = z.object({
   updatedAt: timestampSchema,
 });
 
+export const tenderResultEvidenceTargetTypeSchema = z.enum([
+  'requirement',
+  'missing_item',
+  'risk_flag',
+  'reference_suggestion',
+  'draft_artifact',
+  'review_task',
+]);
+
+export const tenderResultEvidenceSchema = z.object({
+  id: entityIdSchema,
+  packageId: entityIdSchema,
+  sourceDocumentId: entityIdSchema,
+  extractionId: entityIdSchema,
+  chunkId: entityIdSchema,
+  targetEntityType: tenderResultEvidenceTargetTypeSchema,
+  targetEntityId: entityIdSchema,
+  excerptText: z.string().trim().min(1),
+  locatorText: z.string().trim().nullable().optional(),
+  confidence: z.number().min(0).max(1).nullable().optional(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+
+export const tenderExtractionCoverageSchema = z.object({
+  totalDocuments: z.number().int().min(0),
+  uploadedDocuments: z.number().int().min(0),
+  supportedDocuments: z.number().int().min(0),
+  extractedDocuments: z.number().int().min(0),
+  extractedChunks: z.number().int().min(0),
+  pendingExtractions: z.number().int().min(0),
+  failedExtractions: z.number().int().min(0),
+  unsupportedDocuments: z.number().int().min(0),
+  documentsNeedingExtraction: z.number().int().min(0),
+});
+
+export const tenderAnalysisReadinessSchema = z.object({
+  canStart: z.boolean(),
+  blockedReason: z.string().trim().nullable().optional(),
+  coverage: tenderExtractionCoverageSchema,
+});
+
 export const tenderRequirementSchema = z.object({
   id: entityIdSchema,
   packageId: entityIdSchema,
@@ -223,8 +265,10 @@ export const tenderPackageDetailsSchema = z.object({
   package: tenderPackageSchema,
   documents: z.array(tenderDocumentSchema),
   documentExtractions: z.array(tenderDocumentExtractionSchema),
+  resultEvidence: z.array(tenderResultEvidenceSchema),
   analysisJobs: z.array(tenderAnalysisJobSchema),
   latestAnalysisJob: tenderAnalysisJobSchema.nullable(),
+  analysisReadiness: tenderAnalysisReadinessSchema,
   results: tenderPackageResultsSchema,
 });
 
@@ -264,12 +308,16 @@ export type TenderDocumentUploadStatus = z.infer<typeof tenderDocumentUploadStat
 export type TenderDocumentParseStatus = z.infer<typeof tenderDocumentParseStatusSchema>;
 export type TenderDocumentExtractionStatus = z.infer<typeof tenderDocumentExtractionStatusSchema>;
 export type TenderDocumentExtractorType = z.infer<typeof tenderDocumentExtractorTypeSchema>;
+export type TenderResultEvidenceTargetType = z.infer<typeof tenderResultEvidenceTargetTypeSchema>;
 
 export type TenderPackageSummary = z.infer<typeof tenderPackageSummarySchema>;
 export type TenderPackage = z.infer<typeof tenderPackageSchema>;
 export type TenderDocument = z.infer<typeof tenderDocumentSchema>;
 export type TenderDocumentExtraction = z.infer<typeof tenderDocumentExtractionSchema>;
 export type TenderDocumentChunk = z.infer<typeof tenderDocumentChunkSchema>;
+export type TenderResultEvidence = z.infer<typeof tenderResultEvidenceSchema>;
+export type TenderExtractionCoverage = z.infer<typeof tenderExtractionCoverageSchema>;
+export type TenderAnalysisReadiness = z.infer<typeof tenderAnalysisReadinessSchema>;
 export type TenderAnalysisJob = z.infer<typeof tenderAnalysisJobSchema>;
 export type TenderRequirement = z.infer<typeof tenderRequirementSchema>;
 export type TenderMissingItem = z.infer<typeof tenderMissingItemSchema>;

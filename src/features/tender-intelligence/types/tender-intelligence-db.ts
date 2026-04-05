@@ -82,6 +82,29 @@ export const tenderDocumentChunkRowSchema = z.object({
   updated_at: z.string(),
 });
 
+export const tenderResultEvidenceRowSchema = z.object({
+  id: z.string().uuid(),
+  tender_package_id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  source_document_id: z.string().uuid(),
+  extraction_id: z.string().uuid(),
+  chunk_id: z.string().uuid(),
+  target_entity_type: z.enum([
+    'requirement',
+    'missing_item',
+    'risk_flag',
+    'reference_suggestion',
+    'draft_artifact',
+    'review_task',
+  ]),
+  target_entity_id: z.string().uuid(),
+  excerpt_text: z.string(),
+  locator_text: z.string().nullable(),
+  confidence: z.number().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
 export const tenderGoNoGoAssessmentRowSchema = z.object({
   id: z.string().uuid(),
   tender_package_id: z.string().uuid(),
@@ -179,6 +202,7 @@ export const tenderAnalysisJobRowsSchema = z.array(tenderAnalysisJobRowSchema);
 export const tenderGoNoGoAssessmentRowsSchema = z.array(tenderGoNoGoAssessmentRowSchema);
 export const tenderDocumentExtractionRowsSchema = z.array(tenderDocumentExtractionRowSchema);
 export const tenderDocumentChunkRowsSchema = z.array(tenderDocumentChunkRowSchema);
+export const tenderResultEvidenceRowsSchema = z.array(tenderResultEvidenceRowSchema);
 export const tenderRequirementRowsSchema = z.array(tenderRequirementRowSchema);
 export const tenderMissingItemRowsSchema = z.array(tenderMissingItemRowSchema);
 export const tenderRiskFlagRowsSchema = z.array(tenderRiskFlagRowSchema);
@@ -191,6 +215,7 @@ export type TenderDocumentRow = z.infer<typeof tenderDocumentRowSchema>;
 export type TenderAnalysisJobRow = z.infer<typeof tenderAnalysisJobRowSchema>;
 export type TenderDocumentExtractionRow = z.infer<typeof tenderDocumentExtractionRowSchema>;
 export type TenderDocumentChunkRow = z.infer<typeof tenderDocumentChunkRowSchema>;
+export type TenderResultEvidenceRow = z.infer<typeof tenderResultEvidenceRowSchema>;
 export type TenderGoNoGoAssessmentRow = z.infer<typeof tenderGoNoGoAssessmentRowSchema>;
 export type TenderRequirementRow = z.infer<typeof tenderRequirementRowSchema>;
 export type TenderMissingItemRow = z.infer<typeof tenderMissingItemRowSchema>;

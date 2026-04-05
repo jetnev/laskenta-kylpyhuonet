@@ -3,17 +3,26 @@ import type { PostgrestError } from '@supabase/supabase-js';
 import { getSupabaseConfigError, isSupabaseConfigured, requireSupabase } from '@/lib/supabase';
 
 import type { TenderIntelligenceBackendAdapter } from './tender-intelligence-backend-adapter';
+import { buildTenderAnalysisReadiness, buildTenderExtractionCoverage } from '../lib/tender-analysis';
 import {
   type CreateTenderPackageInput,
   type TenderAnalysisJobStatus,
   type TenderAnalysisJobType,
+  type TenderAnalysisReadiness,
+  type TenderExtractionCoverage,
+  type TenderResultEvidence,
+  type TenderResultEvidenceTargetType,
 } from '../types/tender-intelligence';
 import {
   buildTenderDocumentStoragePath,
   TENDER_INTELLIGENCE_STORAGE_BUCKET,
   validateTenderDocumentFile,
 } from '../lib/tender-document-upload';
-import { buildPlaceholderAnalysisSeedPlan } from '../lib/tender-placeholder-results';
+import {
+  buildPlaceholderAnalysisSeedPlan,
+  type PlaceholderEvidenceSourceSeed,
+  type PlaceholderResultEvidenceLinkSeed,
+} from '../lib/tender-placeholder-results';
 import {
   TENDER_ANALYSIS_RUNNER_FUNCTION_NAME,
   parseTenderAnalysisRunnerResponse,
@@ -35,6 +44,7 @@ import {
   mapTenderMissingItemRowToDomain,
   mapTenderPackageResultsRowsToDomain,
   mapTenderPackageRowToDomain,
+  mapTenderResultEvidenceRowToDomain,
   mapTenderReferenceSuggestionRowToDomain,
   mapTenderRequirementRowToDomain,
   mapTenderReviewTaskRowToDomain,
@@ -54,6 +64,7 @@ import {
   tenderMissingItemRowsSchema,
   tenderPackageRowSchema,
   tenderPackageRowsSchema,
+  tenderResultEvidenceRowsSchema,
   tenderReferenceSuggestionRowsSchema,
   tenderRequirementRowsSchema,
   tenderReviewTaskRowsSchema,
@@ -125,6 +136,7 @@ async function fetchPackageRows<Row>(options: {
   tableName:
     | 'tender_documents'
     | 'tender_analysis_jobs'
+    | 'tender_result_evidence'
     | 'tender_requirements'
     | 'tender_missing_items'
     | 'tender_risk_flags'
@@ -234,6 +246,51 @@ async function fetchTenderDocumentChunkRowsForDocument(documentId: string) {
   return tenderDocumentChunkRowsSchema.parse(data ?? []);
 }
 
+async function fetchTenderDocumentChunkRowsForPackage(packageId: string) {
+  const client = requireConfiguredSupabase();
+  const { data, error } = await client
+    .from('tender_document_chunks')
+    .select('*')
+    .eq('tender_package_id', packageId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw toRepositoryError(error, 'Tarjouspyyntöpaketin extraction-chunkeja ei voitu ladata.');
+  }
+
+  return tenderDocumentChunkRowsSchema.parse(data ?? []);
+}
+
+async function fetchTenderResultEvidenceRowsForPackage(packageId: string) {
+  return fetchPackageRows({
+    tableName: 'tender_result_evidence',
+    packageId,
+    schema: tenderResultEvidenceRowsSchema,
+    fallbackMessage: 'Tarjouspyyntöpaketin evidence-rivejä ei voitu ladata.',
+  });
+}
+
+async function fetchTenderResultEvidenceRowsForTarget(
+  packageId: string,
+  targetEntityType: TenderResultEvidenceTargetType,
+  targetEntityId: string,
+) {
+  const client = requireConfiguredSupabase();
+  const { data, error } = await client
+    .from('tender_result_evidence')
+    .select('*')
+    .eq('tender_package_id', packageId)
+    .eq('target_entity_type', targetEntityType)
+    .eq('target_entity_id', targetEntityId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw toRepositoryError(error, 'Evidence-rivejä ei voitu ladata valitulle kohteelle.');
+  }
+
+  return tenderResultEvidenceRowsSchema.parse(data ?? []);
+}
+
 async function fetchPackageResultCounts(
   tableName:
     | 'tender_documents'
@@ -272,6 +329,7 @@ async function fetchPackageResultCounts(
 
 async function deletePackageRows(
   tableName:
+    | 'tender_result_evidence'
     | 'tender_review_tasks'
     | 'tender_draft_artifacts'
     | 'tender_reference_suggestions'
@@ -299,6 +357,54 @@ async function deleteDocumentRows(
 
   if (error) {
     throw toRepositoryError(error, fallbackMessage);
+  }
+}
+
+async function insertTenderResultEvidenceRows<TSeed extends { evidenceLinks: PlaceholderResultEvidenceLinkSeed[] }>(options: {
+  client: ReturnType<typeof requireSupabase>;
+  packageId: string;
+  targetEntityType: TenderResultEvidenceTargetType;
+  targetRows: { id: string }[];
+  seeds: TSeed[];
+  evidenceSources: PlaceholderEvidenceSourceSeed[];
+  fallbackMessage: string;
+}) {
+  const payload = options.seeds.flatMap((seed, index) => {
+    const targetId = options.targetRows[index]?.id;
+
+    if (!targetId) {
+      return [];
+    }
+
+    return seed.evidenceLinks.flatMap((link) => {
+      const source = options.evidenceSources[link.sourceIndex];
+
+      if (!source) {
+        return [];
+      }
+
+      return {
+        tender_package_id: options.packageId,
+        source_document_id: source.documentId,
+        extraction_id: source.extractionId,
+        chunk_id: source.chunkId,
+        target_entity_type: options.targetEntityType,
+        target_entity_id: targetId,
+        excerpt_text: source.excerptText,
+        locator_text: source.locatorText,
+        confidence: link.confidence,
+      };
+    });
+  });
+
+  if (payload.length < 1) {
+    return;
+  }
+
+  const { error } = await options.client.from('tender_result_evidence').insert(payload);
+
+  if (error) {
+    throw toRepositoryError(error, options.fallbackMessage);
   }
 }
 
@@ -333,6 +439,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
   private async clearAnalysisResults(packageId: string, emitAfter: boolean) {
     await assertTenderPackageAccess(packageId);
 
+    await deletePackageRows('tender_result_evidence', packageId, 'Analyysin evidence-rivejä ei voitu poistaa paketilta.');
     await deletePackageRows('tender_review_tasks', packageId, 'Tarkistustehtäviä ei voitu poistaa paketilta.');
     await deletePackageRows('tender_draft_artifacts', packageId, 'Luonnosartefakteja ei voitu poistaa paketilta.');
     await deletePackageRows('tender_reference_suggestions', packageId, 'Referenssiehdotuksia ei voitu poistaa paketilta.');
@@ -364,6 +471,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     const client = requireConfiguredSupabase();
     const packageRow = await assertTenderPackageAccess(packageId);
     const documentRows = await fetchTenderDocumentRowsForPackage(packageId);
+    const chunkRows = await fetchTenderDocumentChunkRowsForPackage(packageId);
 
     if (documentRows.length === 0) {
       throw new Error('Analyysiä ei voi kirjoittaa ilman paketin dokumentteja.');
@@ -372,6 +480,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     const plan = buildPlaceholderAnalysisSeedPlan({
       packageRow,
       documentRows,
+      chunkRows,
     });
 
     try {
@@ -398,6 +507,15 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       }
 
       const requirementRows = tenderRequirementRowsSchema.parse(requirementData ?? []);
+      await insertTenderResultEvidenceRows({
+        client,
+        packageId,
+        targetEntityType: 'requirement',
+        targetRows: requirementRows,
+        seeds: plan.requirements,
+        evidenceSources: plan.evidenceSources,
+        fallbackMessage: 'Vaatimusten evidence-rivejä ei voitu tallentaa.',
+      });
 
       const { data: missingItemData, error: missingItemError } = await client
         .from('tender_missing_items')
@@ -419,6 +537,15 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       }
 
       const missingItemRows = tenderMissingItemRowsSchema.parse(missingItemData ?? []);
+      await insertTenderResultEvidenceRows({
+        client,
+        packageId,
+        targetEntityType: 'missing_item',
+        targetRows: missingItemRows,
+        seeds: plan.missingItems,
+        evidenceSources: plan.evidenceSources,
+        fallbackMessage: 'Puuterivien evidence-rivejä ei voitu tallentaa.',
+      });
 
       const { data: riskFlagData, error: riskFlagError } = await client
         .from('tender_risk_flags')
@@ -439,6 +566,15 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       }
 
       const riskFlagRows = tenderRiskFlagRowsSchema.parse(riskFlagData ?? []);
+      await insertTenderResultEvidenceRows({
+        client,
+        packageId,
+        targetEntityType: 'risk_flag',
+        targetRows: riskFlagRows,
+        seeds: plan.riskFlags,
+        evidenceSources: plan.evidenceSources,
+        fallbackMessage: 'Riskirivien evidence-rivejä ei voitu tallentaa.',
+      });
 
       const { data: referenceSuggestionData, error: referenceSuggestionError } = await client
         .from('tender_reference_suggestions')
@@ -459,6 +595,15 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       }
 
       const referenceSuggestionRows = tenderReferenceSuggestionRowsSchema.parse(referenceSuggestionData ?? []);
+      await insertTenderResultEvidenceRows({
+        client,
+        packageId,
+        targetEntityType: 'reference_suggestion',
+        targetRows: referenceSuggestionRows,
+        seeds: plan.referenceSuggestions,
+        evidenceSources: plan.evidenceSources,
+        fallbackMessage: 'Referenssien evidence-rivejä ei voitu tallentaa.',
+      });
 
       const { data: draftArtifactData, error: draftArtifactError } = await client
         .from('tender_draft_artifacts')
@@ -478,6 +623,15 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       }
 
       const draftArtifactRows = tenderDraftArtifactRowsSchema.parse(draftArtifactData ?? []);
+      await insertTenderResultEvidenceRows({
+        client,
+        packageId,
+        targetEntityType: 'draft_artifact',
+        targetRows: draftArtifactRows,
+        seeds: plan.draftArtifacts,
+        evidenceSources: plan.evidenceSources,
+        fallbackMessage: 'Luonnosartefaktien evidence-rivejä ei voitu tallentaa.',
+      });
 
       const { data: reviewTaskData, error: reviewTaskError } = await client
         .from('tender_review_tasks')
@@ -498,6 +652,15 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       }
 
       const reviewTaskRows = tenderReviewTaskRowsSchema.parse(reviewTaskData ?? []);
+      await insertTenderResultEvidenceRows({
+        client,
+        packageId,
+        targetEntityType: 'review_task',
+        targetRows: reviewTaskRows,
+        seeds: plan.reviewTasks,
+        evidenceSources: plan.evidenceSources,
+        fallbackMessage: 'Tarkistustehtävien evidence-rivejä ei voitu tallentaa.',
+      });
 
       const { data: goNoGoAssessmentData, error: goNoGoAssessmentError } = await client
         .from('tender_go_no_go_assessments')
@@ -599,6 +762,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       const [
         documentRows,
         documentExtractionRows,
+        resultEvidenceRows,
         analysisJobRows,
         requirementRows,
         missingItemRows,
@@ -610,6 +774,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       ] = await Promise.all([
         fetchTenderDocumentRowsForPackage(packageId),
         fetchTenderDocumentExtractionRowsForPackage(packageId),
+        fetchTenderResultEvidenceRowsForPackage(packageId),
         fetchTenderAnalysisJobRowsForPackage(packageId),
         fetchPackageRows({
           tableName: 'tender_requirements',
@@ -660,6 +825,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         packageRow,
         documentRows,
         documentExtractionRows,
+        resultEvidenceRows,
         analysisJobRows,
         requirementRows,
         missingItemRows,
@@ -1163,6 +1329,69 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       return rows.map(mapTenderDocumentChunkRowToDomain);
     } catch (error) {
       throw toRepositoryError(error, 'Dokumentin extraction-chunkeja ei voitu ladata.');
+    }
+  }
+
+  async listEvidenceForPackage(packageId: string): Promise<TenderResultEvidence[]> {
+    try {
+      await assertTenderPackageAccess(packageId);
+      const rows = await fetchTenderResultEvidenceRowsForPackage(packageId);
+      return rows.map(mapTenderResultEvidenceRowToDomain);
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjouspyyntöpaketin evidence-rivejä ei voitu ladata.');
+    }
+  }
+
+  async listEvidenceForTarget(
+    packageId: string,
+    targetEntityType: TenderResultEvidenceTargetType,
+    targetEntityId: string,
+  ): Promise<TenderResultEvidence[]> {
+    try {
+      await assertTenderPackageAccess(packageId);
+      const rows = await fetchTenderResultEvidenceRowsForTarget(packageId, targetEntityType, targetEntityId);
+      return rows.map(mapTenderResultEvidenceRowToDomain);
+    } catch (error) {
+      throw toRepositoryError(error, 'Valitun kohteen evidence-rivejä ei voitu ladata.');
+    }
+  }
+
+  async getExtractionCoverageForPackage(packageId: string): Promise<TenderExtractionCoverage> {
+    try {
+      await assertTenderPackageAccess(packageId);
+      const [documentRows, documentExtractionRows] = await Promise.all([
+        fetchTenderDocumentRowsForPackage(packageId),
+        fetchTenderDocumentExtractionRowsForPackage(packageId),
+      ]);
+
+      return buildTenderExtractionCoverage({
+        documents: documentRows.map(mapTenderDocumentRowToDomain),
+        documentExtractions: documentExtractionRows.map(mapTenderDocumentExtractionRowToDomain),
+      });
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjouspyyntöpaketin extraction-kattavuutta ei voitu laskea.');
+    }
+  }
+
+  async getAnalysisReadinessForPackage(packageId: string): Promise<TenderAnalysisReadiness> {
+    try {
+      await assertTenderPackageAccess(packageId);
+      const [documentRows, documentExtractionRows, analysisJobRows] = await Promise.all([
+        fetchTenderDocumentRowsForPackage(packageId),
+        fetchTenderDocumentExtractionRowsForPackage(packageId),
+        fetchTenderAnalysisJobRowsForPackage(packageId),
+      ]);
+      const latestAnalysisJob = analysisJobRows
+        .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
+        .map(mapTenderAnalysisJobRowToDomain)[0] ?? null;
+
+      return buildTenderAnalysisReadiness({
+        documents: documentRows.map(mapTenderDocumentRowToDomain),
+        documentExtractions: documentExtractionRows.map(mapTenderDocumentExtractionRowToDomain),
+        latestAnalysisJob,
+      });
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjouspyyntöpaketin analyysivalmiutta ei voitu laskea.');
     }
   }
 

@@ -33,6 +33,11 @@ interface ResultCardProps {
   children: React.ReactNode;
 }
 
+interface ResultEvidencePreviewProps {
+  evidence: TenderPackageDetails['resultEvidence'];
+  documentNameById: Map<string, string>;
+}
+
 function ResultCard({
   icon: Icon,
   title,
@@ -63,7 +68,51 @@ function ResultCard({
   );
 }
 
+function ResultEvidencePreview({ evidence, documentNameById }: ResultEvidencePreviewProps) {
+  if (evidence.length < 1) {
+    return null;
+  }
+
+  const previewItems = evidence.slice(0, 2);
+  const remainingCount = evidence.length - previewItems.length;
+
+  return (
+    <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-3 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Evidence</p>
+        <Badge variant="outline">{formatCountLabel(evidence.length, 'lähde', 'lähdettä')}</Badge>
+      </div>
+      <div className="mt-3 space-y-2">
+        {previewItems.map((item) => (
+          <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">{documentNameById.get(item.sourceDocumentId) ?? 'Dokumentti'}</Badge>
+              {item.locatorText && <span className="text-xs text-muted-foreground">{item.locatorText}</span>}
+              <span className="text-xs text-muted-foreground">Luottamus {formatTenderConfidence(item.confidence)}</span>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-700">{item.excerptText}</p>
+          </div>
+        ))}
+      </div>
+      {remainingCount > 0 && <p className="mt-3 text-xs leading-5 text-muted-foreground">+ {remainingCount} muuta evidence-riviä</p>}
+    </div>
+  );
+}
+
 export default function TenderResultPanels({ selectedPackage }: { selectedPackage: TenderPackageDetails }) {
+  const documentNameById = new Map(selectedPackage.documents.map((document) => [document.id, document.fileName]));
+  const evidenceByTarget = new Map<string, TenderPackageDetails['resultEvidence']>();
+
+  selectedPackage.resultEvidence.forEach((item) => {
+    const key = `${item.targetEntityType}:${item.targetEntityId}`;
+    const current = evidenceByTarget.get(key) ?? [];
+    current.push(item);
+    evidenceByTarget.set(key, current);
+  });
+
+  const getTargetEvidence = (targetEntityType: string, targetEntityId: string) =>
+    evidenceByTarget.get(`${targetEntityType}:${targetEntityId}`) ?? [];
+
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       <ResultCard
@@ -88,6 +137,7 @@ export default function TenderResultPanels({ selectedPackage }: { selectedPackag
               <p className="mt-3 text-sm font-medium text-slate-950">{requirement.title}</p>
               {requirement.description && <p className="mt-2 text-sm leading-6 text-slate-700">{requirement.description}</p>}
               {requirement.sourceExcerpt && <p className="mt-2 text-xs leading-5 text-muted-foreground">{requirement.sourceExcerpt}</p>}
+              <ResultEvidencePreview evidence={getTargetEvidence('requirement', requirement.id)} documentNameById={documentNameById} />
             </div>
           );
         })}
@@ -115,6 +165,7 @@ export default function TenderResultPanels({ selectedPackage }: { selectedPackag
               </div>
               <p className="mt-3 text-sm font-medium text-slate-950">{item.title}</p>
               {item.description && <p className="mt-2 text-sm leading-6 text-slate-700">{item.description}</p>}
+              <ResultEvidencePreview evidence={getTargetEvidence('missing_item', item.id)} documentNameById={documentNameById} />
             </div>
           );
         })}
@@ -142,6 +193,7 @@ export default function TenderResultPanels({ selectedPackage }: { selectedPackag
               </div>
               <p className="mt-3 text-sm font-medium text-slate-950">{riskFlag.title}</p>
               {riskFlag.description && <p className="mt-2 text-sm leading-6 text-slate-700">{riskFlag.description}</p>}
+              <ResultEvidencePreview evidence={getTargetEvidence('risk_flag', riskFlag.id)} documentNameById={documentNameById} />
             </div>
           );
         })}
@@ -167,6 +219,7 @@ export default function TenderResultPanels({ selectedPackage }: { selectedPackag
               <p className="mt-3 text-sm font-medium text-slate-950">{suggestion.title}</p>
               {suggestion.sourceReference && <p className="mt-2 text-xs leading-5 text-muted-foreground">Lähde: {suggestion.sourceReference}</p>}
               {suggestion.rationale && <p className="mt-2 text-sm leading-6 text-slate-700">{suggestion.rationale}</p>}
+              <ResultEvidencePreview evidence={getTargetEvidence('reference_suggestion', suggestion.id)} documentNameById={documentNameById} />
             </div>
           );
         })}
@@ -193,6 +246,7 @@ export default function TenderResultPanels({ selectedPackage }: { selectedPackag
               </div>
               <p className="mt-3 text-sm font-medium text-slate-950">{artifact.title}</p>
               {artifact.contentMd && <p className="mt-2 text-sm leading-6 text-slate-700">{getTenderTextPreview(artifact.contentMd, 220)}</p>}
+              <ResultEvidencePreview evidence={getTargetEvidence('draft_artifact', artifact.id)} documentNameById={documentNameById} />
             </div>
           );
         })}
@@ -218,6 +272,7 @@ export default function TenderResultPanels({ selectedPackage }: { selectedPackag
               </div>
               <p className="mt-3 text-sm font-medium text-slate-950">{task.title}</p>
               {task.description && <p className="mt-2 text-sm leading-6 text-slate-700">{task.description}</p>}
+              <ResultEvidencePreview evidence={getTargetEvidence('review_task', task.id)} documentNameById={documentNameById} />
             </div>
           );
         })}
