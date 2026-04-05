@@ -1,5 +1,6 @@
 import { ArrowSquareOut, Sparkle, WarningCircle } from '@phosphor-icons/react';
 
+import type { TenderIntelligenceQuoteEditorHandoffLink } from '../../features/tender-intelligence/lib/tender-intelligence-handoff';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -20,7 +21,7 @@ export interface QuoteTenderImportSourceSummary {
 interface QuoteTenderImportInspectorProps {
   diagnostics: QuoteTenderManagedSurfaceDiagnostics;
   source?: QuoteTenderImportSourceSummary | null;
-  tenderIntelligenceUrl?: string | null;
+  tenderIntelligenceLink?: TenderIntelligenceQuoteEditorHandoffLink | null;
 }
 
 function resolveHealthMeta(status: QuoteTenderManagedSurfaceHealthStatus) {
@@ -80,7 +81,7 @@ function resolveBlockTargetLabel(block: QuoteTenderManagedBlockDiagnostics) {
 export default function QuoteTenderImportInspector({
   diagnostics,
   source = null,
-  tenderIntelligenceUrl = null,
+  tenderIntelligenceLink = null,
 }: QuoteTenderImportInspectorProps) {
   if (!diagnostics.has_tarjousaly_managed_surface) {
     return null;
@@ -111,11 +112,11 @@ export default function QuoteTenderImportInspector({
             </div>
           </div>
 
-          {tenderIntelligenceUrl && (
+          {tenderIntelligenceLink && (
             <Button asChild variant="outline" size="sm">
-              <a href={tenderIntelligenceUrl}>
+              <a href={tenderIntelligenceLink.url}>
                 <ArrowSquareOut className="h-4 w-4" />
-                Avaa Tarjousäly
+                {tenderIntelligenceLink.label}
               </a>
             </Button>
           )}

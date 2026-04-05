@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowSquareOut, CheckCircle, FloppyDisk, WarningCircle, XCircle } from '@phosphor-icons/react';
 
+import type { TenderIntelligenceQuoteEditorHandoffLink } from '../../features/tender-intelligence/lib/tender-intelligence-handoff';
 import type { QuoteTenderManagedEditorState } from '../../features/tender-intelligence/lib/quote-managed-surface-inspector';
 import { resolveQuoteTenderManagedSaveGuardDecision } from '../../features/tender-intelligence/lib/quote-managed-surface-inspector';
 import { cn } from '../../lib/utils';
@@ -12,7 +13,7 @@ interface QuoteManagedSaveGuardProps {
   state: QuoteTenderManagedEditorState;
   isEditable: boolean;
   onSave: () => void;
-  tenderIntelligenceUrl?: string | null;
+  tenderIntelligenceLink?: TenderIntelligenceQuoteEditorHandoffLink | null;
 }
 
 function resolveStatusMeta(status: QuoteTenderManagedEditorState['status']) {
@@ -64,7 +65,7 @@ export default function QuoteManagedSaveGuard({
   state,
   isEditable,
   onSave,
-  tenderIntelligenceUrl = null,
+  tenderIntelligenceLink = null,
 }: QuoteManagedSaveGuardProps) {
   const [warningConfirmationRequested, setWarningConfirmationRequested] = useState(false);
   const statusMeta = useMemo(() => resolveStatusMeta(state.status), [state.status]);
@@ -115,11 +116,11 @@ export default function QuoteManagedSaveGuard({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {state.status === 'danger' && tenderIntelligenceUrl && (
+            {state.status === 'danger' && tenderIntelligenceLink && (
               <Button asChild size="sm" variant="outline">
-                <a href={tenderIntelligenceUrl}>
+                <a href={tenderIntelligenceLink.url}>
                   <ArrowSquareOut className="h-4 w-4" />
-                  Palaa Tarjousälyyn
+                  {tenderIntelligenceLink.label}
                 </a>
               </Button>
             )}

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import { buildTenderIntelligenceQuoteEditorHandoff } from '../../features/tender-intelligence/lib/tender-intelligence-handoff';
 import type { QuoteTenderManagedEditorState } from '../../features/tender-intelligence/lib/quote-managed-surface-inspector';
 import QuoteManagedSaveGuard from './QuoteManagedSaveGuard';
 
@@ -31,6 +32,14 @@ function createState(
   };
 }
 
+const repairLink = buildTenderIntelligenceQuoteEditorHandoff({
+  tenderPackageId: '11111111-1111-4111-8111-111111111111',
+  draftPackageId: '66666666-6666-4666-8666-666666666666',
+  importedQuoteId: '77777777-7777-4777-8777-777777777777',
+  intent: 'repair-managed-import',
+  blockIds: ['requirements_and_quote_notes'],
+});
+
 describe('QuoteManagedSaveGuard', () => {
   it('renders a clean managed summary and save action', () => {
     const markup = renderToStaticMarkup(
@@ -38,7 +47,7 @@ describe('QuoteManagedSaveGuard', () => {
         state={createState('clean')}
         isEditable
         onSave={() => undefined}
-        tenderIntelligenceUrl="/app/tarjousaly"
+        tenderIntelligenceLink={repairLink}
       />,
     );
 
@@ -53,7 +62,7 @@ describe('QuoteManagedSaveGuard', () => {
         state={createState('warning')}
         isEditable
         onSave={() => undefined}
-        tenderIntelligenceUrl="/app/tarjousaly"
+        tenderIntelligenceLink={repairLink}
       />,
     );
 
@@ -68,13 +77,14 @@ describe('QuoteManagedSaveGuard', () => {
         state={createState('danger')}
         isEditable
         onSave={() => undefined}
-        tenderIntelligenceUrl="/app/tarjousaly"
+        tenderIntelligenceLink={repairLink}
       />,
     );
 
     expect(markup).toContain('Tarjousälyn hallinnoitu sisältö on rikkoutunut');
     expect(markup).toContain('Normaali tallennus on estetty');
-    expect(markup).toContain('Palaa Tarjousälyyn');
+    expect(markup).toContain('Korjaa Tarjousälyn hallittu sisältö');
+    expect(markup).toContain('intent=repair-managed-import');
     expect(markup).not.toContain('Tallenna luonnos');
   });
 });

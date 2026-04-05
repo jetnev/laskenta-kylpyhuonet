@@ -44,6 +44,7 @@ import type {
   TenderPackageDetails,
   UpdateTenderDraftPackageItemInput,
 } from '../types/tender-intelligence';
+import type { TenderIntelligenceResolvedHandoff } from '../lib/tender-intelligence-handoff';
 
 interface TenderDraftPackagePanelProps {
   selectedPackage: TenderPackageDetails;
@@ -65,6 +66,7 @@ interface TenderDraftPackagePanelProps {
   reviewingDraftPackageId?: string | null;
   exportingDraftPackageId?: string | null;
   updatingDraftPackageItemIds?: string[];
+  editorHandoff?: TenderIntelligenceResolvedHandoff | null;
   onSelectDraftPackage: (draftPackageId: string) => void;
   onCreateDraftPackage: (packageId: string) => Promise<unknown>;
   onImportDraftPackageToEditor: (draftPackageId: string) => Promise<unknown>;
@@ -259,6 +261,7 @@ export default function TenderDraftPackagePanel({
   reviewingDraftPackageId = null,
   exportingDraftPackageId = null,
   updatingDraftPackageItemIds = [],
+  editorHandoff = null,
   onSelectDraftPackage,
   onCreateDraftPackage,
   onImportDraftPackageToEditor,
@@ -311,6 +314,7 @@ export default function TenderDraftPackagePanel({
   const [selectedRemoveBlockIds, setSelectedRemoveBlockIds] = useState<TenderEditorManagedBlockId[]>([]);
   const [selectedOverrideConflictBlockIds, setSelectedOverrideConflictBlockIds] = useState<TenderEditorManagedBlockId[]>([]);
   const [confirmSelectiveReimport, setConfirmSelectiveReimport] = useState(false);
+  const [activeTab, setActiveTab] = useState<'included' | 'excluded' | 'payload' | 'import'>(editorHandoff?.isActive ? 'import' : 'included');
   const selectedUpdateBlockIdSet = useMemo(() => new Set(selectedUpdateBlockIds), [selectedUpdateBlockIds]);
   const selectedRemoveBlockIdSet = useMemo(() => new Set(selectedRemoveBlockIds), [selectedRemoveBlockIds]);
   const selectedOverrideConflictBlockIdSet = useMemo(() => new Set(selectedOverrideConflictBlockIds), [selectedOverrideConflictBlockIds]);
@@ -364,6 +368,10 @@ export default function TenderDraftPackagePanel({
     selectedDraftPackage?.id,
   ]);
 
+  useEffect(() => {
+    setActiveTab(editorHandoff?.isActive ? 'import' : 'included');
+  }, [editorHandoff?.isActive, editorHandoff?.resolvedDraftPackageId, selectedDraftPackage?.id]);
+
   return (
     <Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
       <CardHeader className="border-b">
@@ -376,6 +384,25 @@ export default function TenderDraftPackagePanel({
             <CardDescription>
               Tämä vaihe rajaa Tarjousälyn hallitsemat editorilohkot eksplisiittisesti, näyttää niiden block-level diffit ja päivittää re-importissa vain adapterin varmasti omistaman notes-, internalNotes- ja section-pinnan.
             </CardDescription>
+            {editorHandoff?.isActive && editorHandoff.title && editorHandoff.description && (
+              <div className={[
+                'rounded-2xl border px-4 py-4 text-sm leading-6',
+                editorHandoff.bannerTone === 'warning'
+                  ? 'border-amber-200 bg-amber-50 text-amber-950'
+                  : 'border-sky-200 bg-sky-50 text-sky-950',
+              ].join(' ')}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">QuoteEditor handoff</Badge>
+                  {editorHandoff.ctaLabel && <Badge variant="outline">{editorHandoff.ctaLabel}</Badge>}
+                  {editorHandoff.focusedBlockIds.length > 0 && <Badge variant="outline">{editorHandoff.focusedBlockIds.length} kohdeblokkia</Badge>}
+                </div>
+                <div className="mt-2 font-medium">{editorHandoff.title}</div>
+                <p className="mt-1">{editorHandoff.description}</p>
+                {editorHandoff.focusedBlockIds.length > 0 && (
+                  <p className="mt-2 text-xs opacity-80">Kohdistetut blockit: {editorHandoff.focusedBlockIds.join(', ')}</p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2 lg:justify-end">
@@ -585,7 +612,7 @@ export default function TenderDraftPackagePanel({
               </div>
             </div>
 
-            <Tabs defaultValue="included" className="space-y-4">
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)} className="space-y-4">
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="included">Mukana ({includedItems.length})</TabsTrigger>
                 <TabsTrigger value="excluded">Ulkona ({excludedItems.length})</TabsTrigger>
@@ -725,6 +752,18 @@ export default function TenderDraftPackagePanel({
               <TabsContent value="import" className="space-y-4" forceMount>
                 {editorImportPreview ? (
                   <>
+                    {editorHandoff?.isActive && editorHandoff.title && (
+                      <div className={[
+                        'rounded-2xl border px-4 py-4 text-sm leading-6',
+                        editorHandoff.bannerTone === 'warning'
+                          ? 'border-amber-200 bg-amber-50 text-amber-950'
+                          : 'border-sky-200 bg-sky-50 text-sky-950',
+                      ].join(' ')}>
+                        <div className="font-medium">QuoteEditor avasi tämän import-kontekstin suoraan lähdeluonnoksesta</div>
+                        <p className="mt-1">{editorHandoff.description}</p>
+                      </div>
+                    )}
+
                     <div className="grid gap-4 xl:grid-cols-2">
                       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                         <div className="flex items-center gap-2 text-sm font-medium text-slate-950">

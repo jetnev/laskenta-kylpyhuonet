@@ -615,7 +615,7 @@ function App() {
           {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigateLocation} />}
           {currentPage === 'help' && <HelpPage onNavigate={handleNavigatePage} />}
           {currentPage === 'projects' && <ProjectsPage routeState={currentLocation} onNavigate={handleNavigateLocation} />}
-          {currentPage === 'tender-intelligence' && <TenderIntelligencePage onNavigate={handleNavigateLocation} />}
+          {currentPage === 'tender-intelligence' && <TenderIntelligencePage routeState={currentLocation} onNavigate={handleNavigateLocation} />}
           {currentPage === 'invoices' && <InvoicesPage routeState={currentLocation} onNavigate={handleNavigateLocation} />}
           {currentPage === 'products' && <ProductsPage />}
           {currentPage === 'installation-groups' && <InstallationGroupsPage />}

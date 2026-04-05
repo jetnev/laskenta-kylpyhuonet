@@ -1,5 +1,6 @@
 import { ArrowSquareOut, WarningCircle, XCircle } from '@phosphor-icons/react';
 
+import type { TenderIntelligenceQuoteEditorHandoffLink } from '../../features/tender-intelligence/lib/tender-intelligence-handoff';
 import type { QuoteTenderManagedEditorStateStatus } from '../../features/tender-intelligence/lib/quote-managed-surface-inspector';
 import { cn } from '../../lib/utils';
 import { Badge } from '../ui/badge';
@@ -13,7 +14,7 @@ export interface QuoteManagedInterceptionDialogRequest {
   issueMessages?: string[];
   confirmLabel?: string;
   closeLabel?: string;
-  tenderIntelligenceUrl?: string | null;
+  tenderIntelligenceLink?: TenderIntelligenceQuoteEditorHandoffLink | null;
 }
 
 interface QuoteManagedInterceptionDialogContentProps {
@@ -105,11 +106,11 @@ export default function QuoteManagedInterceptionDialogContent({
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button variant="outline" onClick={onClose}>{request.closeLabel ?? 'Peru'}</Button>
         {request.status === 'danger' ? (
-          request.tenderIntelligenceUrl ? (
+          request.tenderIntelligenceLink ? (
             <Button asChild>
-              <a href={request.tenderIntelligenceUrl}>
+              <a href={request.tenderIntelligenceLink.url}>
                 <ArrowSquareOut className="h-4 w-4" />
-                Palaa Tarjousälyyn
+                {request.tenderIntelligenceLink.label}
               </a>
             </Button>
           ) : null

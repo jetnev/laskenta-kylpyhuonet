@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import { buildTenderIntelligenceQuoteEditorHandoff } from '../../features/tender-intelligence/lib/tender-intelligence-handoff';
 import QuoteManagedSectionBadge from './QuoteManagedSectionBadge';
 import QuoteTenderImportInspector from './QuoteTenderImportInspector';
 import type { QuoteTenderManagedSurfaceDiagnostics } from '../../features/tender-intelligence/lib/quote-managed-surface-inspector';
@@ -70,8 +71,18 @@ function createDiagnostics(overrides: Partial<QuoteTenderManagedSurfaceDiagnosti
   };
 }
 
+function createHandoffLink(intent: 'open-source-draft' | 'reimport-managed-import' | 'repair-managed-import') {
+  return buildTenderIntelligenceQuoteEditorHandoff({
+    tenderPackageId: '11111111-1111-4111-8111-111111111111',
+    draftPackageId: '66666666-6666-4666-8666-666666666666',
+    importedQuoteId: '77777777-7777-4777-8777-777777777777',
+    intent,
+    blockIds: ['requirements_and_quote_notes', 'notes_for_editor'],
+  });
+}
+
 describe('QuoteTenderImportInspector', () => {
-  it('renders source details, transparency guidance, and managed block summary', () => {
+  it('renders source details, transparency guidance, and reimport CTA', () => {
     const markup = renderToStaticMarkup(
       <QuoteTenderImportInspector
         diagnostics={createDiagnostics()}
@@ -81,17 +92,36 @@ describe('QuoteTenderImportInspector', () => {
           tenderPackageId: '11111111-1111-4111-8111-111111111111',
           tenderPackageTitle: 'Kylpyhuoneen tarjouspyyntö',
         }}
-        tenderIntelligenceUrl="/app/tarjousaly"
+        tenderIntelligenceLink={createHandoffLink('reimport-managed-import')}
       />,
     );
 
     expect(markup).toContain('Tarjousäly-importti');
     expect(markup).toContain('Kylpyhuone / draft package');
     expect(markup).toContain('Kylpyhuoneen tarjouspyyntö');
-    expect(markup).toContain('Avaa Tarjousäly');
+    expect(markup).toContain('Palaa hallittuun importtiin');
+    expect(markup).toContain('intent=reimport-managed-import');
     expect(markup).toContain('Tee päivitykset Tarjousälyn draft package / re-import -näkymästä');
     expect(markup).toContain('Tarjoushuomiot');
     expect(markup).toContain('Sisäiset editorihuomiot');
+  });
+
+  it('renders a source-draft CTA when the editor points back to the original draft', () => {
+    const markup = renderToStaticMarkup(
+      <QuoteTenderImportInspector
+        diagnostics={createDiagnostics({ health_status: 'clean', probable_drift_blocks_total: 0 })}
+        source={{
+          draftPackageId: '66666666-6666-4666-8666-666666666666',
+          draftPackageTitle: 'Kylpyhuone / draft package',
+          tenderPackageId: '11111111-1111-4111-8111-111111111111',
+          tenderPackageTitle: 'Kylpyhuoneen tarjouspyyntö',
+        }}
+        tenderIntelligenceLink={createHandoffLink('open-source-draft')}
+      />,
+    );
+
+    expect(markup).toContain('Avaa lähdeluonnos Tarjousälyssä');
+    expect(markup).toContain('intent=open-source-draft');
   });
 
   it('does not render when the quote has no managed Tarjousaly surface', () => {

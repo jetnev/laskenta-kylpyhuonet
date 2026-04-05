@@ -39,6 +39,7 @@ import type {
   UpdateTenderReferenceProfileInput,
   UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
+import type { TenderIntelligenceResolvedHandoff } from '../lib/tender-intelligence-handoff';
 
 interface TenderPanelProps {
   title: string;
@@ -95,6 +96,7 @@ interface TenderPackageWorkspaceProps {
   workflowUpdatingTargetIds?: string[];
   recomputingReferenceSuggestionPackageId?: string | null;
   error?: string | null;
+  editorHandoff?: TenderIntelligenceResolvedHandoff | null;
   onCreateClick: () => void;
   onStartAnalysis: (packageId: string) => Promise<void>;
   onStartDocumentExtraction: (packageId: string, documentId: string) => Promise<TenderDocumentExtraction>;
@@ -158,6 +160,7 @@ export default function TenderPackageWorkspace({
   workflowUpdatingTargetIds = [],
   recomputingReferenceSuggestionPackageId = null,
   error = null,
+  editorHandoff = null,
   onCreateClick,
   onStartAnalysis,
   onStartDocumentExtraction,
@@ -429,6 +432,7 @@ export default function TenderPackageWorkspace({
         onUpdateDraftPackageItem={onUpdateDraftPackageItem}
         onMarkDraftPackageReviewed={onMarkDraftPackageReviewed}
         onMarkDraftPackageExported={onMarkDraftPackageExported}
+        editorHandoff={editorHandoff}
       />
 
       <TenderDocumentsPanel

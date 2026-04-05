@@ -1,5 +1,5 @@
 import { Plus, Sparkle, Stack } from '@phosphor-icons/react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,12 @@ import TenderPackageList from '../components/TenderPackageList';
 import TenderReferenceCorpusPanel from '../components/TenderReferenceCorpusPanel';
 import TenderPackageWorkspace from '../components/TenderPackageWorkspace';
 import { useTenderIntelligence } from '../hooks/use-tender-intelligence';
+import { getTenderIntelligenceRepository } from '../services/tender-intelligence-repository';
+import {
+  resolveTenderIntelligenceHandoff,
+  resolveTenderIntelligenceHandoffLabel,
+  type TenderIntelligenceResolvedHandoff,
+} from '../lib/tender-intelligence-handoff';
 
 const SUMMARY_CARDS = [
   {
@@ -42,11 +48,29 @@ const SUMMARY_CARDS = [
 ] as const;
 
 interface TenderIntelligencePageProps {
+  routeState?: AppLocationState;
   onNavigate?: (location: AppLocationState, options?: { replace?: boolean }) => void;
 }
 
-export default function TenderIntelligencePage({ onNavigate }: TenderIntelligencePageProps) {
+function createEmptyHandoffState(): TenderIntelligenceResolvedHandoff {
+  return {
+    isActive: false,
+    status: 'none',
+    context: null,
+    resolvedTenderPackageId: null,
+    resolvedDraftPackageId: null,
+    focusedBlockIds: [],
+    bannerTone: 'default',
+    title: null,
+    description: null,
+    ctaLabel: null,
+  };
+}
+
+export default function TenderIntelligencePage({ routeState, onNavigate }: TenderIntelligencePageProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [editorHandoff, setEditorHandoff] = useState<TenderIntelligenceResolvedHandoff>(() => createEmptyHandoffState());
+  const repository = useMemo(() => getTenderIntelligenceRepository(), []);
   const {
     packages,
     draftPackages,
@@ -115,6 +139,78 @@ export default function TenderIntelligencePage({ onNavigate }: TenderIntelligenc
     updateReviewTaskWorkflow,
   } = useTenderIntelligence();
 
+  useEffect(() => {
+    let active = true;
+
+    const resolveRouteHandoff = async () => {
+      if (!routeState) {
+        if (active) {
+          setEditorHandoff(createEmptyHandoffState());
+        }
+        return;
+      }
+
+      const tenderPackageId = routeState.tenderContext?.tenderPackageId;
+      const draftPackageId = routeState.tenderContext?.draftPackageId;
+
+      try {
+        const [tenderPackage, draftPackage] = await Promise.all([
+          tenderPackageId ? repository.getTenderPackageById(tenderPackageId) : Promise.resolve(null),
+          draftPackageId ? repository.getDraftPackageById(draftPackageId) : Promise.resolve(null),
+        ]);
+
+        if (active) {
+          setEditorHandoff(resolveTenderIntelligenceHandoff(routeState, {
+            tenderPackage: tenderPackage?.package ?? null,
+            draftPackage,
+          }));
+        }
+      } catch {
+        if (active) {
+          setEditorHandoff({
+            isActive: true,
+            status: 'missing_context',
+            context: routeState.tenderContext ?? null,
+            resolvedTenderPackageId: routeState.tenderContext?.tenderPackageId ?? null,
+            resolvedDraftPackageId: routeState.tenderContext?.draftPackageId ?? null,
+            focusedBlockIds: (routeState.tenderContext?.blockIds ?? []) as TenderIntelligenceResolvedHandoff['focusedBlockIds'],
+            bannerTone: 'warning',
+            title: 'Editorin lähdekontekstia ei voitu tarkistaa',
+            description: 'Tarjousäly avattiin editorista, mutta lähdedraftin tarkistaminen epäonnistui. Työtila pysyy ehjänä ja voit valita luonnoksen myös käsin.',
+            ctaLabel: routeState.tenderContext?.intent
+              ? resolveTenderIntelligenceHandoffLabel(routeState.tenderContext.intent)
+              : null,
+          });
+        }
+      }
+    };
+
+    void resolveRouteHandoff();
+
+    return () => {
+      active = false;
+    };
+  }, [repository, routeState]);
+
+  useEffect(() => {
+    if (!editorHandoff.isActive) {
+      return;
+    }
+
+    if (editorHandoff.resolvedTenderPackageId && selectedPackageId !== editorHandoff.resolvedTenderPackageId) {
+      selectPackage(editorHandoff.resolvedTenderPackageId);
+      return;
+    }
+
+    if (
+      editorHandoff.resolvedDraftPackageId
+      && selectedPackageId === editorHandoff.resolvedTenderPackageId
+      && selectedDraftPackageId !== editorHandoff.resolvedDraftPackageId
+    ) {
+      selectDraftPackage(editorHandoff.resolvedDraftPackageId);
+    }
+  }, [editorHandoff, selectDraftPackage, selectPackage, selectedDraftPackageId, selectedPackageId]);
+
   const openImportedQuote = useCallback((projectId: string, quoteId: string) => {
     onNavigate?.({
       page: 'projects',
@@ -166,6 +262,18 @@ export default function TenderIntelligencePage({ onNavigate }: TenderIntelligenc
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
+        </div>
+      )}
+
+      {editorHandoff.isActive && editorHandoff.title && editorHandoff.description && (editorHandoff.status !== 'ready' || !selectedPackage || !selectedDraftPackageId || selectedDraftPackageId === editorHandoff.resolvedDraftPackageId) && (
+        <div className={[
+          'rounded-2xl border px-4 py-4 text-sm leading-6',
+          editorHandoff.bannerTone === 'warning'
+            ? 'border-amber-200 bg-amber-50 text-amber-950'
+            : 'border-sky-200 bg-sky-50 text-sky-950',
+        ].join(' ')}>
+          <div className="font-medium">{editorHandoff.title}</div>
+          <p className="mt-1">{editorHandoff.description}</p>
         </div>
       )}
 
@@ -261,6 +369,7 @@ export default function TenderIntelligencePage({ onNavigate }: TenderIntelligenc
           onUpdateMissingItem={updateMissingItemWorkflow}
           onUpdateRiskFlag={updateRiskFlagWorkflow}
           onUpdateReviewTask={updateReviewTaskWorkflow}
+          editorHandoff={editorHandoff}
         />
       </div>
 

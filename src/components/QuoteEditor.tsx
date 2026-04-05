@@ -85,20 +85,26 @@ import {
   exportQuoteToInternalExcel,
   exportQuoteToPDF,
 } from '../lib/export';
-import { buildAppUrl } from '../lib/app-routing';
 import { getQuoteCompletionChecklist, getQuoteEditorSteps, type QuoteEditorStepId } from '../lib/quote-editor-ux';
 import { getResponsibleUserLabel } from '../lib/ownership';
 import { resolveQuoteTermsSnapshotTemplate, resolveTermTemplatePlaceholders } from '../lib/term-templates';
+import {
+  buildTenderIntelligenceQuoteEditorHandoff,
+  type TenderIntelligenceHandoffIntent,
+  type TenderIntelligenceQuoteEditorHandoffLink,
+} from '../features/tender-intelligence/lib/tender-intelligence-handoff';
 import {
   inspectQuoteTenderManagedSurface,
   resolveQuoteTenderManagedActionGuardDecision,
   resolveQuoteTenderManagedEditGuardDecision,
   resolveQuoteTenderManagedEditTarget,
   type QuoteTenderManagedEditTarget,
+  type QuoteTenderManagedSurfaceHealthStatus,
   resolveQuoteTenderManagedEditorState,
   resolveQuoteTenderManagedSectionState,
 } from '../features/tender-intelligence/lib/quote-managed-surface-inspector';
 import { getTenderIntelligenceRepository } from '../features/tender-intelligence/services/tender-intelligence-repository';
+import type { TenderEditorManagedBlockId } from '../features/tender-intelligence/types/tender-editor-import';
 
 interface QuoteEditorProps {
   projectId: string;
@@ -350,9 +356,50 @@ function formatManagedScopeLabel(titles: string[]) {
   return `${uniqueTitles.length} Tarjousälyn hallinnoimaa lohkoa`;
 }
 
+function normalizeManagedBlockIds(blockIds?: string[] | null) {
+  if (!blockIds || blockIds.length === 0) {
+    return [];
+  }
+
+  return [...new Set(blockIds.map((blockId) => blockId.trim()).filter(Boolean))] as TenderEditorManagedBlockId[];
+}
+
+function createTenderIntelligenceHandoffLink(options: {
+  quoteId: string;
+  source: QuoteTenderImportSourceSummary | null;
+  intent: TenderIntelligenceHandoffIntent;
+  blockIds?: string[];
+}): TenderIntelligenceQuoteEditorHandoffLink | null {
+  if (!options.source?.tenderPackageId || !options.source.draftPackageId) {
+    return null;
+  }
+
+  return buildTenderIntelligenceQuoteEditorHandoff({
+    tenderPackageId: options.source.tenderPackageId,
+    draftPackageId: options.source.draftPackageId,
+    importedQuoteId: options.quoteId,
+    intent: options.intent,
+    blockIds: normalizeManagedBlockIds(options.blockIds),
+  });
+}
+
+function resolveInspectorHandoffIntent(
+  healthStatus: QuoteTenderManagedSurfaceHealthStatus,
+): TenderIntelligenceHandoffIntent {
+  if (healthStatus === 'inconsistent') {
+    return 'repair-managed-import';
+  }
+
+  if (healthStatus === 'needs_attention') {
+    return 'reimport-managed-import';
+  }
+
+  return 'open-source-draft';
+}
+
 function buildManagedEditGuardRequest(
   target: QuoteTenderManagedEditTarget,
-  tenderIntelligenceUrl: string | null,
+  tenderIntelligenceLink: TenderIntelligenceQuoteEditorHandoffLink | null,
 ): QuoteManagedInterceptionDialogRequest {
   const managedScope = formatManagedScopeLabel(target.titles);
 
@@ -363,7 +410,7 @@ function buildManagedEditGuardRequest(
       title: `Muokkaus estetty: ${target.label}`,
       description: `${target.label} sisältää ${managedScope}. Managed surface on danger-tilassa, joten tätä kohtaa ei voi muokata suoraan editorissa.`,
       issueMessages: target.issue_messages,
-      tenderIntelligenceUrl,
+      tenderIntelligenceLink,
       closeLabel: 'Sulje',
     };
   }
@@ -377,7 +424,7 @@ function buildManagedEditGuardRequest(
       : `${target.label} sisältää ${managedScope}. Suora muokkaus irrottaa tai rikkoo Tarjousälyn hallitsemaa rakennetta, joten jatko vaatii eksplisiittisen vahvistuksen.`,
     confirmLabel: 'Muokkaa tästä huolimatta',
     issueMessages: target.issue_messages,
-    tenderIntelligenceUrl,
+    tenderIntelligenceLink,
   };
 }
 
@@ -385,7 +432,7 @@ function buildManagedActionGuardRequest(options: {
   actionLabel: string;
   status: 'warning' | 'danger';
   issueMessages: string[];
-  tenderIntelligenceUrl: string | null;
+  tenderIntelligenceLink: TenderIntelligenceQuoteEditorHandoffLink | null;
   confirmLabel?: string;
 }): QuoteManagedInterceptionDialogRequest {
   if (options.status === 'danger') {
@@ -395,7 +442,7 @@ function buildManagedActionGuardRequest(options: {
       title: `${options.actionLabel} on estetty`,
       description: `Tarjousälyn hallinnoitu sisältö on danger-tilassa. ${options.actionLabel} on estetty, kunnes palaat Tarjousälyyn ja korjaat managed surface -tilan.`,
       issueMessages: options.issueMessages,
-      tenderIntelligenceUrl: options.tenderIntelligenceUrl,
+      tenderIntelligenceLink: options.tenderIntelligenceLink,
       closeLabel: 'Sulje',
     };
   }
@@ -407,7 +454,7 @@ function buildManagedActionGuardRequest(options: {
     description: `Tarjousälyn hallinnoitu sisältö on jo muuttunut. ${options.actionLabel} kannattaa tehdä vain, jos tiedät miksi managed lohkoja on muokattu editorissa.`,
     confirmLabel: options.confirmLabel ?? 'Jatka tästä huolimatta',
     issueMessages: options.issueMessages,
-    tenderIntelligenceUrl: options.tenderIntelligenceUrl,
+    tenderIntelligenceLink: options.tenderIntelligenceLink,
   };
 }
 
@@ -499,6 +546,29 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     () => resolveQuoteTenderManagedEditorState({ quote, rows: quoteRows, diagnostics: quoteTenderManagedDiagnostics }),
     [quote, quoteRows, quoteTenderManagedDiagnostics]
   );
+  const resolveTenderIntelligenceLink = (
+    intent: TenderIntelligenceHandoffIntent,
+    blockIds?: string[],
+  ) => {
+    if (!quote) {
+      return null;
+    }
+
+    return createTenderIntelligenceHandoffLink({
+      quoteId: quote.id,
+      source: quoteTenderImportSource,
+      intent,
+      blockIds,
+    });
+  };
+  const tenderIntelligenceRepairLink = resolveTenderIntelligenceLink(
+    'repair-managed-import',
+    quoteTenderManagedDiagnostics.managed_block_ids,
+  );
+  const tenderIntelligenceInspectorLink = resolveTenderIntelligenceLink(
+    resolveInspectorHandoffIntent(quoteTenderManagedDiagnostics.health_status),
+    quoteTenderManagedDiagnostics.managed_block_ids,
+  );
   const managedEditUnlockKeySet = useMemo(() => new Set(managedEditUnlockKeys), [managedEditUnlockKeys]);
   const quoteTenderManagedFieldTargets = useMemo(() => ({
     notes: resolveQuoteTenderManagedEditTarget({
@@ -567,7 +637,6 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     () => (quote ? (quote.scheduleMilestones || []).filter(hasScheduleMilestoneContent) : []),
     [quote]
   );
-  const tenderIntelligenceUrl = buildAppUrl({ page: 'tender-intelligence' });
   const applyTermsTemplateSelection = (value: string) => {
     if (!quote) {
       return;
@@ -855,7 +924,17 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       return;
     }
 
-    setManagedGuardRequest(buildManagedEditGuardRequest(target, tenderIntelligenceUrl));
+    setManagedGuardRequest(buildManagedEditGuardRequest(
+      target,
+      resolveTenderIntelligenceLink(
+        target.status === 'danger'
+          ? 'repair-managed-import'
+          : target.status === 'warning'
+            ? 'reimport-managed-import'
+            : 'open-source-draft',
+        target.block_ids,
+      ),
+    ));
 
     if (decision === 'confirm') {
       pendingManagedGuardActionRef.current = () => {
@@ -939,7 +1018,10 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       actionLabel,
       status,
       issueMessages: quoteTenderManagedEditorState.issues.map((issue) => issue.message),
-      tenderIntelligenceUrl,
+      tenderIntelligenceLink: resolveTenderIntelligenceLink(
+        status === 'danger' ? 'repair-managed-import' : 'reimport-managed-import',
+        quoteTenderManagedDiagnostics.managed_block_ids,
+      ),
       confirmLabel: options.confirmLabel,
     }));
     pendingManagedGuardActionRef.current = decision === 'confirm' ? onProceed : null;
@@ -1438,13 +1520,13 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
               state={quoteTenderManagedEditorState}
               isEditable={isEditable}
               onSave={saveManagedAwareDraft}
-              tenderIntelligenceUrl={tenderIntelligenceUrl}
+              tenderIntelligenceLink={tenderIntelligenceRepairLink}
             />
 
             <QuoteTenderImportInspector
               diagnostics={quoteTenderManagedDiagnostics}
               source={quoteTenderImportSource}
-              tenderIntelligenceUrl={tenderIntelligenceUrl}
+              tenderIntelligenceLink={tenderIntelligenceInspectorLink}
             />
 
             <div className="grid gap-4 xl:grid-cols-3">
