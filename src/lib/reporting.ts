@@ -1671,10 +1671,11 @@ export function buildReportingModel(input: ReportingInput): ReportingModel {
   const projectByOwner = Array.from(projectByOwnerMap.values())
     .map((summary) => {
       const ownerProjects = projects.filter((project) => (project.ownerUserId || '__unassigned__') === summary.ownerUserId);
+      const invoicedProjectCount = ownerProjects.filter((candidate) => candidate.projectStage === 'Laskutettu').length;
       return {
         ...summary,
         acceptanceRatePercent: ratioPercent(
-          ownerProjects.reduce((sum, project) => sum + ownerProjects.filter((candidate) => candidate.projectStage === 'Laskutettu').length, 0),
+          invoicedProjectCount,
           Math.max(ownerProjects.length, 1)
         ),
         averageMarginPercent: ratioPercent(

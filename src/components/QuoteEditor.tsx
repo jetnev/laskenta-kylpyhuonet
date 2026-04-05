@@ -427,7 +427,10 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const quoteOwnerLabel = quote ? getResponsibleUserLabel(quote.ownerUserId, responsibleUsers) : 'Ei vastuuhenkilöä';
   const travelCosts = quote ? calculateTravelCosts(quote) : 0;
   const activeExtraChargeLines = quoteSummary?.extraChargeLines ?? [];
-  const visibleScheduleMilestones = quote ? (quote.scheduleMilestones || []).filter(hasScheduleMilestoneContent) : [];
+  const visibleScheduleMilestones = useMemo(
+    () => (quote ? (quote.scheduleMilestones || []).filter(hasScheduleMilestoneContent) : []),
+    [quote]
+  );
   const applyTermsTemplateSelection = (value: string) => {
     if (!quote) {
       return;

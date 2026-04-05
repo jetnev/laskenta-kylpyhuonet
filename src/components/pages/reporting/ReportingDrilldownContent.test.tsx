@@ -2,7 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import type { QuoteFamilySummary, ReportCustomerSummary, ReportProjectSummary } from '../../../lib/reporting';
-import ReportingDrilldownContent, { getReportingDrilldownDescription } from './ReportingDrilldownContent';
+import ReportingDrilldownContent from './ReportingDrilldownContent';
+import { getReportingDrilldownDescription } from './ReportingDrilldownMeta';
 
 const longQuoteName = 'Erittäin pitkä tarjousnimi joka ei saa rikkoa modaalin sarakerakennetta vaikka se olisi poikkeuksellisen pitkä ja moniosainen';
 const longCustomerName = 'Todella pitkä asiakasnimi joka sisältää useita sanoja ja jonka pitää pysyä omassa sarakkeessaan ilman ylivuotoa';

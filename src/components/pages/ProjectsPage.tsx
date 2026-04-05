@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, Pencil, Trash, FileText, Building, Users, MagnifyingGlass, X, Clock, FolderOpen } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -61,7 +61,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   const { user, users, canManageUsers } = useAuth();
   const { projects, addProject, updateProject, deleteProject } = useProjects();
   const { customers, addCustomer, updateCustomer, deleteCustomer, getCustomer } = useCustomers();
-  const { invoices, getInvoicesForProject } = useInvoices();
+  const { invoices } = useInvoices();
   const { quotes, addQuote, getQuotesForProject, deleteQuote } = useQuotes();
   const { rows, deleteRow } = useQuoteRows();
   const { createQuoteTermsSnapshot, getDefaultTerms } = useQuoteTerms();
@@ -174,9 +174,13 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   const visibleQuotes = sortByUpdatedAtDesc(filterOwnedRecords(quotes, ownerFilter));
   const selectedProject = ownerScopedProjects.find((project) => project.id === selectedProjectId) ?? null;
   const selectedCustomer = selectedProject ? getCustomer(selectedProject.customerId) : null;
-  const selectedProjectQuotes = selectedProject
-    ? sortByUpdatedAtDesc(filterOwnedRecords(getQuotesForProject(selectedProject.id), ownerFilter))
-    : [];
+  const selectedProjectQuotes = useMemo(() => {
+    if (!selectedProjectId) {
+      return [];
+    }
+
+    return sortByUpdatedAtDesc(filterOwnedRecords(getQuotesForProject(selectedProjectId), ownerFilter));
+  }, [getQuotesForProject, ownerFilter, selectedProjectId]);
   const projectContext = useMemo(
     () =>
       selectedProject
@@ -191,7 +195,6 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
         : null,
     [customers, invoices, projects, quotes, rows, selectedProject]
   );
-  const selectedProjectInvoices = selectedProject ? sortByUpdatedAtDesc(getInvoicesForProject(selectedProject.id)) : [];
   const projectQuoteStats = {
     draft: selectedProjectQuotes.filter((quote) => quote.status === 'draft').length,
     sent: selectedProjectQuotes.filter((quote) => quote.status === 'sent').length,
@@ -211,7 +214,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
     toast.success('Lisäsimme valmiiksi malliasiakkaan, malliprojektin ja mallitarjouksen. Voit muokata niitä suoraan oman työn pohjaksi.');
   }, [starterWorkspace]);
 
-  const navigateToProjects = (
+  const navigateToProjects = useCallback((
     nextState: Pick<AppLocationState, 'projectId' | 'quoteId' | 'editor'>,
     options?: { replace?: boolean }
   ) => {
@@ -224,7 +227,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
       },
       options
     );
-  };
+  }, [onNavigate]);
 
   useEffect(() => {
     if (!selectedProjectId) {
