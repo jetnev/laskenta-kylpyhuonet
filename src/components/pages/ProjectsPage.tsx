@@ -15,6 +15,7 @@ import { cn } from '../../lib/utils';
 import type { AppLocationState } from '../../lib/app-routing';
 import { getInvoiceStatusLabel, isInvoiceOverdue } from '../../lib/invoices';
 import { filterOwnedRecords, getResponsibleUserLabel } from '../../lib/ownership';
+import { shouldKeepPendingQuoteEditorOpen } from '../../lib/project-workspace';
 import { buildProjectWorkspaceContext, resolveWorkspaceTaskExecution, type WorkspaceTask } from '../../lib/workspace-flow';
 import QuoteEditor from '../QuoteEditor';
 import FieldHelpLabel from '../FieldHelpLabel';
@@ -72,6 +73,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [selectedQuotes, setSelectedQuotes] = useState<Set<string>>(new Set());
+  const [pendingCreatedQuoteId, setPendingCreatedQuoteId] = useState<string | null>(null);
   const [searchProjects, setSearchProjects] = useState('');
   const [searchCustomers, setSearchCustomers] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('all');
@@ -240,15 +242,31 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   }, [navigateToProjects, ownerScopedProjects, selectedProjectId]);
 
   useEffect(() => {
+    if (!selectedQuoteId) {
+      setPendingCreatedQuoteId(null);
+    }
+  }, [selectedQuoteId]);
+
+  useEffect(() => {
     if (!selectedProject || !selectedQuoteId) {
       return;
     }
 
-    const quoteStillVisible = selectedProjectQuotes.some((quote) => quote.id === selectedQuoteId);
-    if (!quoteStillVisible) {
+    const visibleQuoteIds = selectedProjectQuotes.map((quote) => quote.id);
+    const shouldKeepEditorOpen = shouldKeepPendingQuoteEditorOpen({
+      pendingCreatedQuoteId,
+      selectedQuoteId,
+      visibleQuoteIds,
+    });
+
+    if (visibleQuoteIds.includes(selectedQuoteId)) {
+      setPendingCreatedQuoteId((current) => (current === selectedQuoteId ? null : current));
+    }
+
+    if (!shouldKeepEditorOpen) {
       navigateToProjects({ projectId: selectedProject.id }, { replace: true });
     }
-  }, [navigateToProjects, selectedProject, selectedProjectQuotes, selectedQuoteId]);
+  }, [navigateToProjects, pendingCreatedQuoteId, selectedProject, selectedProjectQuotes, selectedQuoteId]);
 
   useEffect(() => {
     if (selectedProject) {
@@ -418,6 +436,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
       scheduleMilestones: [],
     });
 
+    setPendingCreatedQuoteId(newQuote.id);
     navigateToProjects({ projectId, quoteId: newQuote.id, editor: 'quote' });
   };
 
@@ -433,6 +452,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   };
 
   const handleEditQuote = (projectId: string, quoteId: string) => {
+    setPendingCreatedQuoteId(null);
     navigateToProjects({ projectId, quoteId, editor: 'quote' });
   };
 
