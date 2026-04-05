@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { formatCurrency } from '../../lib/calculations';
 import type { Quote } from '../../lib/types';
+import type { QuoteTenderManagedEditTarget } from '../../features/tender-intelligence/lib/quote-managed-surface-inspector';
 import AdditionalCostsSection from './AdditionalCostsSection';
 import QuoteCompletionChecklist from './QuoteCompletionChecklist';
 import QuoteEditorStepper from './QuoteEditorStepper';
@@ -56,6 +57,28 @@ const fieldHelp = {
   notes: 'Asiakasnäkyvät huomiot',
   internalNotes: 'Sisäiset huomiot',
 };
+
+function createManagedTarget(
+  kind: QuoteTenderManagedEditTarget['kind'],
+  status: QuoteTenderManagedEditTarget['status'],
+  overrides: Partial<QuoteTenderManagedEditTarget> = {},
+): QuoteTenderManagedEditTarget {
+  return {
+    kind,
+    label: kind === 'notes' ? 'Tarjoushuomautukset' : kind === 'internalNotes' ? 'Sisäiset muistiinpanot' : 'Väliotsikko "Tarjoushuomiot"',
+    status,
+    is_tarjousaly_managed: true,
+    is_safe_managed: status !== 'danger',
+    is_danger: status === 'danger',
+    field: kind === 'notes' || kind === 'internalNotes' ? kind : 'sections',
+    marker_keys: ['draft:block'],
+    block_ids: ['requirements_and_quote_notes'],
+    titles: ['Tarjoushuomiot'],
+    issue_messages: status === 'warning' ? ['Kenttä on jo muuttunut editorissa.'] : [],
+    unlock_key: `target:${kind}`,
+    ...overrides,
+  };
+}
 
 describe('quote editor workflow components', () => {
   it('renders the stepper and checklist summaries', () => {
@@ -158,8 +181,13 @@ describe('quote editor workflow components', () => {
       <QuoteNotesPanels
         quote={createQuote({ notes: 'Asiakkaalle', internalNotes: 'Sisäinen' })}
         isEditable
-        onUpdateQuote={() => undefined}
+        onUpdateField={() => undefined}
         fieldHelp={{ notes: fieldHelp.notes, internalNotes: fieldHelp.internalNotes }}
+        managedTargets={{
+          notes: createManagedTarget('notes', 'clean'),
+          internalNotes: createManagedTarget('internalNotes', 'warning'),
+        }}
+        managedUnlockState={{ notes: false, internalNotes: true }}
       />
     );
 
@@ -168,5 +196,7 @@ describe('quote editor workflow components', () => {
     expect(markup).toContain('Näkyy asiakkaalle');
     expect(markup).toContain('Vain sisäinen');
     expect(markup).toContain('aria-label="Ohje: Huomiot ja rajaukset"');
+    expect(markup).toContain('Tarjousäly / vahvistus');
+    expect(markup).toContain('Tarjousäly / varoitus');
   });
 });

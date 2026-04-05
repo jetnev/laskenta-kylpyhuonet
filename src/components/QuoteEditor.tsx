@@ -40,6 +40,9 @@ import AdditionalCostsSection from './quote-editor/AdditionalCostsSection';
 import HelpTooltip from './quote-editor/HelpTooltip';
 import QuoteCompletionChecklist from './quote-editor/QuoteCompletionChecklist';
 import QuoteEditorSection from './quote-editor/QuoteEditorSection';
+import QuoteManagedInterceptionDialogContent, {
+  type QuoteManagedInterceptionDialogRequest,
+} from './quote-editor/QuoteManagedInterceptionDialogContent';
 import QuoteManagedSaveGuard from './quote-editor/QuoteManagedSaveGuard';
 import QuoteEditorStepper from './quote-editor/QuoteEditorStepper';
 import QuoteManagedSectionBadge from './quote-editor/QuoteManagedSectionBadge';
@@ -88,6 +91,10 @@ import { getResponsibleUserLabel } from '../lib/ownership';
 import { resolveQuoteTermsSnapshotTemplate, resolveTermTemplatePlaceholders } from '../lib/term-templates';
 import {
   inspectQuoteTenderManagedSurface,
+  resolveQuoteTenderManagedActionGuardDecision,
+  resolveQuoteTenderManagedEditGuardDecision,
+  resolveQuoteTenderManagedEditTarget,
+  type QuoteTenderManagedEditTarget,
   resolveQuoteTenderManagedEditorState,
   resolveQuoteTenderManagedSectionState,
 } from '../features/tender-intelligence/lib/quote-managed-surface-inspector';
@@ -325,6 +332,105 @@ function formatScheduleMilestoneDate(value?: string) {
   });
 }
 
+function formatManagedScopeLabel(titles: string[]) {
+  const uniqueTitles = [...new Set(titles.map((title) => title.trim()).filter(Boolean))];
+
+  if (uniqueTitles.length === 0) {
+    return 'Tarjousälyn hallinnoimaa sisältöä';
+  }
+
+  if (uniqueTitles.length === 1) {
+    return `Tarjousälyn hallinnoimaa lohkoa "${uniqueTitles[0]}"`;
+  }
+
+  if (uniqueTitles.length === 2) {
+    return `Tarjousälyn hallinnoimia lohkoja "${uniqueTitles[0]}" ja "${uniqueTitles[1]}"`;
+  }
+
+  return `${uniqueTitles.length} Tarjousälyn hallinnoimaa lohkoa`;
+}
+
+function buildManagedEditGuardRequest(
+  target: QuoteTenderManagedEditTarget,
+  tenderIntelligenceUrl: string | null,
+): QuoteManagedInterceptionDialogRequest {
+  const managedScope = formatManagedScopeLabel(target.titles);
+
+  if (target.status === 'danger') {
+    return {
+      kind: 'edit',
+      status: 'danger',
+      title: `Muokkaus estetty: ${target.label}`,
+      description: `${target.label} sisältää ${managedScope}. Managed surface on danger-tilassa, joten tätä kohtaa ei voi muokata suoraan editorissa.`,
+      issueMessages: target.issue_messages,
+      tenderIntelligenceUrl,
+      closeLabel: 'Sulje',
+    };
+  }
+
+  return {
+    kind: 'edit',
+    status: target.status,
+    title: `Vahvista muokkaus: ${target.label}`,
+    description: target.status === 'warning'
+      ? `${target.label} sisältää ${managedScope} ja lohko on jo muuttunut editorissa. Lisämuokkaus vaikeuttaa turvallista Tarjousäly re-importia.`
+      : `${target.label} sisältää ${managedScope}. Suora muokkaus irrottaa tai rikkoo Tarjousälyn hallitsemaa rakennetta, joten jatko vaatii eksplisiittisen vahvistuksen.`,
+    confirmLabel: 'Muokkaa tästä huolimatta',
+    issueMessages: target.issue_messages,
+    tenderIntelligenceUrl,
+  };
+}
+
+function buildManagedActionGuardRequest(options: {
+  actionLabel: string;
+  status: 'warning' | 'danger';
+  issueMessages: string[];
+  tenderIntelligenceUrl: string | null;
+  confirmLabel?: string;
+}): QuoteManagedInterceptionDialogRequest {
+  if (options.status === 'danger') {
+    return {
+      kind: 'action',
+      status: 'danger',
+      title: `${options.actionLabel} on estetty`,
+      description: `Tarjousälyn hallinnoitu sisältö on danger-tilassa. ${options.actionLabel} on estetty, kunnes palaat Tarjousälyyn ja korjaat managed surface -tilan.`,
+      issueMessages: options.issueMessages,
+      tenderIntelligenceUrl: options.tenderIntelligenceUrl,
+      closeLabel: 'Sulje',
+    };
+  }
+
+  return {
+    kind: 'action',
+    status: 'warning',
+    title: `Vahvista: ${options.actionLabel}`,
+    description: `Tarjousälyn hallinnoitu sisältö on jo muuttunut. ${options.actionLabel} kannattaa tehdä vain, jos tiedät miksi managed lohkoja on muokattu editorissa.`,
+    confirmLabel: options.confirmLabel ?? 'Jatka tästä huolimatta',
+    issueMessages: options.issueMessages,
+    tenderIntelligenceUrl: options.tenderIntelligenceUrl,
+  };
+}
+
+function resolveManagedSectionInlineHint(target: QuoteTenderManagedEditTarget | null, unlocked: boolean) {
+  if (!target?.is_tarjousaly_managed) {
+    return null;
+  }
+
+  if (target.status === 'danger') {
+    return 'Tarjousäly hallinnoi tätä väliotsikkoa. Suora muokkaus on estetty, kunnes managed surface on korjattu.';
+  }
+
+  if (target.status === 'warning') {
+    return unlocked
+      ? 'Tarjousäly hallinnoi tätä väliotsikkoa. Väliotsikko on jo warning-tilassa ja muokkaus on avattu tälle sessiolle vahvistuksen jälkeen.'
+      : 'Tarjousäly hallinnoi tätä väliotsikkoa. Väliotsikko on jo warning-tilassa ja lisämuokkaus vaatii vahvistuksen.';
+  }
+
+  return unlocked
+    ? 'Tarjousäly hallinnoi tätä väliotsikkoa. Muokkaus on avattu tälle sessiolle vahvistuksen jälkeen.'
+    : 'Tarjousäly hallinnoi tätä väliotsikkoa. Suora muokkaus vaatii vahvistuksen.';
+}
+
 export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditorProps) {
   const { user, users, canManageUsers } = useAuth();
   const tenderIntelligenceRepository = useMemo(() => getTenderIntelligenceRepository(), []);
@@ -349,6 +455,9 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const [activeStep, setActiveStep] = useState<QuoteEditorStepId>('basics');
   const [additionalCostsOpen, setAdditionalCostsOpen] = useState(false);
   const [quoteTenderImportSource, setQuoteTenderImportSource] = useState<QuoteTenderImportSourceSummary | null>(null);
+  const [managedGuardRequest, setManagedGuardRequest] = useState<QuoteManagedInterceptionDialogRequest | null>(null);
+  const [managedEditUnlockKeys, setManagedEditUnlockKeys] = useState<string[]>([]);
+  const pendingManagedGuardActionRef = useRef<null | (() => void)>(null);
   const initializedQuoteUiRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -356,6 +465,9 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     setSelectedRowIds([]);
     setActiveStep('basics');
     setAdditionalCostsOpen(false);
+    setManagedGuardRequest(null);
+    setManagedEditUnlockKeys([]);
+    pendingManagedGuardActionRef.current = null;
     initializedQuoteUiRef.current = null;
   }, [quoteId]);
 
@@ -387,6 +499,23 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     () => resolveQuoteTenderManagedEditorState({ quote, rows: quoteRows, diagnostics: quoteTenderManagedDiagnostics }),
     [quote, quoteRows, quoteTenderManagedDiagnostics]
   );
+  const managedEditUnlockKeySet = useMemo(() => new Set(managedEditUnlockKeys), [managedEditUnlockKeys]);
+  const quoteTenderManagedFieldTargets = useMemo(() => ({
+    notes: resolveQuoteTenderManagedEditTarget({
+      quote,
+      rows: quoteRows,
+      diagnostics: quoteTenderManagedDiagnostics,
+      editorState: quoteTenderManagedEditorState,
+      target: { kind: 'quote_field', field: 'notes' },
+    }),
+    internalNotes: resolveQuoteTenderManagedEditTarget({
+      quote,
+      rows: quoteRows,
+      diagnostics: quoteTenderManagedDiagnostics,
+      editorState: quoteTenderManagedEditorState,
+      target: { kind: 'quote_field', field: 'internalNotes' },
+    }),
+  }), [quote, quoteRows, quoteTenderManagedDiagnostics, quoteTenderManagedEditorState]);
   const quoteTenderSectionStateByRowId = useMemo(() => {
     const entries = new Map<string, ReturnType<typeof resolveQuoteTenderManagedSectionState>>();
 
@@ -400,6 +529,25 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
 
     return entries;
   }, [quoteRows, quoteTenderManagedDiagnostics]);
+  const quoteTenderManagedEditTargetsByRowId = useMemo(() => {
+    const entries = new Map<string, QuoteTenderManagedEditTarget>();
+
+    quoteRows.forEach((row) => {
+      if (row.mode !== 'section') {
+        return;
+      }
+
+      entries.set(row.id, resolveQuoteTenderManagedEditTarget({
+        quote,
+        rows: quoteRows,
+        diagnostics: quoteTenderManagedDiagnostics,
+        editorState: quoteTenderManagedEditorState,
+        target: { kind: 'section_row', rowId: row.id },
+      }));
+    });
+
+    return entries;
+  }, [quote, quoteRows, quoteTenderManagedDiagnostics, quoteTenderManagedEditorState]);
   const resolvedQuoteTermsContent = useMemo(
     () => (quote && quoteTerms ? resolveTermTemplatePlaceholders(quoteTerms.contentMd, { customer, project, quote, settings: documentSettings }) : ''),
     [customer, documentSettings, project, quote, quoteTerms]
@@ -667,6 +815,99 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
         ? 'Tarjous tallennettu käyttäjän vahvistuksella Tarjousälyn hallinnoitujen muutosten jälkeen.'
         : 'Tarjouksen luonnos tallennettu.'
     );
+  };
+
+  const closeManagedGuardDialog = () => {
+    setManagedGuardRequest(null);
+    pendingManagedGuardActionRef.current = null;
+  };
+
+  const handleManagedGuardConfirm = () => {
+    const pendingAction = pendingManagedGuardActionRef.current;
+    closeManagedGuardDialog();
+    pendingAction?.();
+  };
+
+  const rememberUnlockedManagedTarget = (unlockKey?: string) => {
+    if (!unlockKey) {
+      return;
+    }
+
+    setManagedEditUnlockKeys((current) => current.includes(unlockKey) ? current : [...current, unlockKey]);
+  };
+
+  const attemptManagedEdit = (
+    target: QuoteTenderManagedEditTarget | null | undefined,
+    applyChange: () => void,
+  ) => {
+    if (!target) {
+      applyChange();
+      return;
+    }
+
+    const decision = resolveQuoteTenderManagedEditGuardDecision(
+      target,
+      Boolean(target.unlock_key && managedEditUnlockKeySet.has(target.unlock_key)),
+    );
+
+    if (decision === 'allow') {
+      applyChange();
+      return;
+    }
+
+    setManagedGuardRequest(buildManagedEditGuardRequest(target, tenderIntelligenceUrl));
+
+    if (decision === 'confirm') {
+      pendingManagedGuardActionRef.current = () => {
+        rememberUnlockedManagedTarget(target.unlock_key);
+        applyChange();
+      };
+      return;
+    }
+
+    pendingManagedGuardActionRef.current = null;
+  };
+
+  const updateManagedQuoteField = (field: 'notes' | 'internalNotes', value: string) => {
+    const target = quoteTenderManagedFieldTargets[field];
+
+    attemptManagedEdit(target, () => {
+      updateQuote(quote.id, field === 'notes' ? { notes: value } : { internalNotes: value });
+    });
+  };
+
+  const attemptManagedSectionEdit = (row: QuoteRow, applyChange: () => void) => {
+    attemptManagedEdit(quoteTenderManagedEditTargetsByRowId.get(row.id), applyChange);
+  };
+
+  const attemptManagedAction = (
+    actionLabel: string,
+    onProceed: () => void,
+    options: {
+      confirmLabel?: string;
+      allowWarningWithoutConfirmation?: boolean;
+    } = {},
+  ) => {
+    const decision = resolveQuoteTenderManagedActionGuardDecision(
+      quoteTenderManagedEditorState,
+      options.allowWarningWithoutConfirmation ?? false,
+    );
+
+    if (decision === 'allow') {
+      onProceed();
+      return;
+    }
+
+    const status = quoteTenderManagedEditorState.status === 'danger' ? 'danger' : 'warning';
+
+    setManagedGuardRequest(buildManagedActionGuardRequest({
+      actionLabel,
+      status,
+      issueMessages: quoteTenderManagedEditorState.issues.map((issue) => issue.message),
+      tenderIntelligenceUrl,
+      confirmLabel: options.confirmLabel,
+    }));
+    pendingManagedGuardActionRef.current = decision === 'confirm' ? onProceed : null;
   };
 
   const getDefaultMargin = (product?: Product, installationGroupId?: string) => {
@@ -1044,15 +1285,15 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     <>
       <Button variant="outline" onClick={onClose}>Sulje</Button>
       <div className="flex flex-wrap gap-2 sm:justify-end">
-        <Button variant="outline" onClick={() => exportQuoteToPDF(quote, quoteRows, customer, project, quoteTerms, documentSettings)}>
+        <Button variant="outline" onClick={() => attemptManagedAction('PDF-vienti', () => exportQuoteToPDF(quote, quoteRows, customer, project, quoteTerms, documentSettings), { confirmLabel: 'Vie PDF tästä huolimatta' })}>
           <FilePdf className="h-4 w-4" />
           PDF
         </Button>
-        <Button variant="outline" onClick={() => exportQuoteToCustomerExcel(quote, quoteRows, customer, project, quoteTerms, documentSettings)}>
+        <Button variant="outline" onClick={() => attemptManagedAction('Asiakas-Excel-vienti', () => exportQuoteToCustomerExcel(quote, quoteRows, customer, project, quoteTerms, documentSettings), { confirmLabel: 'Vie asiakas-Excel tästä huolimatta' })}>
           <FileXls className="h-4 w-4" />
           Asiakas-Excel
         </Button>
-        <Button variant="outline" onClick={() => exportQuoteToInternalExcel(quote, quoteRows, customer, project, quoteTerms, documentSettings)}>
+        <Button variant="outline" onClick={() => attemptManagedAction('Sisäinen Excel-vienti', () => exportQuoteToInternalExcel(quote, quoteRows, customer, project, quoteTerms, documentSettings), { confirmLabel: 'Vie sisäinen Excel tästä huolimatta' })}>
           <FileXls className="h-4 w-4" />
           Sisäinen Excel
         </Button>
@@ -1069,7 +1310,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
           </>
         )}
         {quote.status !== 'draft' && !quoteHasNewerRevision && (
-          <Button variant="outline" onClick={createRevision}>
+          <Button variant="outline" onClick={() => attemptManagedAction('Tarjouksen revisio', createRevision, { confirmLabel: 'Luo revisio tästä huolimatta' })}>
             <Copy className="h-4 w-4" />
             Luo revisio
           </Button>
@@ -1081,7 +1322,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
           </Button>
         )}
         {quote.status === 'draft' && (
-          <Button onClick={() => setValidationOpen(true)} disabled={!validation.isValid && validation.errors.length > 0}>
+          <Button onClick={() => attemptManagedAction('Lähetyksen tarkistus', () => setValidationOpen(true), { allowWarningWithoutConfirmation: true })} disabled={!validation.isValid && validation.errors.length > 0}>
             <PaperPlaneTilt className="h-4 w-4" />
             Lähetä tarjous
           </Button>
@@ -1415,6 +1656,10 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                       const rowCalculation = calculateQuoteRow(row);
                       const pricingDetails = getQuoteRowPricingDetails(row, quoteVatPercent);
                       const managedSectionState = quoteTenderSectionStateByRowId.get(row.id) ?? null;
+                      const managedSectionEditTarget = quoteTenderManagedEditTargetsByRowId.get(row.id) ?? null;
+                      const managedSectionEditUnlocked = Boolean(
+                        managedSectionEditTarget?.unlock_key && managedEditUnlockKeySet.has(managedSectionEditTarget.unlock_key),
+                      );
                       const pricingWorkflow = getRowPricingWorkflow(row);
                       const priceSource = getRowPriceSource(row);
                       const isMarginWorkflow = pricingWorkflow === 'margin';
@@ -1472,16 +1717,16 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                                 {row.chargeType && <Badge variant="outline">{CHARGE_TYPE_LABELS[row.chargeType]}</Badge>}
                               </div>
                               <div className="flex flex-wrap gap-2">
-                                <Button size="sm" variant="ghost" onClick={() => moveRow(row.id, -1)} disabled={!isEditable || index === 0}><ArrowUp className="h-4 w-4" /></Button>
-                                <Button size="sm" variant="ghost" onClick={() => moveRow(row.id, 1)} disabled={!isEditable || index === quoteRows.length - 1}><ArrowDown className="h-4 w-4" /></Button>
-                                <Button size="sm" variant="ghost" onClick={() => cloneRow(row)} disabled={!isEditable}><Copy className="h-4 w-4" /></Button>
-                                <Button size="sm" variant="ghost" onClick={() => removeRow(row.id)} disabled={!isEditable}><Trash className="h-4 w-4 text-destructive" /></Button>
+                                <Button size="sm" variant="ghost" onClick={() => attemptManagedSectionEdit(row, () => moveRow(row.id, -1))} disabled={!isEditable || index === 0}><ArrowUp className="h-4 w-4" /></Button>
+                                <Button size="sm" variant="ghost" onClick={() => attemptManagedSectionEdit(row, () => moveRow(row.id, 1))} disabled={!isEditable || index === quoteRows.length - 1}><ArrowDown className="h-4 w-4" /></Button>
+                                <Button size="sm" variant="ghost" onClick={() => attemptManagedSectionEdit(row, () => cloneRow(row))} disabled={!isEditable}><Copy className="h-4 w-4" /></Button>
+                                <Button size="sm" variant="ghost" onClick={() => attemptManagedSectionEdit(row, () => removeRow(row.id))} disabled={!isEditable}><Trash className="h-4 w-4 text-destructive" /></Button>
                               </div>
                             </div>
                             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                               <div className="space-y-2">
                                 <FieldHelpLabel label="Tyyppi" help={QUOTE_ROW_FIELD_HELP.mode} />
-                                <Select value={row.mode} onValueChange={(value) => patchRow(row, { mode: value as QuoteRowMode })} disabled={!isEditable}>
+                                <Select value={row.mode} onValueChange={(value) => attemptManagedSectionEdit(row, () => patchRow(row, { mode: value as QuoteRowMode }))} disabled={!isEditable}>
                                   <SelectTrigger><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     {Object.entries(ROW_MODE_LABELS).map(([value, label]) => (
@@ -1509,7 +1754,19 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                               </div>
                               <div className="space-y-2 md:col-span-2">
                                 <FieldHelpLabel label={row.mode === 'section' ? 'Väliotsikko' : 'Tuotenimi'} help={QUOTE_ROW_FIELD_HELP.productName} />
-                                <Input value={row.productName} onChange={(event) => patchRow(row, { productName: event.target.value })} disabled={!isEditable} />
+                                <Input value={row.productName} onChange={(event) => attemptManagedSectionEdit(row, () => patchRow(row, { productName: event.target.value }))} disabled={!isEditable} />
+                                {managedSectionEditTarget?.is_tarjousaly_managed && row.mode === 'section' && (
+                                  <p className={[
+                                    'text-xs leading-6',
+                                    managedSectionEditTarget.status === 'danger'
+                                      ? 'text-red-700'
+                                      : managedSectionEditTarget.status === 'warning'
+                                        ? 'text-amber-700'
+                                        : 'text-slate-500',
+                                  ].join(' ')}>
+                                    {resolveManagedSectionInlineHint(managedSectionEditTarget, managedSectionEditUnlocked)}
+                                  </p>
+                                )}
                               </div>
                             </div>
 
@@ -2159,7 +2416,23 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   </div>
                 </div>
 
-                <QuoteNotesPanels quote={quote} isEditable={isEditable} onUpdateQuote={updateQuote} fieldHelp={{ notes: QUOTE_FIELD_HELP.notes, internalNotes: QUOTE_FIELD_HELP.internalNotes }} />
+                <QuoteNotesPanels
+                  quote={quote}
+                  isEditable={isEditable}
+                  onUpdateField={updateManagedQuoteField}
+                  fieldHelp={{ notes: QUOTE_FIELD_HELP.notes, internalNotes: QUOTE_FIELD_HELP.internalNotes }}
+                  managedTargets={quoteTenderManagedFieldTargets}
+                  managedUnlockState={{
+                    notes: Boolean(
+                      quoteTenderManagedFieldTargets.notes.unlock_key
+                        && managedEditUnlockKeySet.has(quoteTenderManagedFieldTargets.notes.unlock_key),
+                    ),
+                    internalNotes: Boolean(
+                      quoteTenderManagedFieldTargets.internalNotes.unlock_key
+                        && managedEditUnlockKeySet.has(quoteTenderManagedFieldTargets.internalNotes.unlock_key),
+                    ),
+                  }}
+                />
 
                 {quoteTerms && resolvedQuoteTermsContent && (
                   <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5">
@@ -2225,7 +2498,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                         </Alert>
                       )}
                       <div className="flex flex-wrap gap-2">
-                        <Button type="button" onClick={() => setValidationOpen(true)} disabled={!validation.isValid}>
+                        <Button type="button" onClick={() => attemptManagedAction('Lähetyksen tarkistus', () => setValidationOpen(true), { allowWarningWithoutConfirmation: true })} disabled={!validation.isValid}>
                           <PaperPlaneTilt className="h-4 w-4" />
                           Tarkista ja lähetä tarjous
                         </Button>
@@ -2394,9 +2667,13 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   toast.error('Tarjous ei ole valmis lähetettäväksi.');
                   return;
                 }
-                updateQuoteStatus(quote.id, 'sent');
-                setValidationOpen(false);
-                toast.success('Tarjous merkitty lähetetyksi.');
+                attemptManagedAction('Tarjouksen lähetys', () => {
+                  updateQuoteStatus(quote.id, 'sent');
+                  setValidationOpen(false);
+                  toast.success('Tarjous merkitty lähetetyksi.');
+                }, {
+                  confirmLabel: 'Lähetä tästä huolimatta',
+                });
               }}
               disabled={!validation.isValid}
             >
@@ -2405,6 +2682,18 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
             </Button>
           </DialogFooter>
         </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(managedGuardRequest)} onOpenChange={(open) => !open && closeManagedGuardDialog()}>
+        {managedGuardRequest && (
+          <DialogContent>
+            <QuoteManagedInterceptionDialogContent
+              request={managedGuardRequest}
+              onClose={closeManagedGuardDialog}
+              onConfirm={handleManagedGuardConfirm}
+            />
+          </DialogContent>
+        )}
       </Dialog>
 
       {selectedInvoiceId && <InvoiceEditor invoiceId={selectedInvoiceId} onClose={() => setSelectedInvoiceId(null)} />}

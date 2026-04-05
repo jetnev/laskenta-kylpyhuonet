@@ -12,6 +12,7 @@ export type QuoteTenderManagedSurfaceHealthStatus = 'clean' | 'needs_attention' 
 export type QuoteTenderManagedField = 'notes' | 'internalNotes' | 'sections';
 export type QuoteTenderManagedEditorStateStatus = 'clean' | 'warning' | 'danger';
 export type QuoteTenderManagedEditorIssueSeverity = 'warning' | 'danger';
+export type QuoteTenderManagedEditTargetKind = 'unmanaged' | 'notes' | 'internalNotes' | 'section_row';
 export type QuoteTenderManagedEditorIssueCode =
   | 'managed_notes_block_changed'
   | 'managed_internal_notes_block_changed'
@@ -22,6 +23,12 @@ export type QuoteTenderManagedEditorIssueCode =
   | 'unknown_marker'
   | 'multiple_draft_package_sources';
 export type QuoteTenderManagedSaveGuardDecision = 'allow' | 'confirm' | 'block';
+export type QuoteTenderManagedEditGuardDecision = 'allow' | 'confirm' | 'block';
+export type QuoteTenderManagedActionGuardDecision = 'allow' | 'confirm' | 'block';
+
+export type QuoteTenderManagedEditTargetLocator =
+  | { kind: 'quote_field'; field: 'notes' | 'internalNotes' }
+  | { kind: 'section_row'; rowId: string };
 
 export interface QuoteTenderManagedBlockDiagnostics {
   marker_key: string;
@@ -86,6 +93,22 @@ export interface QuoteTenderManagedEditorState {
   warning_count: number;
   danger_count: number;
   issues: QuoteTenderManagedEditorIssue[];
+}
+
+export interface QuoteTenderManagedEditTarget {
+  kind: QuoteTenderManagedEditTargetKind;
+  label: string;
+  status: QuoteTenderManagedEditorStateStatus;
+  is_tarjousaly_managed: boolean;
+  is_safe_managed: boolean;
+  is_danger: boolean;
+  field?: 'notes' | 'internalNotes' | 'sections';
+  row_id?: string;
+  marker_keys: string[];
+  block_ids: string[];
+  titles: string[];
+  issue_messages: string[];
+  unlock_key?: string;
 }
 
 interface MutableBlockDiagnostics {
@@ -319,6 +342,52 @@ function dedupeManagedEditorIssues(issues: QuoteTenderManagedEditorIssue[]) {
     seen.add(key);
     return true;
   });
+}
+
+function createUnmanagedEditTarget(label: string): QuoteTenderManagedEditTarget {
+  return {
+    kind: 'unmanaged',
+    label,
+    status: 'clean',
+    is_tarjousaly_managed: false,
+    is_safe_managed: false,
+    is_danger: false,
+    marker_keys: [],
+    block_ids: [],
+    titles: [],
+    issue_messages: [],
+  };
+}
+
+function isGlobalManagedIssue(issue: QuoteTenderManagedEditorIssue) {
+  return issue.code === 'multiple_draft_package_sources' || (!issue.marker_key && !issue.field);
+}
+
+function collectManagedIssueMessages(issues: QuoteTenderManagedEditorIssue[]) {
+  return [...new Set(issues.map((issue) => issue.message))];
+}
+
+function resolveManagedTargetStatus(
+  issues: QuoteTenderManagedEditorIssue[],
+  healthStatuses: QuoteTenderManagedSurfaceHealthStatus[],
+): QuoteTenderManagedEditorStateStatus {
+  if (issues.some((issue) => issue.severity === 'danger')) {
+    return 'danger';
+  }
+
+  if (issues.some((issue) => issue.severity === 'warning')) {
+    return 'warning';
+  }
+
+  if (healthStatuses.some((status) => status === 'inconsistent')) {
+    return 'danger';
+  }
+
+  if (healthStatuses.some((status) => status === 'needs_attention')) {
+    return 'warning';
+  }
+
+  return 'clean';
 }
 
 export function inspectQuoteTenderManagedSurface(options: {
@@ -561,6 +630,119 @@ export function resolveQuoteTenderManagedSaveGuardDecision(
   return 'block';
 }
 
+export function resolveQuoteTenderManagedActionGuardDecision(
+  state: Pick<QuoteTenderManagedEditorState, 'has_tarjousaly_managed_surface' | 'status'>,
+  warningConfirmed = false,
+): QuoteTenderManagedActionGuardDecision {
+  return resolveQuoteTenderManagedSaveGuardDecision(state, warningConfirmed);
+}
+
+export function resolveQuoteTenderManagedEditGuardDecision(
+  target: Pick<QuoteTenderManagedEditTarget, 'is_tarjousaly_managed' | 'status'>,
+  editConfirmed = false,
+): QuoteTenderManagedEditGuardDecision {
+  if (!target.is_tarjousaly_managed) {
+    return 'allow';
+  }
+
+  if (target.status === 'danger') {
+    return 'block';
+  }
+
+  return editConfirmed ? 'allow' : 'confirm';
+}
+
+export function resolveQuoteTenderManagedEditTarget(options: {
+  quote: Quote | null | undefined;
+  rows: QuoteRow[];
+  target: QuoteTenderManagedEditTargetLocator;
+  diagnostics?: QuoteTenderManagedSurfaceDiagnostics;
+  editorState?: QuoteTenderManagedEditorState;
+}): QuoteTenderManagedEditTarget {
+  const diagnostics = options.diagnostics ?? inspectQuoteTenderManagedSurface(options);
+  const editorState = options.editorState ?? resolveQuoteTenderManagedEditorState({
+    quote: options.quote,
+    rows: options.rows,
+    diagnostics,
+  });
+
+  if (options.target.kind === 'quote_field') {
+    const field = options.target.field;
+    const label = field === 'notes' ? 'Tarjoushuomautukset' : 'Sisäiset muistiinpanot';
+    const relatedBlocks = diagnostics.blocks.filter((block) => block.text_fields.includes(field));
+
+    if (relatedBlocks.length === 0) {
+      return createUnmanagedEditTarget(label);
+    }
+
+    const markerKeys = new Set(relatedBlocks.map((block) => block.marker_key));
+    const relatedIssues = dedupeManagedEditorIssues(
+      editorState.issues.filter(
+        (issue) => isGlobalManagedIssue(issue) || Boolean(issue.marker_key && markerKeys.has(issue.marker_key)),
+      ),
+    );
+    const titles = [...new Set(relatedBlocks.map((block) => block.title).filter(Boolean))];
+    const status = resolveManagedTargetStatus(
+      relatedIssues,
+      relatedBlocks.map((block) => block.health_status),
+    );
+
+    return {
+      kind: field,
+      label,
+      status,
+      is_tarjousaly_managed: true,
+      is_safe_managed: status !== 'danger',
+      is_danger: status === 'danger',
+      field,
+      marker_keys: [...markerKeys],
+      block_ids: [...new Set(relatedBlocks.map((block) => block.block_id))],
+      titles,
+      issue_messages: collectManagedIssueMessages(relatedIssues),
+      unlock_key: `quote-field:${field}`,
+    };
+  }
+
+  const row = options.rows.find((candidate) => candidate.id === options.target.rowId);
+  const rowLabel = row?.productName?.trim() ? `Väliotsikko "${row.productName.trim()}"` : 'Väliotsikko';
+
+  if (!row) {
+    return createUnmanagedEditTarget(rowLabel);
+  }
+
+  const sectionState = resolveQuoteTenderManagedSectionState(row, diagnostics);
+
+  if (!sectionState) {
+    return createUnmanagedEditTarget(rowLabel);
+  }
+
+  const relatedIssues = dedupeManagedEditorIssues(
+    editorState.issues.filter(
+      (issue) => isGlobalManagedIssue(issue) || issue.marker_key === sectionState.marker_key,
+    ),
+  );
+  const resolvedLabel = sectionState.title.trim().length > 0
+    ? `Väliotsikko "${sectionState.title}"`
+    : rowLabel;
+  const status = resolveManagedTargetStatus(relatedIssues, [sectionState.health_status]);
+
+  return {
+    kind: 'section_row',
+    label: resolvedLabel,
+    status,
+    is_tarjousaly_managed: true,
+    is_safe_managed: status !== 'danger',
+    is_danger: status === 'danger',
+    field: 'sections',
+    row_id: row.id,
+    marker_keys: [sectionState.marker_key],
+    block_ids: [sectionState.block_id],
+    titles: [sectionState.title],
+    issue_messages: collectManagedIssueMessages(relatedIssues),
+    unlock_key: `section-row:${sectionState.marker_key}`,
+  };
+}
+
 export function resolveQuoteTenderManagedSectionState(
   row: QuoteRow,
   diagnostics: QuoteTenderManagedSurfaceDiagnostics,
@@ -587,7 +769,7 @@ export function resolveQuoteTenderManagedSectionState(
       title: row.productName,
       draft_package_id: parsedMarkerKey?.draftPackageId ?? null,
       health_status: 'inconsistent',
-      label: 'Tarjousäly / tarkista',
+      label: 'Tarjousäly / estetty',
     };
   }
 
@@ -597,6 +779,10 @@ export function resolveQuoteTenderManagedSectionState(
     title: block.title,
     draft_package_id: block.draft_package_id,
     health_status: block.health_status,
-    label: block.health_status === 'clean' ? 'Tarjousäly' : 'Tarjousäly / tarkista',
+    label: block.health_status === 'clean'
+      ? 'Tarjousäly / vartioitu'
+      : block.health_status === 'needs_attention'
+        ? 'Tarjousäly / tarkista'
+        : 'Tarjousäly / estetty',
   };
 }

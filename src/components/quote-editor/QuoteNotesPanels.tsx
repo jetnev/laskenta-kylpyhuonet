@@ -1,5 +1,7 @@
 import FieldHelpLabel from '../FieldHelpLabel';
+import type { QuoteTenderManagedEditTarget } from '../../features/tender-intelligence/lib/quote-managed-surface-inspector';
 import { Textarea } from '../ui/textarea';
+import { Badge } from '../ui/badge';
 import type { Quote } from '../../lib/types';
 import HelpTooltip from './HelpTooltip';
 import VisibilityBadge from './VisibilityBadge';
@@ -7,18 +9,65 @@ import VisibilityBadge from './VisibilityBadge';
 interface QuoteNotesPanelsProps {
   quote: Quote;
   isEditable: boolean;
-  onUpdateQuote: (quoteId: string, updates: Partial<Quote>) => void;
+  onUpdateField: (field: 'notes' | 'internalNotes', value: string) => void;
   fieldHelp: {
     notes: string;
     internalNotes: string;
   };
+  managedTargets?: {
+    notes: QuoteTenderManagedEditTarget;
+    internalNotes: QuoteTenderManagedEditTarget;
+  };
+  managedUnlockState?: {
+    notes: boolean;
+    internalNotes: boolean;
+  };
+}
+
+function renderManagedFieldNotice(target: QuoteTenderManagedEditTarget | undefined, unlocked: boolean | undefined) {
+  if (!target?.is_tarjousaly_managed) {
+    return null;
+  }
+
+  const blockLabel = target.titles.length === 1
+    ? `lohkoa "${target.titles[0]}"`
+    : `${target.titles.length} Tarjousälyn hallinnoimaa lohkoa`;
+  const text = target.status === 'danger'
+    ? `Tämä kenttä sisältää ${blockLabel}. Managed surface on danger-tilassa, joten suora muokkaus estetään.`
+    : target.status === 'warning'
+      ? unlocked
+        ? `Tämä kenttä sisältää ${blockLabel}. Kenttä on jo warning-tilassa ja muokkaus on avattu tälle sessiolle vahvistuksen jälkeen.`
+        : `Tämä kenttä sisältää ${blockLabel}. Kenttä on jo warning-tilassa ja lisämuokkaus vaatii vahvistuksen.`
+      : unlocked
+        ? `Tämä kenttä sisältää ${blockLabel}. Muokkaus on avattu tälle sessiolle vahvistuksen jälkeen.`
+        : `Tämä kenttä sisältää ${blockLabel}. Suora muokkaus vaatii ensin vahvistuksen.`;
+
+  return (
+    <div className={[
+      'rounded-2xl border px-4 py-3 text-xs leading-6',
+      target.status === 'danger'
+        ? 'border-red-200 bg-red-50/80 text-red-950'
+        : target.status === 'warning'
+          ? 'border-amber-200 bg-amber-50/80 text-amber-950'
+          : 'border-slate-200 bg-slate-50/80 text-slate-700',
+    ].join(' ')}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={target.status === 'danger' ? 'destructive' : 'outline'}>
+          {target.status === 'danger' ? 'Tarjousäly / estetty' : target.status === 'warning' ? 'Tarjousäly / varoitus' : 'Tarjousäly / vahvistus'}
+        </Badge>
+      </div>
+      <p className="mt-2">{text}</p>
+    </div>
+  );
 }
 
 export default function QuoteNotesPanels({
   quote,
   isEditable,
-  onUpdateQuote,
+  onUpdateField,
   fieldHelp,
+  managedTargets,
+  managedUnlockState,
 }: QuoteNotesPanelsProps) {
   return (
     <div className="space-y-4">
@@ -39,11 +88,12 @@ export default function QuoteNotesPanels({
             Kirjaa tähän rajaukset, oletukset, lisäselitteet ja muut tiedot, jotka haluat mukaan asiakkaan tarjoukseen ja tulosteisiin.
           </p>
           <div className="mt-4 space-y-2">
+            {renderManagedFieldNotice(managedTargets?.notes, managedUnlockState?.notes)}
             <FieldHelpLabel htmlFor="quote-notes" label="Tarjoushuomautukset" help={fieldHelp.notes} />
             <Textarea
               id="quote-notes"
               value={quote.notes || ''}
-              onChange={(event) => onUpdateQuote(quote.id, { notes: event.target.value })}
+              onChange={(event) => onUpdateField('notes', event.target.value)}
               disabled={!isEditable}
               rows={6}
             />
@@ -59,11 +109,12 @@ export default function QuoteNotesPanels({
             Käytä tätä omille muistioille, työjärjestykselle ja kannattavuuden tai toteutuksen huomioille. Tätä sisältöä ei näytetä asiakkaalle.
           </p>
           <div className="mt-4 space-y-2">
+            {renderManagedFieldNotice(managedTargets?.internalNotes, managedUnlockState?.internalNotes)}
             <FieldHelpLabel htmlFor="internal-notes" label="Sisäiset muistiinpanot" help={fieldHelp.internalNotes} />
             <Textarea
               id="internal-notes"
               value={quote.internalNotes || ''}
-              onChange={(event) => onUpdateQuote(quote.id, { internalNotes: event.target.value })}
+              onChange={(event) => onUpdateField('internalNotes', event.target.value)}
               disabled={!isEditable}
               rows={6}
             />
