@@ -1,10 +1,20 @@
 import type {
   TenderAnalysisJobType,
   TenderAnalysisJobStatus,
+  TenderDraftArtifactStatus,
+  TenderDraftArtifactType,
   TenderDocumentParseStatus,
   TenderDocumentUploadStatus,
   TenderGoNoGoRecommendation,
+  TenderMissingItemStatus,
+  TenderMissingItemType,
   TenderPackageStatus,
+  TenderReferenceSuggestionSourceType,
+  TenderRequirementStatus,
+  TenderRequirementType,
+  TenderReviewTaskType,
+  TenderRiskFlagStatus,
+  TenderRiskType,
   TenderReviewTaskStatus,
   TenderSeverity,
 } from '../types/tender-intelligence';
@@ -39,6 +49,78 @@ export const TENDER_ANALYSIS_JOB_TYPE_META: Record<
   'reference-scan': { label: 'Referenssihaku', variant: 'outline' },
   'draft-preparation': { label: 'Luonnoksen valmistelu', variant: 'outline' },
   placeholder_analysis: { label: 'Placeholder-analyysi', variant: 'secondary' },
+};
+
+export const TENDER_REQUIREMENT_TYPE_META: Record<TenderRequirementType, { label: string; variant: TenderBadgeVariant }> = {
+  administrative: { label: 'Hallinnollinen', variant: 'secondary' },
+  commercial: { label: 'Kaupallinen', variant: 'outline' },
+  technical: { label: 'Tekninen', variant: 'outline' },
+  schedule: { label: 'Aikataulu', variant: 'outline' },
+  legal: { label: 'Sopimus', variant: 'outline' },
+  other: { label: 'Muu', variant: 'secondary' },
+};
+
+export const TENDER_REQUIREMENT_STATUS_META: Record<TenderRequirementStatus, { label: string; variant: TenderBadgeVariant }> = {
+  unreviewed: { label: 'Tarkistamatta', variant: 'secondary' },
+  covered: { label: 'Katettu', variant: 'default' },
+  missing: { label: 'Puuttuu', variant: 'destructive' },
+  'at-risk': { label: 'Riskissä', variant: 'outline' },
+};
+
+export const TENDER_MISSING_ITEM_TYPE_META: Record<TenderMissingItemType, { label: string; variant: TenderBadgeVariant }> = {
+  clarification: { label: 'Tarkennus', variant: 'outline' },
+  document: { label: 'Dokumentti', variant: 'outline' },
+  pricing: { label: 'Hinnoittelu', variant: 'outline' },
+  resourcing: { label: 'Resursointi', variant: 'outline' },
+  decision: { label: 'Päätös', variant: 'outline' },
+  other: { label: 'Muu', variant: 'secondary' },
+};
+
+export const TENDER_MISSING_ITEM_STATUS_META: Record<TenderMissingItemStatus, { label: string; variant: TenderBadgeVariant }> = {
+  open: { label: 'Avoin', variant: 'destructive' },
+  resolved: { label: 'Ratkaistu', variant: 'default' },
+};
+
+export const TENDER_RISK_TYPE_META: Record<TenderRiskType, { label: string; variant: TenderBadgeVariant }> = {
+  commercial: { label: 'Kaupallinen', variant: 'outline' },
+  delivery: { label: 'Toimitus', variant: 'outline' },
+  technical: { label: 'Tekninen', variant: 'outline' },
+  legal: { label: 'Sopimus', variant: 'outline' },
+  resourcing: { label: 'Resursointi', variant: 'outline' },
+  other: { label: 'Muu', variant: 'secondary' },
+};
+
+export const TENDER_RISK_FLAG_STATUS_META: Record<TenderRiskFlagStatus, { label: string; variant: TenderBadgeVariant }> = {
+  open: { label: 'Avoin', variant: 'destructive' },
+  accepted: { label: 'Hyväksytty', variant: 'outline' },
+  mitigated: { label: 'Mitigoitu', variant: 'default' },
+};
+
+export const TENDER_REFERENCE_SOURCE_META: Record<TenderReferenceSuggestionSourceType, { label: string; variant: TenderBadgeVariant }> = {
+  quote: { label: 'Tarjous', variant: 'outline' },
+  project: { label: 'Projekti', variant: 'outline' },
+  'document-template': { label: 'Dokumenttipohja', variant: 'outline' },
+  manual: { label: 'Manuaalinen', variant: 'secondary' },
+};
+
+export const TENDER_DRAFT_ARTIFACT_TYPE_META: Record<TenderDraftArtifactType, { label: string; variant: TenderBadgeVariant }> = {
+  'quote-outline': { label: 'Tarjousrunko', variant: 'outline' },
+  'response-summary': { label: 'Vastausyhteenveto', variant: 'outline' },
+  'clarification-list': { label: 'Tarkennuslista', variant: 'outline' },
+};
+
+export const TENDER_DRAFT_ARTIFACT_STATUS_META: Record<TenderDraftArtifactStatus, { label: string; variant: TenderBadgeVariant }> = {
+  placeholder: { label: 'Placeholder', variant: 'secondary' },
+  'ready-for-review': { label: 'Valmis tarkistukseen', variant: 'outline' },
+  accepted: { label: 'Hyväksytty', variant: 'default' },
+};
+
+export const TENDER_REVIEW_TASK_TYPE_META: Record<TenderReviewTaskType, { label: string; variant: TenderBadgeVariant }> = {
+  documents: { label: 'Dokumentit', variant: 'outline' },
+  requirements: { label: 'Vaatimukset', variant: 'outline' },
+  risk: { label: 'Riskit', variant: 'outline' },
+  decision: { label: 'Päätös', variant: 'outline' },
+  draft: { label: 'Luonnos', variant: 'outline' },
 };
 
 export const TENDER_DOCUMENT_UPLOAD_STATUS_META: Record<
@@ -92,6 +174,29 @@ export function formatTenderTimestamp(value: string) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
+}
+
+export function formatTenderConfidence(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) {
+    return 'Ei arviota';
+  }
+
+  return `${Math.round(value * 100)} %`;
+}
+
+export function getTenderTextPreview(value: string | null | undefined, maxLength = 160) {
+  const normalized = value?.replace(/\s+/g, ' ').trim() ?? '';
+  const suffix = '...';
+
+  if (!normalized) {
+    return '';
+  }
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(0, maxLength - suffix.length)).trimEnd()}${suffix}`;
 }
 
 export function formatCountLabel(count: number, singular: string, plural = singular) {

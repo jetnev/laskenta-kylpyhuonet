@@ -56,7 +56,7 @@ export default function TenderAnalysisPanel({
               Analyysi
             </CardTitle>
             <CardDescription>
-              Placeholder-ajon skeleton käyttää oikeaa analyysijobin domainia, kuljettaa jobin tilasta toiseen ja jättää selkeän adapterirajan myöhemmälle worker- tai edge-function -ajolle.
+              Placeholder-ajon skeleton käyttää oikeaa analyysijobin domainia, kirjoittaa completion-vaiheessa pysyvät result-rivit omiin tauluihinsa ja jättää selkeän adapterirajan myöhemmälle worker- tai edge-function -ajolle.
             </CardDescription>
           </div>
 
@@ -67,7 +67,7 @@ export default function TenderAnalysisPanel({
             </Button>
             <p className="text-xs leading-5 text-muted-foreground">
               {startState.canStart
-                ? 'Tämä ajo ei vielä lue dokumenttien sisältöä. Se vain luo, jonottaa, suorittaa ja päättää placeholder-jobin näkyvästi.'
+                ? 'Tämä ajo ei vielä lue dokumenttien sisältöä. Se luo näkyvän jobin ja kirjoittaa completion-vaiheessa deterministiset placeholder-tulokset pysyviin result-tauluihin.'
                 : startState.reason}
             </p>
           </div>
@@ -107,7 +107,7 @@ export default function TenderAnalysisPanel({
               {busy && (
                 <div className="mt-4 flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-700">
                   <SpinnerGap className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
-                  <span>Jobi etenee näkyvästi tilojen pending -&gt; queued -&gt; running -&gt; completed läpi, mutta varsinainen analyysimoottori korvataan myöhemmässä vaiheessa.</span>
+                  <span>Jobi etenee näkyvästi tilojen pending -&gt; queued -&gt; running -&gt; completed läpi. Completion-vaihe tallentaa placeholder-vaatimukset, puutteet, riskit, tehtävät ja luonnosrungon oikeaan result-domainiin.</span>
                 </div>
               )}
 

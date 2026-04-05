@@ -6,43 +6,27 @@ import {
   type TenderDocument,
   type TenderDraftArtifact,
   type TenderGoNoGoAssessment,
+  type TenderMissingItem,
   type TenderPackage,
   type TenderPackageDetails,
   type TenderPackageResults,
+  type TenderReferenceSuggestion,
+  type TenderRequirement,
   type TenderReviewTask,
+  type TenderRiskFlag,
 } from '../types/tender-intelligence';
 import type {
   TenderAnalysisJobRow,
+  TenderDraftArtifactRow,
   TenderDocumentRow,
   TenderGoNoGoAssessmentRow,
+  TenderMissingItemRow,
   TenderPackageRow,
+  TenderReferenceSuggestionRow,
+  TenderRequirementRow,
+  TenderReviewTaskRow,
+  TenderRiskFlagRow,
 } from '../types/tender-intelligence-db';
-
-function buildPlaceholderDraftArtifact(packageId: string, anchorTimestamp: string): TenderDraftArtifact {
-  return {
-    id: `${packageId}-draft-placeholder`,
-    packageId,
-    title: 'Tarjousluonnoksen runko',
-    kind: 'quote-outline',
-    status: 'placeholder',
-    summary: 'Tarjousluonnoksen generointi lisätään myöhemmässä vaiheessa oman analyysi- ja hyväksyntäputken päälle.',
-    createdAt: anchorTimestamp,
-    updatedAt: anchorTimestamp,
-  };
-}
-
-function buildPlaceholderReviewTask(packageId: string, anchorTimestamp: string, assigneeUserId?: string | null): TenderReviewTask {
-  return {
-    id: `${packageId}-review-documents`,
-    packageId,
-    title: 'Käynnistä placeholder-analyysi, tarkista jobin tila ja valmistele paketti seuraavaa vaihetta varten',
-    status: 'todo',
-    category: 'documents',
-    assigneeUserId: assigneeUserId || null,
-    createdAt: anchorTimestamp,
-    updatedAt: anchorTimestamp,
-  };
-}
 
 function getTenderAnalysisJobLabel(job: TenderAnalysisJobRow) {
   return job.job_type === 'placeholder_analysis' ? 'Placeholder-analyysi' : 'Analyysiajo';
@@ -96,6 +80,84 @@ export function mapTenderAnalysisJobRowToDomain(row: TenderAnalysisJobRow): Tend
   };
 }
 
+export function mapTenderRequirementRowToDomain(row: TenderRequirementRow): TenderRequirement {
+  return {
+    id: row.id,
+    packageId: row.tender_package_id,
+    sourceDocumentId: row.source_document_id,
+    requirementType: row.requirement_type,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    confidence: row.confidence,
+    sourceExcerpt: row.source_excerpt,
+  };
+}
+
+export function mapTenderMissingItemRowToDomain(row: TenderMissingItemRow): TenderMissingItem {
+  return {
+    id: row.id,
+    packageId: row.tender_package_id,
+    relatedRequirementId: row.related_requirement_id,
+    itemType: row.item_type,
+    title: row.title,
+    description: row.description,
+    severity: row.severity,
+    status: row.status,
+  };
+}
+
+export function mapTenderRiskFlagRowToDomain(row: TenderRiskFlagRow): TenderRiskFlag {
+  return {
+    id: row.id,
+    packageId: row.tender_package_id,
+    riskType: row.risk_type,
+    title: row.title,
+    description: row.description,
+    severity: row.severity,
+    status: row.status,
+  };
+}
+
+export function mapTenderReferenceSuggestionRowToDomain(row: TenderReferenceSuggestionRow): TenderReferenceSuggestion {
+  return {
+    id: row.id,
+    packageId: row.tender_package_id,
+    sourceType: row.source_type,
+    sourceReference: row.source_reference,
+    title: row.title,
+    rationale: row.rationale,
+    confidence: row.confidence,
+  };
+}
+
+export function mapTenderDraftArtifactRowToDomain(row: TenderDraftArtifactRow): TenderDraftArtifact {
+  return {
+    id: row.id,
+    packageId: row.tender_package_id,
+    artifactType: row.artifact_type,
+    title: row.title,
+    contentMd: row.content_md,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapTenderReviewTaskRowToDomain(row: TenderReviewTaskRow): TenderReviewTask {
+  return {
+    id: row.id,
+    packageId: row.tender_package_id,
+    taskType: row.task_type,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    assignedToUserId: row.assigned_to_user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export function mapTenderDocumentRowToDomain(row: TenderDocumentRow): TenderDocument {
   return {
     id: row.id,
@@ -115,13 +177,19 @@ export function mapTenderDocumentRowToDomain(row: TenderDocumentRow): TenderDocu
   };
 }
 
-export function buildTenderPackageSummary(options: { documentCount: number; reviewTaskCount?: number }) {
+export function buildTenderPackageSummary(options: {
+  documentCount: number;
+  requirementCount?: number;
+  missingItemCount?: number;
+  riskCount?: number;
+  reviewTaskCount?: number;
+}) {
   return {
     documentCount: options.documentCount,
-    requirementCount: 0,
-    missingItemCount: 0,
-    riskCount: 0,
-    reviewTaskCount: options.reviewTaskCount ?? 1,
+    requirementCount: options.requirementCount ?? 0,
+    missingItemCount: options.missingItemCount ?? 0,
+    riskCount: options.riskCount ?? 0,
+    reviewTaskCount: options.reviewTaskCount ?? 0,
   };
 }
 
@@ -129,6 +197,9 @@ export function mapTenderPackageRowToDomain(
   row: TenderPackageRow,
   options: {
     documentCount?: number;
+    requirementCount?: number;
+    missingItemCount?: number;
+    riskCount?: number;
     reviewTaskCount?: number;
     currentJobId?: string | null;
   } = {}
@@ -147,25 +218,31 @@ export function mapTenderPackageRowToDomain(
     currentJobId: options.currentJobId ?? null,
     summary: buildTenderPackageSummary({
       documentCount: options.documentCount ?? 0,
-      reviewTaskCount: options.reviewTaskCount ?? 1,
+      requirementCount: options.requirementCount ?? 0,
+      missingItemCount: options.missingItemCount ?? 0,
+      riskCount: options.riskCount ?? 0,
+      reviewTaskCount: options.reviewTaskCount ?? 0,
     }),
   };
 }
 
-export function buildTenderPackageResults(options: {
-  packageId: string;
-  createdByUserId?: string | null;
-  anchorTimestamp: string;
-  goNoGoAssessment: TenderGoNoGoAssessment | null;
+export function mapTenderPackageResultsRowsToDomain(input: {
+  requirementRows: TenderRequirementRow[];
+  missingItemRows: TenderMissingItemRow[];
+  riskFlagRows: TenderRiskFlagRow[];
+  referenceSuggestionRows: TenderReferenceSuggestionRow[];
+  draftArtifactRows: TenderDraftArtifactRow[];
+  reviewTaskRows: TenderReviewTaskRow[];
+  goNoGoAssessmentRow: TenderGoNoGoAssessmentRow | null;
 }): TenderPackageResults {
   return {
-    requirements: [],
-    missingItems: [],
-    riskFlags: [],
-    goNoGoAssessment: options.goNoGoAssessment,
-    referenceSuggestions: [],
-    draftArtifacts: [buildPlaceholderDraftArtifact(options.packageId, options.anchorTimestamp)],
-    reviewTasks: [buildPlaceholderReviewTask(options.packageId, options.anchorTimestamp, options.createdByUserId)],
+    requirements: input.requirementRows.map(mapTenderRequirementRowToDomain),
+    missingItems: input.missingItemRows.map(mapTenderMissingItemRowToDomain),
+    riskFlags: input.riskFlagRows.map(mapTenderRiskFlagRowToDomain),
+    goNoGoAssessment: input.goNoGoAssessmentRow ? mapTenderGoNoGoAssessmentRowToDomain(input.goNoGoAssessmentRow) : null,
+    referenceSuggestions: input.referenceSuggestionRows.map(mapTenderReferenceSuggestionRowToDomain),
+    draftArtifacts: input.draftArtifactRows.map(mapTenderDraftArtifactRowToDomain),
+    reviewTasks: input.reviewTaskRows.map(mapTenderReviewTaskRowToDomain),
   };
 }
 
@@ -173,6 +250,12 @@ export function buildTenderPackageDetails(input: {
   packageRow: TenderPackageRow;
   documentRows: TenderDocumentRow[];
   analysisJobRows: TenderAnalysisJobRow[];
+  requirementRows: TenderRequirementRow[];
+  missingItemRows: TenderMissingItemRow[];
+  riskFlagRows: TenderRiskFlagRow[];
+  referenceSuggestionRows: TenderReferenceSuggestionRow[];
+  draftArtifactRows: TenderDraftArtifactRow[];
+  reviewTaskRows: TenderReviewTaskRow[];
   goNoGoAssessmentRow: TenderGoNoGoAssessmentRow | null;
 }): TenderPackageDetails {
   const sortedJobRows = [...input.analysisJobRows].sort(
@@ -180,17 +263,22 @@ export function buildTenderPackageDetails(input: {
   );
   const analysisJobs = sortedJobRows.map(mapTenderAnalysisJobRowToDomain);
   const latestAnalysisJob = analysisJobs[0] ?? null;
-  const goNoGoAssessment = input.goNoGoAssessmentRow ? mapTenderGoNoGoAssessmentRowToDomain(input.goNoGoAssessmentRow) : null;
-  const results = buildTenderPackageResults({
-    packageId: input.packageRow.id,
-    createdByUserId: input.packageRow.created_by_user_id,
-    anchorTimestamp: input.goNoGoAssessmentRow?.updated_at || sortedJobRows[0]?.updated_at || input.packageRow.updated_at,
-    goNoGoAssessment,
+  const results = mapTenderPackageResultsRowsToDomain({
+    requirementRows: input.requirementRows,
+    missingItemRows: input.missingItemRows,
+    riskFlagRows: input.riskFlagRows,
+    referenceSuggestionRows: input.referenceSuggestionRows,
+    draftArtifactRows: input.draftArtifactRows,
+    reviewTaskRows: input.reviewTaskRows,
+    goNoGoAssessmentRow: input.goNoGoAssessmentRow,
   });
 
   return tenderPackageDetailsSchema.parse({
     package: mapTenderPackageRowToDomain(input.packageRow, {
       documentCount: input.documentRows.length,
+      requirementCount: results.requirements.length,
+      missingItemCount: results.missingItems.length,
+      riskCount: results.riskFlags.length,
       reviewTaskCount: results.reviewTasks.length,
       currentJobId: latestAnalysisJob?.id ?? null,
     }),

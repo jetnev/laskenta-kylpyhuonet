@@ -3,10 +3,16 @@ import type {
   TenderAnalysisJob,
   TenderAnalysisJobStatus,
   TenderAnalysisJobType,
+  TenderDraftArtifact,
   TenderDocument,
+  TenderMissingItem,
   TenderPackage,
   TenderPackageDetails,
   TenderPackageResults,
+  TenderReferenceSuggestion,
+  TenderRequirement,
+  TenderReviewTask,
+  TenderRiskFlag,
 } from '../types/tender-intelligence';
 
 export interface TenderIntelligenceBackendAdapter {
@@ -19,6 +25,14 @@ export interface TenderIntelligenceBackendAdapter {
   ): Promise<TenderAnalysisJob>;
   listAnalysisJobsForPackage(packageId: string): Promise<TenderAnalysisJob[]>;
   getLatestAnalysisJobForPackage(packageId: string): Promise<TenderAnalysisJob | null>;
+  listRequirementsForPackage(packageId: string): Promise<TenderRequirement[]>;
+  listMissingItemsForPackage(packageId: string): Promise<TenderMissingItem[]>;
+  listRiskFlagsForPackage(packageId: string): Promise<TenderRiskFlag[]>;
+  listReferenceSuggestionsForPackage(packageId: string): Promise<TenderReferenceSuggestion[]>;
+  listDraftArtifactsForPackage(packageId: string): Promise<TenderDraftArtifact[]>;
+  listReviewTasksForPackage(packageId: string): Promise<TenderReviewTask[]>;
+  clearAnalysisResultsForPackage(packageId: string): Promise<void>;
+  seedPlaceholderAnalysisResults(packageId: string): Promise<TenderPackageResults>;
   startPlaceholderAnalysis(packageId: string): Promise<TenderAnalysisJob>;
   markAnalysisJobRunning(jobId: string): Promise<TenderAnalysisJob>;
   markAnalysisJobCompleted(jobId: string): Promise<TenderAnalysisJob>;
