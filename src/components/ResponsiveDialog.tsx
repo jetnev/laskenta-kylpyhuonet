@@ -55,7 +55,7 @@ export function ResponsiveDialog({
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="flex max-h-[calc(100vh-1rem)] max-h-[calc(100dvh-1rem)] flex-col">
+        <DrawerContent className="flex max-h-[calc(100vh-1rem)] max-h-[calc(100dvh-1rem)] flex-col overflow-hidden">
           <DrawerHeader className="shrink-0 border-b pb-4">
             <DrawerTitle className="text-lg">{title}</DrawerTitle>
             {description ? <DrawerDescription className="text-sm leading-6">{description}</DrawerDescription> : null}
