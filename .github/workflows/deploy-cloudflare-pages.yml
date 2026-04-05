@@ -1,6 +1,6 @@
 name: Deploy Cloudflare Pages
 
-on:
+"on":
   push:
     branches:
       - main

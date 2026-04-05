@@ -1,6 +1,6 @@
 name: Publish Update Feed
 
-on:
+"on":
   push:
     tags:
       - 'v*'
