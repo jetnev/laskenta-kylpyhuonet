@@ -218,11 +218,11 @@ export default function TenderPackageWorkspace({
     return (
       <Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
         <CardHeader className="space-y-4 border-b border-white/10 pb-6">
-          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 13 / Imported quote handoff + re-import reconciliation</Badge>
+          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly</Badge>
           <div className="space-y-3">
-            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousäly osaa nyt avata importoidun quoten handoffin ja päivittää saman import-surfacein hallitusti takaisin editoriin</CardTitle>
+            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Aloita luomalla tarjouspyyntöpaketti</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Luo tarjouspyyntöpaketti, reviewaa löydökset, muodosta draft package ja tarkista reconciliation-preview. Import on edelleen käyttäjän eksplisiittinen toiminto, mutta sama draft voidaan nyt päivittää takaisin aiemmin importoituun quoteen ilman riskialtista ydinfuusiota.
+              Tarjouspyyntöpaketti kokoaa tarjouspyynnön dokumentit, havainnot, tehtävät ja myöhemmät luonnospaketit samaan paikkaan. Kun ensimmäinen paketti on luotu, voit lisätä tiedostoja, käynnistää analyysin ja valmistella sisältöä tarjouseditoriin.
             </CardDescription>
           </div>
         </CardHeader>
@@ -231,37 +231,37 @@ export default function TenderPackageWorkspace({
             <TenderPanel
               title="Dokumentit"
               value="0"
-              description="Dokumenttipaneeli osaa ladata tiedostot Storageen ja käynnistää niille server-side extractionin."
+              description="Lataa tarjouspyyntöön liittyvät tiedostot samaan pakettiin, jotta aineisto pysyy yhdessä paikassa."
             />
             <TenderPanel
-              title="Analyysijobit"
+              title="Havainnot"
               value="0"
-              description="Sääntöpohjainen baseline-run suoritetaan palvelinpuolella Edge Functionin kautta ja voi nyt kirjoittaa myös organisaation referenssikorpukseen perustuvat suggestion-rivit result-domainiin."
+              description="Vaatimukset, puutteet ja riskit ilmestyvät tänne analyysin jälkeen katselmoitaviksi."
             />
             <TenderPanel
-              title="Extraction"
+              title="Avoimet tehtävät"
               value="0"
-              description="Extracted text ja chunkit tallentuvat omaan org-scoped domainiinsa ilman muutoksia Projekta-ytimeen."
+              description="Käsittelyä vaativat kohdat kootaan myöhemmin selkeäksi työjonoksi."
             />
             <TenderPanel
-              title="Evidence"
-              value="0"
-              description="Extraction-aware evidence kiinnittää sekä baseline-löydökset että myöhemmät review-päätökset oikeisiin dokumentti- ja chunk-lähteisiin."
-            />
-            <TenderPanel
-              title="Referenssikorpus"
+              title="Referenssit"
               value={String(referenceProfiles.length)}
-              description="Organisaation omat referenssiprofiilit elävät nyt Tarjousälyn omassa corpus-domainissa ja niitä käytetään deterministiseen suggestion-matchaukseen."
+              description="Tallennetut referenssiprofiilit ovat käytettävissä, kun tarjouspyyntöä aletaan verrata aiempiin toteutuksiin."
+            />
+            <TenderPanel
+              title="Luonnospaketit"
+              value="0"
+              description="Hyväksytyistä havainnoista muodostetaan myöhemmin tarjouseditoriin vietävä luonnospaketti."
+            />
+            <TenderPanel
+              title="Tarjouseditoriin vienti"
+              value="Hallittu"
+              description="Valmis luonnospaketti voidaan viedä editoriin niin, että muu tarjoussisältö pysyy rauhassa."
             />
             <TenderPanel
               title="Go / No-Go"
-              value="Odottaa analyysiä"
-              description="Päätöstuki rakennetaan myöhemmin omaksi tulosobjektikseen. Näkyvä analyysitila syntyy jobin elinkaaresta ja result-domainin riveistä."
-            />
-            <TenderPanel
-              title="Draft package"
-              value="0"
-              description="Reviewed löydöksistä voidaan nyt muodostaa Tarjousälyn staging-luonnospaketti, diffata muutokset viimeiseen importiin ja päivittää sama quote hallitusti adapterin omistamalta pinnalta."
+              value="Myöhemmin"
+              description="Päätöstuki täydentyy, kun pakettiin on lisätty aineistoa ja analyysi on ehditty ajaa läpi."
             />
           </div>
 
@@ -297,7 +297,7 @@ export default function TenderPackageWorkspace({
           <div className="space-y-3">
             <CardTitle className="text-3xl tracking-[-0.03em] text-white">{selectedPackage.package.name}</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Tämä tarjouspyyntöpaketti elää omassa Tarjousäly-domainissaan. Dokumentit tallentuvat Supabase Storageen, analyysijobi toimii näkyvästi ja result-domain kirjoittuu pysyvästi omiin tauluihinsa sääntöpohjaisten löydösten, evidence-rivien, review workflow -päätösten, org-korpukseen sidottujen referenssiehdotusten, draft package -stagingin sekä import reconciliation -ajohistorian kanssa, mutta nykyinen quote-editori, exportit, laskentalogiikka ja raportointi pysyvät edelleen mahdollisimman koskemattomina.
+              Tähän pakettiin kerätään tarjouspyyntöön liittyvät dokumentit, analyysihavainnot, katselmointi ja myöhemmät luonnospaketit. Tarjouseditoriin vienti tehdään erikseen vasta silloin, kun sisältö on valmis vietäväksi.
             </CardDescription>
           </div>
         </CardHeader>
@@ -313,7 +313,7 @@ export default function TenderPackageWorkspace({
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">Data status</p>
-            <p className="mt-2 text-sm text-slate-100">Paketti, dokumenttimetadata, extraction-data, chunkit, analyysijobit, result-domain, evidence-rivit, review workflow -metadata, organisaation referenssikorpus ja draft package -staging luetaan nyt suoraan Supabasesta ilman kytkentää tarjousytimeen.</p>
+            <p className="mt-2 text-sm text-slate-100">Dokumentit, analyysit, katselmointi ja luonnospaketit luetaan Tarjousälyn omasta tietorakenteesta, jotta nykyinen tarjouseditori pysyy hallinnassa.</p>
           </div>
         </CardContent>
       </Card>

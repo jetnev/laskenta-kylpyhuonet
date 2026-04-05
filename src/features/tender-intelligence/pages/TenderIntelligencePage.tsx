@@ -1,4 +1,4 @@
-import { Plus, Sparkle, Stack } from '@phosphor-icons/react';
+import { Plus, Sparkle, Stack, WarningCircle } from '@phosphor-icons/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -12,6 +12,7 @@ import TenderPackageList from '../components/TenderPackageList';
 import TenderReferenceCorpusPanel from '../components/TenderReferenceCorpusPanel';
 import TenderPackageWorkspace from '../components/TenderPackageWorkspace';
 import { useTenderIntelligence } from '../hooks/use-tender-intelligence';
+import { isTenderIntelligenceSchemaUnavailableMessage } from '../lib/tender-intelligence-errors';
 import { getTenderIntelligenceRepository } from '../services/tender-intelligence-repository';
 import {
   resolveTenderIntelligenceHandoff,
@@ -23,29 +24,49 @@ const SUMMARY_CARDS = [
   {
     key: 'packages',
     label: 'Paketit',
-    description: 'Organisaation tarjouspyyntöpaketit',
+    description: 'Aktiiviset tarjouspyyntöpaketit',
   },
   {
     key: 'openReviewTasks',
-    label: 'Review taskit',
-    description: 'Käsittelyyn nostetut workflow-rivit',
+    label: 'Avoimet tehtävät',
+    description: 'Käsittelyä odottavat havainnot',
   },
   {
     key: 'referenceProfiles',
     label: 'Referenssit',
-    description: 'Organisaation oma referenssikorpus',
+    description: 'Tallennetut referenssiprofiilit',
   },
   {
     key: 'openRisks',
     label: 'Riskit',
-    description: 'Riskinostot ja niiden käsittely',
+    description: 'Avoimet riskihavainnot',
   },
   {
     key: 'documents',
     label: 'Dokumentit',
-    description: 'Storageen sidotut dokumentit',
+    description: 'Paketteihin liitetyt tiedostot',
   },
 ] as const;
+
+function resolveTenderIntelligenceErrorState(error: string | null) {
+  if (!error) {
+    return null;
+  }
+
+  if (isTenderIntelligenceSchemaUnavailableMessage(error)) {
+    return {
+      tone: 'warning' as const,
+      title: 'Tarjousäly ei ole käytössä tässä ympäristössä',
+      description: error,
+    };
+  }
+
+  return {
+    tone: 'error' as const,
+    title: 'Tarjousälyn lataus epäonnistui',
+    description: error,
+  };
+}
 
 interface TenderIntelligencePageProps {
   routeState?: AppLocationState;
@@ -219,6 +240,7 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
       editor: 'quote',
     });
   }, [onNavigate]);
+  const errorState = resolveTenderIntelligenceErrorState(error);
 
   return (
     <div className="space-y-6 p-4 sm:p-8">
@@ -226,11 +248,11 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
         <CardContent className="space-y-8 px-6 py-6 sm:px-8 sm:py-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4">
-              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 13</Badge>
+              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly</Badge>
               <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Imported quote handoff ja re-import reconciliation Tarjousäly-draft packageille</h1>
+                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Kokoa tarjouspyynnön aineisto yhteen paikkaan ja valmistele vastaus hallitusti</h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-200 sm:text-base">
-                  Tarjousäly osaa nyt näyttää importoidun quoten handoffin, havaita draft packagen muutokset viime importin jälkeen ja päivittää saman quote-luonnoksen hallitusti vain adapterin omistamalta import-surfacelta.
+                  Luo tarjouspyyntöpaketti, lisää dokumentit ja käy havainnot läpi ennen kuin viet sisältöä tarjouseditoriin. Tarjousäly pitää tarjouspyynnön aineiston, katselmoinnin ja luonnospaketit samassa näkymässä ilman että nykyinen tarjouseditori muuttuu taustalla.
                 </p>
               </div>
             </div>
@@ -241,7 +263,7 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
                 <Plus className="h-4 w-4" />
               </Button>
               <Button variant="outline" className="justify-between border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white" disabled>
-                Result-domain päivittyy baseline-, workflow-, reference-matchaus-, draft package-, import handoff- ja reconciliation-ajoista
+                Dokumentit, katselmointi ja luonnospaketit etenevät paketin kautta
                 <Sparkle className="h-4 w-4" />
               </Button>
             </div>
@@ -259,9 +281,18 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
         </CardContent>
       </Card>
 
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+      {errorState && (
+        <div className={[
+          'rounded-2xl border px-4 py-4 text-sm leading-6',
+          errorState.tone === 'warning'
+            ? 'border-amber-200 bg-amber-50 text-amber-950'
+            : 'border-red-200 bg-red-50 text-red-700',
+        ].join(' ')}>
+          <div className="flex items-center gap-2 font-medium">
+            <WarningCircle className="h-4 w-4" />
+            {errorState.title}
+          </div>
+          <p className="mt-1">{errorState.description}</p>
         </div>
       )}
 
@@ -394,11 +425,11 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
               <Stack className="h-4 w-4" />
               <span className="font-medium">Mitä tämä vaihe jo tekee</span>
             </div>
-            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit, extraction-data, analyysitulokset, evidence-rivit, review workflow, referenssikorpus ja draft package -staging tallentuvat Supabaseen. Reviewed löydöksistä voidaan nyt muodostaa import-preview, nähdä imported quote handoff, diffata muutokset viimeiseen onnistuneeseen importiin ja päivittää samaa tarjousluonnosta idempotentisti.</p>
+            <p>Tarjouspyyntöpaketteihin voi jo tallentaa dokumentit, ajaa analyysin, käsitellä havainnot, hyödyntää referenssiprofiileja ja muodostaa luonnospaketin tarjouseditoria varten. Työ etenee vaiheittain, jotta tarjouspyynnön valmistelu pysyy erillään varsinaisesta tarjouksen kirjoittamisesta.</p>
           </div>
           <div className="space-y-2 sm:max-w-sm">
             <p className="font-medium text-slate-950">Mitä tästä puuttuu tarkoituksella</p>
-            <p>Ei vielä OCR:ää, AI-provider-koodia, täydellistä automaattista tarjousgenerointia tai riskialtista syväkirjoitusta quote-riveihin. Nykyinen quote-, project-, invoice- ja reporting-ydin jätetään edelleen mahdollisimman koskemattomaksi, ja re-import päivittää vain adapterin omistaman notes/internalNotes/section-surface-alueen.</p>
+            <p>Ei vielä OCR:ää, AI-avusteista sisällöntuotantoa tai täysin automaattista tarjouksen muodostusta. Tarjouseditoriin tehdään vain hallittu vienti, jotta nykyinen tarjous-, projekti- ja raportointilogiikka pysyy vakaana.</p>
           </div>
         </CardContent>
       </Card>

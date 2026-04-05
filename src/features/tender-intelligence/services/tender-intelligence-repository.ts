@@ -5,6 +5,10 @@ import { getSupabaseConfigError, isSupabaseConfigured, requireSupabase } from '@
 import type { TenderIntelligenceBackendAdapter } from './tender-intelligence-backend-adapter';
 import { buildTenderAnalysisReadiness, buildTenderExtractionCoverage } from '../lib/tender-analysis';
 import {
+  getTenderIntelligenceSchemaUnavailableMessage,
+  isTenderIntelligenceSchemaUnavailableError,
+} from '../lib/tender-intelligence-errors';
+import {
   buildTenderDraftExportPayload,
   buildTenderDraftPackageFromReviewedResults,
   buildTenderDraftSummary,
@@ -165,6 +169,10 @@ function getRepositoryErrorMessage(error: unknown, fallbackMessage: string) {
   const candidate = error as PostgrestError | Error | null | undefined;
   const message = typeof candidate?.message === 'string' ? candidate.message.trim() : '';
   const normalizedMessage = message.toLowerCase();
+
+  if (isTenderIntelligenceSchemaUnavailableError(error)) {
+    return getTenderIntelligenceSchemaUnavailableMessage();
+  }
 
   if (
     normalizedMessage.includes('row-level security') ||
