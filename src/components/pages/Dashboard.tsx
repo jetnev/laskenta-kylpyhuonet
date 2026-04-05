@@ -1,17 +1,15 @@
 import {
 	ArrowRight,
-	ClockCountdown,
-	FileText,
 	FolderOpen,
 	Package,
 	Plus,
-	Receipt,
 	TrendUp,
 	WarningCircle,
 } from '@phosphor-icons/react';
 import { useMemo } from 'react';
 
 import DeadlineNotifications from '../DeadlineNotifications';
+import { AppPageLayout } from '../layout/AppPageLayout';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -64,7 +62,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
 	if (!actionCenter.hasWorkspace) {
 		return (
-			<div className="p-4 sm:p-8 space-y-6">
+			<AppPageLayout pageType="dashboard">
 				<div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_340px]">
 					<Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
 						<div className="flex h-full flex-col gap-6 p-6 sm:p-8">
@@ -138,12 +136,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 						<DeadlineNotifications compact />
 					</div>
 				</div>
-			</div>
+			</AppPageLayout>
 		);
 	}
 
 	return (
-		<div className="p-4 sm:p-8 space-y-6">
+		<AppPageLayout pageType="dashboard">
 			<div className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_340px]">
 				<div className="space-y-6">
 					<Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
@@ -298,6 +296,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 					<DeadlineNotifications compact />
 				</div>
 			</div>
-		</div>
+		</AppPageLayout>
 	);
 }

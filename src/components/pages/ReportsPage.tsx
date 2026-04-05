@@ -16,7 +16,6 @@ import {
   FileXls,
   Warning,
   ArrowRight,
-  TrendUp,
   TrendDown,
   CaretRight,
   Eye,
@@ -45,7 +44,7 @@ import { fi } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../hooks/use-auth';
-import { getResponsibleUserLabel } from '../../lib/ownership';
+import { AppPageLayout } from '../layout/AppPageLayout';
 import { exportReportsToPDF } from '../../lib/export';
 import ReportingDrilldownContent, { getReportingDrilldownDescription } from './reporting/ReportingDrilldownContent';
 import type { AppLocationState } from '../../lib/app-routing';
@@ -58,7 +57,6 @@ import {
   type ReportActionItem,
   type ReportActionGroupKey,
   type ReportBadgeVariant,
-  type ReportSeverity,
 } from '../../lib/reporting';
 import { selectReportingViewState } from '../../lib/reporting-view-state';
 
@@ -100,7 +98,7 @@ function EmptyState({ icon, title, description, action }: { icon: ReactNode; tit
 
 function ReportsLoadingState() {
   return (
-    <div className="p-8 space-y-6">
+    <AppPageLayout pageType="registry">
       <div>
         <h1 className="text-3xl font-semibold">Raportointi</h1>
         <p className="mt-1 text-sm text-muted-foreground">Ladataan raportointinäkymää ensimmäistä kertaa.</p>
@@ -119,7 +117,7 @@ function ReportsLoadingState() {
       <Card className="p-6 text-sm text-muted-foreground">
         Raportin sisältö valmistellaan. Ensimmäisen latauksen jälkeen data pidetään näkyvissä myös taustapäivitysten aikana.
       </Card>
-    </div>
+    </AppPageLayout>
   );
 }
 
@@ -296,10 +294,10 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
 
   if (!model.meta.hasQuotes && model.customers.length === 0) {
     return (
-      <div className="p-8">
+      <AppPageLayout pageType="registry">
         <h1 className="text-3xl font-semibold mb-2">Raportointi</h1>
         <EmptyState icon={<ChartBar className="h-16 w-16" />} title="Ei vielä riittävästi dataa" description="Raportointi aktivoituu, kun järjestelmässä on asiakkaita, projekteja ja tarjouksia." action="Luo ensimmäinen asiakas ja tarjous aloittaaksesi." />
-      </div>
+      </AppPageLayout>
     );
   }
 
@@ -307,7 +305,7 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
   const actionCount = allActions.length;
 
   return (
-    <div className="p-8 space-y-6">
+    <AppPageLayout pageType="registry">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
@@ -326,7 +324,10 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
               </SelectContent>
             </Select>
           )}
-          <Select value={filterDraft.quoteStatus || 'all'} onValueChange={(v) => updateFilter('quoteStatus', v as any)}>
+          <Select
+            value={filterDraft.quoteStatus || 'all'}
+            onValueChange={(value) => updateFilter('quoteStatus', value === 'all' ? undefined : value as ReportingFilterDraft['quoteStatus'])}
+          >
             <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Kaikki statukset</SelectItem>
@@ -800,6 +801,6 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </AppPageLayout>
   );
 }
