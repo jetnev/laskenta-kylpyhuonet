@@ -3,6 +3,7 @@ import type { AppLocationState } from './app-routing';
 import type { Customer, Invoice, Product, Project, Quote, QuoteRow, ScheduleMilestone } from './types';
 
 export type WorkspaceTaskTone = 'critical' | 'attention' | 'follow-up' | 'info';
+export type WorkspaceTaskActionKind = 'navigate' | 'create-quote';
 
 export interface WorkspaceTask {
   id: string;
@@ -13,11 +14,16 @@ export interface WorkspaceTask {
   target: AppLocationState;
   priority: number;
   tone: WorkspaceTaskTone;
+  actionKind: WorkspaceTaskActionKind;
   projectId?: string;
   quoteId?: string;
   invoiceId?: string;
   updatedAt?: string;
 }
+
+type WorkspaceTaskInput = Omit<WorkspaceTask, 'actionKind'> & {
+  actionKind?: WorkspaceTaskActionKind;
+};
 
 export interface WorkspaceResumeItem {
   id: string;
@@ -121,10 +127,29 @@ function buildProjectLabel(project?: Project | null, customer?: Customer | null)
   return [project?.name || 'Tuntematon projekti', customer?.name || 'Ei asiakasta'].join(' • ');
 }
 
-function pushTask(collection: WorkspaceTask[], task: WorkspaceTask | null) {
+function pushTask(collection: WorkspaceTask[], task: WorkspaceTaskInput | null) {
   if (task) {
-    collection.push(task);
+    collection.push({
+      actionKind: 'navigate',
+      ...task,
+    });
   }
+}
+
+export function resolveWorkspaceTaskExecution(task: WorkspaceTask):
+  | { kind: 'create-quote'; projectId: string }
+  | { kind: 'navigate'; target: AppLocationState } {
+  if (task.actionKind === 'create-quote' && task.projectId) {
+    return {
+      kind: 'create-quote',
+      projectId: task.projectId,
+    };
+  }
+
+  return {
+    kind: 'navigate',
+    target: task.target,
+  };
 }
 
 function compareTasks(left: WorkspaceTask, right: WorkspaceTask) {
@@ -422,6 +447,7 @@ export function buildWorkspaceActionCenter(input: WorkspaceFlowInput): Workspace
         target: { page: 'projects', projectId: project.id },
         priority: 66,
         tone: 'info',
+        actionKind: 'create-quote',
         projectId: project.id,
         updatedAt: project.updatedAt,
       });

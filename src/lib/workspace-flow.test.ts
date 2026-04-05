@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildProjectWorkspaceContext, buildWorkspaceActionCenter } from './workspace-flow';
+import { buildProjectWorkspaceContext, buildWorkspaceActionCenter, resolveWorkspaceTaskExecution } from './workspace-flow';
 import type { Customer, Invoice, Product, Project, Quote, QuoteRow } from './types';
 
 function createCustomer(overrides: Partial<Customer> = {}): Customer {
@@ -314,5 +314,56 @@ describe('buildProjectWorkspaceContext', () => {
     expect(context.draftInvoiceCount).toBe(1);
     expect(context.overdueInvoiceCount).toBe(0);
     expect(context.acceptedWithoutInvoiceCount).toBe(1);
+  });
+
+  it('marks an empty project next action as create-quote work', () => {
+    const customer = createCustomer();
+    const project = createProject();
+
+    const context = buildProjectWorkspaceContext(project.id, {
+      customers: [customer],
+      invoices: [],
+      products: [createProduct()],
+      projects: [project],
+      quoteRows: [],
+      quotes: [],
+      today: new Date('2026-04-10T12:00:00.000Z'),
+    });
+
+    expect(context.nextAction).toMatchObject({
+      id: 'project-empty-project-1',
+      ctaLabel: 'Luo tarjous',
+      actionKind: 'create-quote',
+      projectId: project.id,
+    });
+    expect(resolveWorkspaceTaskExecution(context.nextAction!)).toEqual({
+      kind: 'create-quote',
+      projectId: project.id,
+    });
+  });
+
+  it('keeps navigation tasks as navigation actions', () => {
+    const customer = createCustomer();
+    const project = createProject();
+    const acceptedQuote = createQuote({
+      id: 'quote-accepted',
+      status: 'accepted',
+      updatedAt: '2026-04-07T08:00:00.000Z',
+    });
+
+    const context = buildProjectWorkspaceContext(project.id, {
+      customers: [customer],
+      invoices: [],
+      products: [createProduct()],
+      projects: [project],
+      quoteRows: [createQuoteRow({ quoteId: acceptedQuote.id })],
+      quotes: [acceptedQuote],
+      today: new Date('2026-04-10T12:00:00.000Z'),
+    });
+
+    expect(resolveWorkspaceTaskExecution(context.nextAction!)).toEqual({
+      kind: 'navigate',
+      target: { page: 'invoices' },
+    });
   });
 });
