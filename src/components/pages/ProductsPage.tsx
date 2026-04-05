@@ -21,6 +21,7 @@ import { useAuth } from '../../hooks/use-auth';
 import { useInstallationGroups, useProducts } from '../../hooks/use-data';
 import { Product } from '../../lib/types';
 import { formatCurrency } from '../../lib/calculations';
+import { matchesProductSearch, normalizeProductSearchQuery } from '../../lib/product-search';
 import { ReadOnlyAlert } from '../ReadOnlyAlert';
 
 type ProductFormState = {
@@ -173,7 +174,7 @@ export default function ProductsPage() {
   );
 
   const filteredProducts = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = normalizeProductSearchQuery(search);
     return products
       .filter((product) => {
         const active = product.active ?? product.isActive ?? true;
@@ -181,19 +182,8 @@ export default function ProductsPage() {
         if (activeFilter === 'inactive' && active) return false;
         if (categoryFilter !== 'all' && (product.category || '') !== categoryFilter) return false;
         if (brandFilter !== 'all' && (product.brand || product.manufacturer || '') !== brandFilter) return false;
-        if (!query) return true;
-        return [
-          product.code,
-          product.internalCode,
-          product.name,
-          product.description,
-          product.category,
-          product.brand,
-          product.manufacturer,
-          product.ean,
-        ]
-          .filter(Boolean)
-          .some((value) => value?.toLowerCase().includes(query));
+        if (!query.normalizedText) return true;
+        return matchesProductSearch(product, query);
       })
       .sort((left, right) => {
         const direction = sortDirection === 'asc' ? 1 : -1;
@@ -290,18 +280,6 @@ export default function ProductsPage() {
       installationGroupId: form.installationGroupId === 'none' ? undefined : form.installationGroupId,
       isActive: form.active,
       active: form.active,
-      searchableText: [
-        code,
-        name,
-        form.description,
-        form.category,
-        form.brand,
-        form.manufacturer,
-        form.ean,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase(),
     };
 
     try {

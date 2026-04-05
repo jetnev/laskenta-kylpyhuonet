@@ -32,6 +32,7 @@ import {
 import { createInvoiceSnapshotFromQuote } from '../lib/invoices';
 import { APP_DEFAULT_UPDATE_FEED_URL } from '../lib/site-brand';
 import { getQuoteVatPercent } from '../lib/calculations';
+import { buildProductSearchText } from '../lib/product-search';
 
 type OwnedAuditKeys = 'id' | keyof ReturnType<typeof buildOwnedAudit>;
 type CustomerCreateInput = Omit<Customer, 'id' | keyof ReturnType<typeof buildOwnedAudit>> & {
@@ -408,23 +409,32 @@ export function useProducts() {
 
     const internalCode = product.internalCode?.trim() || product.code?.trim();
     const code = product.code?.trim() || internalCode;
-    if (!code || !product.name.trim()) {
+    const name = product.name.trim();
+    if (!code || !name) {
       throw new Error('Anna tuotteelle vähintään koodi ja nimi.');
     }
+
+    const description = product.description?.trim();
+    const category = product.category?.trim();
+    const brand = product.brand?.trim();
+    const manufacturer = product.manufacturer?.trim();
+    const manufacturerSku = product.manufacturerSku?.trim();
+    const ean = product.ean?.trim();
+    const normalizedName = product.normalizedName?.trim() || name;
 
     const newProduct: Product = {
       ...product,
       id: crypto.randomUUID(),
       code,
       internalCode,
-      name: product.name.trim(),
-      description: product.description?.trim(),
-      category: product.category?.trim(),
-      brand: product.brand?.trim(),
-      manufacturer: product.manufacturer?.trim(),
-      manufacturerSku: product.manufacturerSku?.trim(),
-      ean: product.ean?.trim(),
-      normalizedName: product.normalizedName?.trim() || product.name.trim(),
+      name,
+      description,
+      category,
+      brand,
+      manufacturer,
+      manufacturerSku,
+      ean,
+      normalizedName,
       salesUnit: product.salesUnit || product.unit,
       baseUnit: product.baseUnit || product.unit,
       purchasePrice: product.defaultCostPrice ?? product.purchasePrice ?? 0,
@@ -440,21 +450,20 @@ export function useProducts() {
         product.defaultInstallPrice ?? product.defaultInstallationPrice ?? 0,
       active: product.active ?? product.isActive ?? true,
       isActive: product.active ?? product.isActive ?? true,
-      searchableText:
-        product.searchableText ||
-        [
-          code,
-          internalCode,
-          product.name,
-          product.description,
-          product.category,
-          product.brand,
-          product.manufacturer,
-          product.ean,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase(),
+      searchableText: buildProductSearchText({
+        code,
+        internalCode,
+        name,
+        normalizedName,
+        description,
+        category,
+        brand,
+        manufacturer,
+        manufacturerSku,
+        ean,
+        sourceNames: product.sourceNames,
+        tags: product.tags,
+      }),
       ...buildAudit(currentUserId),
     };
 
@@ -487,6 +496,7 @@ export function useProducts() {
             ? updates.manufacturerSku?.trim()
             : product.manufacturerSku;
         const ean = updates.ean !== undefined ? updates.ean?.trim() : product.ean;
+        const normalizedName = updates.normalizedName?.trim() || name;
         const purchasePrice = updates.defaultCostPrice ?? updates.purchasePrice ?? product.purchasePrice;
         const defaultSalePrice = updates.defaultSalePrice ?? product.defaultSalePrice ?? purchasePrice;
         const defaultMarginPercent =
@@ -526,13 +536,21 @@ export function useProducts() {
           defaultInstallPrice: defaultInstallationPrice,
           active,
           isActive: active,
-          normalizedName: updates.normalizedName?.trim() || name,
-          searchableText:
-            updates.searchableText ||
-            [code, internalCode, name, description, category, brand, manufacturer, ean]
-              .filter(Boolean)
-              .join(' ')
-              .toLowerCase(),
+          normalizedName,
+          searchableText: buildProductSearchText({
+            code,
+            internalCode,
+            name,
+            normalizedName,
+            description,
+            category,
+            brand,
+            manufacturer,
+            manufacturerSku,
+            ean,
+            sourceNames: updates.sourceNames ?? product.sourceNames,
+            tags: updates.tags ?? product.tags,
+          }),
           updatedAt: nowIso(),
           updatedByUserId: currentUserId,
         };
