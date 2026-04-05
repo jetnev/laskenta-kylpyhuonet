@@ -67,9 +67,11 @@ describe('buildTenderPackageDetails', () => {
         created_by_user_id: packageRow.created_by_user_id,
         file_name: 'tarjouspyynto.pdf',
         mime_type: 'application/pdf',
+        storage_bucket: 'tender-intelligence',
         storage_path: null,
         file_size_bytes: null,
         checksum: null,
+        upload_error: null,
         upload_status: 'placeholder',
         parse_status: 'not-started',
         created_at: '2026-04-05T09:05:00.000Z',
@@ -114,6 +116,7 @@ describe('buildTenderPackageDetails', () => {
     expect(details.package.summary.documentCount).toBe(1);
     expect(details.documents[0]).toMatchObject({
       fileName: 'tarjouspyynto.pdf',
+      storageBucket: 'tender-intelligence',
       uploadState: 'placeholder',
       parseStatus: 'not-started',
     });

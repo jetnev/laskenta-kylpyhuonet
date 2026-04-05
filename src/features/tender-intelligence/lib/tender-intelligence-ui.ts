@@ -1,5 +1,7 @@
 import type {
   TenderAnalysisJobStatus,
+  TenderDocumentParseStatus,
+  TenderDocumentUploadStatus,
   TenderGoNoGoRecommendation,
   TenderPackageStatus,
   TenderReviewTaskStatus,
@@ -21,6 +23,27 @@ export const TENDER_ANALYSIS_JOB_STATUS_META: Record<
   { label: string; variant: TenderBadgeVariant }
 > = {
   'not-started': { label: 'Ei käynnistetty', variant: 'secondary' },
+  queued: { label: 'Jonossa', variant: 'outline' },
+  processing: { label: 'Käsittelyssä', variant: 'outline' },
+  completed: { label: 'Valmis', variant: 'default' },
+  failed: { label: 'Virhe', variant: 'destructive' },
+};
+
+export const TENDER_DOCUMENT_UPLOAD_STATUS_META: Record<
+  TenderDocumentUploadStatus,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  placeholder: { label: 'Placeholder', variant: 'secondary' },
+  pending: { label: 'Ladataan', variant: 'outline' },
+  uploaded: { label: 'Tallennettu', variant: 'default' },
+  failed: { label: 'Virhe', variant: 'destructive' },
+};
+
+export const TENDER_DOCUMENT_PARSE_STATUS_META: Record<
+  TenderDocumentParseStatus,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  'not-started': { label: 'Ei aloitettu', variant: 'secondary' },
   queued: { label: 'Jonossa', variant: 'outline' },
   processing: { label: 'Käsittelyssä', variant: 'outline' },
   completed: { label: 'Valmis', variant: 'default' },

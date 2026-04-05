@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
+import TenderDocumentsPanel from './TenderDocumentsPanel';
 import {
   TENDER_ANALYSIS_JOB_STATUS_META,
   TENDER_GO_NO_GO_META,
@@ -12,6 +13,7 @@ import {
   formatTenderTimestamp,
 } from '../lib/tender-intelligence-ui';
 import { TENDER_INTELLIGENCE_BACKEND_PLAN } from '../services/tender-intelligence-backend-adapter';
+import type { TenderDocumentsUploadResult } from '../hooks/use-tender-intelligence';
 import type { TenderPackageDetails } from '../types/tender-intelligence';
 
 interface TenderPanelProps {
@@ -38,14 +40,24 @@ interface TenderPackageWorkspaceProps {
   selectedPackage: TenderPackageDetails | null;
   loading?: boolean;
   notFound?: boolean;
+  uploading?: boolean;
+  deletingDocumentIds?: string[];
+  error?: string | null;
   onCreateClick: () => void;
+  onUploadDocuments: (packageId: string, files: File[]) => Promise<TenderDocumentsUploadResult>;
+  onDeleteDocument: (documentId: string) => Promise<void>;
 }
 
 export default function TenderPackageWorkspace({
   selectedPackage,
   loading = false,
   notFound = false,
+  uploading = false,
+  deletingDocumentIds = [],
+  error = null,
   onCreateClick,
+  onUploadDocuments,
+  onDeleteDocument,
 }: TenderPackageWorkspaceProps) {
   if (loading && !selectedPackage) {
     return (
@@ -77,11 +89,11 @@ export default function TenderPackageWorkspace({
     return (
       <Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
         <CardHeader className="space-y-4 border-b border-white/10 pb-6">
-          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 1 / Supabase data</Badge>
+          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 2 / Storage foundation</Badge>
           <div className="space-y-3">
-            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousäly käyttää nyt omaa pysyvää organisaatiodataa</CardTitle>
+            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousäly osaa nyt liittää oikeita dokumentteja omaan Storage-domainiinsa</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Luo ensimmäinen tarjouspyyntöpaketti. Data tallentuu nyt organisaation omaan Supabase-domainiin, mutta dokumenttiupload, analyysijobit ja generointi lisätään edelleen vasta myöhemmissä vaiheissa.
+              Luo ensimmäinen tarjouspyyntöpaketti. Phase 2 lisää dokumenttien uploadin ja storage-pathit organisaation omaan Supabase-domainiin, mutta parsinta, OCR, analyysijobit ja generointi jätetään edelleen myöhempiin vaiheisiin.
             </CardDescription>
           </div>
         </CardHeader>
@@ -90,7 +102,7 @@ export default function TenderPackageWorkspace({
             <TenderPanel
               title="Dokumentit"
               value="0"
-              description="Dokumenttilista näkyy tässä, kun package saa myöhemmin oikean upload- ja storage-kerroksen."
+              description="Dokumenttipaneeli osaa jo ladata tiedostot oikeaan Storage-bucketiin heti kun ensimmäinen paketti on luotu."
             />
             <TenderPanel
               title="Vaatimukset"
@@ -110,7 +122,7 @@ export default function TenderPackageWorkspace({
             <TenderPanel
               title="Go / No-Go"
               value="Odottaa analyysiä"
-              description="Päätöstuki rakennetaan myöhemmin omaksi tulosobjektikseen eikä sitä vielä johdeta nykyisestä raportointidomainista."
+              description="Päätöstuki rakennetaan myöhemmin omaksi tulosobjektikseen eikä sitä vielä johdeta nykyisestä raportointidomainista tai upload-kerroksesta."
             />
             <TenderPanel
               title="Luonnos"
@@ -151,7 +163,7 @@ export default function TenderPackageWorkspace({
           <div className="space-y-3">
             <CardTitle className="text-3xl tracking-[-0.03em] text-white">{selectedPackage.package.name}</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Tämä tarjouspyyntöpaketti elää omassa foundation-domainissaan. Nykyinen quote-editori, exportit, laskentalogiikka ja raportointi eivät ole vielä kytketty tähän näkymään.
+              Tämä tarjouspyyntöpaketti elää omassa foundation-domainissaan. Dokumentit voidaan jo tallentaa Supabase Storageen, mutta nykyinen quote-editori, exportit, laskentalogiikka ja raportointi eivät edelleenkään ole kytketty tähän näkymään.
             </CardDescription>
           </div>
         </CardHeader>
@@ -167,7 +179,7 @@ export default function TenderPackageWorkspace({
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">Data status</p>
-            <p className="mt-2 text-sm text-slate-100">Paketti ja metatiedot luetaan nyt suoraan Supabasesta ilman kytkentää tarjousytimeen.</p>
+            <p className="mt-2 text-sm text-slate-100">Paketti, dokumenttimetadata ja Storage-polut luetaan nyt suoraan Supabasesta ilman kytkentää tarjousytimeen.</p>
           </div>
         </CardContent>
       </Card>
@@ -178,8 +190,8 @@ export default function TenderPackageWorkspace({
           value={String(selectedPackage.documents.length)}
           description={
             selectedPackage.documents.length > 0
-              ? `${selectedPackage.documents.length} placeholder-dokumenttia näkyy repositoryn omassa tilassa.`
-              : 'Dokumentteja ei ole lisätty. Upload-virta ja Storage-kytkentä lisätään myöhemmin adapterikerroksen päälle.'
+              ? `${selectedPackage.documents.length} dokumenttia näkyy paketin omassa Storage- ja metadata-tilassa.`
+              : 'Dokumentteja ei ole lisätty. Upload-virta on valmis, mutta analyysiä ei vielä käynnistetä.'
           }
         />
         <TenderPanel
@@ -224,6 +236,16 @@ export default function TenderPackageWorkspace({
         />
       </div>
 
+      <TenderDocumentsPanel
+        selectedPackage={selectedPackage}
+        loading={loading}
+        uploading={uploading}
+        deletingDocumentIds={deletingDocumentIds}
+        error={error}
+        onUploadDocuments={onUploadDocuments}
+        onDeleteDocument={onDeleteDocument}
+      />
+
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_360px]">
         <Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
           <CardHeader className="border-b">
@@ -232,7 +254,7 @@ export default function TenderPackageWorkspace({
               Katselmointi ja jatkovaihe
             </CardTitle>
             <CardDescription>
-              Foundation rajaa valmiiksi ne kohdat, joihin myöhemmät Supabase-taulut, Storage-uploadit ja analyysijobit kytketään.
+              Foundation rajaa valmiiksi ne kohdat, joihin myöhemmät analyysijobit, parsinta ja tulosmallit kytketään ilman muutoksia nykyiseen tarjousytimeen.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
@@ -251,7 +273,7 @@ export default function TenderPackageWorkspace({
             )}
 
             <div className="rounded-2xl border border-dashed px-4 py-8 text-sm leading-6 text-muted-foreground">
-              Referenssiehdotukset, puuteanalyysi ja varsinainen luonnoksen generointi tulevat myöhemmin omasta analyysipalvelusta. Phase 0 pitää nämä riippuvuudet tietoisesti irti nykyisestä tarjouseditorista.
+              Referenssiehdotukset, puuteanalyysi ja varsinainen luonnoksen generointi tulevat myöhemmin omasta analyysipalvelusta. Phase 2 pitää nämä riippuvuudet tietoisesti irti nykyisestä tarjouseditorista, vaikka dokumentit jo tallentuvat Storageen.
             </div>
           </CardContent>
         </Card>

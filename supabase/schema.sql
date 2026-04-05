@@ -618,9 +618,11 @@ create table if not exists public.tender_documents (
   created_by_user_id uuid not null references public.profiles(id) on delete restrict,
   file_name text not null,
   mime_type text not null,
+  storage_bucket text not null default 'tender-intelligence',
   storage_path text,
   file_size_bytes bigint check (file_size_bytes is null or file_size_bytes >= 0),
   checksum text,
+  upload_error text,
   upload_status text not null default 'placeholder' check (upload_status in ('placeholder', 'pending', 'uploaded', 'failed')),
   parse_status text not null default 'not-started' check (parse_status in ('not-started', 'queued', 'processing', 'completed', 'failed')),
   created_at timestamptz not null default timezone('utc', now()),
@@ -632,6 +634,28 @@ on public.tender_documents(tender_package_id, created_at desc);
 
 create index if not exists tender_documents_organization_id_idx
 on public.tender_documents(organization_id, created_at desc);
+
+create unique index if not exists tender_documents_storage_object_unique_idx
+on public.tender_documents(storage_bucket, storage_path)
+where storage_path is not null;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'tender-intelligence',
+  'tender-intelligence',
+  false,
+  26214400,
+  array[
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/zip'
+  ]::text[]
+)
+on conflict (id) do update
+set public = excluded.public,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
 
 create table if not exists public.tender_analysis_jobs (
   id uuid primary key default gen_random_uuid(),
@@ -670,6 +694,55 @@ on public.tender_go_no_go_assessments(tender_package_id);
 
 create index if not exists tender_go_no_go_assessments_organization_id_idx
 on public.tender_go_no_go_assessments(organization_id, updated_at desc);
+
+create or replace function public.can_access_tender_storage_object(target_bucket_id text, target_object_name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.tender_documents document_row
+    join public.tender_packages package_row on package_row.id = document_row.tender_package_id
+    where document_row.storage_bucket = target_bucket_id
+      and document_row.storage_path = target_object_name
+      and document_row.storage_path is not null
+      and (
+        (select public.is_admin())
+        or (
+          package_row.organization_id is not null
+          and (select public.is_organization_member(package_row.organization_id))
+        )
+      )
+  );
+$$;
+
+create or replace function public.can_delete_tender_storage_object(target_bucket_id text, target_object_name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.tender_documents document_row
+    join public.tender_packages package_row on package_row.id = document_row.tender_package_id
+    where document_row.storage_bucket = target_bucket_id
+      and document_row.storage_path = target_object_name
+      and document_row.storage_path is not null
+      and (
+        (select public.is_admin())
+        or (
+          package_row.organization_id is not null
+          and (select public.is_organization_owner(package_row.organization_id))
+        )
+        or document_row.created_by_user_id = (select auth.uid())
+      )
+  );
+$$;
 
 create or replace function public.prepare_tender_package()
 returns trigger
@@ -761,11 +834,35 @@ begin
     raise exception 'Dokumentin MIME-tyyppi on pakollinen.';
   end if;
 
+  new.storage_bucket := trim(coalesce(new.storage_bucket, 'tender-intelligence'));
+  if new.storage_bucket = '' then
+    raise exception 'Dokumentin storage-bucket on pakollinen.';
+  end if;
+
   new.storage_path := nullif(trim(coalesce(new.storage_path, '')), '');
   new.checksum := nullif(trim(coalesce(new.checksum, '')), '');
-  new.upload_status := coalesce(new.upload_status, 'placeholder');
+  new.upload_error := nullif(trim(coalesce(new.upload_error, '')), '');
+  new.upload_status := coalesce(new.upload_status, 'pending');
   new.parse_status := coalesce(new.parse_status, 'not-started');
   new.updated_at := timezone('utc', now());
+
+  if new.storage_path is not null then
+    if left(new.storage_path, 1) = '/' then
+      raise exception 'Storage-polku ei saa alkaa kauttaviivalla.';
+    end if;
+
+    if position('..' in new.storage_path) > 0 then
+      raise exception 'Storage-polku ei saa sisältää parent-segmenttejä.';
+    end if;
+
+    if split_part(new.storage_path, '/', 1) <> target_package.organization_id::text then
+      raise exception 'Storage-polun on aloitettava organisaation tunnisteella.';
+    end if;
+
+    if split_part(new.storage_path, '/', 2) <> target_package.id::text then
+      raise exception 'Storage-polun on sisällettävä tarjouspyyntöpaketin tunniste.';
+    end if;
+  end if;
 
   if tg_op = 'INSERT' then
     new.organization_id := target_package.organization_id;
@@ -998,6 +1095,57 @@ using (
   (select public.is_admin())
   or (organization_id is not null and (select public.is_organization_owner(organization_id)))
   or created_by_user_id = (select auth.uid())
+);
+
+drop policy if exists tender_intelligence_bucket_select on storage.buckets;
+create policy tender_intelligence_bucket_select
+on storage.buckets
+for select
+to authenticated
+using (id = 'tender-intelligence');
+
+drop policy if exists tender_intelligence_storage_select on storage.objects;
+create policy tender_intelligence_storage_select
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'tender-intelligence'
+  and public.can_access_tender_storage_object(bucket_id, name)
+);
+
+drop policy if exists tender_intelligence_storage_insert on storage.objects;
+create policy tender_intelligence_storage_insert
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'tender-intelligence'
+  and public.can_access_tender_storage_object(bucket_id, name)
+);
+
+drop policy if exists tender_intelligence_storage_update on storage.objects;
+create policy tender_intelligence_storage_update
+on storage.objects
+for update
+to authenticated
+using (
+  bucket_id = 'tender-intelligence'
+  and public.can_access_tender_storage_object(bucket_id, name)
+)
+with check (
+  bucket_id = 'tender-intelligence'
+  and public.can_access_tender_storage_object(bucket_id, name)
+);
+
+drop policy if exists tender_intelligence_storage_delete on storage.objects;
+create policy tender_intelligence_storage_delete
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'tender-intelligence'
+  and public.can_delete_tender_storage_object(bucket_id, name)
 );
 
 drop policy if exists tender_analysis_jobs_select_org_member_or_admin on public.tender_analysis_jobs;
