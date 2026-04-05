@@ -4,6 +4,7 @@ import {
   buildTenderPackageDetails,
   mapCreateTenderReferenceProfileInputToInsert,
   mapCreateTenderPackageInputToInsert,
+  mapTenderDraftPackageImportRunRowToDomain,
   mapTenderDraftPackageItemRowToDomain,
   mapTenderDraftPackageRowToDomain,
   mapTenderDocumentChunkRowToDomain,
@@ -25,6 +26,7 @@ import type {
   TenderDocumentChunkRow,
   TenderDocumentExtractionRow,
   TenderDocumentRow,
+  TenderDraftPackageImportRunRow,
   TenderDraftPackageItemRow,
   TenderDraftPackageRow,
   TenderDraftArtifactRow,
@@ -712,6 +714,9 @@ describe('draft package mappers', () => {
       title: 'Tarjouspaketti / draft package',
       status: 'draft',
       import_status: 'imported',
+      reimport_status: 'stale',
+      import_revision: 2,
+      last_import_payload_hash: 'deadbeef',
       generated_from_analysis_job_id: '33333333-3333-4333-8333-333333333333',
       generated_by_user_id: '22222222-2222-4222-8222-222222222222',
       imported_quote_id: '61616161-6161-4616-8616-616161616161',
@@ -756,6 +761,9 @@ describe('draft package mappers', () => {
       tenderPackageId: packageRow.tender_package_id,
       status: 'draft',
       importStatus: 'imported',
+      reimportStatus: 'stale',
+      importRevision: 2,
+      lastImportPayloadHash: 'deadbeef',
       importedQuoteId: '61616161-6161-4616-8616-616161616161',
       items: [
         expect.objectContaining({
@@ -778,6 +786,55 @@ describe('draft package mappers', () => {
       content_md: null,
       sort_order: 3,
       is_included: false,
+    });
+  });
+
+  it('maps import run rows into the feature boundary', () => {
+    const runRow: TenderDraftPackageImportRunRow = {
+      id: '71717171-7171-4717-8717-717171717171',
+      organization_id: '22222222-2222-4222-8222-222222222222',
+      tender_draft_package_id: '41414141-4141-4414-8414-414141414141',
+      target_quote_id: '61616161-6161-4616-8616-616161616161',
+      import_mode: 'update_existing_quote',
+      payload_hash: 'cafebabe',
+      payload_snapshot: {
+        schema_version: 'tender-editor-import/v1',
+        generated_at: '2026-04-05T12:50:00.000Z',
+        source_draft_package_id: '41414141-4141-4414-8414-414141414141',
+        source_tender_package_id: '11111111-1111-4111-8111-111111111111',
+        source_analysis_job_id: null,
+        metadata: {
+          draft_package_title: 'Tarjouspaketti / draft package',
+          draft_package_status: 'draft',
+          import_status: 'imported',
+          reimport_status: 'stale',
+          target_quote_title: 'Tarjouspaketti / editor import',
+          target_quote_id: '61616161-6161-4616-8616-616161616161',
+          target_customer_id: null,
+          target_project_id: null,
+          imported_quote_id: '61616161-6161-4616-8616-616161616161',
+          will_create_placeholder_target: false,
+        },
+        sections: {
+          quote_notes_md: '## Vaatimukset / tarjoushuomiot',
+          quote_internal_notes_md: null,
+        },
+        items: [],
+      },
+      result_status: 'success',
+      summary: 'Päivitettiin aiemmin importoitu tarjous.',
+      created_by_user_id: '22222222-2222-4222-8222-222222222222',
+      created_at: '2026-04-05T12:50:00.000Z',
+    };
+
+    expect(mapTenderDraftPackageImportRunRowToDomain(runRow)).toMatchObject({
+      id: runRow.id,
+      import_mode: 'update_existing_quote',
+      payload_hash: 'cafebabe',
+      result_status: 'success',
+      payload_snapshot: expect.objectContaining({
+        schema_version: 'tender-editor-import/v1',
+      }),
     });
   });
 });

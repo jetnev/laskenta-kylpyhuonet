@@ -4,8 +4,11 @@ import { useAuth } from '@/hooks/use-auth';
 
 import { getTenderIntelligenceRepository } from '../services/tender-intelligence-repository';
 import type {
+  TenderDraftPackageImportRun,
+  TenderDraftPackageImportState,
   TenderEditorImportPreview,
   TenderEditorImportResult,
+  TenderEditorReconciliationPreview,
   TenderEditorImportValidationResult,
 } from '../types/tender-editor-import';
 import type {
@@ -48,6 +51,9 @@ export function useTenderIntelligence() {
   const [selectedPackage, setSelectedPackage] = useState<TenderPackageDetails | null>(null);
   const [editorImportPreview, setEditorImportPreview] = useState<TenderEditorImportPreview | null>(null);
   const [editorImportValidation, setEditorImportValidation] = useState<TenderEditorImportValidationResult | null>(null);
+  const [draftPackageImportState, setDraftPackageImportState] = useState<TenderDraftPackageImportState | null>(null);
+  const [draftPackageReimportPreview, setDraftPackageReimportPreview] = useState<TenderEditorReconciliationPreview | null>(null);
+  const [draftPackageImportRuns, setDraftPackageImportRuns] = useState<TenderDraftPackageImportRun[]>([]);
   const [selectedPackageMissing, setSelectedPackageMissing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -227,6 +233,9 @@ export function useTenderIntelligence() {
     if (!selectedDraftPackageId) {
       setEditorImportPreview(null);
       setEditorImportValidation(null);
+      setDraftPackageImportState(null);
+      setDraftPackageReimportPreview(null);
+      setDraftPackageImportRuns([]);
       setPreviewingEditorImportDraftPackageId(null);
       return () => {
         active = false;
@@ -236,20 +245,29 @@ export function useTenderIntelligence() {
     const hydrateEditorImportPreview = async () => {
       try {
         setPreviewingEditorImportDraftPackageId(selectedDraftPackageId);
-        const [preview, validation] = await Promise.all([
+        const [preview, validation, importState, reimportPreview, importRuns] = await Promise.all([
           repository.previewEditorImportForDraftPackage(selectedDraftPackageId),
           repository.validateEditorImportForDraftPackage(selectedDraftPackageId),
+          repository.getDraftPackageImportStatus(selectedDraftPackageId),
+          repository.previewDraftPackageReimport(selectedDraftPackageId),
+          repository.listDraftPackageImportRuns(selectedDraftPackageId),
         ]);
 
         if (active) {
           setEditorImportPreview(preview);
           setEditorImportValidation(validation);
+          setDraftPackageImportState(importState);
+          setDraftPackageReimportPreview(reimportPreview);
+          setDraftPackageImportRuns(importRuns);
           setError(null);
         }
       } catch (nextError) {
         if (active) {
           setEditorImportPreview(null);
           setEditorImportValidation(null);
+          setDraftPackageImportState(null);
+          setDraftPackageReimportPreview(null);
+          setDraftPackageImportRuns([]);
           setError(getErrorMessage(nextError));
         }
       } finally {
@@ -720,6 +738,31 @@ export function useTenderIntelligence() {
     [loadDraftPackages, loadSelectedPackage, repository, selectedPackage, selectedPackageId],
   );
 
+  const reimportDraftPackageToEditor = useCallback(
+    async (draftPackageId: string): Promise<TenderEditorImportResult> => {
+      setImportingDraftPackageId(draftPackageId);
+
+      try {
+        const result = await repository.reimportDraftPackageToEditor(draftPackageId);
+        const packageId = selectedPackage?.package.id ?? selectedPackageId;
+
+        if (packageId) {
+          await Promise.all([loadDraftPackages(packageId), loadSelectedPackage(packageId)]);
+        }
+
+        setError(null);
+        return result;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setImportingDraftPackageId((current) => (current === draftPackageId ? null : current));
+      }
+    },
+    [loadDraftPackages, loadSelectedPackage, repository, selectedPackage, selectedPackageId],
+  );
+
   const overview = useMemo(
     () => ({
       packages: packages.length,
@@ -736,6 +779,9 @@ export function useTenderIntelligence() {
     draftPackages,
     editorImportPreview,
     editorImportValidation,
+    draftPackageImportState,
+    draftPackageReimportPreview,
+    draftPackageImportRuns,
     referenceProfiles,
     selectedPackage,
     selectedPackageId,
@@ -774,6 +820,7 @@ export function useTenderIntelligence() {
     deleteDocument,
     createDraftPackage,
     importDraftPackageToEditor,
+    reimportDraftPackageToEditor,
     updateDraftPackageItem,
     markDraftPackageReviewed,
     markDraftPackageExported,

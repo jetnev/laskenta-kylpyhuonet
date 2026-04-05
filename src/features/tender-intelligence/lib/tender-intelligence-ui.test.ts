@@ -5,6 +5,9 @@ import {
   formatTenderConfidence,
   getTenderTextPreview,
   TENDER_DRAFT_PACKAGE_IMPORT_STATUS_META,
+  TENDER_DRAFT_PACKAGE_REIMPORT_STATUS_META,
+  TENDER_EDITOR_IMPORT_MODE_META,
+  TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META,
   TENDER_DRAFT_PACKAGE_ITEM_TYPE_META,
   TENDER_DRAFT_PACKAGE_STATUS_META,
   TENDER_DOCUMENT_EXTRACTION_STATUS_META,
@@ -37,6 +40,9 @@ describe('Phase 6 Tender UI helpers', () => {
     expect(TENDER_REFERENCE_PROFILE_SOURCE_KIND_META.imported.label).toBe('Tuotu');
     expect(TENDER_DRAFT_PACKAGE_STATUS_META.reviewed.label).toBe('Tarkistettu');
     expect(TENDER_DRAFT_PACKAGE_IMPORT_STATUS_META.imported.label).toBe('Importoitu editoriin');
+    expect(TENDER_DRAFT_PACKAGE_REIMPORT_STATUS_META.stale.label).toBe('Draft muuttunut importin jälkeen');
+    expect(TENDER_EDITOR_IMPORT_MODE_META.update_existing_quote.label).toBe('Päivitä aiempi quote');
+    expect(TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META.failed.label).toBe('Epäonnistui');
     expect(TENDER_DRAFT_PACKAGE_ITEM_TYPE_META.review_note.label).toBe('Editor-note');
   });
 

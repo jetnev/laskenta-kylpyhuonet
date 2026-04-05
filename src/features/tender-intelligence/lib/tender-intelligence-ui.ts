@@ -4,6 +4,7 @@ import type {
   TenderDocumentExtractionStatus,
   TenderDocumentExtractorType,
   TenderDraftPackageImportStatus,
+  TenderDraftPackageReimportStatus,
   TenderDraftPackageItemType,
   TenderDraftPackageStatus,
   TenderDraftArtifactStatus,
@@ -26,6 +27,7 @@ import type {
   TenderReviewTaskStatus,
   TenderSeverity,
 } from '../types/tender-intelligence';
+import type { TenderEditorImportMode, TenderEditorImportRunResultStatus } from '../types/tender-editor-import';
 
 export type TenderBadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
 
@@ -149,6 +151,29 @@ export const TENDER_DRAFT_PACKAGE_IMPORT_STATUS_META: Record<
   not_imported: { label: 'Ei importoitu', variant: 'secondary' },
   imported: { label: 'Importoitu editoriin', variant: 'default' },
   failed: { label: 'Import epäonnistui', variant: 'destructive' },
+};
+
+export const TENDER_DRAFT_PACKAGE_REIMPORT_STATUS_META: Record<
+  TenderDraftPackageReimportStatus,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  up_to_date: { label: 'Import ajan tasalla', variant: 'default' },
+  stale: { label: 'Draft muuttunut importin jälkeen', variant: 'outline' },
+  never_imported: { label: 'Ei vielä importoitu', variant: 'secondary' },
+  import_failed: { label: 'Viimeisin import epäonnistui', variant: 'destructive' },
+};
+
+export const TENDER_EDITOR_IMPORT_MODE_META: Record<TenderEditorImportMode, { label: string; variant: TenderBadgeVariant }> = {
+  create_new_quote: { label: 'Luo uusi quote', variant: 'secondary' },
+  update_existing_quote: { label: 'Päivitä aiempi quote', variant: 'outline' },
+};
+
+export const TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META: Record<
+  TenderEditorImportRunResultStatus,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  success: { label: 'Onnistui', variant: 'default' },
+  failed: { label: 'Epäonnistui', variant: 'destructive' },
 };
 
 export const TENDER_DRAFT_PACKAGE_ITEM_TYPE_META: Record<TenderDraftPackageItemType, { label: string; variant: TenderBadgeVariant }> = {

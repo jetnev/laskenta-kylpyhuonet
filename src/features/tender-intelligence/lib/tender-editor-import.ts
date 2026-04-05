@@ -12,6 +12,7 @@ import {
   tenderEditorImportValidationResultSchema,
   TENDER_EDITOR_IMPORT_SCHEMA_VERSION,
 } from '../types/tender-editor-import';
+import { buildTenderEditorImportPayloadHash } from './tender-editor-reconciliation';
 
 const GROUP_META: Record<
   TenderEditorImportGroup,
@@ -145,17 +146,6 @@ export function validateTenderEditorImport(options: {
     });
   }
 
-  if (options.draftPackage.importStatus === 'imported') {
-    issues.push({
-      code: 'already_imported',
-      severity: 'error',
-      message: options.draftPackage.importedQuoteId
-        ? `Luonnospaketti on jo importoitu editoriin tarjouksena ${options.draftPackage.importedQuoteId}.`
-        : 'Luonnospaketti on jo merkitty importoiduksi editoriin.',
-      draft_package_item_id: null,
-    });
-  }
-
   options.items.forEach((item) => {
     if (!item.title.trim()) {
       issues.push({
@@ -199,6 +189,8 @@ function buildTargetQuoteTitle(packageName: string) {
 export function buildTenderEditorImportPreview(options: {
   draftPackage: TenderDraftPackage;
   packageName: string;
+  targetQuoteId?: string | null;
+  targetQuoteTitle?: string | null;
   targetCustomerId?: string | null;
   targetProjectId?: string | null;
   willCreatePlaceholderTarget: boolean;
@@ -221,7 +213,9 @@ export function buildTenderEditorImportPreview(options: {
       draft_package_title: options.draftPackage.title,
       draft_package_status: options.draftPackage.status,
       import_status: options.draftPackage.importStatus,
-      target_quote_title: buildTargetQuoteTitle(options.packageName),
+      reimport_status: options.draftPackage.reimportStatus,
+      target_quote_title: options.targetQuoteTitle?.trim() || buildTargetQuoteTitle(options.packageName),
+      target_quote_id: options.targetQuoteId ?? options.draftPackage.importedQuoteId ?? null,
       target_customer_id: options.targetCustomerId ?? null,
       target_project_id: options.targetProjectId ?? null,
       imported_quote_id: options.draftPackage.importedQuoteId ?? null,
@@ -237,10 +231,12 @@ export function buildTenderEditorImportPreview(options: {
     draftPackage: options.draftPackage,
     items,
   });
+  const payloadHash = buildTenderEditorImportPayloadHash(payload);
 
   return tenderEditorImportPreviewSchema.parse({
     draft_item_count: options.draftPackage.items.length,
     importable_item_count: items.length,
+    payload_hash: payloadHash,
     payload,
     validation,
     sections,

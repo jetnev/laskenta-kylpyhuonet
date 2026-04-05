@@ -28,8 +28,11 @@ import type {
   UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
 import type {
+  TenderDraftPackageImportRun,
+  TenderDraftPackageImportState,
   TenderEditorImportPreview,
   TenderEditorImportResult,
+  TenderEditorReconciliationPreview,
   TenderEditorImportValidationResult,
 } from '../types/tender-editor-import';
 
@@ -58,8 +61,12 @@ export interface TenderIntelligenceBackendAdapter {
   markDraftPackageExported(draftPackageId: string): Promise<TenderDraftPackage>;
   previewEditorImportForDraftPackage(draftPackageId: string): Promise<TenderEditorImportPreview>;
   validateEditorImportForDraftPackage(draftPackageId: string): Promise<TenderEditorImportValidationResult>;
+  getDraftPackageImportStatus(draftPackageId: string): Promise<TenderDraftPackageImportState>;
+  previewDraftPackageReimport(draftPackageId: string): Promise<TenderEditorReconciliationPreview>;
   importDraftPackageToEditor(draftPackageId: string): Promise<TenderEditorImportResult>;
+  reimportDraftPackageToEditor(draftPackageId: string): Promise<TenderEditorImportResult>;
   markDraftPackageImported(draftPackageId: string, importedQuoteId: string, importStatus?: TenderDraftPackageImportStatus): Promise<TenderDraftPackage>;
+  listDraftPackageImportRuns(draftPackageId: string): Promise<TenderDraftPackageImportRun[]>;
   listReferenceSuggestionsForPackage(packageId: string): Promise<TenderReferenceSuggestion[]>;
   listDraftArtifactsForPackage(packageId: string): Promise<TenderDraftArtifact[]>;
   listReviewTasksForPackage(packageId: string): Promise<TenderReviewTask[]>;

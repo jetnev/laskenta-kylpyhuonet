@@ -1,10 +1,11 @@
 import { Plus, Sparkle, Stack } from '@phosphor-icons/react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import type { AppLocationState } from '@/lib/app-routing';
 
 import CreateTenderPackageDialog from '../components/CreateTenderPackageDialog';
 import TenderPackageList from '../components/TenderPackageList';
@@ -40,13 +41,20 @@ const SUMMARY_CARDS = [
   },
 ] as const;
 
-export default function TenderIntelligencePage() {
+interface TenderIntelligencePageProps {
+  onNavigate?: (location: AppLocationState, options?: { replace?: boolean }) => void;
+}
+
+export default function TenderIntelligencePage({ onNavigate }: TenderIntelligencePageProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const {
     packages,
     draftPackages,
     editorImportPreview,
     editorImportValidation,
+    draftPackageImportState,
+    draftPackageReimportPreview,
+    draftPackageImportRuns,
     selectedPackage,
     selectedPackageId,
     selectedDraftPackageId,
@@ -84,6 +92,7 @@ export default function TenderIntelligencePage() {
     currentUserId,
     createDraftPackage,
     importDraftPackageToEditor,
+    reimportDraftPackageToEditor,
     updateDraftPackageItem,
     markDraftPackageReviewed,
     markDraftPackageExported,
@@ -98,17 +107,26 @@ export default function TenderIntelligencePage() {
     updateReviewTaskWorkflow,
   } = useTenderIntelligence();
 
+  const openImportedQuote = useCallback((projectId: string, quoteId: string) => {
+    onNavigate?.({
+      page: 'projects',
+      projectId,
+      quoteId,
+      editor: 'quote',
+    });
+  }, [onNavigate]);
+
   return (
     <div className="space-y-6 p-4 sm:p-8">
       <Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
         <CardContent className="space-y-8 px-6 py-6 sm:px-8 sm:py-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4">
-              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 12</Badge>
+              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 13</Badge>
               <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Editor import boundary reviewed Tarjousäly-draft packageille</h1>
+                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Imported quote handoff ja re-import reconciliation Tarjousäly-draft packageille</h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-200 sm:text-base">
-                  Tarjousäly muodostaa nyt reviewed löydöksistä draft package -stagingin, validioi sen editori-importtia varten ja voi tuoda sisällön hallittuun tarjousluonnokseen notes- ja section-rakenteena ilman riskialtista syväkirjoitusta nykyiseen tarjousytimeen.
+                  Tarjousäly osaa nyt näyttää importoidun quoten handoffin, havaita draft packagen muutokset viime importin jälkeen ja päivittää saman quote-luonnoksen hallitusti vain adapterin omistamalta import-surfacelta.
                 </p>
               </div>
             </div>
@@ -119,7 +137,7 @@ export default function TenderIntelligencePage() {
                 <Plus className="h-4 w-4" />
               </Button>
               <Button variant="outline" className="justify-between border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white" disabled>
-                Result-domain päivittyy baseline-, workflow-, reference-matchaus-, draft package- ja editor import -ajoista
+                Result-domain päivittyy baseline-, workflow-, reference-matchaus-, draft package-, import handoff- ja reconciliation-ajoista
                 <Sparkle className="h-4 w-4" />
               </Button>
             </div>
@@ -169,6 +187,9 @@ export default function TenderIntelligencePage() {
           creatingDraftPackagePackageId={creatingDraftPackagePackageId}
           editorImportPreview={editorImportPreview}
           editorImportValidation={editorImportValidation}
+          draftPackageImportState={draftPackageImportState}
+          draftPackageReimportPreview={draftPackageReimportPreview}
+          draftPackageImportRuns={draftPackageImportRuns}
           previewingEditorImportDraftPackageId={previewingEditorImportDraftPackageId}
           importingDraftPackageId={importingDraftPackageId}
           updatingDraftPackageItemIds={updatingDraftPackageItemIds}
@@ -189,7 +210,17 @@ export default function TenderIntelligencePage() {
           onDeleteDocument={deleteDocument}
           onSelectDraftPackage={selectDraftPackage}
           onCreateDraftPackage={createDraftPackage}
-          onImportDraftPackageToEditor={importDraftPackageToEditor}
+          onImportDraftPackageToEditor={async (draftPackageId) => {
+            const result = await importDraftPackageToEditor(draftPackageId);
+            toast.success(result.summary);
+            return result;
+          }}
+          onReimportDraftPackageToEditor={async (draftPackageId) => {
+            const result = await reimportDraftPackageToEditor(draftPackageId);
+            toast.success(result.summary);
+            return result;
+          }}
+          onOpenImportedQuote={openImportedQuote}
           onUpdateDraftPackageItem={updateDraftPackageItem}
           onMarkDraftPackageReviewed={markDraftPackageReviewed}
           onMarkDraftPackageExported={markDraftPackageExported}
@@ -226,11 +257,11 @@ export default function TenderIntelligencePage() {
               <Stack className="h-4 w-4" />
               <span className="font-medium">Mitä tämä vaihe jo tekee</span>
             </div>
-            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit, extraction-data, analyysitulokset, evidence-rivit, review workflow, referenssikorpus ja draft package -staging tallentuvat Supabaseen. Reviewed löydöksistä voidaan nyt muodostaa editor import preview, nähdä validointihuomiot ja tuoda sisältö eksplisiittisesti turvalliseen tarjousluonnokseen.</p>
+            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit, extraction-data, analyysitulokset, evidence-rivit, review workflow, referenssikorpus ja draft package -staging tallentuvat Supabaseen. Reviewed löydöksistä voidaan nyt muodostaa import-preview, nähdä imported quote handoff, diffata muutokset viimeiseen onnistuneeseen importiin ja päivittää samaa tarjousluonnosta idempotentisti.</p>
           </div>
           <div className="space-y-2 sm:max-w-sm">
             <p className="font-medium text-slate-950">Mitä tästä puuttuu tarkoituksella</p>
-            <p>Ei vielä OCR:ää, AI-provider-koodia, täydellistä automaattista tarjousgenerointia tai riskialtista syväkirjoitusta quote-riveihin. Nykyinen quote-, project-, invoice- ja reporting-ydin jätetään edelleen mahdollisimman koskemattomaksi, ja import rakentuu notes-pohjaisen adapterin kautta.</p>
+            <p>Ei vielä OCR:ää, AI-provider-koodia, täydellistä automaattista tarjousgenerointia tai riskialtista syväkirjoitusta quote-riveihin. Nykyinen quote-, project-, invoice- ja reporting-ydin jätetään edelleen mahdollisimman koskemattomaksi, ja re-import päivittää vain adapterin omistaman notes/internalNotes/section-surface-alueen.</p>
           </div>
         </CardContent>
       </Card>

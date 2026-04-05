@@ -1,6 +1,7 @@
 import { buildTenderAnalysisReadiness } from './tender-analysis';
 import {
   createTenderReferenceProfileInputSchema,
+  tenderDraftPackageReimportStatusSchema,
   createTenderPackageInputSchema,
   tenderDraftExportPayloadSchema,
   tenderPackageDetailsSchema,
@@ -29,11 +30,14 @@ import {
   type UpdateTenderDraftPackageItemInput,
   type UpdateTenderReferenceProfileInput,
 } from '../types/tender-intelligence';
+import type { TenderDraftPackageImportRun } from '../types/tender-editor-import';
+import { tenderEditorImportPayloadSchema } from '../types/tender-editor-import';
 import type {
   TenderAnalysisJobRow,
   TenderDocumentChunkRow,
   TenderDocumentExtractionRow,
   TenderDocumentRow,
+  TenderDraftPackageImportRunRow,
   TenderDraftPackageItemRow,
   TenderDraftPackageRow,
   TenderDraftArtifactRow,
@@ -295,6 +299,9 @@ export function mapTenderDraftPackageRowToDomain(
     title: row.title,
     status: row.status,
     importStatus: row.import_status,
+    reimportStatus: tenderDraftPackageReimportStatusSchema.parse(row.reimport_status),
+    importRevision: row.import_revision,
+    lastImportPayloadHash: row.last_import_payload_hash,
     generatedFromAnalysisJobId: row.generated_from_analysis_job_id,
     generatedByUserId: row.generated_by_user_id,
     importedQuoteId: row.imported_quote_id,
@@ -305,6 +312,21 @@ export function mapTenderDraftPackageRowToDomain(
     items: itemRows.map(mapTenderDraftPackageItemRowToDomain),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+export function mapTenderDraftPackageImportRunRowToDomain(row: TenderDraftPackageImportRunRow): TenderDraftPackageImportRun {
+  return {
+    id: row.id,
+    tender_draft_package_id: row.tender_draft_package_id,
+    target_quote_id: row.target_quote_id,
+    import_mode: row.import_mode,
+    payload_hash: row.payload_hash,
+    payload_snapshot: tenderEditorImportPayloadSchema.parse(row.payload_snapshot),
+    result_status: row.result_status,
+    summary: row.summary,
+    created_by_user_id: row.created_by_user_id,
+    created_at: row.created_at,
   };
 }
 

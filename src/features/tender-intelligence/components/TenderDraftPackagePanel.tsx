@@ -1,4 +1,4 @@
-import { FileText, ListChecks, Note, Sparkle, WarningCircle } from '@phosphor-icons/react';
+import { ArrowSquareOut, ArrowsClockwise, ClockCounterClockwise, FileText, ListChecks, Note, Sparkle, WarningCircle } from '@phosphor-icons/react';
 import { useEffect, useMemo } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -11,13 +11,19 @@ import {
   formatTenderTimestamp,
   getTenderTextPreview,
   TENDER_DRAFT_PACKAGE_IMPORT_STATUS_META,
+  TENDER_DRAFT_PACKAGE_REIMPORT_STATUS_META,
+  TENDER_EDITOR_IMPORT_MODE_META,
+  TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META,
   TENDER_DRAFT_PACKAGE_ITEM_TYPE_META,
   TENDER_DRAFT_PACKAGE_STATUS_META,
   TENDER_RESOLUTION_STATUS_META,
   TENDER_REVIEW_STATUS_META,
 } from '../lib/tender-intelligence-ui';
 import type {
+  TenderDraftPackageImportRun,
+  TenderDraftPackageImportState,
   TenderEditorImportPreview,
+  TenderEditorReconciliationPreview,
   TenderEditorImportValidationResult,
 } from '../types/tender-editor-import';
 import type {
@@ -34,6 +40,9 @@ interface TenderDraftPackagePanelProps {
   creatingDraftPackage?: boolean;
   editorImportPreview?: TenderEditorImportPreview | null;
   editorImportValidation?: TenderEditorImportValidationResult | null;
+  draftPackageImportState?: TenderDraftPackageImportState | null;
+  draftPackageReimportPreview?: TenderEditorReconciliationPreview | null;
+  draftPackageImportRuns?: TenderDraftPackageImportRun[];
   previewingEditorImportDraftPackageId?: string | null;
   importingDraftPackageId?: string | null;
   reviewingDraftPackageId?: string | null;
@@ -42,6 +51,8 @@ interface TenderDraftPackagePanelProps {
   onSelectDraftPackage: (draftPackageId: string) => void;
   onCreateDraftPackage: (packageId: string) => Promise<unknown>;
   onImportDraftPackageToEditor: (draftPackageId: string) => Promise<unknown>;
+  onReimportDraftPackageToEditor: (draftPackageId: string) => Promise<unknown>;
+  onOpenImportedQuote: (projectId: string, quoteId: string) => void;
   onUpdateDraftPackageItem: (itemId: string, input: UpdateTenderDraftPackageItemInput) => Promise<unknown>;
   onMarkDraftPackageReviewed: (draftPackageId: string) => Promise<unknown>;
   onMarkDraftPackageExported: (draftPackageId: string) => Promise<unknown>;
@@ -57,6 +68,19 @@ function resolveIssueVariant(severity: 'info' | 'warning' | 'error') {
   }
 
   return 'secondary' as const;
+}
+
+function shortenHash(value?: string | null) {
+  const nextValue = value?.trim();
+  return nextValue ? nextValue.slice(0, 8) : 'Ei hashia';
+}
+
+function resolvePrimaryImportActionLabel(importState: TenderDraftPackageImportState | null | undefined) {
+  if (importState?.suggested_import_mode === 'update_existing_quote') {
+    return 'Päivitä samaan quoteen';
+  }
+
+  return 'Tuo editoriin';
 }
 
 function ReadinessCard({ title, value, description }: { title: string; value: string; description: string }) {
@@ -155,6 +179,9 @@ export default function TenderDraftPackagePanel({
   creatingDraftPackage = false,
   editorImportPreview = null,
   editorImportValidation = null,
+  draftPackageImportState = null,
+  draftPackageReimportPreview = null,
+  draftPackageImportRuns = [],
   previewingEditorImportDraftPackageId = null,
   importingDraftPackageId = null,
   reviewingDraftPackageId = null,
@@ -163,6 +190,8 @@ export default function TenderDraftPackagePanel({
   onSelectDraftPackage,
   onCreateDraftPackage,
   onImportDraftPackageToEditor,
+  onReimportDraftPackageToEditor,
+  onOpenImportedQuote,
   onUpdateDraftPackageItem,
   onMarkDraftPackageReviewed,
   onMarkDraftPackageExported,
@@ -176,6 +205,8 @@ export default function TenderDraftPackagePanel({
   const excludedItems = selectedDraftPackage?.items.filter((item) => !item.isIncluded) ?? [];
   const payload = selectedDraftPackage?.exportPayload ?? null;
   const importValidation = editorImportValidation ?? editorImportPreview?.validation ?? null;
+  const latestImportRun = draftPackageImportRuns[0] ?? draftPackageImportState?.latest_run ?? null;
+  const canOpenImportedQuote = Boolean(selectedDraftPackage?.importedQuoteId && selectedPackage.package.linkedProjectId);
 
   useEffect(() => {
     if (!selectedDraftPackageId && draftPackages[0]) {
@@ -190,10 +221,10 @@ export default function TenderDraftPackagePanel({
           <div className="space-y-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <FileText className="h-4.5 w-4.5 text-slate-500" />
-              Editor import boundary
+              Imported quote handoff + re-import reconciliation
             </CardTitle>
             <CardDescription>
-              Tämä vaihe validoi Tarjousälyn draft packagen, näyttää editori-importin previewn ja tuo sisällön turvalliseen tarjousluonnokseen vain käyttäjän eksplisiittisestä toiminnosta. Import kirjoittaa tässä vaiheessa hallittuihin notes- ja section-rakenteisiin.
+              Tämä vaihe näyttää importoidun quoten handoffin, vertaa nykyistä draft packagea viimeiseen onnistuneeseen importiin ja päivittää saman tarjousluonnoksen vain adapterin omistamilta notes-, internalNotes- ja section-pinnoilta.
             </CardDescription>
           </div>
 
@@ -238,6 +269,11 @@ export default function TenderDraftPackagePanel({
                     || !importValidation?.can_import
                   }
                   onClick={() => {
+                    if (draftPackageImportState?.suggested_import_mode === 'update_existing_quote') {
+                      void onReimportDraftPackageToEditor(selectedDraftPackage.id);
+                      return;
+                    }
+
                     void onImportDraftPackageToEditor(selectedDraftPackage.id);
                   }}
                 >
@@ -245,8 +281,18 @@ export default function TenderDraftPackagePanel({
                     ? 'Validoidaan...'
                     : importingDraftPackageId === selectedDraftPackage.id
                       ? 'Importoidaan...'
-                      : 'Tuo editoriin'}
+                      : resolvePrimaryImportActionLabel(draftPackageImportState)}
                 </Button>
+                {canOpenImportedQuote && selectedDraftPackage.importedQuoteId && selectedPackage.package.linkedProjectId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onOpenImportedQuote(selectedPackage.package.linkedProjectId!, selectedDraftPackage.importedQuoteId!)}
+                  >
+                    <ArrowSquareOut className="mr-2 h-4 w-4" />
+                    Avaa importoitu quote
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -317,7 +363,11 @@ export default function TenderDraftPackagePanel({
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={TENDER_DRAFT_PACKAGE_STATUS_META[selectedDraftPackage.status].variant}>{TENDER_DRAFT_PACKAGE_STATUS_META[selectedDraftPackage.status].label}</Badge>
                     <Badge variant={TENDER_DRAFT_PACKAGE_IMPORT_STATUS_META[selectedDraftPackage.importStatus].variant}>{TENDER_DRAFT_PACKAGE_IMPORT_STATUS_META[selectedDraftPackage.importStatus].label}</Badge>
+                    {draftPackageImportState && (
+                      <Badge variant={TENDER_DRAFT_PACKAGE_REIMPORT_STATUS_META[draftPackageImportState.reimport_status].variant}>{TENDER_DRAFT_PACKAGE_REIMPORT_STATUS_META[draftPackageImportState.reimport_status].label}</Badge>
+                    )}
                     <Badge variant="outline">Päivitetty {formatTenderTimestamp(selectedDraftPackage.updatedAt)}</Badge>
+                    <Badge variant="outline">Revision {draftPackageImportState?.import_revision ?? selectedDraftPackage.importRevision}</Badge>
                     {selectedDraftPackage.importedQuoteId && <Badge variant="outline">Quote {selectedDraftPackage.importedQuoteId}</Badge>}
                   </div>
                   <p className="text-sm font-medium text-slate-950">{selectedDraftPackage.title}</p>
@@ -326,9 +376,42 @@ export default function TenderDraftPackagePanel({
                   <p>Skeema {payload.schema_version}</p>
                   <p>Generoitu {formatTenderTimestamp(payload.generated_at)}</p>
                   {selectedDraftPackage.importedAt && <p>Importoitu {formatTenderTimestamp(selectedDraftPackage.importedAt)}</p>}
+                  {draftPackageImportState?.last_import_payload_hash && <p>Viimeisin payload hash {shortenHash(draftPackageImportState.last_import_payload_hash)}</p>}
+                  {latestImportRun && <p>Viimeisin ajo {formatTenderTimestamp(latestImportRun.created_at)}</p>}
                 </div>
               </div>
               {selectedDraftPackage.summary && <p className="mt-3 text-sm leading-6 text-slate-700">{selectedDraftPackage.summary}</p>}
+              <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {draftPackageImportState && <Badge variant={TENDER_EDITOR_IMPORT_MODE_META[draftPackageImportState.suggested_import_mode].variant}>{TENDER_EDITOR_IMPORT_MODE_META[draftPackageImportState.suggested_import_mode].label}</Badge>}
+                    {latestImportRun && <Badge variant={TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[latestImportRun.result_status].variant}>{TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[latestImportRun.result_status].label}</Badge>}
+                  </div>
+                  <div className="mt-3 space-y-2 text-sm text-slate-700">
+                    <p>Kohdequote: {draftPackageImportState?.target_quote_title ?? editorImportPreview?.payload.metadata.target_quote_title ?? 'Luodaan importissa'}</p>
+                    <p>Kohdeproject: {draftPackageImportState?.target_project_id ?? selectedPackage.package.linkedProjectId ?? 'Luodaan tai ratkaistaan importissa'}</p>
+                    <p>Kohdeasiakas: {draftPackageImportState?.target_customer_id ?? selectedPackage.package.linkedCustomerId ?? 'Luodaan tai ratkaistaan importissa'}</p>
+                    <p>Nykyinen payload hash: {editorImportPreview ? shortenHash(editorImportPreview.payload_hash) : 'Ladataan...'}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+                    <ClockCounterClockwise className="h-4 w-4 text-slate-500" />
+                    Viimeisin import-ajotieto
+                  </div>
+                  {latestImportRun ? (
+                    <div className="mt-3 space-y-2 text-sm text-slate-700">
+                      <p>Aika: {formatTenderTimestamp(latestImportRun.created_at)}</p>
+                      <p>Mode: {TENDER_EDITOR_IMPORT_MODE_META[latestImportRun.import_mode].label}</p>
+                      <p>Status: {TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[latestImportRun.result_status].label}</p>
+                      <p>Summary: {latestImportRun.summary ?? 'Ei erillistä yhteenvetoa.'}</p>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm leading-6 text-slate-700">Tälle luonnospaketille ei ole vielä import-ajohistoriaa.</p>
+                  )}
+                </div>
+              </div>
             </div>
 
             <Tabs defaultValue="included" className="space-y-4">
@@ -475,15 +558,18 @@ export default function TenderDraftPackagePanel({
                       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                         <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
                           <ListChecks className="h-4 w-4 text-slate-500" />
-                          Import preview
+                          Import handoff
                         </div>
                         <div className="mt-3 space-y-2 text-sm text-slate-700">
                           <p>Draft package rivejä: {editorImportPreview.draft_item_count}</p>
                           <p>Importoitavia rivejä: {editorImportPreview.importable_item_count}</p>
                           <p>Kohdetarjous: {editorImportPreview.payload.metadata.target_quote_title}</p>
+                          <p>Kohdequote ID: {draftPackageImportState?.target_quote_id ?? editorImportPreview.payload.metadata.target_quote_id ?? 'Luodaan importissa'}</p>
                           <p>Kohdeprojekti: {editorImportPreview.payload.metadata.target_project_id ?? 'Luodaan importin yhteydessä'}</p>
                           <p>Kohdeasiakas: {editorImportPreview.payload.metadata.target_customer_id ?? 'Luodaan importin yhteydessä'}</p>
+                          {draftPackageImportState && <p>Mode: {TENDER_EDITOR_IMPORT_MODE_META[draftPackageImportState.suggested_import_mode].label}</p>}
                           <p>Placeholder-kohde: {editorImportPreview.payload.metadata.will_create_placeholder_target ? 'Kyllä' : 'Ei'}</p>
+                          <p>Payload hash: {shortenHash(editorImportPreview.payload_hash)}</p>
                         </div>
                       </div>
 
@@ -506,6 +592,93 @@ export default function TenderDraftPackagePanel({
                           </div>
                         ) : (
                           <p className="mt-3 text-sm leading-6 text-slate-700">Ei blokkaavia validointihuomioita. Import voidaan käynnistää eksplisiittisesti tästä näkymästä.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+                          <ArrowsClockwise className="h-4 w-4 text-slate-500" />
+                          Re-import reconciliation
+                        </div>
+                        {draftPackageReimportPreview ? (
+                          <div className="mt-3 space-y-4 text-sm text-slate-700">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant={TENDER_DRAFT_PACKAGE_REIMPORT_STATUS_META[draftPackageReimportPreview.reimport_status].variant}>{TENDER_DRAFT_PACKAGE_REIMPORT_STATUS_META[draftPackageReimportPreview.reimport_status].label}</Badge>
+                              <Badge variant={TENDER_EDITOR_IMPORT_MODE_META[draftPackageReimportPreview.import_mode].variant}>{TENDER_EDITOR_IMPORT_MODE_META[draftPackageReimportPreview.import_mode].label}</Badge>
+                            </div>
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Added</p>
+                                <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.added_count}</p>
+                              </div>
+                              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Changed</p>
+                                <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.changed_count}</p>
+                              </div>
+                              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Removed</p>
+                                <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.removed_count}</p>
+                              </div>
+                              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Unchanged</p>
+                                <p className="mt-1 text-xl font-semibold text-slate-950">{draftPackageReimportPreview.unchanged_count}</p>
+                              </div>
+                            </div>
+
+                            {draftPackageReimportPreview.warnings.length > 0 && (
+                              <div className="space-y-2">
+                                <p className="text-sm font-medium text-slate-950">Warnings</p>
+                                {draftPackageReimportPreview.warnings.map((warning, index) => (
+                                  <div key={`${warning}-${index}`} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-700">
+                                    {warning}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium text-slate-950">Keskeiset muutokset</p>
+                              {draftPackageReimportPreview.entries.slice(0, 6).map((entry) => (
+                                <div key={entry.key} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Badge variant="outline">{entry.change_type}</Badge>
+                                    <Badge variant="outline">{entry.import_group}</Badge>
+                                  </div>
+                                  <p className="mt-2 text-sm font-medium text-slate-950">{entry.title}</p>
+                                </div>
+                              ))}
+                              {draftPackageReimportPreview.entries.length === 0 && (
+                                <p className="text-sm leading-6 text-slate-700">Reconciliation ei löytänyt item-tason eroja. Tila voi silti olla ajan tasalla tai muuttunut vain section-koosteen järjestyksen tasolla.</p>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm leading-6 text-slate-700">Re-import previewta ei ole saatavilla tälle luonnospaketille.</p>
+                        )}
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+                          <ClockCounterClockwise className="h-4 w-4 text-slate-500" />
+                          Import-ajohistoria
+                        </div>
+                        {draftPackageImportRuns.length > 0 ? (
+                          <div className="mt-3 space-y-3">
+                            {draftPackageImportRuns.slice(0, 4).map((run) => (
+                              <div key={run.id} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant={TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[run.result_status].variant}>{TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[run.result_status].label}</Badge>
+                                  <Badge variant={TENDER_EDITOR_IMPORT_MODE_META[run.import_mode].variant}>{TENDER_EDITOR_IMPORT_MODE_META[run.import_mode].label}</Badge>
+                                </div>
+                                <p className="mt-2 text-sm font-medium text-slate-950">{formatTenderTimestamp(run.created_at)}</p>
+                                <p className="mt-1 text-sm leading-6 text-slate-700">{run.summary ?? 'Ei erillistä yhteenvetoa.'}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm leading-6 text-slate-700">Tälle draft packagelle ei ole vielä import-run-historiaa.</p>
                         )}
                       </div>
                     </div>

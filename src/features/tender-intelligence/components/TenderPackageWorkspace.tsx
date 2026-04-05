@@ -20,7 +20,10 @@ import {
 import { TENDER_INTELLIGENCE_BACKEND_PLAN } from '../services/tender-intelligence-backend-adapter';
 import type { TenderDocumentsUploadResult } from '../hooks/use-tender-intelligence';
 import type {
+  TenderDraftPackageImportRun,
+  TenderDraftPackageImportState,
   TenderEditorImportPreview,
+  TenderEditorReconciliationPreview,
   TenderEditorImportValidationResult,
 } from '../types/tender-editor-import';
 import type {
@@ -71,6 +74,9 @@ interface TenderPackageWorkspaceProps {
   creatingDraftPackagePackageId?: string | null;
   editorImportPreview?: TenderEditorImportPreview | null;
   editorImportValidation?: TenderEditorImportValidationResult | null;
+  draftPackageImportState?: TenderDraftPackageImportState | null;
+  draftPackageReimportPreview?: TenderEditorReconciliationPreview | null;
+  draftPackageImportRuns?: TenderDraftPackageImportRun[];
   previewingEditorImportDraftPackageId?: string | null;
   importingDraftPackageId?: string | null;
   updatingDraftPackageItemIds?: string[];
@@ -90,6 +96,8 @@ interface TenderPackageWorkspaceProps {
   onSelectDraftPackage: (draftPackageId: string) => void;
   onCreateDraftPackage: (packageId: string) => Promise<unknown>;
   onImportDraftPackageToEditor: (draftPackageId: string) => Promise<unknown>;
+  onReimportDraftPackageToEditor: (draftPackageId: string) => Promise<unknown>;
+  onOpenImportedQuote: (projectId: string, quoteId: string) => void;
   onUpdateDraftPackageItem: (itemId: string, input: UpdateTenderDraftPackageItemInput) => Promise<unknown>;
   onMarkDraftPackageReviewed: (draftPackageId: string) => Promise<unknown>;
   onMarkDraftPackageExported: (draftPackageId: string) => Promise<unknown>;
@@ -121,6 +129,9 @@ export default function TenderPackageWorkspace({
   creatingDraftPackagePackageId = null,
   editorImportPreview = null,
   editorImportValidation = null,
+  draftPackageImportState = null,
+  draftPackageReimportPreview = null,
+  draftPackageImportRuns = [],
   previewingEditorImportDraftPackageId = null,
   importingDraftPackageId = null,
   updatingDraftPackageItemIds = [],
@@ -140,6 +151,8 @@ export default function TenderPackageWorkspace({
   onSelectDraftPackage,
   onCreateDraftPackage,
   onImportDraftPackageToEditor,
+  onReimportDraftPackageToEditor,
+  onOpenImportedQuote,
   onUpdateDraftPackageItem,
   onMarkDraftPackageReviewed,
   onMarkDraftPackageExported,
@@ -183,11 +196,11 @@ export default function TenderPackageWorkspace({
     return (
       <Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
         <CardHeader className="space-y-4 border-b border-white/10 pb-6">
-          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 12 / Editor import boundary</Badge>
+          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 13 / Imported quote handoff + re-import reconciliation</Badge>
           <div className="space-y-3">
-            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousäly osaa nyt validoida, previewata ja importoida draft packagen hallitusti editorin maailmaan</CardTitle>
+            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousäly osaa nyt avata importoidun quoten handoffin ja päivittää saman import-surfacein hallitusti takaisin editoriin</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Luo tarjouspyyntöpaketti, reviewaa löydökset, muodosta draft package ja tarkista editori-importin preview. Import on nyt käyttäjän eksplisiittinen toiminto, joka kirjoittaa vain turvalliseen tarjousluonnokseen notes- ja section-rakenteena.
+              Luo tarjouspyyntöpaketti, reviewaa löydökset, muodosta draft package ja tarkista reconciliation-preview. Import on edelleen käyttäjän eksplisiittinen toiminto, mutta sama draft voidaan nyt päivittää takaisin aiemmin importoituun quoteen ilman riskialtista ydinfuusiota.
             </CardDescription>
           </div>
         </CardHeader>
@@ -226,7 +239,7 @@ export default function TenderPackageWorkspace({
             <TenderPanel
               title="Draft package"
               value="0"
-              description="Reviewed löydöksistä voidaan nyt muodostaa Tarjousälyn staging-luonnospaketti, validoida se editori-importtia varten ja tuoda sisältö eksplisiittisesti turvalliseen tarjousluonnokseen."
+              description="Reviewed löydöksistä voidaan nyt muodostaa Tarjousälyn staging-luonnospaketti, diffata muutokset viimeiseen importiin ja päivittää sama quote hallitusti adapterin omistamalta pinnalta."
             />
           </div>
 
@@ -262,7 +275,7 @@ export default function TenderPackageWorkspace({
           <div className="space-y-3">
             <CardTitle className="text-3xl tracking-[-0.03em] text-white">{selectedPackage.package.name}</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Tämä tarjouspyyntöpaketti elää omassa Tarjousäly-domainissaan. Dokumentit tallentuvat Supabase Storageen, analyysijobi toimii näkyvästi ja result-domain kirjoittuu pysyvästi omiin tauluihinsa sääntöpohjaisten löydösten, evidence-rivien, review workflow -päätösten, org-korpukseen sidottujen referenssiehdotusten, draft package -stagingin ja uuden editor import boundaryn kanssa, mutta nykyinen quote-editori, exportit, laskentalogiikka ja raportointi pysyvät edelleen mahdollisimman koskemattomina.
+              Tämä tarjouspyyntöpaketti elää omassa Tarjousäly-domainissaan. Dokumentit tallentuvat Supabase Storageen, analyysijobi toimii näkyvästi ja result-domain kirjoittuu pysyvästi omiin tauluihinsa sääntöpohjaisten löydösten, evidence-rivien, review workflow -päätösten, org-korpukseen sidottujen referenssiehdotusten, draft package -stagingin sekä import reconciliation -ajohistorian kanssa, mutta nykyinen quote-editori, exportit, laskentalogiikka ja raportointi pysyvät edelleen mahdollisimman koskemattomina.
             </CardDescription>
           </div>
         </CardHeader>
@@ -330,7 +343,7 @@ export default function TenderPackageWorkspace({
           value={String(draftPackages.length)}
           description={
             draftPackages[0]?.summary ||
-            'Reviewed löydöksistä voidaan nyt muodostaa erillinen draft package -stagingpaketti, jota voi säätää, validoida ja importoida editoriin hallitusti.'
+            'Reviewed löydöksistä voidaan nyt muodostaa erillinen draft package -stagingpaketti, jota voi säätää, vertailla viimeiseen importiin ja päivittää samaan quoteen hallitusti.'
           }
         />
         <TenderPanel
@@ -373,6 +386,9 @@ export default function TenderPackageWorkspace({
         creatingDraftPackage={creatingDraftPackagePackageId === selectedPackage.package.id}
         editorImportPreview={editorImportPreview}
         editorImportValidation={editorImportValidation}
+        draftPackageImportState={draftPackageImportState}
+        draftPackageReimportPreview={draftPackageReimportPreview}
+        draftPackageImportRuns={draftPackageImportRuns}
         previewingEditorImportDraftPackageId={previewingEditorImportDraftPackageId}
         importingDraftPackageId={importingDraftPackageId}
         updatingDraftPackageItemIds={updatingDraftPackageItemIds}
@@ -381,6 +397,8 @@ export default function TenderPackageWorkspace({
         onSelectDraftPackage={onSelectDraftPackage}
         onCreateDraftPackage={onCreateDraftPackage}
         onImportDraftPackageToEditor={onImportDraftPackageToEditor}
+        onReimportDraftPackageToEditor={onReimportDraftPackageToEditor}
+        onOpenImportedQuote={onOpenImportedQuote}
         onUpdateDraftPackageItem={onUpdateDraftPackageItem}
         onMarkDraftPackageReviewed={onMarkDraftPackageReviewed}
         onMarkDraftPackageExported={onMarkDraftPackageExported}
@@ -427,7 +445,7 @@ export default function TenderPackageWorkspace({
             )}
 
             <div className="rounded-2xl border border-dashed px-4 py-8 text-sm leading-6 text-muted-foreground">
-              Baseline tunnistaa nyt deadline-, liite- ja referenssiosumia extracted tekstistä, review workflow jalostaa ne käsiteltäviksi työobjekteiksi, draft package kokoaa hyväksytyt löydökset payloadiksi ja Phase 12 tuo niiden päälle turvallisen editor import previewn sekä eksplisiittisen importin. Varsinainen syvärakenteinen tarjousgenerointi jätetään silti tarkoituksella myöhempiin vaiheisiin.
+              Baseline tunnistaa nyt deadline-, liite- ja referenssiosumia extracted tekstistä, review workflow jalostaa ne käsiteltäviksi työobjekteiksi, draft package kokoaa hyväksytyt löydökset payloadiksi ja Phase 13 tuo niiden päälle imported quote handoffin, ajohistorian sekä hallitun re-import reconciliation -previewn. Varsinainen syvärakenteinen tarjousgenerointi jätetään silti tarkoituksella myöhempiin vaiheisiin.
             </div>
           </CardContent>
         </Card>

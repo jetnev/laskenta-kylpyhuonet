@@ -2,7 +2,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import TenderDraftPackagePanel from './TenderDraftPackagePanel';
-import type { TenderEditorImportPreview } from '../types/tender-editor-import';
+import type {
+  TenderDraftPackageImportRun,
+  TenderDraftPackageImportState,
+  TenderEditorImportPreview,
+  TenderEditorReconciliationPreview,
+} from '../types/tender-editor-import';
 import type { TenderDraftPackage, TenderPackageDetails } from '../types/tender-intelligence';
 
 function createPackageDetails(): TenderPackageDetails {
@@ -15,9 +20,9 @@ function createPackageDetails(): TenderPackageDetails {
       createdAt: '2026-04-05T13:00:00.000Z',
       updatedAt: '2026-04-05T13:00:00.000Z',
       createdByUserId: '22222222-2222-4222-8222-222222222222',
-      linkedCustomerId: null,
-      linkedProjectId: null,
-      linkedQuoteId: null,
+      linkedCustomerId: '12121212-1212-4212-8212-121212121212',
+      linkedProjectId: '13131313-1313-4313-8313-131313131313',
+      linkedQuoteId: '61616161-6161-4616-8616-616161616161',
       currentJobId: null,
       summary: {
         documentCount: 1,
@@ -107,12 +112,15 @@ function createDraftPackage(): TenderDraftPackage {
     tenderPackageId: '11111111-1111-4111-8111-111111111111',
     title: 'Tarjouspaketti / draft package',
     status: 'draft',
-    importStatus: 'not_imported',
+    importStatus: 'imported',
+    reimportStatus: 'stale',
+    importRevision: 2,
+    lastImportPayloadHash: '1234abcd',
     generatedFromAnalysisJobId: null,
     generatedByUserId: '22222222-2222-4222-8222-222222222222',
-    importedQuoteId: null,
-    importedAt: null,
-    importedByUserId: null,
+    importedQuoteId: '61616161-6161-4616-8616-616161616161',
+    importedAt: '2026-04-05T13:07:00.000Z',
+    importedByUserId: '22222222-2222-4222-8222-222222222222',
     summary: 'Luonnospaketti sisältää 1 hyväksyttyä vaatimusta, 1 editor-notea.',
     exportPayload: {
       schema_version: 'tender-draft-package/v1',
@@ -172,7 +180,7 @@ function createDraftPackage(): TenderDraftPackage {
       },
     ],
     createdAt: '2026-04-05T13:02:00.000Z',
-    updatedAt: '2026-04-05T13:02:00.000Z',
+    updatedAt: '2026-04-05T13:08:00.000Z',
   };
 }
 
@@ -180,6 +188,7 @@ function createEditorImportPreview(): TenderEditorImportPreview {
   return {
     draft_item_count: 2,
     importable_item_count: 1,
+    payload_hash: 'cafebabe',
     payload: {
       schema_version: 'tender-editor-import/v1',
       generated_at: '2026-04-05T13:05:00.000Z',
@@ -189,12 +198,14 @@ function createEditorImportPreview(): TenderEditorImportPreview {
       metadata: {
         draft_package_title: 'Tarjouspaketti / draft package',
         draft_package_status: 'draft',
-        import_status: 'not_imported',
+        import_status: 'imported',
+        reimport_status: 'stale',
         target_quote_title: 'Tarjouspaketti / editor import',
-        target_customer_id: null,
-        target_project_id: null,
-        imported_quote_id: null,
-        will_create_placeholder_target: true,
+        target_quote_id: '61616161-6161-4616-8616-616161616161',
+        target_customer_id: '12121212-1212-4212-8212-121212121212',
+        target_project_id: '13131313-1313-4313-8313-131313131313',
+        imported_quote_id: '61616161-6161-4616-8616-616161616161',
+        will_create_placeholder_target: false,
       },
       sections: {
         quote_notes_md: '## Vaatimukset / tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nTämä on hyväksytty.',
@@ -258,35 +269,104 @@ function createEditorImportPreview(): TenderEditorImportPreview {
   };
 }
 
+function createImportState(): TenderDraftPackageImportState {
+  return {
+    draft_package_id: '66666666-6666-4666-8666-666666666666',
+    import_status: 'imported',
+    reimport_status: 'stale',
+    import_revision: 2,
+    current_payload_hash: 'cafebabe',
+    last_import_payload_hash: '1234abcd',
+    imported_quote_id: '61616161-6161-4616-8616-616161616161',
+    imported_at: '2026-04-05T13:07:00.000Z',
+    target_quote_id: '61616161-6161-4616-8616-616161616161',
+    target_quote_title: 'Tarjouspaketti / editor import',
+    target_project_id: '13131313-1313-4313-8313-131313131313',
+    target_customer_id: '12121212-1212-4212-8212-121212121212',
+    can_import: true,
+    can_reimport: true,
+    suggested_import_mode: 'update_existing_quote',
+    latest_run: createImportRuns()[0],
+  };
+}
+
+function createReimportPreview(): TenderEditorReconciliationPreview {
+  return {
+    draft_package_id: '66666666-6666-4666-8666-666666666666',
+    target_quote_id: '61616161-6161-4616-8616-616161616161',
+    target_quote_title: 'Tarjouspaketti / editor import',
+    import_mode: 'update_existing_quote',
+    reimport_status: 'stale',
+    current_payload_hash: 'cafebabe',
+    previous_payload_hash: '1234abcd',
+    added_count: 1,
+    changed_count: 1,
+    removed_count: 0,
+    unchanged_count: 0,
+    can_reimport: true,
+    warnings: ['Managed surface muuttui section-koosteen tasolla.'],
+    entries: [
+      {
+        key: 'requirements_and_quote_notes:accepted_requirement:requirement:44444444-4444-4444-8444-444444444444',
+        import_group: 'requirements_and_quote_notes',
+        target_kind: 'quote_notes_section',
+        title: 'Mukana oleva vaatimus',
+        change_type: 'changed',
+        current_content_md: 'Tämä on hyväksytty.',
+        previous_content_md: 'Vanha sisältö.',
+      },
+    ],
+  };
+}
+
+function createImportRuns(): TenderDraftPackageImportRun[] {
+  return [
+    {
+      id: '71717171-7171-4717-8717-717171717171',
+      tender_draft_package_id: '66666666-6666-4666-8666-666666666666',
+      target_quote_id: '61616161-6161-4616-8616-616161616161',
+      import_mode: 'update_existing_quote',
+      payload_hash: '1234abcd',
+      payload_snapshot: createEditorImportPreview().payload,
+      result_status: 'success',
+      summary: 'Päivitettiin aiemmin importoitu tarjous “Tarjouspaketti / editor import”.',
+      created_by_user_id: '22222222-2222-4222-8222-222222222222',
+      created_at: '2026-04-05T13:07:00.000Z',
+    },
+  ];
+}
+
 describe('TenderDraftPackagePanel', () => {
-  it('renders readiness, included and excluded preview sections for draft packages', () => {
+  it('renders imported quote handoff and re-import reconciliation state for draft packages', () => {
     const markup = renderToStaticMarkup(
       <TenderDraftPackagePanel
         selectedPackage={createPackageDetails()}
         draftPackages={[createDraftPackage()]}
         editorImportPreview={createEditorImportPreview()}
         editorImportValidation={createEditorImportPreview().validation}
+        draftPackageImportState={createImportState()}
+        draftPackageReimportPreview={createReimportPreview()}
+        draftPackageImportRuns={createImportRuns()}
         selectedDraftPackageId="66666666-6666-4666-8666-666666666666"
         onSelectDraftPackage={async () => undefined as unknown as void}
         onCreateDraftPackage={async () => undefined}
         onImportDraftPackageToEditor={async () => undefined}
+        onReimportDraftPackageToEditor={async () => undefined}
+        onOpenImportedQuote={() => undefined}
         onUpdateDraftPackageItem={async () => undefined}
         onMarkDraftPackageReviewed={async () => undefined}
         onMarkDraftPackageExported={async () => undefined}
       />,
     );
 
-    expect(markup).toContain('Editor import boundary');
-    expect(markup).toContain('Hyväksytyt vaatimukset');
-    expect(markup).toContain('Mukana (1)');
-    expect(markup).toContain('Ulkona (1)');
-    expect(markup).toContain('Export preview');
-    expect(markup).toContain('Editor import');
-    expect(markup).toContain('Mukana oleva vaatimus');
-    expect(markup).toContain('Avoin editor-note');
-    expect(markup).toContain('accepted_requirements');
-    expect(markup).toContain('notes_for_editor');
-    expect(markup).toContain('Import preview');
+    expect(markup).toContain('Imported quote handoff + re-import reconciliation');
+    expect(markup).toContain('Päivitä samaan quoteen');
+    expect(markup).toContain('Avaa importoitu quote');
+    expect(markup).toContain('Import handoff');
+    expect(markup).toContain('Re-import reconciliation');
+    expect(markup).toContain('Import-ajohistoria');
+    expect(markup).toContain('Draft muuttunut importin jälkeen');
+    expect(markup).toContain('Revision 2');
     expect(markup).toContain('Tarjouspaketti / editor import');
   });
 });

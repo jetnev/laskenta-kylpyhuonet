@@ -11,6 +11,9 @@ function createDraftPackage(overrides: Partial<TenderDraftPackage> = {}): Tender
     title: 'Tarjouspaketti / draft package',
     status: 'draft',
     importStatus: 'not_imported',
+    reimportStatus: 'never_imported',
+    importRevision: 0,
+    lastImportPayloadHash: null,
     generatedFromAnalysisJobId: '33333333-3333-4333-8333-333333333333',
     generatedByUserId: '22222222-2222-4222-8222-222222222222',
     importedQuoteId: null,
@@ -79,6 +82,7 @@ describe('tender-editor-import', () => {
     });
 
     expect(preview.importable_item_count).toBe(2);
+    expect(preview.payload_hash).toHaveLength(8);
     expect(preview.payload.metadata.target_quote_title).toBe('Tarjouspaketti / editor import');
     expect(preview.payload.sections.quote_notes_md).toContain('Vaatimukset / tarjoushuomiot');
     expect(preview.payload.sections.quote_internal_notes_md).toContain('Notes for editor');
@@ -89,9 +93,12 @@ describe('tender-editor-import', () => {
     expect(preview.validation.can_import).toBe(true);
   });
 
-  it('blocks re-importing a draft package that is already marked imported', () => {
+  it('keeps an already imported draft package valid for Phase 13 re-import preview generation', () => {
     const draftPackage = createDraftPackage({
       importStatus: 'imported',
+      reimportStatus: 'stale',
+      importRevision: 1,
+      lastImportPayloadHash: '1234abcd',
       importedQuoteId: '99999999-9999-4999-8999-999999999999',
       importedAt: '2026-04-05T14:10:00.000Z',
       importedByUserId: '22222222-2222-4222-8222-222222222222',
@@ -99,19 +106,17 @@ describe('tender-editor-import', () => {
     const preview = buildTenderEditorImportPreview({
       draftPackage,
       packageName: 'Tarjouspaketti',
+      targetQuoteId: '99999999-9999-4999-8999-999999999999',
+      targetQuoteTitle: 'Aiemmin importoitu tarjous',
       targetCustomerId: '12121212-1212-4212-8212-121212121212',
       targetProjectId: '13131313-1313-4313-8313-131313131313',
       willCreatePlaceholderTarget: false,
       generatedAt: '2026-04-05T14:15:00.000Z',
     });
 
-    expect(preview.validation.can_import).toBe(false);
-    expect(preview.validation.issues).toContainEqual(
-      expect.objectContaining({
-        code: 'already_imported',
-        severity: 'error',
-      }),
-    );
+    expect(preview.validation.can_import).toBe(true);
+    expect(preview.payload.metadata.target_quote_id).toBe('99999999-9999-4999-8999-999999999999');
+    expect(preview.payload.metadata.reimport_status).toBe('stale');
   });
 
   it('warns when importable content is missing while still producing a preview payload', () => {

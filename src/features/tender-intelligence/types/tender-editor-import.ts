@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   tenderDraftPackageImportStatusSchema,
   tenderDraftPackageItemTypeSchema,
+  tenderDraftPackageReimportStatusSchema,
   tenderDraftPackageSourceEntityTypeSchema,
   tenderDraftPackageStatusSchema,
 } from './tender-intelligence';
@@ -20,14 +21,18 @@ export const tenderEditorImportGroupSchema = z.enum([
 ]);
 
 export const tenderEditorImportTargetKindSchema = z.enum(['quote_notes_section', 'quote_internal_notes_section']);
+export const tenderEditorImportModeSchema = z.enum(['create_new_quote', 'update_existing_quote']);
+export const tenderEditorImportRunResultStatusSchema = z.enum(['success', 'failed']);
+export const tenderEditorImportExecutionStatusSchema = z.enum(['created', 'updated', 'no_changes']);
 export const tenderEditorImportIssueSeveritySchema = z.enum(['info', 'warning', 'error']);
 export const tenderEditorImportIssueCodeSchema = z.enum([
   'empty_package',
   'no_importable_items',
   'missing_title',
   'missing_content',
-  'already_imported',
 ]);
+
+export const tenderEditorReconciliationChangeTypeSchema = z.enum(['added', 'changed', 'removed', 'unchanged']);
 
 export const tenderEditorImportItemSchema = z.object({
   draft_package_item_id: entityIdSchema,
@@ -51,7 +56,9 @@ export const tenderEditorImportPayloadSchema = z.object({
     draft_package_title: z.string().trim().min(1),
     draft_package_status: tenderDraftPackageStatusSchema,
     import_status: tenderDraftPackageImportStatusSchema,
+    reimport_status: tenderDraftPackageReimportStatusSchema.nullable().optional(),
     target_quote_title: z.string().trim().min(1),
+    target_quote_id: entityIdSchema.nullable().optional(),
     target_customer_id: entityIdSchema.nullable().optional(),
     target_project_id: entityIdSchema.nullable().optional(),
     imported_quote_id: entityIdSchema.nullable().optional(),
@@ -91,6 +98,7 @@ export const tenderEditorImportPreviewSectionSchema = z.object({
 export const tenderEditorImportPreviewSchema = z.object({
   draft_item_count: z.number().int().min(0),
   importable_item_count: z.number().int().min(0),
+  payload_hash: z.string().trim().min(1),
   payload: tenderEditorImportPayloadSchema,
   validation: tenderEditorImportValidationResultSchema,
   sections: z.array(tenderEditorImportPreviewSectionSchema),
@@ -99,13 +107,80 @@ export const tenderEditorImportPreviewSchema = z.object({
 export const tenderEditorImportResultSchema = z.object({
   draft_package_id: entityIdSchema,
   imported_quote_id: entityIdSchema,
-  imported_project_id: entityIdSchema,
-  imported_customer_id: entityIdSchema,
+  imported_project_id: entityIdSchema.nullable().optional(),
+  imported_customer_id: entityIdSchema.nullable().optional(),
   created_placeholder_target: z.boolean(),
+  import_mode: tenderEditorImportModeSchema,
+  result_status: tenderEditorImportExecutionStatusSchema,
+  payload_hash: z.string().trim().min(1),
+  import_revision: z.number().int().min(0),
+  summary: z.string().trim().min(1),
+});
+
+export const tenderDraftPackageImportRunSchema = z.object({
+  id: entityIdSchema,
+  tender_draft_package_id: entityIdSchema,
+  target_quote_id: entityIdSchema.nullable().optional(),
+  import_mode: tenderEditorImportModeSchema,
+  payload_hash: z.string().trim().min(1),
+  payload_snapshot: tenderEditorImportPayloadSchema,
+  result_status: tenderEditorImportRunResultStatusSchema,
+  summary: z.string().trim().nullable().optional(),
+  created_by_user_id: entityIdSchema.nullable().optional(),
+  created_at: timestampSchema,
+});
+
+export const tenderDraftPackageImportStateSchema = z.object({
+  draft_package_id: entityIdSchema,
+  import_status: tenderDraftPackageImportStatusSchema,
+  reimport_status: tenderDraftPackageReimportStatusSchema,
+  import_revision: z.number().int().min(0),
+  current_payload_hash: z.string().trim().nullable().optional(),
+  last_import_payload_hash: z.string().trim().nullable().optional(),
+  imported_quote_id: entityIdSchema.nullable().optional(),
+  imported_at: timestampSchema.nullable().optional(),
+  target_quote_id: entityIdSchema.nullable().optional(),
+  target_quote_title: z.string().trim().nullable().optional(),
+  target_project_id: entityIdSchema.nullable().optional(),
+  target_customer_id: entityIdSchema.nullable().optional(),
+  can_import: z.boolean(),
+  can_reimport: z.boolean(),
+  suggested_import_mode: tenderEditorImportModeSchema,
+  latest_run: tenderDraftPackageImportRunSchema.nullable().optional(),
+});
+
+export const tenderEditorReconciliationEntrySchema = z.object({
+  key: z.string().trim().min(1),
+  import_group: tenderEditorImportGroupSchema,
+  target_kind: tenderEditorImportTargetKindSchema,
+  title: z.string().trim().min(1),
+  change_type: tenderEditorReconciliationChangeTypeSchema,
+  current_content_md: z.string().trim().nullable().optional(),
+  previous_content_md: z.string().trim().nullable().optional(),
+});
+
+export const tenderEditorReconciliationPreviewSchema = z.object({
+  draft_package_id: entityIdSchema,
+  target_quote_id: entityIdSchema.nullable().optional(),
+  target_quote_title: z.string().trim().nullable().optional(),
+  import_mode: tenderEditorImportModeSchema,
+  reimport_status: tenderDraftPackageReimportStatusSchema,
+  current_payload_hash: z.string().trim().min(1),
+  previous_payload_hash: z.string().trim().nullable().optional(),
+  added_count: z.number().int().min(0),
+  changed_count: z.number().int().min(0),
+  removed_count: z.number().int().min(0),
+  unchanged_count: z.number().int().min(0),
+  can_reimport: z.boolean(),
+  warnings: z.array(z.string().trim().min(1)),
+  entries: z.array(tenderEditorReconciliationEntrySchema),
 });
 
 export type TenderEditorImportGroup = z.infer<typeof tenderEditorImportGroupSchema>;
 export type TenderEditorImportTargetKind = z.infer<typeof tenderEditorImportTargetKindSchema>;
+export type TenderEditorImportMode = z.infer<typeof tenderEditorImportModeSchema>;
+export type TenderEditorImportRunResultStatus = z.infer<typeof tenderEditorImportRunResultStatusSchema>;
+export type TenderEditorImportExecutionStatus = z.infer<typeof tenderEditorImportExecutionStatusSchema>;
 export type TenderEditorImportItem = z.infer<typeof tenderEditorImportItemSchema>;
 export type TenderEditorImportPayload = z.infer<typeof tenderEditorImportPayloadSchema>;
 export type TenderEditorImportValidationIssue = z.infer<typeof tenderEditorImportValidationIssueSchema>;
@@ -113,3 +188,8 @@ export type TenderEditorImportValidationResult = z.infer<typeof tenderEditorImpo
 export type TenderEditorImportPreviewSection = z.infer<typeof tenderEditorImportPreviewSectionSchema>;
 export type TenderEditorImportPreview = z.infer<typeof tenderEditorImportPreviewSchema>;
 export type TenderEditorImportResult = z.infer<typeof tenderEditorImportResultSchema>;
+export type TenderDraftPackageImportRun = z.infer<typeof tenderDraftPackageImportRunSchema>;
+export type TenderDraftPackageImportState = z.infer<typeof tenderDraftPackageImportStateSchema>;
+export type TenderEditorReconciliationChangeType = z.infer<typeof tenderEditorReconciliationChangeTypeSchema>;
+export type TenderEditorReconciliationEntry = z.infer<typeof tenderEditorReconciliationEntrySchema>;
+export type TenderEditorReconciliationPreview = z.infer<typeof tenderEditorReconciliationPreviewSchema>;

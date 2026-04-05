@@ -11,6 +11,10 @@ import {
 } from '../lib/tender-draft-package';
 import { buildTenderEditorImportPreview } from '../lib/tender-editor-import';
 import {
+  buildTenderDraftPackageImportState,
+  buildTenderEditorReconciliationPreview,
+} from '../lib/tender-editor-reconciliation';
+import {
   importTenderDraftPackageToEditor,
   resolveTenderEditorImportTarget,
 } from './tender-editor-import-adapter';
@@ -18,6 +22,7 @@ import {
   type CreateTenderPackageInput,
   type TenderDraftPackageImportStatus,
   type TenderDraftPackage,
+  type TenderDraftPackageReimportStatus,
   type CreateTenderReferenceProfileInput,
   type TenderAnalysisJobStatus,
   type TenderAnalysisJobType,
@@ -31,8 +36,11 @@ import {
   type UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
 import type {
+  TenderDraftPackageImportRun,
+  TenderDraftPackageImportState,
   TenderEditorImportPreview,
   TenderEditorImportResult,
+  TenderEditorReconciliationPreview,
   TenderEditorImportValidationResult,
 } from '../types/tender-editor-import';
 import { buildTenderWorkflowMetadataUpdate, syncTenderReviewTaskStatus } from '../lib/tender-review-workflow';
@@ -61,6 +69,7 @@ import {
   buildTenderPackageDetails,
   mapCreateTenderReferenceProfileInputToInsert,
   mapTenderAnalysisJobRowToDomain,
+  mapTenderDraftPackageImportRunRowToDomain,
   mapCreateTenderPackageInputToInsert,
   mapTenderDocumentChunkRowToDomain,
   mapTenderDocumentExtractionRowToDomain,
@@ -88,6 +97,8 @@ import {
   tenderDocumentExtractionRowsSchema,
   tenderDocumentRowSchema,
   tenderDocumentRowsSchema,
+  tenderDraftPackageImportRunRowSchema,
+  tenderDraftPackageImportRunRowsSchema,
   tenderDraftPackageItemRowSchema,
   tenderDraftPackageItemRowsSchema,
   tenderDraftPackageRowSchema,
@@ -333,6 +344,31 @@ async function fetchTenderDraftPackageItemRowsForDraftPackages(options: {
   }
 
   return tenderDraftPackageItemRowsSchema.parse(data ?? []);
+}
+
+async function fetchTenderDraftPackageImportRunRowsForDraftPackage(options: {
+  client?: ReturnType<typeof requireSupabase>;
+  draftPackageId: string;
+  resultStatus?: 'success' | 'failed';
+}) {
+  const client = options.client ?? requireConfiguredSupabase();
+  let query = client
+    .from('tender_draft_package_import_runs')
+    .select('*')
+    .eq('tender_draft_package_id', options.draftPackageId)
+    .order('created_at', { ascending: false });
+
+  if (options.resultStatus) {
+    query = query.eq('result_status', options.resultStatus);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw toRepositoryError(error, 'Luonnospaketin import-ajohistoriaa ei voitu ladata.');
+  }
+
+  return tenderDraftPackageImportRunRowsSchema.parse(data ?? []);
 }
 
 async function getAuthenticatedActorUserId() {
@@ -585,18 +621,19 @@ async function updateTenderPackageEditorLinks(options: {
 async function updateTenderDraftPackageImportState(options: {
   client: ReturnType<typeof requireSupabase>;
   draftPackageId: string;
-  importStatus: TenderDraftPackageImportStatus;
-  importedQuoteId?: string | null;
-  importedByUserId?: string | null;
+  patch: Partial<{
+    import_status: TenderDraftPackageImportStatus;
+    reimport_status: TenderDraftPackageReimportStatus;
+    import_revision: number;
+    last_import_payload_hash: string | null;
+    imported_quote_id: string | null;
+    imported_by_user_id: string | null;
+    imported_at: string | null;
+  }>;
 }) {
   const { data, error } = await options.client
     .from('tender_draft_packages')
-    .update({
-      import_status: options.importStatus,
-      imported_quote_id: options.importStatus === 'imported' ? options.importedQuoteId ?? null : null,
-      imported_by_user_id: options.importStatus === 'imported' ? options.importedByUserId ?? null : null,
-      imported_at: options.importStatus === 'imported' ? new Date().toISOString() : null,
-    })
+    .update(options.patch)
     .eq('id', options.draftPackageId)
     .select('*')
     .single();
@@ -617,6 +654,40 @@ async function updateTenderDraftPackageImportState(options: {
   });
 
   return mapTenderDraftPackageRowToDomain(materializedRow, itemRows);
+}
+
+async function createTenderDraftPackageImportRun(options: {
+  client: ReturnType<typeof requireSupabase>;
+  draftPackage: TenderDraftPackage;
+  targetQuoteId?: string | null;
+  importMode: 'create_new_quote' | 'update_existing_quote';
+  payloadHash: string;
+  payloadSnapshot: TenderEditorImportPreview['payload'];
+  resultStatus: 'success' | 'failed';
+  summary?: string | null;
+  createdByUserId?: string | null;
+}) {
+  const { data, error } = await options.client
+    .from('tender_draft_package_import_runs')
+    .insert({
+      organization_id: options.draftPackage.organizationId,
+      tender_draft_package_id: options.draftPackage.id,
+      target_quote_id: options.targetQuoteId ?? null,
+      import_mode: options.importMode,
+      payload_hash: options.payloadHash,
+      payload_snapshot: options.payloadSnapshot,
+      result_status: options.resultStatus,
+      summary: options.summary ?? null,
+      created_by_user_id: options.createdByUserId ?? null,
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    throw toRepositoryError(error, 'Luonnospaketin import-ajohistoriaa ei voitu tallentaa.');
+  }
+
+  return mapTenderDraftPackageImportRunRowToDomain(tenderDraftPackageImportRunRowSchema.parse(data));
 }
 
 async function fetchTenderDocumentExtractionRowsForPackage(packageId: string) {
@@ -1725,6 +1796,93 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     }
   }
 
+  private async buildDraftPackageImportContext(draftPackageId: string) {
+    const draftPackage = await this.getDraftPackageById(draftPackageId);
+
+    if (!draftPackage) {
+      throw new Error('Luonnospakettia ei löytynyt editori-importtia varten.');
+    }
+
+    const packageDetails = await this.getTenderPackageById(draftPackage.tenderPackageId);
+
+    if (!packageDetails) {
+      throw new Error('Tarjouspyyntöpakettia ei löytynyt editori-importtia varten.');
+    }
+
+    const actorUserId = await getAuthenticatedActorUserId();
+    const client = requireConfiguredSupabase();
+    const target = await resolveTenderEditorImportTarget({
+      client,
+      packageDetails,
+      actorUserId,
+      importedQuoteId: draftPackage.importedQuoteId,
+    });
+    const preview = buildTenderEditorImportPreview({
+      draftPackage,
+      packageName: packageDetails.package.name,
+      targetQuoteId: target.quoteId ?? draftPackage.importedQuoteId ?? null,
+      targetQuoteTitle: target.quoteTitle ?? undefined,
+      targetCustomerId: target.customerId,
+      targetProjectId: target.projectId,
+      willCreatePlaceholderTarget: target.willCreatePlaceholderTarget,
+    });
+    const importRunRows = await fetchTenderDraftPackageImportRunRowsForDraftPackage({
+      client,
+      draftPackageId,
+    });
+    const importRuns = importRunRows.map(mapTenderDraftPackageImportRunRowToDomain);
+    const latestRun = importRuns[0] ?? null;
+    const latestSuccessfulRun = importRuns.find((run) => run.result_status === 'success') ?? null;
+    const importState = buildTenderDraftPackageImportState({
+      draftPackage,
+      preview,
+      latestRun,
+      latestSuccessfulRun,
+      targetQuoteId: target.quoteId ?? draftPackage.importedQuoteId ?? null,
+      targetQuoteTitle: target.quoteTitle ?? preview.payload.metadata.target_quote_title,
+      targetProjectId: target.projectId ?? packageDetails.package.linkedProjectId ?? null,
+      targetCustomerId: target.customerId ?? packageDetails.package.linkedCustomerId ?? null,
+    });
+    const reconciliation = buildTenderEditorReconciliationPreview({
+      draftPackage,
+      preview,
+      latestSuccessfulRun,
+      targetQuoteId: importState.target_quote_id,
+      targetQuoteTitle: importState.target_quote_title,
+      importMode: importState.suggested_import_mode,
+    });
+
+    return {
+      client,
+      actorUserId,
+      packageDetails,
+      draftPackage,
+      target,
+      preview,
+      importRuns,
+      latestRun,
+      latestSuccessfulRun,
+      importState,
+      reconciliation,
+    };
+  }
+
+  private async syncDraftPackageReimportStatus(
+    context: Awaited<ReturnType<SupabaseTenderIntelligenceRepository['buildDraftPackageImportContext']>>,
+  ) {
+    if (context.draftPackage.reimportStatus === context.importState.reimport_status) {
+      return context.draftPackage;
+    }
+
+    return updateTenderDraftPackageImportState({
+      client: context.client,
+      draftPackageId: context.draftPackage.id,
+      patch: {
+        reimport_status: context.importState.reimport_status,
+      },
+    });
+  }
+
   async updateDraftPackageItem(itemId: string, input: UpdateTenderDraftPackageItemInput) {
     try {
       const existingItemRow = await fetchTenderDraftPackageItemRowById(itemId);
@@ -1846,35 +2004,110 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     }
   }
 
+  private async applyDraftPackageImportToEditor(draftPackageId: string): Promise<TenderEditorImportResult> {
+    let context: Awaited<ReturnType<SupabaseTenderIntelligenceRepository['buildDraftPackageImportContext']>> | null = null;
+
+    try {
+      context = await this.buildDraftPackageImportContext(draftPackageId);
+
+      if (!context.preview.validation.can_import) {
+        const blockingIssue = context.preview.validation.issues.find((issue) => issue.severity === 'error');
+        throw new Error(blockingIssue?.message || 'Luonnospakettia ei voi vielä tuoda editoriin.');
+      }
+
+      const adapterResult = await importTenderDraftPackageToEditor({
+        client: context.client,
+        packageDetails: context.packageDetails,
+        preview: context.preview,
+        actorUserId: context.actorUserId,
+        currentImportRevision: context.draftPackage.importRevision,
+        previousPayloadSnapshot: context.latestSuccessfulRun?.payload_snapshot ?? null,
+      });
+      const persistedImportRevision = adapterResult.result_status === 'no_changes'
+        ? Math.max(context.draftPackage.importRevision, context.draftPackage.importedQuoteId ? 1 : 0)
+        : adapterResult.import_revision;
+      const importedAt = adapterResult.result_status === 'no_changes'
+        ? context.draftPackage.importedAt ?? new Date().toISOString()
+        : new Date().toISOString();
+
+      await updateTenderPackageEditorLinks({
+        client: context.client,
+        packageId: context.packageDetails.package.id,
+        linkedCustomerId: adapterResult.imported_customer_id ?? context.packageDetails.package.linkedCustomerId ?? context.target.customerId,
+        linkedProjectId: adapterResult.imported_project_id ?? context.packageDetails.package.linkedProjectId ?? context.target.projectId,
+        linkedQuoteId: adapterResult.imported_quote_id,
+      });
+      await updateTenderDraftPackageImportState({
+        client: context.client,
+        draftPackageId,
+        patch: {
+          import_status: 'imported',
+          reimport_status: 'up_to_date',
+          import_revision: persistedImportRevision,
+          last_import_payload_hash: adapterResult.payload_hash,
+          imported_quote_id: adapterResult.imported_quote_id,
+          imported_by_user_id: context.actorUserId,
+          imported_at: importedAt,
+        },
+      });
+      await createTenderDraftPackageImportRun({
+        client: context.client,
+        draftPackage: context.draftPackage,
+        targetQuoteId: adapterResult.imported_quote_id,
+        importMode: adapterResult.import_mode,
+        payloadHash: adapterResult.payload_hash,
+        payloadSnapshot: context.preview.payload,
+        resultStatus: 'success',
+        summary: adapterResult.summary,
+        createdByUserId: context.actorUserId,
+      });
+
+      this.emit();
+      return {
+        ...adapterResult,
+        import_revision: persistedImportRevision,
+      };
+    } catch (error) {
+      if (context) {
+        try {
+          await updateTenderDraftPackageImportState({
+            client: context.client,
+            draftPackageId,
+            patch: context.draftPackage.importedQuoteId
+              ? {
+                  import_status: 'imported',
+                  reimport_status: 'import_failed',
+                }
+              : {
+                  import_status: 'failed',
+                  reimport_status: 'import_failed',
+                },
+          });
+          await createTenderDraftPackageImportRun({
+            client: context.client,
+            draftPackage: context.draftPackage,
+            targetQuoteId: context.draftPackage.importedQuoteId ?? null,
+            importMode: context.importState.suggested_import_mode,
+            payloadHash: context.preview.payload_hash,
+            payloadSnapshot: context.preview.payload,
+            resultStatus: 'failed',
+            summary: error instanceof Error ? error.message : 'Import epäonnistui.',
+            createdByUserId: context.actorUserId,
+          });
+        } catch (markError) {
+          console.warn('Tender draft package import failure state update failed.', markError);
+        }
+      }
+
+      throw toRepositoryError(error, 'Luonnospakettia ei voitu tuoda editoriin.');
+    }
+  }
+
   async previewEditorImportForDraftPackage(draftPackageId: string): Promise<TenderEditorImportPreview> {
     try {
-      const draftPackage = await this.getDraftPackageById(draftPackageId);
-
-      if (!draftPackage) {
-        throw new Error('Luonnospakettia ei löytynyt editori-importin previewta varten.');
-      }
-
-      const packageDetails = await this.getTenderPackageById(draftPackage.tenderPackageId);
-
-      if (!packageDetails) {
-        throw new Error('Tarjouspyyntöpakettia ei löytynyt editori-importin previewta varten.');
-      }
-
-      const actorUserId = await getAuthenticatedActorUserId();
-      const client = requireConfiguredSupabase();
-      const target = await resolveTenderEditorImportTarget({
-        client,
-        packageDetails,
-        actorUserId,
-      });
-
-      return buildTenderEditorImportPreview({
-        draftPackage,
-        packageName: packageDetails.package.name,
-        targetCustomerId: target.customerId,
-        targetProjectId: target.projectId,
-        willCreatePlaceholderTarget: target.willCreatePlaceholderTarget,
-      });
+      const context = await this.buildDraftPackageImportContext(draftPackageId);
+      await this.syncDraftPackageReimportStatus(context);
+      return context.preview;
     } catch (error) {
       throw toRepositoryError(error, 'Editori-importin previewta ei voitu muodostaa.');
     }
@@ -1882,10 +2115,47 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
 
   async validateEditorImportForDraftPackage(draftPackageId: string): Promise<TenderEditorImportValidationResult> {
     try {
-      const preview = await this.previewEditorImportForDraftPackage(draftPackageId);
-      return preview.validation;
+      const context = await this.buildDraftPackageImportContext(draftPackageId);
+      await this.syncDraftPackageReimportStatus(context);
+      return context.preview.validation;
     } catch (error) {
       throw toRepositoryError(error, 'Editori-importin validointia ei voitu suorittaa.');
+    }
+  }
+
+  async getDraftPackageImportStatus(draftPackageId: string): Promise<TenderDraftPackageImportState> {
+    try {
+      const context = await this.buildDraftPackageImportContext(draftPackageId);
+      await this.syncDraftPackageReimportStatus(context);
+      return context.importState;
+    } catch (error) {
+      throw toRepositoryError(error, 'Luonnospaketin import-tilaa ei voitu ladata.');
+    }
+  }
+
+  async previewDraftPackageReimport(draftPackageId: string): Promise<TenderEditorReconciliationPreview> {
+    try {
+      const context = await this.buildDraftPackageImportContext(draftPackageId);
+      await this.syncDraftPackageReimportStatus(context);
+      return context.reconciliation;
+    } catch (error) {
+      throw toRepositoryError(error, 'Luonnospaketin re-import previewta ei voitu muodostaa.');
+    }
+  }
+
+  async listDraftPackageImportRuns(draftPackageId: string): Promise<TenderDraftPackageImportRun[]> {
+    try {
+      const existingDraftPackageRow = await fetchTenderDraftPackageRowById(draftPackageId);
+
+      if (!existingDraftPackageRow) {
+        throw new Error('Luonnospakettia ei löytynyt tai se on jo poistettu.');
+      }
+
+      await assertTenderPackageAccess(existingDraftPackageRow.tender_package_id);
+      const rows = await fetchTenderDraftPackageImportRunRowsForDraftPackage({ draftPackageId });
+      return rows.map(mapTenderDraftPackageImportRunRowToDomain);
+    } catch (error) {
+      throw toRepositoryError(error, 'Luonnospaketin import-ajohistoriaa ei voitu ladata.');
     }
   }
 
@@ -1907,9 +2177,14 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       const updated = await updateTenderDraftPackageImportState({
         client,
         draftPackageId,
-        importStatus,
-        importedQuoteId,
-        importedByUserId: actorUserId,
+        patch: {
+          import_status: importStatus,
+          reimport_status: importStatus === 'imported' ? 'up_to_date' : 'import_failed',
+          import_revision: existingDraftPackageRow.import_revision + (importStatus === 'imported' ? 1 : 0),
+          imported_quote_id: importStatus === 'imported' ? importedQuoteId : existingDraftPackageRow.imported_quote_id,
+          imported_by_user_id: importStatus === 'imported' ? actorUserId : existingDraftPackageRow.imported_by_user_id,
+          imported_at: importStatus === 'imported' ? new Date().toISOString() : existingDraftPackageRow.imported_at,
+        },
       });
 
       this.emit();
@@ -1920,81 +2195,11 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
   }
 
   async importDraftPackageToEditor(draftPackageId: string): Promise<TenderEditorImportResult> {
-    let draftPackage: TenderDraftPackage | null = null;
+    return this.applyDraftPackageImportToEditor(draftPackageId);
+  }
 
-    try {
-      draftPackage = await this.getDraftPackageById(draftPackageId);
-
-      if (!draftPackage) {
-        throw new Error('Luonnospakettia ei löytynyt editori-importtia varten.');
-      }
-
-      const packageDetails = await this.getTenderPackageById(draftPackage.tenderPackageId);
-
-      if (!packageDetails) {
-        throw new Error('Tarjouspyyntöpakettia ei löytynyt editori-importtia varten.');
-      }
-
-      const actorUserId = await getAuthenticatedActorUserId();
-      const client = requireConfiguredSupabase();
-      const target = await resolveTenderEditorImportTarget({
-        client,
-        packageDetails,
-        actorUserId,
-      });
-      const preview = buildTenderEditorImportPreview({
-        draftPackage,
-        packageName: packageDetails.package.name,
-        targetCustomerId: target.customerId,
-        targetProjectId: target.projectId,
-        willCreatePlaceholderTarget: target.willCreatePlaceholderTarget,
-      });
-
-      if (!preview.validation.can_import) {
-        const blockingIssue = preview.validation.issues.find((issue) => issue.severity === 'error');
-        throw new Error(blockingIssue?.message || 'Luonnospakettia ei voi vielä tuoda editoriin.');
-      }
-
-      const result = await importTenderDraftPackageToEditor({
-        client,
-        packageDetails,
-        preview,
-        actorUserId,
-      });
-
-      await updateTenderPackageEditorLinks({
-        client,
-        packageId: packageDetails.package.id,
-        linkedCustomerId: result.imported_customer_id,
-        linkedProjectId: result.imported_project_id,
-        linkedQuoteId: result.imported_quote_id,
-      });
-      await updateTenderDraftPackageImportState({
-        client,
-        draftPackageId,
-        importStatus: 'imported',
-        importedQuoteId: result.imported_quote_id,
-        importedByUserId: actorUserId,
-      });
-
-      this.emit();
-      return result;
-    } catch (error) {
-      if (draftPackage) {
-        try {
-          const client = requireConfiguredSupabase();
-          await updateTenderDraftPackageImportState({
-            client,
-            draftPackageId,
-            importStatus: 'failed',
-          });
-        } catch (markError) {
-          console.warn('Tender draft package import failure state update failed.', markError);
-        }
-      }
-
-      throw toRepositoryError(error, 'Luonnospakettia ei voitu tuoda editoriin.');
-    }
+  async reimportDraftPackageToEditor(draftPackageId: string): Promise<TenderEditorImportResult> {
+    return this.applyDraftPackageImportToEditor(draftPackageId);
   }
 
   async listReferenceSuggestionsForPackage(packageId: string) {
