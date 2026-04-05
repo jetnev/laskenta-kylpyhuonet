@@ -2,6 +2,7 @@ export type AppPage =
   | 'dashboard'
   | 'help'
   | 'projects'
+  | 'tender-intelligence'
   | 'invoices'
   | 'products'
   | 'installation-groups'
@@ -38,6 +39,7 @@ const APP_PAGE_PATHS: Record<AppPage, string> = {
   dashboard: '/app/etusivu',
   help: '/app/ohjeet',
   projects: '/app/projektit',
+  'tender-intelligence': '/app/tarjousaly',
   invoices: '/app/laskut',
   products: '/app/tuoterekisteri',
   'installation-groups': '/app/hintaryhmat',
@@ -128,9 +130,9 @@ export function resolveAppLocation(pathname: string, search = ''): AppLocationSt
 
   return normalizeLocationShape({
     page: requestedPage,
-    projectId: params.get(APP_QUERY_PARAM.project),
-    quoteId: params.get(APP_QUERY_PARAM.quote),
-    invoiceId: params.get(APP_QUERY_PARAM.invoice),
+    projectId: params.get(APP_QUERY_PARAM.project) ?? undefined,
+    quoteId: params.get(APP_QUERY_PARAM.quote) ?? undefined,
+    invoiceId: params.get(APP_QUERY_PARAM.invoice) ?? undefined,
     editor: params.get(APP_QUERY_PARAM.editor) === 'quote' ? 'quote' : undefined,
   });
 }

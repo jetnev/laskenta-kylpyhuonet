@@ -23,6 +23,7 @@ describe('resolveAppPage', () => {
   it('maps tarjousehdot and juridiset dokumentit to different pages', () => {
     expect(resolveAppPage('/app/tarjousehdot')).toBe('terms');
     expect(resolveAppPage('/app/juridiset-dokumentit')).toBe('legal');
+    expect(resolveAppPage('/app/tarjousaly')).toBe('tender-intelligence');
   });
 
   it('supports the legacy sopimusasiat alias and dashboard root', () => {
@@ -53,10 +54,12 @@ describe('resolveAccessibleAppPage', () => {
   it('keeps tarjousehdot untouched as a separate page', () => {
     const quoteTermsPath = getAppPagePath('terms');
     const legalDocumentsPath = getAppPagePath('legal');
+    const tenderIntelligencePath = getAppPagePath('tender-intelligence');
 
     expect(resolveAccessibleAppPage('terms', { canManageSharedData: false, canManageUsers: false })).toBe('terms');
     expect(quoteTermsPath).toBe('/app/tarjousehdot');
     expect(legalDocumentsPath).toBe('/app/juridiset-dokumentit');
+    expect(tenderIntelligencePath).toBe('/app/tarjousaly');
   });
 });
 

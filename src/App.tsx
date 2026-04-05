@@ -9,6 +9,7 @@ import {
   Gear,
   House,
   List,
+  MagnifyingGlass,
   Package,
   Receipt,
   Shield,
@@ -43,6 +44,7 @@ import AccountPage from './components/pages/AccountPage';
 import UsersPage from './components/pages/UsersPage';
 import LegalDocumentsPage from './components/pages/LegalDocumentsPage';
 import LegalAcceptanceGate from './components/legal/LegalAcceptanceGate';
+import TenderIntelligencePage from './features/tender-intelligence/pages/TenderIntelligencePage';
 import {
   acceptLegalDocuments,
   evaluateLegalAcceptanceState,
@@ -211,6 +213,7 @@ function App() {
         { id: 'dashboard' as const, name: 'Etusivu', icon: House, visible: true },
         { id: 'help' as const, name: 'Ohjeet', icon: List, visible: true },
         { id: 'projects' as const, name: 'Projektit', icon: Folder, visible: true },
+        { id: 'tender-intelligence' as const, name: 'Tarjousäly', icon: MagnifyingGlass, visible: true },
         { id: 'invoices' as const, name: 'Laskut', icon: Receipt, visible: true },
         { id: 'products' as const, name: 'Tuoterekisteri', icon: Package, visible: true },
         { id: 'installation-groups' as const, name: 'Hintaryhmät', icon: Wrench, visible: true },
@@ -604,6 +607,7 @@ function App() {
           {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigateLocation} />}
           {currentPage === 'help' && <HelpPage onNavigate={handleNavigatePage} />}
           {currentPage === 'projects' && <ProjectsPage routeState={currentLocation} onNavigate={handleNavigateLocation} />}
+          {currentPage === 'tender-intelligence' && <TenderIntelligencePage />}
           {currentPage === 'invoices' && <InvoicesPage routeState={currentLocation} onNavigate={handleNavigateLocation} />}
           {currentPage === 'products' && <ProductsPage />}
           {currentPage === 'installation-groups' && <InstallationGroupsPage />}

@@ -22,6 +22,7 @@ const WORKSPACE_PAGE_DESCRIPTIONS: Record<AppPage, string> = {
   dashboard: 'Seuraa tarjousten, projektien ja avainlukujen tilannetta yhdesta Projekta-nakymasta.',
   help: 'Projektan kaytto-ohjeet, aloituspolku ja arjen tukisisallot yhdessa paikassa.',
   projects: 'Hallitse asiakkaita, projekteja, tarjouksia ja etenemista Projekta-tyotilassa.',
+  'tender-intelligence': 'Rakenna tarjouspyyntopaketeille oma analyysi- ja katselmointivalmis foundation Projektassa.',
   invoices: 'Seuraa laskuja, laskutustilanteita ja projektikohtaista toteumaa Projekta-tyotilassa.',
   products: 'Yllapida tuotekatalogia, hinnoittelua ja tuotekuvauksia Projekta-jarjestelmassa.',
   'installation-groups': 'Hallinnoi hintaryhmia ja asennuslogiikkaa Projekta-jarjestelmassa.',

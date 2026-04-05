@@ -30,7 +30,7 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Checkbox } from '../ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
+import { ResponsiveDialog } from '../ResponsiveDialog';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -169,6 +169,44 @@ export default function LegalDocumentsPage() {
     setEditorOpen(true);
   };
 
+  const handleSaveDraft = async () => {
+    try {
+      setSaving(true);
+      if (editingDocument) {
+        await updateLegalDocumentDraft(editingDocument.id, formData);
+        toast.success('Luonnos päivitetty.');
+      } else {
+        await createLegalDocumentDraft(formData);
+        toast.success('Luonnos luotu.');
+      }
+      setEditorOpen(false);
+      await loadData();
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : 'Tallennus epäonnistui.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    try {
+      setSaving(true);
+      if (editingDocument) {
+        await updateLegalDocumentDraft(editingDocument.id, formData);
+        toast.success('Luonnos päivitetty.');
+      } else {
+        await createLegalDocumentDraft(formData);
+        toast.success('Luonnos luotu.');
+      }
+      setEditorOpen(false);
+      await loadData();
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : 'Tallennus epäonnistui.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!canManageUsers) {
     return (
       <div className="p-4 sm:p-8">
@@ -185,17 +223,25 @@ export default function LegalDocumentsPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-semibold">Juridiset dokumentit</h1>
           <p className="mt-1 text-muted-foreground">
-            Hallitse palvelun omia käyttöehtoja, tietosuojaa, DPA:ta ja hyväksyntäauditointia. Tarjousehdot hallitaan erikseen Tarjousehdot-sivulla.
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => void loadData()} disabled={loading}>
-          Päivitä näkymä
-        </Button>
-      </div>
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
+          <ResponsiveDialog
+            open={editorOpen}
+            onOpenChange={setEditorOpen}
+            title={editingDocument ? 'Muokkaa dokumenttiluonnosta' : 'Luo uusi dokumenttiluonnos'}
+            description="Julkaistut versiot ovat muuttumattomia. Tee sisällölliset muutokset aina uuden luonnoksen kautta. Pitkä sisältö scrollaa tämän näkymän sisällä ilman, että otsikko tai sulkemistoiminnot katoavat." 
+            maxWidth="full"
+            footer={(
+              <>
+                <Button type="button" variant="outline" onClick={() => setEditorOpen(false)} className="flex-1 sm:flex-initial">
+                  Sulje
+                </Button>
+                <Button type="button" disabled={saving} onClick={() => void handleSaveDraft()} className="flex-1 sm:flex-initial">
+                  {saving ? 'Tallennetaan...' : editingDocument ? 'Tallenna muutokset' : 'Luo luonnos'}
+                </Button>
+              </>
+            )}
+          >
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                <div className="min-w-0 space-y-4">
         </Alert>
       )}
 
@@ -410,17 +456,25 @@ export default function LegalDocumentsPage() {
       </Tabs>
 
       {isPlatformAdmin && (
-        <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-          <DialogContent className="max-w-6xl">
-            <DialogHeader>
-              <DialogTitle>{editingDocument ? 'Muokkaa dokumenttiluonnosta' : 'Luo uusi dokumenttiluonnos'}</DialogTitle>
-              <DialogDescription>
-                Julkaistut versiot ovat muuttumattomia. Tee sisällölliset muutokset aina uuden luonnoksen kautta.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-              <div className="space-y-4">
+        <ResponsiveDialog
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          title={editingDocument ? 'Muokkaa dokumenttiluonnosta' : 'Luo uusi dokumenttiluonnos'}
+          description="Julkaistut versiot ovat muuttumattomia. Tee sisällölliset muutokset aina uuden luonnoksen kautta. Pitkä dokumenttisisältö scrollaa tämän näkymän sisällä ilman, että otsikko tai sulkemistoiminnot leikkaantuvat."
+          maxWidth="full"
+          footer={(
+            <>
+              <Button type="button" variant="outline" onClick={() => setEditorOpen(false)} className="flex-1 sm:flex-initial">
+                Sulje
+              </Button>
+              <Button type="button" disabled={saving} onClick={() => void handleSaveDraft()} className="flex-1 sm:flex-initial">
+                {saving ? 'Tallennetaan...' : editingDocument ? 'Tallenna muutokset' : 'Luo luonnos'}
+              </Button>
+            </>
+          )}
+        >
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+              <div className="min-w-0 space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="legal-document-title">Otsikko</Label>
@@ -517,39 +571,9 @@ export default function LegalDocumentsPage() {
                     onChange={(event) => setFormData((current) => ({ ...current, contentMd: event.target.value }))}
                   />
                 </div>
-
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setEditorOpen(false)}>
-                    Sulje
-                  </Button>
-                  <Button
-                    type="button"
-                    disabled={saving}
-                    onClick={async () => {
-                      try {
-                        setSaving(true);
-                        if (editingDocument) {
-                          await updateLegalDocumentDraft(editingDocument.id, formData);
-                          toast.success('Luonnos päivitetty.');
-                        } else {
-                          await createLegalDocumentDraft(formData);
-                          toast.success('Luonnos luotu.');
-                        }
-                        setEditorOpen(false);
-                        await loadData();
-                      } catch (reason) {
-                        toast.error(reason instanceof Error ? reason.message : 'Tallennus epäonnistui.');
-                      } finally {
-                        setSaving(false);
-                      }
-                    }}
-                  >
-                    {saving ? 'Tallennetaan...' : editingDocument ? 'Tallenna muutokset' : 'Luo luonnos'}
-                  </Button>
-                </div>
               </div>
 
-              <div className="space-y-3 rounded-[28px] border border-slate-200 bg-slate-50/70 p-5">
+              <div className="min-w-0 space-y-3 rounded-[28px] border border-slate-200 bg-slate-50/70 p-5">
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Esikatselu</div>
                   <h3 className="mt-2 text-lg font-semibold text-slate-950">{formData.title || 'Dokumenttiluonnos'}</h3>
@@ -559,8 +583,7 @@ export default function LegalDocumentsPage() {
                 </div>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
+        </ResponsiveDialog>
       )}
     </div>
   );
