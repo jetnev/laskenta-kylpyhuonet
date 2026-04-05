@@ -880,6 +880,41 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     attemptManagedEdit(quoteTenderManagedEditTargetsByRowId.get(row.id), applyChange);
   };
 
+  const resolveManagedSelectionEditTarget = () => {
+    const managedTargets = selectedRowIds
+      .map((rowId) => quoteTenderManagedEditTargetsByRowId.get(rowId) ?? null)
+      .filter((target): target is QuoteTenderManagedEditTarget => Boolean(target?.is_tarjousaly_managed));
+
+    if (managedTargets.length === 0) {
+      return null;
+    }
+
+    const markerKeys = [...new Set(managedTargets.flatMap((target) => target.marker_keys))].sort();
+    const titles = [...new Set(managedTargets.flatMap((target) => target.titles).filter(Boolean))];
+    const status = managedTargets.some((target) => target.status === 'danger')
+      ? 'danger'
+      : managedTargets.some((target) => target.status === 'warning')
+        ? 'warning'
+        : 'clean';
+
+    return {
+      kind: 'section_row' as const,
+      label: managedTargets.length === 1
+        ? managedTargets[0].label
+        : `${managedTargets.length} Tarjousälyn hallinnoimaa väliotsikkoa`,
+      status,
+      is_tarjousaly_managed: true,
+      is_safe_managed: status !== 'danger',
+      is_danger: status === 'danger',
+      field: 'sections' as const,
+      marker_keys: markerKeys,
+      block_ids: [...new Set(managedTargets.flatMap((target) => target.block_ids))],
+      titles,
+      issue_messages: [...new Set(managedTargets.flatMap((target) => target.issue_messages))],
+      unlock_key: `section-selection:${markerKeys.join('|')}`,
+    } satisfies QuoteTenderManagedEditTarget;
+  };
+
   const attemptManagedAction = (
     actionLabel: string,
     onProceed: () => void,
@@ -1176,11 +1211,21 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const removeSelectedRows = () => {
     const count = selectedRowIds.length;
     if (count === 0) return;
-    if (!window.confirm(`Haluatko varmasti poistaa ${count} valittua tarjousriviä?`)) return;
-    deleteRows(selectedRowIds);
-    setSelectedRowIds([]);
-    touchQuote();
-    toast.success(count === 1 ? '1 tarjousrivi poistettu.' : `${count} tarjousriviä poistettu.`);
+    const completeRemoval = () => {
+      if (!window.confirm(`Haluatko varmasti poistaa ${count} valittua tarjousriviä?`)) return;
+      deleteRows(selectedRowIds);
+      setSelectedRowIds([]);
+      touchQuote();
+      toast.success(count === 1 ? '1 tarjousrivi poistettu.' : `${count} tarjousriviä poistettu.`);
+    };
+    const managedSelectionTarget = resolveManagedSelectionEditTarget();
+
+    if (managedSelectionTarget) {
+      attemptManagedEdit(managedSelectionTarget, completeRemoval);
+      return;
+    }
+
+    completeRemoval();
   };
 
   const applyQuoteMargin = (marginPercent: number) => {
