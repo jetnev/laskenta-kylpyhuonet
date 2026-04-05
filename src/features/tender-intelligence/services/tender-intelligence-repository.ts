@@ -5,12 +5,15 @@ import { getSupabaseConfigError, isSupabaseConfigured, requireSupabase } from '@
 import type { TenderIntelligenceBackendAdapter } from './tender-intelligence-backend-adapter';
 import {
   type CreateTenderPackageInput,
+  type TenderAnalysisJobStatus,
+  type TenderAnalysisJobType,
 } from '../types/tender-intelligence';
 import {
   buildTenderDocumentStoragePath,
   TENDER_INTELLIGENCE_STORAGE_BUCKET,
   validateTenderDocumentFile,
 } from '../lib/tender-document-upload';
+import { getTenderAnalysisStartState } from '../lib/tender-analysis';
 import {
   buildTenderPackageDetails,
   mapTenderAnalysisJobRowToDomain,
@@ -19,6 +22,7 @@ import {
   mapTenderPackageRowToDomain,
 } from '../lib/tender-intelligence-mappers';
 import {
+  tenderAnalysisJobRowSchema,
   tenderAnalysisJobRowsSchema,
   tenderDocumentRowSchema,
   tenderDocumentRowsSchema,
@@ -29,8 +33,17 @@ import {
 
 type Listener = () => void;
 
+const PLACEHOLDER_ANALYSIS_QUEUE_DELAY_MS = 300;
+const PLACEHOLDER_ANALYSIS_RUNNING_DELAY_MS = 650;
+
 export interface TenderIntelligenceRepository extends TenderIntelligenceBackendAdapter {
   subscribe(listener: Listener): () => void;
+}
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, ms);
+  });
 }
 
 function requireConfiguredSupabase() {
@@ -110,6 +123,32 @@ async function fetchTenderDocumentRowById(documentId: string) {
   return data ? tenderDocumentRowSchema.parse(data) : null;
 }
 
+async function fetchTenderAnalysisJobRowsForPackage(packageId: string) {
+  const client = requireConfiguredSupabase();
+  const { data, error } = await client
+    .from('tender_analysis_jobs')
+    .select('*')
+    .eq('tender_package_id', packageId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw toRepositoryError(error, 'Tarjouspyyntöpaketin analyysijobeja ei voitu ladata.');
+  }
+
+  return tenderAnalysisJobRowsSchema.parse(data ?? []);
+}
+
+async function fetchTenderAnalysisJobRowById(jobId: string) {
+  const client = requireConfiguredSupabase();
+  const { data, error } = await client.from('tender_analysis_jobs').select('*').eq('id', jobId).maybeSingle();
+
+  if (error) {
+    throw toRepositoryError(error, 'Tarjouspyynnön analyysijobia ei voitu ladata.');
+  }
+
+  return data ? tenderAnalysisJobRowSchema.parse(data) : null;
+}
+
 async function fetchTenderDocumentCounts(packageIds: string[]) {
   if (packageIds.length === 0) {
     return new Map<string, number>();
@@ -134,6 +173,31 @@ async function fetchTenderDocumentCounts(packageIds: string[]) {
 
 class SupabaseTenderIntelligenceRepository implements TenderIntelligenceRepository {
   private listeners = new Set<Listener>();
+
+  private async updateAnalysisJob(
+    jobId: string,
+    updates: {
+      status?: TenderAnalysisJobStatus;
+      started_at?: string | null;
+      completed_at?: string | null;
+      error_message?: string | null;
+    },
+    fallbackMessage: string
+  ) {
+    try {
+      const client = requireConfiguredSupabase();
+      const { data, error } = await client.from('tender_analysis_jobs').update(updates).eq('id', jobId).select('*').single();
+
+      if (error) {
+        throw error;
+      }
+
+      this.emit();
+      return mapTenderAnalysisJobRowToDomain(tenderAnalysisJobRowSchema.parse(data));
+    } catch (error) {
+      throw toRepositoryError(error, fallbackMessage);
+    }
+  }
 
   subscribe(listener: Listener) {
     this.listeners.add(listener);
@@ -176,21 +240,16 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       }
 
       const packageRow = tenderPackageRowSchema.parse(data);
-      const [documentRows, jobResponse, assessmentResponse] = await Promise.all([
+      const [documentRows, jobRows, assessmentResponse] = await Promise.all([
         fetchTenderDocumentRowsForPackage(packageId),
-        client.from('tender_analysis_jobs').select('*').eq('tender_package_id', packageId).order('created_at', { ascending: false }),
+        fetchTenderAnalysisJobRowsForPackage(packageId),
         client.from('tender_go_no_go_assessments').select('*').eq('tender_package_id', packageId).limit(1),
       ]);
-
-      if (jobResponse.error) {
-        throw jobResponse.error;
-      }
 
       if (assessmentResponse.error) {
         throw assessmentResponse.error;
       }
 
-      const jobRows = tenderAnalysisJobRowsSchema.parse(jobResponse.data ?? []);
       const assessmentRows = tenderGoNoGoAssessmentRowsSchema.parse(assessmentResponse.data ?? []);
 
       return buildTenderPackageDetails({
@@ -240,6 +299,169 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     } catch (error) {
       throw toRepositoryError(error, 'Tarjouspyyntöpaketin luonti epäonnistui.');
     }
+  }
+
+  async createAnalysisJob(
+    packageId: string,
+    options: { jobType?: TenderAnalysisJobType; status?: TenderAnalysisJobStatus } = {}
+  ) {
+    try {
+      const client = requireConfiguredSupabase();
+      await assertTenderPackageAccess(packageId);
+
+      const { data, error } = await client
+        .from('tender_analysis_jobs')
+        .insert({
+          tender_package_id: packageId,
+          job_type: options.jobType ?? 'placeholder_analysis',
+          status: options.status ?? 'pending',
+          provider: null,
+          model: null,
+          error_message: null,
+          started_at: null,
+          completed_at: null,
+        })
+        .select('*')
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      this.emit();
+      return mapTenderAnalysisJobRowToDomain(tenderAnalysisJobRowSchema.parse(data));
+    } catch (error) {
+      throw toRepositoryError(error, 'Analyysijobin luonti epäonnistui.');
+    }
+  }
+
+  async listAnalysisJobsForPackage(packageId: string) {
+    try {
+      await assertTenderPackageAccess(packageId);
+      const rows = await fetchTenderAnalysisJobRowsForPackage(packageId);
+      return rows.map(mapTenderAnalysisJobRowToDomain);
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjouspyyntöpaketin analyysijobilistaa ei voitu ladata.');
+    }
+  }
+
+  async getLatestAnalysisJobForPackage(packageId: string) {
+    const jobs = await this.listAnalysisJobsForPackage(packageId);
+    return jobs[0] ?? null;
+  }
+
+  async startPlaceholderAnalysis(packageId: string) {
+    let createdJobId: string | null = null;
+
+    try {
+      await assertTenderPackageAccess(packageId);
+      const documentRows = await fetchTenderDocumentRowsForPackage(packageId);
+      const latestJob = await this.getLatestAnalysisJobForPackage(packageId);
+      const startState = getTenderAnalysisStartState({
+        documentCount: documentRows.length,
+        latestAnalysisJob: latestJob,
+      });
+
+      if (!startState.canStart) {
+        throw new Error(startState.reason ?? 'Analyysiä ei voi käynnistää tälle paketille.');
+      }
+
+      const createdJob = await this.createAnalysisJob(packageId, {
+        jobType: 'placeholder_analysis',
+        status: 'pending',
+      });
+      createdJobId = createdJob.id;
+
+      await wait(PLACEHOLDER_ANALYSIS_QUEUE_DELAY_MS);
+      await this.updateAnalysisJob(
+        createdJob.id,
+        {
+          status: 'queued',
+          completed_at: null,
+          error_message: null,
+        },
+        'Analyysijobin jonotusta ei voitu päivittää.'
+      );
+
+      await wait(PLACEHOLDER_ANALYSIS_QUEUE_DELAY_MS);
+      await this.markAnalysisJobRunning(createdJob.id);
+
+      await wait(PLACEHOLDER_ANALYSIS_RUNNING_DELAY_MS);
+      return await this.markAnalysisJobCompleted(createdJob.id);
+    } catch (error) {
+      const message = getRepositoryErrorMessage(error, 'Placeholder-analyysin suoritus epäonnistui.');
+
+      if (createdJobId) {
+        try {
+          await this.markAnalysisJobFailed(createdJobId, message);
+        } catch (markFailedError) {
+          console.warn('Tender placeholder analysis failed and status could not be updated to failed.', markFailedError);
+        }
+      }
+
+      throw new Error(message);
+    }
+  }
+
+  async markAnalysisJobRunning(jobId: string) {
+    const existingJob = await fetchTenderAnalysisJobRowById(jobId);
+
+    if (!existingJob) {
+      throw new Error('Analyysijobia ei löytynyt.');
+    }
+
+    const startedAt = existingJob.started_at ?? new Date().toISOString();
+
+    return this.updateAnalysisJob(
+      jobId,
+      {
+        status: 'running',
+        started_at: startedAt,
+        completed_at: null,
+        error_message: null,
+      },
+      'Analyysijobia ei voitu merkitä käynnissä olevaksi.'
+    );
+  }
+
+  async markAnalysisJobCompleted(jobId: string) {
+    const existingJob = await fetchTenderAnalysisJobRowById(jobId);
+
+    if (!existingJob) {
+      throw new Error('Analyysijobia ei löytynyt.');
+    }
+
+    const completedAt = new Date().toISOString();
+
+    return this.updateAnalysisJob(
+      jobId,
+      {
+        status: 'completed',
+        started_at: existingJob.started_at ?? completedAt,
+        completed_at: completedAt,
+        error_message: null,
+      },
+      'Analyysijobia ei voitu merkitä valmiiksi.'
+    );
+  }
+
+  async markAnalysisJobFailed(jobId: string, errorMessage: string) {
+    const existingJob = await fetchTenderAnalysisJobRowById(jobId);
+
+    if (!existingJob) {
+      throw new Error('Analyysijobia ei löytynyt.');
+    }
+
+    return this.updateAnalysisJob(
+      jobId,
+      {
+        status: 'failed',
+        started_at: existingJob.started_at,
+        completed_at: new Date().toISOString(),
+        error_message: errorMessage,
+      },
+      'Analyysijobia ei voitu merkitä epäonnistuneeksi.'
+    );
   }
 
   async uploadTenderDocument(packageId: string, file: File) {
@@ -377,20 +599,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
 
   async getTenderAnalysisStatus(packageId: string) {
     try {
-      const client = requireConfiguredSupabase();
-      const { data, error } = await client
-        .from('tender_analysis_jobs')
-        .select('*')
-        .eq('tender_package_id', packageId)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (error) {
-        throw error;
-      }
-
-      const jobRows = tenderAnalysisJobRowsSchema.parse(data ?? []);
-      return jobRows[0] ? mapTenderAnalysisJobRowToDomain(jobRows[0]) : null;
+      return await this.getLatestAnalysisJobForPackage(packageId);
     } catch (error) {
       throw toRepositoryError(error, 'Tarjousanalyysin tilaa ei voitu hakea.');
     }

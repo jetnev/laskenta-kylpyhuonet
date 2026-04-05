@@ -35,7 +35,7 @@ function buildPlaceholderReviewTask(packageId: string, anchorTimestamp: string, 
   return {
     id: `${packageId}-review-documents`,
     packageId,
-    title: 'Tarkista paketin perustiedot ja lisää tarjouspyynnön dokumentit myöhemmässä vaiheessa',
+    title: 'Käynnistä placeholder-analyysi, tarkista jobin tila ja valmistele paketti seuraavaa vaihetta varten',
     status: 'todo',
     category: 'documents',
     assigneeUserId: assigneeUserId || null,
@@ -44,24 +44,30 @@ function buildPlaceholderReviewTask(packageId: string, anchorTimestamp: string, 
   };
 }
 
+function getTenderAnalysisJobLabel(job: TenderAnalysisJobRow) {
+  return job.job_type === 'placeholder_analysis' ? 'Placeholder-analyysi' : 'Analyysiajo';
+}
+
 function getTenderAnalysisStageLabel(job: TenderAnalysisJobRow) {
+  const jobLabel = getTenderAnalysisJobLabel(job);
+
   if (job.status === 'failed') {
-    return job.error_message?.trim() || 'Analyysiajo epäonnistui.';
+    return job.error_message?.trim() || `${jobLabel} epäonnistui.`;
   }
 
   if (job.status === 'completed') {
-    return 'Analyysiajo valmis';
+    return `${jobLabel} valmistui`;
   }
 
-  if (job.status === 'processing') {
-    return 'Analyysiajo on käynnissä';
+  if (job.status === 'running') {
+    return `${jobLabel} on käynnissä`;
   }
 
   if (job.status === 'queued') {
-    return 'Analyysiajo odottaa käynnistystä';
+    return `${jobLabel} odottaa suoritusvuoroa`;
   }
 
-  return 'Analyysiajoa ei ole vielä käynnistetty';
+  return `${jobLabel} valmistellaan käynnistettäväksi`;
 }
 
 export function mapTenderGoNoGoAssessmentRowToDomain(row: TenderGoNoGoAssessmentRow): TenderGoNoGoAssessment {
@@ -172,12 +178,13 @@ export function buildTenderPackageDetails(input: {
   const sortedJobRows = [...input.analysisJobRows].sort(
     (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
   );
-  const latestAnalysisJob = sortedJobRows[0] ? mapTenderAnalysisJobRowToDomain(sortedJobRows[0]) : null;
+  const analysisJobs = sortedJobRows.map(mapTenderAnalysisJobRowToDomain);
+  const latestAnalysisJob = analysisJobs[0] ?? null;
   const goNoGoAssessment = input.goNoGoAssessmentRow ? mapTenderGoNoGoAssessmentRowToDomain(input.goNoGoAssessmentRow) : null;
   const results = buildTenderPackageResults({
     packageId: input.packageRow.id,
     createdByUserId: input.packageRow.created_by_user_id,
-    anchorTimestamp: input.goNoGoAssessmentRow?.updated_at || input.packageRow.updated_at,
+    anchorTimestamp: input.goNoGoAssessmentRow?.updated_at || sortedJobRows[0]?.updated_at || input.packageRow.updated_at,
     goNoGoAssessment,
   });
 
@@ -188,6 +195,7 @@ export function buildTenderPackageDetails(input: {
       currentJobId: latestAnalysisJob?.id ?? null,
     }),
     documents: input.documentRows.map(mapTenderDocumentRowToDomain),
+    analysisJobs,
     latestAnalysisJob,
     results,
   });

@@ -12,9 +12,9 @@ export const tenderPackageStatusSchema = z.enum([
 ]);
 
 export const tenderAnalysisJobStatusSchema = z.enum([
-  'not-started',
+  'pending',
   'queued',
-  'processing',
+  'running',
   'completed',
   'failed',
 ]);
@@ -24,7 +24,7 @@ export const tenderAnalysisJobTypeSchema = z.enum([
   'go-no-go',
   'reference-scan',
   'draft-preparation',
-  'placeholder',
+  'placeholder_analysis',
 ]);
 
 export const tenderDocumentUploadStatusSchema = z.enum(['placeholder', 'pending', 'uploaded', 'failed']);
@@ -174,6 +174,7 @@ export const tenderPackageResultsSchema = z.object({
 export const tenderPackageDetailsSchema = z.object({
   package: tenderPackageSchema,
   documents: z.array(tenderDocumentSchema),
+  analysisJobs: z.array(tenderAnalysisJobSchema),
   latestAnalysisJob: tenderAnalysisJobSchema.nullable(),
   results: tenderPackageResultsSchema,
 });

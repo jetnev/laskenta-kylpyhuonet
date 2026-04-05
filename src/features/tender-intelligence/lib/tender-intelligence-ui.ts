@@ -1,4 +1,5 @@
 import type {
+  TenderAnalysisJobType,
   TenderAnalysisJobStatus,
   TenderDocumentParseStatus,
   TenderDocumentUploadStatus,
@@ -22,11 +23,22 @@ export const TENDER_ANALYSIS_JOB_STATUS_META: Record<
   TenderAnalysisJobStatus,
   { label: string; variant: TenderBadgeVariant }
 > = {
-  'not-started': { label: 'Ei käynnistetty', variant: 'secondary' },
+  pending: { label: 'Valmistellaan', variant: 'secondary' },
   queued: { label: 'Jonossa', variant: 'outline' },
-  processing: { label: 'Käsittelyssä', variant: 'outline' },
+  running: { label: 'Käynnissä', variant: 'outline' },
   completed: { label: 'Valmis', variant: 'default' },
-  failed: { label: 'Virhe', variant: 'destructive' },
+  failed: { label: 'Epäonnistui', variant: 'destructive' },
+};
+
+export const TENDER_ANALYSIS_JOB_TYPE_META: Record<
+  TenderAnalysisJobType,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  'document-analysis': { label: 'Dokumenttianalyysi', variant: 'outline' },
+  'go-no-go': { label: 'Go / No-Go', variant: 'outline' },
+  'reference-scan': { label: 'Referenssihaku', variant: 'outline' },
+  'draft-preparation': { label: 'Luonnoksen valmistelu', variant: 'outline' },
+  placeholder_analysis: { label: 'Placeholder-analyysi', variant: 'secondary' },
 };
 
 export const TENDER_DOCUMENT_UPLOAD_STATUS_META: Record<

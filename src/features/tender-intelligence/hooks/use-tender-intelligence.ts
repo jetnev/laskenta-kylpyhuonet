@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 
 import { getTenderIntelligenceRepository } from '../services/tender-intelligence-repository';
-import type { CreateTenderPackageInput, TenderDocument, TenderPackage, TenderPackageDetails } from '../types/tender-intelligence';
+import type { CreateTenderPackageInput, TenderAnalysisJob, TenderDocument, TenderPackage, TenderPackageDetails } from '../types/tender-intelligence';
 
 export interface TenderDocumentsUploadFailure {
   fileName: string;
@@ -29,6 +29,7 @@ export function useTenderIntelligence() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [startingAnalysisPackageId, setStartingAnalysisPackageId] = useState<string | null>(null);
   const [deletingDocumentIds, setDeletingDocumentIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const hasOrganizationContext = Boolean(user?.organizationId);
@@ -83,9 +84,9 @@ export function useTenderIntelligence() {
       };
     }
 
-    const hydrate = async () => {
+    const hydrate = async (background = false) => {
       try {
-        if (active) {
+        if (active && !background) {
           setLoading(true);
         }
 
@@ -106,17 +107,17 @@ export function useTenderIntelligence() {
           setError(getErrorMessage(nextError));
         }
       } finally {
-        if (active) {
+        if (active && !background) {
           setLoading(false);
         }
       }
     };
 
     const unsubscribe = repository.subscribe(() => {
-      void hydrate();
+      void hydrate(true);
     });
 
-    void hydrate();
+    void hydrate(false);
 
     return () => {
       active = false;
@@ -242,6 +243,33 @@ export function useTenderIntelligence() {
     [loadPackages, loadSelectedPackage, repository, selectedPackageId]
   );
 
+  const startAnalysis = useCallback(
+    async (packageId: string): Promise<TenderAnalysisJob> => {
+      if (!hasOrganizationContext) {
+        const message = 'Tarjousäly vaatii organisaatioon liitetyn käyttäjätilin.';
+        setError(message);
+        throw new Error(message);
+      }
+
+      setStartingAnalysisPackageId(packageId);
+
+      try {
+        const completedJob = await repository.startPlaceholderAnalysis(packageId);
+        await loadPackages();
+        await loadSelectedPackage(packageId);
+        setError(null);
+        return completedJob;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setStartingAnalysisPackageId((current) => (current === packageId ? null : current));
+      }
+    },
+    [hasOrganizationContext, loadPackages, loadSelectedPackage, repository]
+  );
+
   const overview = useMemo(
     () => ({
       packages: packages.length,
@@ -260,6 +288,7 @@ export function useTenderIntelligence() {
     loading,
     creating,
     uploading,
+    startingAnalysisPackageId,
     deletingDocumentIds,
     error,
     overview,
@@ -267,6 +296,7 @@ export function useTenderIntelligence() {
     hasPackages: packages.length > 0,
     selectPackage: setSelectedPackageId,
     createPackage,
+    startAnalysis,
     uploadDocuments,
     deleteDocument,
   };

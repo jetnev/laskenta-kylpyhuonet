@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
+import TenderAnalysisPanel from './TenderAnalysisPanel';
 import TenderDocumentsPanel from './TenderDocumentsPanel';
 import {
   TENDER_ANALYSIS_JOB_STATUS_META,
@@ -41,9 +42,11 @@ interface TenderPackageWorkspaceProps {
   loading?: boolean;
   notFound?: boolean;
   uploading?: boolean;
+  analysisStarting?: boolean;
   deletingDocumentIds?: string[];
   error?: string | null;
   onCreateClick: () => void;
+  onStartAnalysis: (packageId: string) => Promise<void>;
   onUploadDocuments: (packageId: string, files: File[]) => Promise<TenderDocumentsUploadResult>;
   onDeleteDocument: (documentId: string) => Promise<void>;
 }
@@ -53,9 +56,11 @@ export default function TenderPackageWorkspace({
   loading = false,
   notFound = false,
   uploading = false,
+  analysisStarting = false,
   deletingDocumentIds = [],
   error = null,
   onCreateClick,
+  onStartAnalysis,
   onUploadDocuments,
   onDeleteDocument,
 }: TenderPackageWorkspaceProps) {
@@ -89,11 +94,11 @@ export default function TenderPackageWorkspace({
     return (
       <Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
         <CardHeader className="space-y-4 border-b border-white/10 pb-6">
-          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 2 / Storage foundation</Badge>
+          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 3 / Analysis job skeleton</Badge>
           <div className="space-y-3">
-            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousäly osaa nyt liittää oikeita dokumentteja omaan Storage-domainiinsa</CardTitle>
+            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousäly osaa nyt käynnistää näkyvän placeholder-analyysin omassa domainissaan</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Luo ensimmäinen tarjouspyyntöpaketti. Phase 2 lisää dokumenttien uploadin ja storage-pathit organisaation omaan Supabase-domainiin, mutta parsinta, OCR, analyysijobit ja generointi jätetään edelleen myöhempiin vaiheisiin.
+              Luo ensimmäinen tarjouspyyntöpaketti. Dokumentit tallentuvat jo organisaation omaan Storage-domainiin ja Phase 3 lisää näkyvän analyysijobin skeletonin, mutta parsinta, OCR, AI ja varsinainen analyysimoottori jätetään edelleen myöhempiin vaiheisiin.
             </CardDescription>
           </div>
         </CardHeader>
@@ -105,9 +110,9 @@ export default function TenderPackageWorkspace({
               description="Dokumenttipaneeli osaa jo ladata tiedostot oikeaan Storage-bucketiin heti kun ensimmäinen paketti on luotu."
             />
             <TenderPanel
-              title="Vaatimukset"
+              title="Analyysijobit"
               value="0"
-              description="Analyysipalvelu tunnistaa tarjouspyynnön vaatimukset myöhemmässä vaiheessa eikä nykyinen tarjouslaskenta muutu tässä vaiheessa."
+              description="Ensimmäinen placeholder-run käyttää samaa job-mallia, jonka oikea analyysipalvelu ottaa myöhemmin käyttöön."
             />
             <TenderPanel
               title="Puutteet"
@@ -122,7 +127,7 @@ export default function TenderPackageWorkspace({
             <TenderPanel
               title="Go / No-Go"
               value="Odottaa analyysiä"
-              description="Päätöstuki rakennetaan myöhemmin omaksi tulosobjektikseen eikä sitä vielä johdeta nykyisestä raportointidomainista tai upload-kerroksesta."
+              description="Päätöstuki rakennetaan myöhemmin omaksi tulosobjektikseen. Tässä vaiheessa näkyvä analyysitila syntyy jobin elinkaaresta, ei vielä sisällön tulkinnasta."
             />
             <TenderPanel
               title="Luonnos"
@@ -163,7 +168,7 @@ export default function TenderPackageWorkspace({
           <div className="space-y-3">
             <CardTitle className="text-3xl tracking-[-0.03em] text-white">{selectedPackage.package.name}</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Tämä tarjouspyyntöpaketti elää omassa foundation-domainissaan. Dokumentit voidaan jo tallentaa Supabase Storageen, mutta nykyinen quote-editori, exportit, laskentalogiikka ja raportointi eivät edelleenkään ole kytketty tähän näkymään.
+              Tämä tarjouspyyntöpaketti elää omassa Tarjousäly-domainissaan. Dokumentit tallentuvat Supabase Storageen ja analyysijobin skeleton toimii jo näkyvästi, mutta nykyinen quote-editori, exportit, laskentalogiikka ja raportointi eivät edelleenkään ole kytketty tähän näkymään.
             </CardDescription>
           </div>
         </CardHeader>
@@ -179,7 +184,7 @@ export default function TenderPackageWorkspace({
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">Data status</p>
-            <p className="mt-2 text-sm text-slate-100">Paketti, dokumenttimetadata ja Storage-polut luetaan nyt suoraan Supabasesta ilman kytkentää tarjousytimeen.</p>
+            <p className="mt-2 text-sm text-slate-100">Paketti, dokumenttimetadata, analyysijobit ja näkyvä status luetaan nyt suoraan Supabasesta ilman kytkentää tarjousytimeen.</p>
           </div>
         </CardContent>
       </Card>
@@ -200,7 +205,7 @@ export default function TenderPackageWorkspace({
           description={
             selectedPackage.results.requirements.length > 0
               ? 'Tunnistetut vaatimukset näkyvät tässä, kun analyysikerros otetaan käyttöön.'
-              : 'Vaatimuslista on tarkoituksella tyhjä, koska analyysipalvelua ei vielä rakenneta tässä vaiheessa.'
+              : 'Vaatimuslista on tarkoituksella tyhjä, koska tässä vaiheessa rakennetaan vain analyysijobin elinkaari eikä vielä oikeaa analyysipalvelua.'
           }
         />
         <TenderPanel
@@ -236,6 +241,13 @@ export default function TenderPackageWorkspace({
         />
       </div>
 
+      <TenderAnalysisPanel
+        selectedPackage={selectedPackage}
+        loading={loading}
+        starting={analysisStarting}
+        onStartAnalysis={onStartAnalysis}
+      />
+
       <TenderDocumentsPanel
         selectedPackage={selectedPackage}
         loading={loading}
@@ -254,7 +266,7 @@ export default function TenderPackageWorkspace({
               Katselmointi ja jatkovaihe
             </CardTitle>
             <CardDescription>
-              Foundation rajaa valmiiksi ne kohdat, joihin myöhemmät analyysijobit, parsinta ja tulosmallit kytketään ilman muutoksia nykyiseen tarjousytimeen.
+              Placeholder-ajon skeleton käyttää jo samaa repository- ja adapterirajaa, johon myöhemmät analyysijobit, parsinta ja tulosmallit voidaan kytkeä ilman muutoksia nykyiseen tarjousytimeen.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
@@ -273,7 +285,7 @@ export default function TenderPackageWorkspace({
             )}
 
             <div className="rounded-2xl border border-dashed px-4 py-8 text-sm leading-6 text-muted-foreground">
-              Referenssiehdotukset, puuteanalyysi ja varsinainen luonnoksen generointi tulevat myöhemmin omasta analyysipalvelusta. Phase 2 pitää nämä riippuvuudet tietoisesti irti nykyisestä tarjouseditorista, vaikka dokumentit jo tallentuvat Storageen.
+              Referenssiehdotukset, puuteanalyysi ja varsinainen luonnoksen generointi tulevat myöhemmin omasta analyysipalvelusta. Phase 3 pitää nämä riippuvuudet tietoisesti irti nykyisestä tarjouseditorista, vaikka dokumentit ja analyysijobin skeleton jo toimivat omassa domainissaan.
             </div>
           </CardContent>
         </Card>
@@ -285,7 +297,7 @@ export default function TenderPackageWorkspace({
               Adapterivalmius
             </CardTitle>
             <CardDescription>
-              Seuraava vaihe voidaan toteuttaa ilman että Tarjousälyä tarvitsee tunkea nykyiseen use-data.ts-monoliittiin.
+              Seuraava vaihe voidaan toteuttaa ilman että Tarjousälyä tarvitsee tunkea nykyiseen use-data.ts-monoliittiin tai nykyiseen tarjouseditoriin.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 pt-6 text-sm text-slate-700">

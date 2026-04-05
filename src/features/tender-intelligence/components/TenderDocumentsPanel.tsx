@@ -88,7 +88,7 @@ export default function TenderDocumentsPanel({
               Dokumentit ja Storage
             </CardTitle>
             <CardDescription>
-              Liitä pakettiin PDF-, DOCX-, XLSX- tai ZIP-tiedostoja. Tiedostot tallennetaan Supabase Storageen organisaatio- ja pakettikohtaiseen polkuun, mutta analyysiä ei vielä käynnistetä.
+              Liitä pakettiin PDF-, DOCX-, XLSX- tai ZIP-tiedostoja. Tiedostot tallennetaan Supabase Storageen organisaatio- ja pakettikohtaiseen polkuun, minkä jälkeen placeholder-analyysi voidaan käynnistää erikseen analyysipaneelista.
             </CardDescription>
           </div>
 
@@ -123,7 +123,7 @@ export default function TenderDocumentsPanel({
 
         {!hasDocuments && !uploading && (
           <div className="rounded-2xl border border-dashed px-4 py-10 text-sm leading-6 text-muted-foreground">
-            Paketissa ei ole vielä dokumentteja. Ensimmäinen upload luo metadatarivin, tallentaa tiedoston Storageen ja näyttää dokumentin tässä listassa.
+            Paketissa ei ole vielä dokumentteja. Ensimmäinen upload luo metadatarivin, tallentaa tiedoston Storageen ja avaa sen jälkeen analyysin käynnistämisen tälle paketille.
           </div>
         )}
 

@@ -83,7 +83,7 @@ describe('buildTenderPackageDetails', () => {
         id: '66666666-6666-4666-8666-666666666666',
         tender_package_id: packageRow.id,
         organization_id: packageRow.organization_id,
-        job_type: 'placeholder',
+        job_type: 'placeholder_analysis',
         status: 'queued',
         provider: null,
         model: null,
@@ -122,9 +122,11 @@ describe('buildTenderPackageDetails', () => {
     });
     expect(details.latestAnalysisJob).toMatchObject({
       id: jobRows[0].id,
-      jobType: 'placeholder',
+      jobType: 'placeholder_analysis',
       status: 'queued',
     });
+    expect(details.analysisJobs).toHaveLength(1);
+    expect(details.analysisJobs[0]?.stageLabel).toContain('odottaa suoritusvuoroa');
     expect(details.results.goNoGoAssessment).toMatchObject({
       packageId: packageRow.id,
       recommendation: 'pending',

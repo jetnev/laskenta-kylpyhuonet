@@ -48,9 +48,11 @@ export default function TenderIntelligencePage() {
     canCreate,
     selectPackage,
     createPackage,
+    startAnalysis,
     uploadDocuments,
     deleteDocument,
     uploading,
+    startingAnalysisPackageId,
     deletingDocumentIds,
   } = useTenderIntelligence();
 
@@ -60,11 +62,11 @@ export default function TenderIntelligencePage() {
         <CardContent className="space-y-8 px-6 py-6 sm:px-8 sm:py-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4">
-              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 2</Badge>
+              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 3</Badge>
               <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Dokumenttiupload ja Storage-perusta tarjouspyyntöpaketeille ilman muutoksia tarjousytimeen</h1>
+                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Analyysijobien skeleton tarjouspyyntöpaketeille ilman muutoksia Projekta-ytimeen</h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-200 sm:text-base">
-                  Tarjousäly käyttää nyt omaa organisaatio-scoped Supabase-domainiaan sekä yksityistä Storage-bucketia. Tässä vaiheessa dokumentit voidaan liittää paketteihin turvallisesti, mutta parsinta, OCR, analyysipalvelu, AI-providerit ja tarjousluonnoksen generointi jätetään edelleen myöhempiin vaiheisiin.
+                  Tarjousäly käyttää omaa organisaatio-scoped Supabase-domainiaan dokumenteille, analyysijobeille ja näkyvälle tilaseurannalle. Tässä vaiheessa käyttäjä voi käynnistää placeholder-analyysin, mutta parsinta, OCR, AI-providerit ja tarjousluonnoksen generointi jätetään edelleen myöhempiin vaiheisiin.
                 </p>
               </div>
             </div>
@@ -75,7 +77,7 @@ export default function TenderIntelligencePage() {
                 <Plus className="h-4 w-4" />
               </Button>
               <Button variant="outline" className="justify-between border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white" disabled>
-                Analyysipalvelu myöhemmässä vaiheessa
+                Käynnistä analyysi paketin työtilasta
                 <Sparkle className="h-4 w-4" />
               </Button>
             </div>
@@ -113,9 +115,13 @@ export default function TenderIntelligencePage() {
           loading={loading}
           notFound={selectedPackageMissing}
           uploading={uploading}
+          analysisStarting={Boolean(selectedPackage && startingAnalysisPackageId === selectedPackage.package.id)}
           deletingDocumentIds={deletingDocumentIds}
           error={error}
           onCreateClick={() => setShowCreateDialog(true)}
+          onStartAnalysis={async (packageId) => {
+            await startAnalysis(packageId);
+          }}
           onUploadDocuments={uploadDocuments}
           onDeleteDocument={deleteDocument}
         />
@@ -128,11 +134,11 @@ export default function TenderIntelligencePage() {
               <Stack className="h-4 w-4" />
               <span className="font-medium">Mitä tämä vaihe jo tekee</span>
             </div>
-            <p>Tarjouspyyntöpaketit ja niiden dokumentit tallentuvat nyt oikeasti Supabaseen. Jokainen tiedosto saa organisaatio- ja pakettikohtaisen Storage-polun ja näkyy paketin työtilassa metatietoineen.</p>
+            <p>Tarjouspyyntöpaketit, dokumentit ja analyysijobit tallentuvat nyt oikeasti Supabaseen. Käyttäjä voi käynnistää placeholder-ajon, seurata sen tilaa ja nähdä viimeisimmän onnistuneen tai epäonnistuneen ajon suoraan paketin työtilassa.</p>
           </div>
           <div className="space-y-2 sm:max-w-sm">
             <p className="font-medium text-slate-950">Mitä tästä puuttuu tarkoituksella</p>
-            <p>Ei vielä dokumenttien sisällön lukua, OCR:ää, AI-provider-koodia, analyysipalvelua, taustajonoa tai kytkentää nykyiseen tarjouseditoriin.</p>
+            <p>Ei vielä dokumenttien sisällön lukua, OCR:ää, AI-provider-koodia, oikeaa analyysipalvelua, backend-workeria tai kytkentää nykyiseen tarjouseditoriin.</p>
           </div>
         </CardContent>
       </Card>
