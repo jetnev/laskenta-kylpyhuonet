@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+import {
+  TENDER_DOCUMENT_EXTRACTION_STATUSES,
+  TENDER_DOCUMENT_EXTRACTOR_TYPES,
+} from '../lib/tender-document-extraction';
+
 export const tenderPackageRowSchema = z.object({
   id: z.string().uuid(),
   organization_id: z.string().uuid(),
@@ -43,6 +48,36 @@ export const tenderAnalysisJobRowSchema = z.object({
   error_message: z.string().nullable(),
   started_at: z.string().nullable(),
   completed_at: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const tenderDocumentExtractionRowSchema = z.object({
+  id: z.string().uuid(),
+  tender_document_id: z.string().uuid(),
+  tender_package_id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  extraction_status: z.enum(TENDER_DOCUMENT_EXTRACTION_STATUSES),
+  extractor_type: z.enum(TENDER_DOCUMENT_EXTRACTOR_TYPES),
+  source_mime_type: z.string(),
+  character_count: z.number().int().nullable(),
+  chunk_count: z.number().int().nullable(),
+  extracted_text: z.string().nullable(),
+  error_message: z.string().nullable(),
+  extracted_at: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const tenderDocumentChunkRowSchema = z.object({
+  id: z.string().uuid(),
+  tender_document_id: z.string().uuid(),
+  tender_package_id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  extraction_id: z.string().uuid(),
+  chunk_index: z.number().int().min(0),
+  text_content: z.string(),
+  character_count: z.number().int().min(0),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -142,6 +177,8 @@ export const tenderPackageRowsSchema = z.array(tenderPackageRowSchema);
 export const tenderDocumentRowsSchema = z.array(tenderDocumentRowSchema);
 export const tenderAnalysisJobRowsSchema = z.array(tenderAnalysisJobRowSchema);
 export const tenderGoNoGoAssessmentRowsSchema = z.array(tenderGoNoGoAssessmentRowSchema);
+export const tenderDocumentExtractionRowsSchema = z.array(tenderDocumentExtractionRowSchema);
+export const tenderDocumentChunkRowsSchema = z.array(tenderDocumentChunkRowSchema);
 export const tenderRequirementRowsSchema = z.array(tenderRequirementRowSchema);
 export const tenderMissingItemRowsSchema = z.array(tenderMissingItemRowSchema);
 export const tenderRiskFlagRowsSchema = z.array(tenderRiskFlagRowSchema);
@@ -152,6 +189,8 @@ export const tenderReviewTaskRowsSchema = z.array(tenderReviewTaskRowSchema);
 export type TenderPackageRow = z.infer<typeof tenderPackageRowSchema>;
 export type TenderDocumentRow = z.infer<typeof tenderDocumentRowSchema>;
 export type TenderAnalysisJobRow = z.infer<typeof tenderAnalysisJobRowSchema>;
+export type TenderDocumentExtractionRow = z.infer<typeof tenderDocumentExtractionRowSchema>;
+export type TenderDocumentChunkRow = z.infer<typeof tenderDocumentChunkRowSchema>;
 export type TenderGoNoGoAssessmentRow = z.infer<typeof tenderGoNoGoAssessmentRowSchema>;
 export type TenderRequirementRow = z.infer<typeof tenderRequirementRowSchema>;
 export type TenderMissingItemRow = z.infer<typeof tenderMissingItemRowSchema>;

@@ -3,7 +3,7 @@ const BYTES_IN_MIB = BYTES_IN_KIB * BYTES_IN_KIB;
 
 export const TENDER_INTELLIGENCE_STORAGE_BUCKET = 'tender-intelligence';
 export const TENDER_DOCUMENT_MAX_FILE_SIZE_BYTES = 25 * BYTES_IN_MIB;
-export const TENDER_DOCUMENT_ACCEPT_ATTRIBUTE = '.pdf,.docx,.xlsx,.zip';
+export const TENDER_DOCUMENT_ACCEPT_ATTRIBUTE = '.txt,.md,.markdown,.csv,.pdf,.docx,.xlsx,.zip';
 
 export interface TenderDocumentFileLike {
   name: string;
@@ -12,7 +12,7 @@ export interface TenderDocumentFileLike {
 }
 
 interface TenderDocumentTypeDefinition {
-  extension: 'pdf' | 'docx' | 'xlsx' | 'zip';
+  extension: string;
   label: string;
   canonicalMimeType: string;
   acceptedMimeTypes: string[];
@@ -21,13 +21,37 @@ interface TenderDocumentTypeDefinition {
 export interface ValidTenderDocumentFile {
   fileName: string;
   sanitizedFileName: string;
-  extension: TenderDocumentTypeDefinition['extension'];
+  extension: string;
   label: string;
   canonicalMimeType: string;
   fileSizeBytes: number;
 }
 
 const TENDER_DOCUMENT_TYPE_DEFINITIONS: readonly TenderDocumentTypeDefinition[] = [
+  {
+    extension: 'txt',
+    label: 'TXT',
+    canonicalMimeType: 'text/plain',
+    acceptedMimeTypes: ['text/plain'],
+  },
+  {
+    extension: 'md',
+    label: 'Markdown',
+    canonicalMimeType: 'text/markdown',
+    acceptedMimeTypes: ['text/markdown', 'text/x-markdown'],
+  },
+  {
+    extension: 'markdown',
+    label: 'Markdown',
+    canonicalMimeType: 'text/markdown',
+    acceptedMimeTypes: ['text/markdown', 'text/x-markdown'],
+  },
+  {
+    extension: 'csv',
+    label: 'CSV',
+    canonicalMimeType: 'text/csv',
+    acceptedMimeTypes: ['text/csv'],
+  },
   {
     extension: 'pdf',
     label: 'PDF',
@@ -55,7 +79,7 @@ const TENDER_DOCUMENT_TYPE_DEFINITIONS: readonly TenderDocumentTypeDefinition[] 
 ] as const;
 
 function getAllowedTypeLabels() {
-  return TENDER_DOCUMENT_TYPE_DEFINITIONS.map((definition) => definition.label).join(', ');
+  return [...new Set(TENDER_DOCUMENT_TYPE_DEFINITIONS.map((definition) => definition.label))].join(', ');
 }
 
 function getFileExtension(fileName: string) {

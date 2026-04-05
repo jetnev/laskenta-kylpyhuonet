@@ -17,7 +17,7 @@ import {
 } from '../lib/tender-intelligence-ui';
 import { TENDER_INTELLIGENCE_BACKEND_PLAN } from '../services/tender-intelligence-backend-adapter';
 import type { TenderDocumentsUploadResult } from '../hooks/use-tender-intelligence';
-import type { TenderPackageDetails } from '../types/tender-intelligence';
+import type { TenderDocumentExtraction, TenderPackageDetails } from '../types/tender-intelligence';
 
 interface TenderPanelProps {
   title: string;
@@ -45,10 +45,14 @@ interface TenderPackageWorkspaceProps {
   notFound?: boolean;
   uploading?: boolean;
   analysisStarting?: boolean;
+  extractingPackage?: boolean;
+  extractingDocumentIds?: string[];
   deletingDocumentIds?: string[];
   error?: string | null;
   onCreateClick: () => void;
   onStartAnalysis: (packageId: string) => Promise<void>;
+  onStartDocumentExtraction: (packageId: string, documentId: string) => Promise<TenderDocumentExtraction>;
+  onStartPackageExtraction: (packageId: string) => Promise<TenderDocumentExtraction[]>;
   onUploadDocuments: (packageId: string, files: File[]) => Promise<TenderDocumentsUploadResult>;
   onDeleteDocument: (documentId: string) => Promise<void>;
 }
@@ -59,10 +63,14 @@ export default function TenderPackageWorkspace({
   notFound = false,
   uploading = false,
   analysisStarting = false,
+  extractingPackage = false,
+  extractingDocumentIds = [],
   deletingDocumentIds = [],
   error = null,
   onCreateClick,
   onStartAnalysis,
+  onStartDocumentExtraction,
+  onStartPackageExtraction,
   onUploadDocuments,
   onDeleteDocument,
 }: TenderPackageWorkspaceProps) {
@@ -96,11 +104,11 @@ export default function TenderPackageWorkspace({
     return (
       <Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
         <CardHeader className="space-y-4 border-b border-white/10 pb-6">
-          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 5 / Server-side analysis runner boundary</Badge>
+          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 6 / Document extraction foundation</Badge>
           <div className="space-y-3">
-            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousälyn analyysiajo käynnistyy nyt palvelinrajan kautta</CardTitle>
+            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousälylle on nyt oma extraction-domain ja server-side extraction boundary</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Luo ensimmäinen tarjouspyyntöpaketti. Analyysiajon orchestration siirtyy nyt palvelinpuolen Edge Function -rajapinnan taakse. Frontend ei enää itse simuloi tilasiirtymiä.
+              Luo ensimmäinen tarjouspyyntöpaketti. Dokumenteille voidaan nyt tallentaa pysyvä extracted text ja chunkit Tarjousälyn omiin tauluihin palvelinpuolen Edge Function -rajan kautta.
             </CardDescription>
           </div>
         </CardHeader>
@@ -109,7 +117,7 @@ export default function TenderPackageWorkspace({
             <TenderPanel
               title="Dokumentit"
               value="0"
-              description="Dokumenttipaneeli osaa jo ladata tiedostot oikeaan Storage-bucketiin heti kun ensimmäinen paketti on luotu."
+              description="Dokumenttipaneeli osaa ladata tiedostot Storageen ja käynnistää niille server-side extractionin."
             />
             <TenderPanel
               title="Analyysijobit"
@@ -117,9 +125,9 @@ export default function TenderPackageWorkspace({
               description="Ensimmäinen placeholder-run suoritetaan palvelinpuolella Edge Functionin kautta."
             />
             <TenderPanel
-              title="Puutteet"
+              title="Extraction"
               value="0"
-              description="Puute- ja tarkennuslista pysyy omassa domainissaan eikä kirjoita nykyisiin quote-riveihin."
+              description="Extracted text ja chunkit tallentuvat omaan org-scoped domainiinsa ilman muutoksia Projekta-ytimeen."
             />
             <TenderPanel
               title="Riskit"
@@ -186,7 +194,7 @@ export default function TenderPackageWorkspace({
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">Data status</p>
-            <p className="mt-2 text-sm text-slate-100">Paketti, dokumenttimetadata, analyysijobit ja analyysitulosten result-domain luetaan nyt suoraan Supabasesta ilman kytkentää tarjousytimeen.</p>
+            <p className="mt-2 text-sm text-slate-100">Paketti, dokumenttimetadata, extraction-data, chunkit, analyysijobit ja result-domain luetaan nyt suoraan Supabasesta ilman kytkentää tarjousytimeen.</p>
           </div>
         </CardContent>
       </Card>
@@ -256,8 +264,12 @@ export default function TenderPackageWorkspace({
         selectedPackage={selectedPackage}
         loading={loading}
         uploading={uploading}
+        extractingPackage={extractingPackage}
+        extractingDocumentIds={extractingDocumentIds}
         deletingDocumentIds={deletingDocumentIds}
         error={error}
+        onStartDocumentExtraction={onStartDocumentExtraction}
+        onStartPackageExtraction={onStartPackageExtraction}
         onUploadDocuments={onUploadDocuments}
         onDeleteDocument={onDeleteDocument}
       />
@@ -289,7 +301,7 @@ export default function TenderPackageWorkspace({
             )}
 
             <div className="rounded-2xl border border-dashed px-4 py-8 text-sm leading-6 text-muted-foreground">
-              Referenssiehdotukset, puuteanalyysi ja varsinainen luonnoksen generointi tulevat myöhemmin omasta analyysipalvelusta. Phase 5 pitää nämä riippuvuudet tietoisesti irti nykyisestä tarjouseditorista ja ajaa orchestration palvelinrajan takaa.
+              Referenssiehdotukset, puuteanalyysi ja varsinainen luonnoksen generointi tulevat myöhemmin omasta analyysipalvelusta. Phase 6 pitää nämä riippuvuudet tietoisesti irti nykyisestä tarjouseditorista ja lisää nyt extraction-domainin analyysin rinnalle.
             </div>
           </CardContent>
         </Card>
@@ -312,6 +324,10 @@ export default function TenderPackageWorkspace({
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <p className="font-medium text-slate-900">Document storage</p>
               <p className="mt-2">{TENDER_INTELLIGENCE_BACKEND_PLAN.documentStorage}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <p className="font-medium text-slate-900">Document extraction</p>
+              <p className="mt-2">{TENDER_INTELLIGENCE_BACKEND_PLAN.documentExtraction}</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <p className="font-medium text-slate-900">Analysis execution</p>

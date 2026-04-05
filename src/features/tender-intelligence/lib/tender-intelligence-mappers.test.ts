@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildTenderPackageDetails,
   mapCreateTenderPackageInputToInsert,
+  mapTenderDocumentChunkRowToDomain,
+  mapTenderDocumentExtractionRowToDomain,
   mapTenderDraftArtifactRowToDomain,
   mapTenderMissingItemRowToDomain,
   mapTenderPackageRowToDomain,
@@ -13,6 +15,8 @@ import {
 } from './tender-intelligence-mappers';
 import type {
   TenderAnalysisJobRow,
+  TenderDocumentChunkRow,
+  TenderDocumentExtractionRow,
   TenderDocumentRow,
   TenderDraftArtifactRow,
   TenderGoNoGoAssessmentRow,
@@ -148,6 +152,34 @@ describe('result row mappers', () => {
       created_at: '2026-04-05T09:09:00.000Z',
       updated_at: '2026-04-05T09:09:00.000Z',
     };
+    const extractionRow: TenderDocumentExtractionRow = {
+      id: '10101010-1010-4010-8010-101010101010',
+      tender_document_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      tender_package_id: requirementRow.tender_package_id,
+      organization_id: requirementRow.organization_id,
+      extraction_status: 'extracted',
+      extractor_type: 'xlsx',
+      source_mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      character_count: 240,
+      chunk_count: 2,
+      extracted_text: 'Sheet data',
+      error_message: null,
+      extracted_at: '2026-04-05T09:09:30.000Z',
+      created_at: '2026-04-05T09:09:30.000Z',
+      updated_at: '2026-04-05T09:09:30.000Z',
+    };
+    const chunkRow: TenderDocumentChunkRow = {
+      id: '20202020-2020-4020-8020-202020202020',
+      tender_document_id: extractionRow.tender_document_id,
+      tender_package_id: extractionRow.tender_package_id,
+      organization_id: extractionRow.organization_id,
+      extraction_id: extractionRow.id,
+      chunk_index: 0,
+      text_content: 'Sheet data chunk',
+      character_count: 16,
+      created_at: '2026-04-05T09:09:31.000Z',
+      updated_at: '2026-04-05T09:09:31.000Z',
+    };
 
     expect(mapTenderRequirementRowToDomain(requirementRow)).toMatchObject({
       requirementType: 'technical',
@@ -178,6 +210,16 @@ describe('result row mappers', () => {
       taskType: 'requirements',
       description: 'Placeholder-tehtävä',
       status: 'todo',
+    });
+    expect(mapTenderDocumentExtractionRowToDomain(extractionRow)).toMatchObject({
+      extractionStatus: 'extracted',
+      extractorType: 'xlsx',
+      chunkCount: 2,
+    });
+    expect(mapTenderDocumentChunkRowToDomain(chunkRow)).toMatchObject({
+      extractionId: extractionRow.id,
+      chunkIndex: 0,
+      textContent: 'Sheet data chunk',
     });
   });
 });
@@ -218,6 +260,24 @@ describe('buildTenderPackageDetails', () => {
         completed_at: null,
         created_at: '2026-04-05T09:10:00.000Z',
         updated_at: '2026-04-05T09:10:00.000Z',
+      },
+    ];
+    const documentExtractionRows: TenderDocumentExtractionRow[] = [
+      {
+        id: '15151515-1515-4515-8515-151515151515',
+        tender_document_id: documentRows[0].id,
+        tender_package_id: packageRow.id,
+        organization_id: packageRow.organization_id,
+        extraction_status: 'extracted',
+        extractor_type: 'plain_text',
+        source_mime_type: 'text/plain',
+        character_count: 180,
+        chunk_count: 1,
+        extracted_text: 'Purettu teksti',
+        error_message: null,
+        extracted_at: '2026-04-05T09:11:00.000Z',
+        created_at: '2026-04-05T09:11:00.000Z',
+        updated_at: '2026-04-05T09:11:00.000Z',
       },
     ];
     const requirementRows: TenderRequirementRow[] = [
@@ -320,6 +380,7 @@ describe('buildTenderPackageDetails', () => {
     const details = buildTenderPackageDetails({
       packageRow,
       documentRows,
+      documentExtractionRows,
       analysisJobRows: jobRows,
       requirementRows,
       missingItemRows,
@@ -342,6 +403,11 @@ describe('buildTenderPackageDetails', () => {
       id: jobRows[0].id,
       jobType: 'placeholder_analysis',
       status: 'queued',
+    });
+    expect(details.documentExtractions[0]).toMatchObject({
+      documentId: documentRows[0].id,
+      extractionStatus: 'extracted',
+      chunkCount: 1,
     });
     expect(details.results.requirements[0]).toMatchObject({
       requirementType: 'technical',

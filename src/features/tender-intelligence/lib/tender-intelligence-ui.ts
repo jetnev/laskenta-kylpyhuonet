@@ -1,6 +1,8 @@
 import type {
   TenderAnalysisJobType,
   TenderAnalysisJobStatus,
+  TenderDocumentExtractionStatus,
+  TenderDocumentExtractorType,
   TenderDraftArtifactStatus,
   TenderDraftArtifactType,
   TenderDocumentParseStatus,
@@ -142,6 +144,30 @@ export const TENDER_DOCUMENT_PARSE_STATUS_META: Record<
   processing: { label: 'Käsittelyssä', variant: 'outline' },
   completed: { label: 'Valmis', variant: 'default' },
   failed: { label: 'Virhe', variant: 'destructive' },
+};
+
+export const TENDER_DOCUMENT_EXTRACTION_STATUS_META: Record<
+  TenderDocumentExtractionStatus,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  not_started: { label: 'Ei aloitettu', variant: 'secondary' },
+  pending: { label: 'Jonossa', variant: 'outline' },
+  extracting: { label: 'Extracting', variant: 'outline' },
+  extracted: { label: 'Purettu', variant: 'default' },
+  failed: { label: 'Epäonnistui', variant: 'destructive' },
+  unsupported: { label: 'Ei tuettu', variant: 'secondary' },
+};
+
+export const TENDER_DOCUMENT_EXTRACTOR_TYPE_META: Record<
+  TenderDocumentExtractorType,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  none: { label: 'Ei extractor-mallia', variant: 'secondary' },
+  plain_text: { label: 'Teksti', variant: 'outline' },
+  markdown: { label: 'Markdown', variant: 'outline' },
+  csv: { label: 'CSV', variant: 'outline' },
+  xlsx: { label: 'XLSX', variant: 'outline' },
+  unsupported: { label: 'Ei tuettu', variant: 'secondary' },
 };
 
 export const TENDER_GO_NO_GO_META: Record<

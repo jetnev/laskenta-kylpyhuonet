@@ -53,6 +53,10 @@ export default function TenderIntelligencePage() {
     deleteDocument,
     uploading,
     startingAnalysisPackageId,
+    extractingPackageId,
+    extractingDocumentIds,
+    startDocumentExtraction,
+    startPackageExtraction,
     deletingDocumentIds,
   } = useTenderIntelligence();
 
@@ -62,11 +66,11 @@ export default function TenderIntelligencePage() {
         <CardContent className="space-y-8 px-6 py-6 sm:px-8 sm:py-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4">
-              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 5</Badge>
+              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 6</Badge>
               <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Server-side analysis runner boundary tarjouspyyntöpaketeille ilman muutoksia Projekta-ytimeen</h1>
+                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Document extraction foundation tarjouspyyntöpaketeille ilman muutoksia Projekta-ytimeen</h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-200 sm:text-base">
-                  Tarjousäly käynnistää analyysiajon nyt palvelinpuolella Supabase Edge Functionin kautta. Orchestration, validaatio ja placeholder-resultien kirjoitus tapahtuvat server-sidellä. Frontend vain käynnistää ajon ja lukee tulokset.
+                  Tarjousälyllä on nyt oma extraction-domain extracted textille ja chunkeille. Frontend käynnistää dokumenttien extractionin Supabase Edge Functionin kautta ja lukee tulokset pysyvistä extraction-tauluista.
                 </p>
               </div>
             </div>
@@ -116,12 +120,16 @@ export default function TenderIntelligencePage() {
           notFound={selectedPackageMissing}
           uploading={uploading}
           analysisStarting={Boolean(selectedPackage && startingAnalysisPackageId === selectedPackage.package.id)}
+          extractingPackage={Boolean(selectedPackage && extractingPackageId === selectedPackage.package.id)}
+          extractingDocumentIds={extractingDocumentIds}
           deletingDocumentIds={deletingDocumentIds}
           error={error}
           onCreateClick={() => setShowCreateDialog(true)}
           onStartAnalysis={async (packageId) => {
             await startAnalysis(packageId);
           }}
+          onStartDocumentExtraction={startDocumentExtraction}
+          onStartPackageExtraction={startPackageExtraction}
           onUploadDocuments={uploadDocuments}
           onDeleteDocument={deleteDocument}
         />
@@ -134,11 +142,11 @@ export default function TenderIntelligencePage() {
               <Stack className="h-4 w-4" />
               <span className="font-medium">Mitä tämä vaihe jo tekee</span>
             </div>
-            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit ja analyysitulokset tallentuvat Supabaseen. Analyysiajo käynnistyy Edge Functionin kautta palvelinpuolella, ja frontend lukee tulokset ajon valmistuttua.</p>
+            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit, extraction-data ja analyysitulokset tallentuvat Supabaseen. TXT-, Markdown-, CSV- ja XLSX-dokumenteille voidaan nyt tallentaa oikea extracted text ja chunkit.</p>
           </div>
           <div className="space-y-2 sm:max-w-sm">
             <p className="font-medium text-slate-950">Mitä tästä puuttuu tarkoituksella</p>
-            <p>Ei vielä dokumenttien sisällön lukua, OCR:ää, AI-provider-koodia, oikeaa analyysipalvelua tai kytkentää nykyiseen tarjouseditoriin. Oikea analyysimoottori voidaan vaihtaa nykyisen Edge Function -rajan taakse.</p>
+            <p>Ei vielä OCR:ää, PDF- tai DOCX-purkua, AI-provider-koodia, oikeaa analyysipalvelua tai kytkentää nykyiseen tarjouseditoriin. Oikea analyysimoottori voidaan vaihtaa nykyisten Edge Function -rajojen taakse.</p>
           </div>
         </CardContent>
       </Card>

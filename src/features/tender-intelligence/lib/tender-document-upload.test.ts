@@ -43,14 +43,28 @@ describe('validateTenderDocumentFile', () => {
     });
   });
 
+  it('accepts markdown files for the extraction foundation', () => {
+    const parsed = validateTenderDocumentFile({
+      name: 'muistiinpanot.md',
+      size: 512,
+      type: 'text/markdown',
+    });
+
+    expect(parsed).toMatchObject({
+      label: 'Markdown',
+      canonicalMimeType: 'text/markdown',
+      sanitizedFileName: 'muistiinpanot.md',
+    });
+  });
+
   it('rejects unsupported file types', () => {
     expect(() =>
       validateTenderDocumentFile({
-        name: 'muistiinpanot.txt',
+        name: 'asennuspaketti.exe',
         size: 512,
-        type: 'text/plain',
+        type: 'application/octet-stream',
       })
-    ).toThrow(/Sallitut tiedostotyypit ovat PDF, DOCX, XLSX, ZIP/i);
+    ).toThrow(/Sallitut tiedostotyypit ovat TXT, Markdown, CSV, PDF, DOCX, XLSX, ZIP/i);
   });
 
   it('rejects empty files', () => {

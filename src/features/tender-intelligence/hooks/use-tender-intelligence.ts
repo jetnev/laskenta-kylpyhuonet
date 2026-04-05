@@ -3,7 +3,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 
 import { getTenderIntelligenceRepository } from '../services/tender-intelligence-repository';
-import type { CreateTenderPackageInput, TenderAnalysisJob, TenderDocument, TenderPackage, TenderPackageDetails } from '../types/tender-intelligence';
+import type {
+  CreateTenderPackageInput,
+  TenderAnalysisJob,
+  TenderDocument,
+  TenderDocumentExtraction,
+  TenderPackage,
+  TenderPackageDetails,
+} from '../types/tender-intelligence';
 
 export interface TenderDocumentsUploadFailure {
   fileName: string;
@@ -30,6 +37,8 @@ export function useTenderIntelligence() {
   const [creating, setCreating] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [startingAnalysisPackageId, setStartingAnalysisPackageId] = useState<string | null>(null);
+  const [extractingPackageId, setExtractingPackageId] = useState<string | null>(null);
+  const [extractingDocumentIds, setExtractingDocumentIds] = useState<string[]>([]);
   const [deletingDocumentIds, setDeletingDocumentIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const hasOrganizationContext = Boolean(user?.organizationId);
@@ -270,6 +279,80 @@ export function useTenderIntelligence() {
     [hasOrganizationContext, loadPackages, loadSelectedPackage, repository]
   );
 
+  const startDocumentExtraction = useCallback(
+    async (packageId: string, documentId: string): Promise<TenderDocumentExtraction> => {
+      if (!hasOrganizationContext) {
+        const message = 'Tarjousäly vaatii organisaatioon liitetyn käyttäjätilin.';
+        setError(message);
+        throw new Error(message);
+      }
+
+      setExtractingDocumentIds((current) => (current.includes(documentId) ? current : [...current, documentId]));
+
+      try {
+        const extraction = await repository.startDocumentExtraction(packageId, documentId);
+        await loadSelectedPackage(packageId);
+        setError(null);
+        return extraction;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setExtractingDocumentIds((current) => current.filter((item) => item !== documentId));
+      }
+    },
+    [hasOrganizationContext, loadSelectedPackage, repository]
+  );
+
+  const startPackageExtraction = useCallback(
+    async (packageId: string): Promise<TenderDocumentExtraction[]> => {
+      if (!hasOrganizationContext) {
+        const message = 'Tarjousäly vaatii organisaatioon liitetyn käyttäjätilin.';
+        setError(message);
+        throw new Error(message);
+      }
+
+      setExtractingPackageId(packageId);
+
+      try {
+        const packageDetails = selectedPackage?.package.id === packageId
+          ? selectedPackage
+          : await repository.getTenderPackageById(packageId);
+        const candidateDocuments = (packageDetails?.documents ?? []).filter(
+          (document) => document.uploadState === 'uploaded' && Boolean(document.storagePath)
+        );
+
+        if (candidateDocuments.length === 0) {
+          return [];
+        }
+
+        const results: TenderDocumentExtraction[] = [];
+        let firstFailure: string | null = null;
+
+        for (const document of candidateDocuments) {
+          setExtractingDocumentIds((current) => (current.includes(document.id) ? current : [...current, document.id]));
+
+          try {
+            const extraction = await repository.startDocumentExtraction(packageId, document.id);
+            results.push(extraction);
+          } catch (nextError) {
+            firstFailure ??= getErrorMessage(nextError);
+          } finally {
+            setExtractingDocumentIds((current) => current.filter((item) => item !== document.id));
+          }
+        }
+
+        await loadSelectedPackage(packageId);
+        setError(firstFailure);
+        return results;
+      } finally {
+        setExtractingPackageId((current) => (current === packageId ? null : current));
+      }
+    },
+    [hasOrganizationContext, loadSelectedPackage, repository, selectedPackage]
+  );
+
   const overview = useMemo(
     () => ({
       packages: packages.length,
@@ -289,6 +372,8 @@ export function useTenderIntelligence() {
     creating,
     uploading,
     startingAnalysisPackageId,
+    extractingPackageId,
+    extractingDocumentIds,
     deletingDocumentIds,
     error,
     overview,
@@ -297,6 +382,8 @@ export function useTenderIntelligence() {
     selectPackage: setSelectedPackageId,
     createPackage,
     startAnalysis,
+    startDocumentExtraction,
+    startPackageExtraction,
     uploadDocuments,
     deleteDocument,
   };

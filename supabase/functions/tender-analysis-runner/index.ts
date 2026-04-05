@@ -305,6 +305,20 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    /* ---- extraction readiness (non-blocking in Phase 6) ---- */
+    const { data: extractionRows, error: extractionError } = await client
+      .from('tender_document_extractions')
+      .select('tender_document_id, extraction_status')
+      .eq('tender_package_id', tenderPackageId);
+
+    if (extractionError) {
+      return rejected(500, 'Dokumenttien extraction-tilaa ei voitu tarkistaa.');
+    }
+
+    const extractedDocumentCount = (extractionRows ?? []).filter(
+      (row: any) => row.extraction_status === 'extracted',
+    ).length;
+
     /* ---- active job guard ---- */
     const { data: activeJobs } = await client
       .from('tender_analysis_jobs')
@@ -376,7 +390,9 @@ Deno.serve(async (req: Request) => {
           accepted: true,
           analysisJobId: jobId,
           status: 'completed',
-          message: null,
+          message: extractedDocumentCount > 0
+            ? null
+            : 'Placeholder-analyysi suoritettiin ilman extraction-dataa. Myöhemmät vaiheet voivat nojata tähän rajaan ilman frontend-uusintakirjoitusta.',
         },
         200,
       );

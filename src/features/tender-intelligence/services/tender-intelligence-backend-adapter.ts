@@ -3,6 +3,8 @@ import type {
   TenderAnalysisJob,
   TenderAnalysisJobStatus,
   TenderAnalysisJobType,
+  TenderDocumentChunk,
+  TenderDocumentExtraction,
   TenderDraftArtifact,
   TenderDocument,
   TenderMissingItem,
@@ -39,6 +41,11 @@ export interface TenderIntelligenceBackendAdapter {
   markAnalysisJobFailed(jobId: string, errorMessage: string): Promise<TenderAnalysisJob>;
   uploadTenderDocument(packageId: string, file: File): Promise<TenderDocument>;
   listTenderDocuments(packageId: string): Promise<TenderDocument[]>;
+  startDocumentExtraction(packageId: string, documentId: string): Promise<TenderDocumentExtraction>;
+  listDocumentExtractionsForPackage(packageId: string): Promise<TenderDocumentExtraction[]>;
+  getDocumentExtractionForDocument(documentId: string): Promise<TenderDocumentExtraction | null>;
+  listDocumentChunksForDocument(documentId: string): Promise<TenderDocumentChunk[]>;
+  clearDocumentExtractionForDocument(documentId: string): Promise<void>;
   deleteTenderDocument(documentId: string): Promise<void>;
   getTenderAnalysisStatus(packageId: string): Promise<TenderAnalysisJob | null>;
   getTenderResults(packageId: string): Promise<TenderPackageResults | null>;
@@ -47,11 +54,13 @@ export interface TenderIntelligenceBackendAdapter {
 export interface TenderIntelligenceBackendPlan {
   persistence: 'supabase';
   documentStorage: 'metadata-only' | 'supabase-storage';
+  documentExtraction: 'none' | 'edge-function-runner' | 'worker-service';
   analysisExecution: 'none' | 'placeholder-runner' | 'edge-function-runner' | 'worker-service';
 }
 
 export const TENDER_INTELLIGENCE_BACKEND_PLAN: TenderIntelligenceBackendPlan = {
   persistence: 'supabase',
   documentStorage: 'supabase-storage',
+  documentExtraction: 'edge-function-runner',
   analysisExecution: 'edge-function-runner',
 };

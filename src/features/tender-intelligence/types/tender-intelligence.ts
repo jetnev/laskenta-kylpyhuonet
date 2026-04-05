@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+import {
+  TENDER_DOCUMENT_EXTRACTION_STATUSES,
+  TENDER_DOCUMENT_EXTRACTOR_TYPES,
+} from '../lib/tender-document-extraction';
+
 const entityIdSchema = z.string().trim().min(1);
 const timestampSchema = z.string().min(1);
 
@@ -29,6 +34,8 @@ export const tenderAnalysisJobTypeSchema = z.enum([
 
 export const tenderDocumentUploadStatusSchema = z.enum(['placeholder', 'pending', 'uploaded', 'failed']);
 export const tenderDocumentParseStatusSchema = z.enum(['not-started', 'queued', 'processing', 'completed', 'failed']);
+export const tenderDocumentExtractionStatusSchema = z.enum(TENDER_DOCUMENT_EXTRACTION_STATUSES);
+export const tenderDocumentExtractorTypeSchema = z.enum(TENDER_DOCUMENT_EXTRACTOR_TYPES);
 
 export const tenderRequirementTypeSchema = z.enum(['administrative', 'commercial', 'technical', 'schedule', 'legal', 'other']);
 export const tenderRequirementStatusSchema = z.enum(['unreviewed', 'covered', 'missing', 'at-risk']);
@@ -98,6 +105,34 @@ export const tenderAnalysisJobSchema = z.object({
   startedAt: timestampSchema.nullable().optional(),
   completedAt: timestampSchema.nullable().optional(),
   errorMessage: z.string().trim().min(1).nullable().optional(),
+});
+
+export const tenderDocumentExtractionSchema = z.object({
+  id: entityIdSchema,
+  documentId: entityIdSchema,
+  packageId: entityIdSchema,
+  extractionStatus: tenderDocumentExtractionStatusSchema,
+  extractorType: tenderDocumentExtractorTypeSchema,
+  sourceMimeType: z.string().trim().min(1),
+  characterCount: z.number().int().nonnegative().nullable().optional(),
+  chunkCount: z.number().int().nonnegative().nullable().optional(),
+  extractedText: z.string().nullable().optional(),
+  errorMessage: z.string().trim().nullable().optional(),
+  extractedAt: timestampSchema.nullable().optional(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+
+export const tenderDocumentChunkSchema = z.object({
+  id: entityIdSchema,
+  documentId: entityIdSchema,
+  packageId: entityIdSchema,
+  extractionId: entityIdSchema,
+  chunkIndex: z.number().int().min(0),
+  textContent: z.string().min(1),
+  characterCount: z.number().int().nonnegative(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
 });
 
 export const tenderRequirementSchema = z.object({
@@ -187,6 +222,7 @@ export const tenderPackageResultsSchema = z.object({
 export const tenderPackageDetailsSchema = z.object({
   package: tenderPackageSchema,
   documents: z.array(tenderDocumentSchema),
+  documentExtractions: z.array(tenderDocumentExtractionSchema),
   analysisJobs: z.array(tenderAnalysisJobSchema),
   latestAnalysisJob: tenderAnalysisJobSchema.nullable(),
   results: tenderPackageResultsSchema,
@@ -226,10 +262,14 @@ export type TenderReviewTaskStatus = z.infer<typeof tenderReviewTaskStatusSchema
 export type TenderDocumentKind = z.infer<typeof tenderDocumentKindSchema>;
 export type TenderDocumentUploadStatus = z.infer<typeof tenderDocumentUploadStatusSchema>;
 export type TenderDocumentParseStatus = z.infer<typeof tenderDocumentParseStatusSchema>;
+export type TenderDocumentExtractionStatus = z.infer<typeof tenderDocumentExtractionStatusSchema>;
+export type TenderDocumentExtractorType = z.infer<typeof tenderDocumentExtractorTypeSchema>;
 
 export type TenderPackageSummary = z.infer<typeof tenderPackageSummarySchema>;
 export type TenderPackage = z.infer<typeof tenderPackageSchema>;
 export type TenderDocument = z.infer<typeof tenderDocumentSchema>;
+export type TenderDocumentExtraction = z.infer<typeof tenderDocumentExtractionSchema>;
+export type TenderDocumentChunk = z.infer<typeof tenderDocumentChunkSchema>;
 export type TenderAnalysisJob = z.infer<typeof tenderAnalysisJobSchema>;
 export type TenderRequirement = z.infer<typeof tenderRequirementSchema>;
 export type TenderMissingItem = z.infer<typeof tenderMissingItemSchema>;

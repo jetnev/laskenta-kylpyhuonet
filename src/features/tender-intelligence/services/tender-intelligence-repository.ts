@@ -20,9 +20,16 @@ import {
   isTenderAnalysisRunnerFailure,
 } from '../types/tender-analysis-runner-contract';
 import {
+  TENDER_DOCUMENT_EXTRACTION_RUNNER_FUNCTION_NAME,
+  isTenderDocumentExtractionRunnerRejected,
+  parseTenderDocumentExtractionRunnerResponse,
+} from '../types/tender-document-extraction-contract';
+import {
   buildTenderPackageDetails,
   mapTenderAnalysisJobRowToDomain,
   mapCreateTenderPackageInputToInsert,
+  mapTenderDocumentChunkRowToDomain,
+  mapTenderDocumentExtractionRowToDomain,
   mapTenderDraftArtifactRowToDomain,
   mapTenderDocumentRowToDomain,
   mapTenderMissingItemRowToDomain,
@@ -36,6 +43,9 @@ import {
 import {
   tenderAnalysisJobRowSchema,
   tenderAnalysisJobRowsSchema,
+  tenderDocumentChunkRowsSchema,
+  tenderDocumentExtractionRowSchema,
+  tenderDocumentExtractionRowsSchema,
   tenderDocumentRowSchema,
   tenderDocumentRowsSchema,
   tenderDraftArtifactRowsSchema,
@@ -179,6 +189,51 @@ async function fetchTenderAnalysisJobRowById(jobId: string) {
   return data ? tenderAnalysisJobRowSchema.parse(data) : null;
 }
 
+async function fetchTenderDocumentExtractionRowsForPackage(packageId: string) {
+  const client = requireConfiguredSupabase();
+  const { data, error } = await client
+    .from('tender_document_extractions')
+    .select('*')
+    .eq('tender_package_id', packageId)
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    throw toRepositoryError(error, 'Tarjouspyyntöpaketin extraction-rivejä ei voitu ladata.');
+  }
+
+  return tenderDocumentExtractionRowsSchema.parse(data ?? []);
+}
+
+async function fetchTenderDocumentExtractionRowForDocument(documentId: string) {
+  const client = requireConfiguredSupabase();
+  const { data, error } = await client
+    .from('tender_document_extractions')
+    .select('*')
+    .eq('tender_document_id', documentId)
+    .maybeSingle();
+
+  if (error) {
+    throw toRepositoryError(error, 'Dokumentin extraction-riviä ei voitu ladata.');
+  }
+
+  return data ? tenderDocumentExtractionRowSchema.parse(data) : null;
+}
+
+async function fetchTenderDocumentChunkRowsForDocument(documentId: string) {
+  const client = requireConfiguredSupabase();
+  const { data, error } = await client
+    .from('tender_document_chunks')
+    .select('*')
+    .eq('tender_document_id', documentId)
+    .order('chunk_index', { ascending: true });
+
+  if (error) {
+    throw toRepositoryError(error, 'Dokumentin extraction-chunkeja ei voitu ladata.');
+  }
+
+  return tenderDocumentChunkRowsSchema.parse(data ?? []);
+}
+
 async function fetchPackageResultCounts(
   tableName:
     | 'tender_documents'
@@ -228,6 +283,19 @@ async function deletePackageRows(
 ) {
   const client = requireConfiguredSupabase();
   const { error } = await client.from(tableName).delete().eq('tender_package_id', packageId);
+
+  if (error) {
+    throw toRepositoryError(error, fallbackMessage);
+  }
+}
+
+async function deleteDocumentRows(
+  tableName: 'tender_document_chunks' | 'tender_document_extractions',
+  documentId: string,
+  fallbackMessage: string
+) {
+  const client = requireConfiguredSupabase();
+  const { error } = await client.from(tableName).delete().eq('tender_document_id', documentId);
 
   if (error) {
     throw toRepositoryError(error, fallbackMessage);
@@ -530,6 +598,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       const packageRow = tenderPackageRowSchema.parse(data);
       const [
         documentRows,
+        documentExtractionRows,
         analysisJobRows,
         requirementRows,
         missingItemRows,
@@ -540,6 +609,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         assessmentResponse,
       ] = await Promise.all([
         fetchTenderDocumentRowsForPackage(packageId),
+        fetchTenderDocumentExtractionRowsForPackage(packageId),
         fetchTenderAnalysisJobRowsForPackage(packageId),
         fetchPackageRows({
           tableName: 'tender_requirements',
@@ -589,6 +659,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       return buildTenderPackageDetails({
         packageRow,
         documentRows,
+        documentExtractionRows,
         analysisJobRows,
         requirementRows,
         missingItemRows,
@@ -1002,6 +1073,124 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       return rows.map(mapTenderDocumentRowToDomain);
     } catch (error) {
       throw toRepositoryError(error, 'Tarjouspyyntöpaketin dokumenttilistaa ei voitu ladata.');
+    }
+  }
+
+  async startDocumentExtraction(packageId: string, documentId: string) {
+    try {
+      const client = requireConfiguredSupabase();
+      const documentRow = await fetchTenderDocumentRowById(documentId);
+
+      if (!documentRow) {
+        throw new Error('Dokumenttia ei löytynyt tai se on jo poistettu.');
+      }
+
+      if (documentRow.tender_package_id !== packageId) {
+        throw new Error('Dokumentti ei kuulu valittuun tarjouspyyntöpakettiin.');
+      }
+
+      await assertTenderPackageAccess(packageId);
+
+      const { data: responseData, error: invokeError } = await client.functions.invoke(
+        TENDER_DOCUMENT_EXTRACTION_RUNNER_FUNCTION_NAME,
+        { body: { tenderPackageId: packageId, tenderDocumentId: documentId } }
+      );
+
+      if (invokeError) {
+        throw new Error(
+          typeof invokeError.message === 'string' && invokeError.message
+            ? invokeError.message
+            : 'Dokumentin extractionin server-side käynnistys epäonnistui.'
+        );
+      }
+
+      const response = parseTenderDocumentExtractionRunnerResponse(responseData);
+
+      if (isTenderDocumentExtractionRunnerRejected(response)) {
+        throw new Error(response.message ?? 'Palvelin hylkäsi dokumentin extraction-pyynnön.');
+      }
+
+      this.emit();
+
+      const extraction = await this.getDocumentExtractionForDocument(documentId);
+
+      if (!extraction) {
+        throw new Error('Dokumentin extraction-riviä ei löytynyt ajon jälkeen.');
+      }
+
+      return extraction;
+    } catch (error) {
+      throw new Error(getRepositoryErrorMessage(error, 'Dokumentin extraction epäonnistui.'));
+    }
+  }
+
+  async listDocumentExtractionsForPackage(packageId: string) {
+    try {
+      await assertTenderPackageAccess(packageId);
+      const rows = await fetchTenderDocumentExtractionRowsForPackage(packageId);
+      return rows.map(mapTenderDocumentExtractionRowToDomain);
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjouspyyntöpaketin extraction-listaa ei voitu ladata.');
+    }
+  }
+
+  async getDocumentExtractionForDocument(documentId: string) {
+    try {
+      const documentRow = await fetchTenderDocumentRowById(documentId);
+
+      if (!documentRow) {
+        return null;
+      }
+
+      await assertTenderPackageAccess(documentRow.tender_package_id);
+      const row = await fetchTenderDocumentExtractionRowForDocument(documentId);
+      return row ? mapTenderDocumentExtractionRowToDomain(row) : null;
+    } catch (error) {
+      throw toRepositoryError(error, 'Dokumentin extraction-riviä ei voitu ladata.');
+    }
+  }
+
+  async listDocumentChunksForDocument(documentId: string) {
+    try {
+      const documentRow = await fetchTenderDocumentRowById(documentId);
+
+      if (!documentRow) {
+        return [];
+      }
+
+      await assertTenderPackageAccess(documentRow.tender_package_id);
+      const rows = await fetchTenderDocumentChunkRowsForDocument(documentId);
+      return rows.map(mapTenderDocumentChunkRowToDomain);
+    } catch (error) {
+      throw toRepositoryError(error, 'Dokumentin extraction-chunkeja ei voitu ladata.');
+    }
+  }
+
+  async clearDocumentExtractionForDocument(documentId: string) {
+    try {
+      const client = requireConfiguredSupabase();
+      const documentRow = await fetchTenderDocumentRowById(documentId);
+
+      if (!documentRow) {
+        throw new Error('Dokumenttia ei löytynyt tai se on jo poistettu.');
+      }
+
+      await assertTenderPackageAccess(documentRow.tender_package_id);
+      await deleteDocumentRows('tender_document_chunks', documentId, 'Dokumentin extraction-chunkeja ei voitu poistaa.');
+      await deleteDocumentRows('tender_document_extractions', documentId, 'Dokumentin extraction-riviä ei voitu poistaa.');
+
+      const { error: documentUpdateError } = await client
+        .from('tender_documents')
+        .update({ parse_status: 'not-started' })
+        .eq('id', documentId);
+
+      if (documentUpdateError) {
+        throw documentUpdateError;
+      }
+
+      this.emit();
+    } catch (error) {
+      throw toRepositoryError(error, 'Dokumentin extraction-datan tyhjennys epäonnistui.');
     }
   }
 

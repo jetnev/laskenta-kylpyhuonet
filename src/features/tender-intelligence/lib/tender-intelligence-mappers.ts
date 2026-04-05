@@ -4,6 +4,8 @@ import {
   type CreateTenderPackageInput,
   type TenderAnalysisJob,
   type TenderDocument,
+  type TenderDocumentChunk,
+  type TenderDocumentExtraction,
   type TenderDraftArtifact,
   type TenderGoNoGoAssessment,
   type TenderMissingItem,
@@ -17,6 +19,8 @@ import {
 } from '../types/tender-intelligence';
 import type {
   TenderAnalysisJobRow,
+  TenderDocumentChunkRow,
+  TenderDocumentExtractionRow,
   TenderDraftArtifactRow,
   TenderDocumentRow,
   TenderGoNoGoAssessmentRow,
@@ -77,6 +81,38 @@ export function mapTenderAnalysisJobRowToDomain(row: TenderAnalysisJobRow): Tend
     startedAt: row.started_at,
     completedAt: row.completed_at,
     errorMessage: row.error_message,
+  };
+}
+
+export function mapTenderDocumentExtractionRowToDomain(row: TenderDocumentExtractionRow): TenderDocumentExtraction {
+  return {
+    id: row.id,
+    documentId: row.tender_document_id,
+    packageId: row.tender_package_id,
+    extractionStatus: row.extraction_status,
+    extractorType: row.extractor_type,
+    sourceMimeType: row.source_mime_type,
+    characterCount: row.character_count,
+    chunkCount: row.chunk_count,
+    extractedText: row.extracted_text,
+    errorMessage: row.error_message,
+    extractedAt: row.extracted_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapTenderDocumentChunkRowToDomain(row: TenderDocumentChunkRow): TenderDocumentChunk {
+  return {
+    id: row.id,
+    documentId: row.tender_document_id,
+    packageId: row.tender_package_id,
+    extractionId: row.extraction_id,
+    chunkIndex: row.chunk_index,
+    textContent: row.text_content,
+    characterCount: row.character_count,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -249,6 +285,7 @@ export function mapTenderPackageResultsRowsToDomain(input: {
 export function buildTenderPackageDetails(input: {
   packageRow: TenderPackageRow;
   documentRows: TenderDocumentRow[];
+  documentExtractionRows: TenderDocumentExtractionRow[];
   analysisJobRows: TenderAnalysisJobRow[];
   requirementRows: TenderRequirementRow[];
   missingItemRows: TenderMissingItemRow[];
@@ -283,6 +320,7 @@ export function buildTenderPackageDetails(input: {
       currentJobId: latestAnalysisJob?.id ?? null,
     }),
     documents: input.documentRows.map(mapTenderDocumentRowToDomain),
+    documentExtractions: input.documentExtractionRows.map(mapTenderDocumentExtractionRowToDomain),
     analysisJobs,
     latestAnalysisJob,
     results,

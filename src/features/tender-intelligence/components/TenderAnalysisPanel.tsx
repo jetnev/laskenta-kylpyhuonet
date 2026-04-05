@@ -56,7 +56,7 @@ export default function TenderAnalysisPanel({
               Analyysi
             </CardTitle>
             <CardDescription>
-              Analyysiajo käynnistyy server-side Edge Function -rajan kautta. Orchestration, validaatio ja placeholder-resultien kirjoitus tapahtuvat palvelinpuolella.
+              Analyysiajo käynnistyy server-side Edge Function -rajan kautta. Document extraction kulkee nyt omassa rajassaan, mutta placeholder-analyysi ei vielä tee varsinaista tekstisisällön tulkintaa.
             </CardDescription>
           </div>
 
@@ -67,7 +67,7 @@ export default function TenderAnalysisPanel({
             </Button>
             <p className="text-xs leading-5 text-muted-foreground">
               {startState.canStart
-                ? 'Analyysi käynnistetään palvelinpuolella. Placeholder-tulokset kirjoitetaan pysyviin result-tauluihin server-side Edge Functionin kautta.'
+                ? 'Analyysi käynnistetään palvelinpuolella. Placeholder-tulokset kirjoitetaan pysyviin result-tauluihin, ja myöhemmät vaiheet voivat nojata nyt myös extraction-domainiin.'
                 : startState.reason}
             </p>
           </div>
@@ -121,7 +121,7 @@ export default function TenderAnalysisPanel({
           )}
 
           <div className="rounded-2xl border border-dashed px-4 py-6 text-sm leading-6 text-muted-foreground">
-            Analyysi kulkee nyt palvelinrajan (Edge Function) kautta. Varsinainen dokumenttien tekstinpurku, OCR, AI-providerit ja tarjousluonnoksen generointi jätetään tarkoituksella myöhempiin vaiheisiin.
+            Analyysi kulkee nyt palvelinrajan (Edge Function) kautta. Dokumenttien extraction-data tallentuu jo omaan domainiinsa, mutta OCR, PDF/DOCX-purku, AI-providerit ja tarjousluonnoksen generointi jätetään tarkoituksella myöhempiin vaiheisiin.
           </div>
         </div>
 
