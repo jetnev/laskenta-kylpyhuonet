@@ -3,6 +3,8 @@ import type { Quote, QuoteRow } from '@/lib/types';
 import type {
   TenderEditorManagedBlock,
   TenderEditorManagedBlockId,
+  TenderEditorManagedBlockDriftStatus,
+  TenderEditorImportRunExecutionMetadata,
   TenderEditorImportTargetKind,
   TenderEditorReconciliationBlock,
   TenderEditorSelectiveReimportSelection,
@@ -16,6 +18,7 @@ import {
   hasTenderEditorManagedTextBlock,
   parseTenderEditorManagedSectionRowKey,
 } from './tender-editor-managed-markers';
+import type { TenderImportOwnedBlockDriftState } from './tender-import-drift';
 
 type OwnershipSource = 'registry' | 'latest_successful_run';
 
@@ -25,7 +28,7 @@ export interface TenderImportOwnershipFallbackMeta {
   lastSyncedAt: string | null;
 }
 
-interface TenderImportOwnedBlockBaseline {
+export interface TenderImportOwnedBlockBaseline {
   persistedRow: TenderImportOwnedBlock | null;
   blockId: TenderEditorManagedBlockId;
   markerKey: string;
@@ -33,6 +36,10 @@ interface TenderImportOwnedBlockBaseline {
   targetSectionKey: string | null;
   blockTitle: string;
   payloadHash: string;
+  lastAppliedContentHash: string | null;
+  lastSeenQuoteContentHash: string | null;
+  lastDriftStatus: TenderEditorManagedBlockDriftStatus | null;
+  lastDriftCheckedAt: string | null;
   revision: number;
   lastSyncedAt: string | null;
   importRunId: string | null;
@@ -55,6 +62,10 @@ export interface TenderImportOwnedBlockWriteRecord {
   target_section_key: string | null;
   block_title: string;
   payload_hash: string;
+  last_applied_content_hash?: string | null;
+  last_seen_quote_content_hash?: string | null;
+  drift_status?: TenderEditorManagedBlockDriftStatus | null;
+  last_drift_checked_at?: string | null;
   revision: number;
   last_synced_at: string;
   is_active: boolean;
@@ -92,6 +103,30 @@ function toBlockIdArray(value: Iterable<TenderEditorManagedBlockId>) {
   return [...new Set(value)];
 }
 
+const EMPTY_EXECUTION_METADATA: TenderEditorImportRunExecutionMetadata = {
+  selected_block_ids: [],
+  selected_update_block_ids: [],
+  selected_remove_block_ids: [],
+  conflict_block_ids: [],
+  skipped_conflict_block_ids: [],
+  override_conflict_block_ids: [],
+  updated_block_ids: [],
+  removed_block_ids: [],
+  missing_in_quote_block_ids: [],
+  untouched_block_ids: [],
+  run_mode: 'protected_reimport',
+  conflict_policy: 'protect_conflicts',
+  summary_counts: {
+    selected_blocks: 0,
+    conflict_blocks: 0,
+    skipped_conflicts: 0,
+    updated_blocks: 0,
+    removed_blocks: 0,
+    missing_in_quote_blocks: 0,
+    untouched_blocks: 0,
+  },
+};
+
 export function buildTenderImportOwnedBlockPayloadHash(block: Pick<
   TenderEditorManagedBlock,
   'block_id' | 'target_kind' | 'title' | 'content_md' | 'item_count'
@@ -105,6 +140,17 @@ export function buildTenderImportOwnedBlockPayloadHash(block: Pick<
   }));
 }
 
+export function buildTenderImportOwnedBlockAppliedContentHash(block: {
+  targetField: TenderEditorImportTargetKind;
+  title: string | null | undefined;
+  contentMd: string | null | undefined;
+}) {
+  return createDeterministicHash(stableStringify({
+    target_field: block.targetField,
+    title: block.title?.trim() || null,
+    content_md: block.contentMd?.trim() || null,
+  }));
+}
 function buildBaselineFromManagedBlock(options: {
   draftPackageId: string;
   block: TenderEditorManagedBlock;
@@ -121,6 +167,14 @@ function buildBaselineFromManagedBlock(options: {
     targetSectionKey: buildTenderEditorManagedSectionRowKey(options.draftPackageId, options.block.block_id),
     blockTitle: options.block.title,
     payloadHash: buildTenderImportOwnedBlockPayloadHash(options.block),
+    lastAppliedContentHash: buildTenderImportOwnedBlockAppliedContentHash({
+      targetField: options.block.target_kind,
+      title: options.block.title,
+      contentMd: options.block.content_md,
+    }),
+    lastSeenQuoteContentHash: null,
+    lastDriftStatus: null,
+    lastDriftCheckedAt: null,
     revision: options.revision,
     lastSyncedAt: normalizeTimestamp(options.lastSyncedAt),
     importRunId: options.importRunId ?? null,
@@ -137,6 +191,10 @@ function buildBaselineFromOwnedBlock(row: TenderImportOwnedBlock): TenderImportO
     targetSectionKey: row.target_section_key ?? null,
     blockTitle: row.block_title,
     payloadHash: row.payload_hash,
+    lastAppliedContentHash: normalizeTimestamp(row.last_applied_content_hash),
+    lastSeenQuoteContentHash: normalizeTimestamp(row.last_seen_quote_content_hash),
+    lastDriftStatus: row.drift_status ?? null,
+    lastDriftCheckedAt: normalizeTimestamp(row.last_drift_checked_at),
     revision: row.revision,
     lastSyncedAt: normalizeTimestamp(row.last_synced_at),
     importRunId: row.import_run_id ?? null,
@@ -207,15 +265,22 @@ export function resolveTenderEditorSelectiveReimportSelection(options: {
 }) {
   const allowedUpdateIds = new Set(options.blocks.filter((block) => block.can_select_for_update).map((block) => block.block_id));
   const allowedRemoveIds = new Set(options.blocks.filter((block) => block.can_select_for_removal).map((block) => block.block_id));
+  const allowedOverrideIds = new Set(options.blocks.filter((block) => block.can_override_conflict).map((block) => block.block_id));
   const defaultUpdateIds = options.blocks.filter((block) => block.selected_for_update).map((block) => block.block_id);
   const defaultRemoveIds = options.blocks.filter((block) => block.selected_for_removal).map((block) => block.block_id);
+  const defaultOverrideIds = options.blocks.filter((block) => block.selected_conflict_override).map((block) => block.block_id);
 
   const requestedUpdateIds = options.selection?.update_block_ids ?? defaultUpdateIds;
   const requestedRemoveIds = options.selection?.remove_block_ids ?? defaultRemoveIds;
+  const requestedOverrideIds = options.selection?.override_conflict_block_ids ?? defaultOverrideIds;
+  const overrideConflictBlockIds = toBlockIdArray(requestedOverrideIds.filter((blockId) => allowedOverrideIds.has(blockId)));
 
   return {
     updateBlockIds: toBlockIdArray(requestedUpdateIds.filter((blockId) => allowedUpdateIds.has(blockId))),
     removeBlockIds: toBlockIdArray(requestedRemoveIds.filter((blockId) => allowedRemoveIds.has(blockId))),
+    overrideConflictBlockIds,
+    conflictPolicy: options.selection?.conflict_policy
+      ?? (overrideConflictBlockIds.length > 0 ? 'override_selected_conflicts' : 'protect_conflicts'),
   };
 }
 
@@ -225,9 +290,15 @@ export function resolveTenderImportOwnershipRegistryStatus(options: {
   effectiveOwnedBlocks: TenderImportOwnedBlockBaseline[];
   warnings: string[];
   actionableBlockIds: TenderEditorManagedBlockId[];
+  conflictBlockIds?: TenderEditorManagedBlockId[];
+  registryIssueBlockIds?: TenderEditorManagedBlockId[];
 }): TenderImportOwnershipRegistryStatus {
   if (!options.importedQuoteId) {
     return 'not_available';
+  }
+
+  if ((options.registryIssueBlockIds?.length ?? 0) > 0 || (options.conflictBlockIds?.length ?? 0) > 0) {
+    return 'conflicted';
   }
 
   if (options.warnings.length > 0) {
@@ -279,98 +350,43 @@ export function buildTenderImportOwnedBlockWriteRecords(options: {
   targetQuoteId: string;
   importRunId?: string | null;
   currentBlocks: TenderEditorManagedBlock[];
-  ownedBlocks: TenderImportOwnedBlock[];
-  fallbackBlocks: TenderEditorManagedBlock[];
-  fallbackMeta: TenderImportOwnershipFallbackMeta;
-  quote: Quote | null;
-  rows: QuoteRow[];
-  selectedUpdateBlockIds: TenderEditorManagedBlockId[];
-  selectedRemoveBlockIds: TenderEditorManagedBlockId[];
+  driftStates: TenderImportOwnedBlockDriftState[];
+  executionMetadata?: TenderEditorImportRunExecutionMetadata;
   syncedAt: string;
   nextRevision: number;
 }) {
+  const executionMetadata = options.executionMetadata ?? EMPTY_EXECUTION_METADATA;
   const currentBlocksById = new Map(options.currentBlocks.map((block) => [block.block_id, block]));
-  const persistedActiveBlocks = options.ownedBlocks.filter((block) => block.is_active);
-  const hasPersistedRegistry = persistedActiveBlocks.length > 0;
-  const updateSet = new Set(options.selectedUpdateBlockIds);
-  const removeSet = new Set(options.selectedRemoveBlockIds);
-
-  if (hasPersistedRegistry) {
-    return [
-      ...options.selectedUpdateBlockIds.flatMap((blockId) => {
-        const block = currentBlocksById.get(blockId);
-
-        if (!block) {
-          return [];
-        }
-
-        return {
-          organization_id: options.organizationId,
-          tender_draft_package_id: options.draftPackageId,
-          target_quote_id: options.targetQuoteId,
-          import_run_id: options.importRunId ?? null,
-          block_id: block.block_id,
-          marker_key: block.marker_key,
-          target_field: block.target_kind,
-          target_section_key: buildTenderEditorManagedSectionRowKey(options.draftPackageId, block.block_id),
-          block_title: block.title,
-          payload_hash: buildTenderImportOwnedBlockPayloadHash(block),
-          revision: options.nextRevision,
-          last_synced_at: options.syncedAt,
-          is_active: true,
-        } satisfies TenderImportOwnedBlockWriteRecord;
-      }),
-      ...persistedActiveBlocks.flatMap((row) => {
-        if (!removeSet.has(row.block_id)) {
-          return [];
-        }
-
-        return {
-          organization_id: options.organizationId,
-          tender_draft_package_id: options.draftPackageId,
-          target_quote_id: options.targetQuoteId,
-          import_run_id: options.importRunId ?? null,
-          block_id: row.block_id,
-          marker_key: row.marker_key,
-          target_field: row.target_field,
-          target_section_key: row.target_section_key ?? null,
-          block_title: row.block_title,
-          payload_hash: row.payload_hash,
-          revision: options.nextRevision,
-          last_synced_at: options.syncedAt,
-          is_active: false,
-        } satisfies TenderImportOwnedBlockWriteRecord;
-      }),
-    ];
-  }
-
-  const baselineBlocks = buildTenderImportOwnedBlockBaselines({
-    draftPackageId: options.draftPackageId,
-    ownedBlocks: options.ownedBlocks,
-    fallbackBlocks: options.fallbackBlocks,
-    fallbackMeta: options.fallbackMeta,
-    quote: options.quote,
-    rows: options.rows,
-  });
-  const baselineById = new Map(baselineBlocks.map((block) => [block.blockId, block]));
-  const orderedBlockIds = toBlockIdArray([
-    ...options.currentBlocks.map((block) => block.block_id),
-    ...baselineBlocks.map((block) => block.blockId),
+  const updatedSet = new Set(executionMetadata.updated_block_ids);
+  const removedSet = new Set(executionMetadata.removed_block_ids);
+  const touchedSet = new Set([
+    ...executionMetadata.selected_block_ids,
+    ...executionMetadata.updated_block_ids,
+    ...executionMetadata.removed_block_ids,
+    ...executionMetadata.skipped_conflict_block_ids,
+    ...executionMetadata.missing_in_quote_block_ids,
+    ...executionMetadata.untouched_block_ids,
   ]);
   const records: TenderImportOwnedBlockWriteRecord[] = [];
 
-  orderedBlockIds.forEach((blockId) => {
-    const currentBlock = currentBlocksById.get(blockId) ?? null;
-    const baseline = baselineById.get(blockId) ?? null;
+  options.driftStates.forEach((state) => {
+    const currentBlock = currentBlocksById.get(state.blockId) ?? state.currentBlock ?? null;
+    const baseline = state.baseline;
 
     if (!currentBlock && !baseline) {
       return;
     }
 
     if (!baseline && currentBlock) {
-      if (!updateSet.has(blockId)) {
+      if (!updatedSet.has(state.blockId)) {
         return;
       }
+
+      const appliedContentHash = buildTenderImportOwnedBlockAppliedContentHash({
+        targetField: currentBlock.target_kind,
+        title: currentBlock.title,
+        contentMd: currentBlock.content_md,
+      });
 
       records.push({
         organization_id: options.organizationId,
@@ -383,6 +399,10 @@ export function buildTenderImportOwnedBlockWriteRecords(options: {
         target_section_key: buildTenderEditorManagedSectionRowKey(options.draftPackageId, currentBlock.block_id),
         block_title: currentBlock.title,
         payload_hash: buildTenderImportOwnedBlockPayloadHash(currentBlock),
+        last_applied_content_hash: appliedContentHash,
+        last_seen_quote_content_hash: appliedContentHash,
+        drift_status: 'up_to_date',
+        last_drift_checked_at: options.syncedAt,
         revision: options.nextRevision,
         last_synced_at: options.syncedAt,
         is_active: true,
@@ -390,48 +410,63 @@ export function buildTenderImportOwnedBlockWriteRecords(options: {
       return;
     }
 
-    if (baseline && !currentBlock) {
+    if (!baseline) {
+      return;
+    }
+
+    if (removedSet.has(state.blockId)) {
       records.push({
         organization_id: options.organizationId,
         tender_draft_package_id: options.draftPackageId,
         target_quote_id: options.targetQuoteId,
-        import_run_id: removeSet.has(blockId) ? options.importRunId ?? null : baseline.importRunId,
+        import_run_id: options.importRunId ?? null,
         block_id: baseline.blockId,
         marker_key: baseline.markerKey,
         target_field: baseline.targetField,
         target_section_key: baseline.targetSectionKey,
         block_title: baseline.blockTitle,
         payload_hash: baseline.payloadHash,
-        revision: removeSet.has(blockId) ? options.nextRevision : baseline.revision,
-        last_synced_at: removeSet.has(blockId) ? options.syncedAt : baseline.lastSyncedAt ?? options.syncedAt,
-        is_active: !removeSet.has(blockId),
+        last_applied_content_hash: baseline.lastAppliedContentHash,
+        last_seen_quote_content_hash: state.quoteSnapshot.contentHash ?? baseline.lastSeenQuoteContentHash,
+        drift_status: state.driftStatus,
+        last_drift_checked_at: options.syncedAt,
+        revision: options.nextRevision,
+        last_synced_at: options.syncedAt,
+        is_active: false,
       });
       return;
     }
 
-    if (!currentBlock || !baseline) {
-      return;
-    }
+    if (updatedSet.has(state.blockId) && currentBlock) {
+      const appliedContentHash = buildTenderImportOwnedBlockAppliedContentHash({
+        targetField: currentBlock.target_kind,
+        title: currentBlock.title,
+        contentMd: currentBlock.content_md,
+      });
 
-    const currentPayloadHash = buildTenderImportOwnedBlockPayloadHash(currentBlock);
-    const keepBaseline = baseline.source === 'latest_successful_run' && !updateSet.has(blockId) && baseline.payloadHash !== currentPayloadHash;
-
-    if (keepBaseline) {
       records.push({
         organization_id: options.organizationId,
         tender_draft_package_id: options.draftPackageId,
         target_quote_id: options.targetQuoteId,
-        import_run_id: baseline.importRunId,
-        block_id: baseline.blockId,
-        marker_key: baseline.markerKey,
-        target_field: baseline.targetField,
-        target_section_key: baseline.targetSectionKey,
-        block_title: baseline.blockTitle,
-        payload_hash: baseline.payloadHash,
-        revision: baseline.revision,
-        last_synced_at: baseline.lastSyncedAt ?? options.syncedAt,
+        import_run_id: options.importRunId ?? null,
+        block_id: currentBlock.block_id,
+        marker_key: currentBlock.marker_key,
+        target_field: currentBlock.target_kind,
+        target_section_key: buildTenderEditorManagedSectionRowKey(options.draftPackageId, currentBlock.block_id),
+        block_title: currentBlock.title,
+        payload_hash: buildTenderImportOwnedBlockPayloadHash(currentBlock),
+        last_applied_content_hash: appliedContentHash,
+        last_seen_quote_content_hash: appliedContentHash,
+        drift_status: 'up_to_date',
+        last_drift_checked_at: options.syncedAt,
+        revision: options.nextRevision,
+        last_synced_at: options.syncedAt,
         is_active: true,
       });
+      return;
+    }
+
+    if (!touchedSet.has(state.blockId) && baseline.persistedRow == null) {
       return;
     }
 
@@ -439,15 +474,19 @@ export function buildTenderImportOwnedBlockWriteRecords(options: {
       organization_id: options.organizationId,
       tender_draft_package_id: options.draftPackageId,
       target_quote_id: options.targetQuoteId,
-      import_run_id: updateSet.has(blockId) ? options.importRunId ?? null : baseline.importRunId,
-      block_id: currentBlock.block_id,
-      marker_key: currentBlock.marker_key,
-      target_field: currentBlock.target_kind,
-      target_section_key: buildTenderEditorManagedSectionRowKey(options.draftPackageId, currentBlock.block_id),
-      block_title: currentBlock.title,
-      payload_hash: currentPayloadHash,
-      revision: updateSet.has(blockId) ? options.nextRevision : baseline.revision,
-      last_synced_at: updateSet.has(blockId) ? options.syncedAt : baseline.lastSyncedAt ?? options.syncedAt,
+      import_run_id: baseline.importRunId,
+      block_id: baseline.blockId,
+      marker_key: baseline.markerKey,
+      target_field: baseline.targetField,
+      target_section_key: baseline.targetSectionKey,
+      block_title: baseline.blockTitle,
+      payload_hash: baseline.payloadHash,
+      last_applied_content_hash: baseline.lastAppliedContentHash,
+      last_seen_quote_content_hash: state.quoteSnapshot.contentHash ?? baseline.lastSeenQuoteContentHash,
+      drift_status: state.driftStatus,
+      last_drift_checked_at: options.syncedAt,
+      revision: baseline.revision,
+      last_synced_at: baseline.lastSyncedAt ?? options.syncedAt,
       is_active: true,
     });
   });

@@ -31,7 +31,10 @@ import {
   type UpdateTenderReferenceProfileInput,
 } from '../types/tender-intelligence';
 import type { TenderDraftPackageImportRun } from '../types/tender-editor-import';
-import { tenderEditorImportPayloadSchema } from '../types/tender-editor-import';
+import {
+  tenderEditorImportPayloadSchema,
+  tenderEditorImportRunExecutionMetadataSchema,
+} from '../types/tender-editor-import';
 import type {
   TenderAnalysisJobRow,
   TenderDocumentChunkRow,
@@ -326,6 +329,7 @@ export function mapTenderDraftPackageImportRunRowToDomain(row: TenderDraftPackag
     payload_snapshot: tenderEditorImportPayloadSchema.parse(row.payload_snapshot),
     result_status: row.result_status,
     summary: row.summary,
+    execution_metadata: tenderEditorImportRunExecutionMetadataSchema.parse(row.execution_metadata ?? {}),
     created_by_user_id: row.created_by_user_id,
     created_at: row.created_at,
   };
@@ -344,6 +348,10 @@ export function mapTenderImportOwnedBlockRowToDomain(row: TenderImportOwnedBlock
     target_section_key: row.target_section_key,
     block_title: row.block_title,
     payload_hash: row.payload_hash,
+    last_applied_content_hash: row.last_applied_content_hash,
+    last_seen_quote_content_hash: row.last_seen_quote_content_hash,
+    drift_status: row.drift_status,
+    last_drift_checked_at: row.last_drift_checked_at,
     revision: row.revision,
     last_synced_at: row.last_synced_at,
     is_active: row.is_active,

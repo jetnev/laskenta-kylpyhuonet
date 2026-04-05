@@ -4,12 +4,14 @@ import type { Customer, Project, Quote, QuoteRow } from '@/lib/types';
 
 import type { TenderPackageDetails } from '../types/tender-intelligence';
 import type {
+  TenderEditorImportRunExecutionMetadata,
   TenderEditorManagedBlockId,
   TenderEditorImportMode,
   TenderEditorImportPreview,
   TenderEditorImportResult,
   TenderEditorImportTargetKind,
   TenderEditorManagedBlock,
+  TenderEditorReimportConflictPolicy,
   TenderImportOwnedBlock,
 } from '../types/tender-editor-import';
 import { buildTenderEditorManagedSurfaceFromPayload } from '../lib/tender-editor-managed-surface';
@@ -19,7 +21,7 @@ import {
   parseTenderEditorManagedSectionRowKey,
 } from '../lib/tender-editor-managed-markers';
 import { buildTenderImportOwnedBlockBaselines } from '../lib/tender-import-ownership-registry';
-
+import { buildTenderImportOwnedBlockDriftStates } from '../lib/tender-import-drift';
 const DEFAULT_VAT_PERCENT = 25.5;
 const DEFAULT_MARGIN_PERCENT = 30;
 const DEFAULT_VALIDITY_DAYS = 30;
@@ -560,16 +562,107 @@ function buildImportSummary(options: {
   importMode: TenderEditorImportMode;
   resultStatus: TenderEditorImportResult['result_status'];
   quoteTitle: string;
+  executionMetadata?: TenderEditorImportRunExecutionMetadata;
 }) {
   if (options.resultStatus === 'no_changes') {
+    if (options.executionMetadata && (options.executionMetadata.summary_counts.skipped_conflicts > 0 || options.executionMetadata.summary_counts.missing_in_quote_blocks > 0)) {
+      const parts: string[] = [];
+
+      if (options.executionMetadata.summary_counts.skipped_conflicts > 0) {
+        parts.push(`${options.executionMetadata.summary_counts.skipped_conflicts} konfliktiblokkia jätettiin suojaan`);
+      }
+
+      if (options.executionMetadata.summary_counts.missing_in_quote_blocks > 0) {
+        parts.push(`${options.executionMetadata.summary_counts.missing_in_quote_blocks} blokkia puuttui quote-puolelta`);
+      }
+
+      return `Suojattu re-import ei muuttanut tarjousta “${options.quoteTitle}”: ${parts.join(' ja ')}.`;
+    }
+
     return `Importoitu tarjous “${options.quoteTitle}” oli jo ajan tasalla.`;
   }
 
   if (options.importMode === 'update_existing_quote') {
+    if (options.executionMetadata) {
+      const parts: string[] = [];
+
+      if (options.executionMetadata.summary_counts.updated_blocks > 0) {
+        parts.push(`päivitettiin ${options.executionMetadata.summary_counts.updated_blocks} blokkia`);
+      }
+
+      if (options.executionMetadata.summary_counts.removed_blocks > 0) {
+        parts.push(`poistettiin ${options.executionMetadata.summary_counts.removed_blocks} blokkia`);
+      }
+
+      if (options.executionMetadata.summary_counts.skipped_conflicts > 0) {
+        parts.push(`jätettiin ${options.executionMetadata.summary_counts.skipped_conflicts} konfliktiblokkia suojaan`);
+      }
+
+      if (options.executionMetadata.summary_counts.missing_in_quote_blocks > 0) {
+        parts.push(`${options.executionMetadata.summary_counts.missing_in_quote_blocks} blokkia oli jo poistunut quote-puolelta`);
+      }
+
+      if (parts.length > 0) {
+        return `Suojattu re-import tarjoukseen “${options.quoteTitle}”: ${parts.join(', ')}.`;
+      }
+    }
+
     return `Päivitettiin aiemmin importoitu tarjous “${options.quoteTitle}” Tarjousälyn managed surface -alueelta.`;
   }
 
   return `Luotiin uusi tarjousluonnos “${options.quoteTitle}” Tarjousälyn importia varten.`;
+}
+
+function toUniqueBlockIds(blockIds: TenderEditorManagedBlockId[]) {
+  return [...new Set(blockIds)];
+}
+
+function buildImportExecutionMetadata(options: {
+  runMode: TenderEditorImportRunExecutionMetadata['run_mode'];
+  conflictPolicy: TenderEditorReimportConflictPolicy;
+  selectedUpdateBlockIds: TenderEditorManagedBlockId[];
+  selectedRemoveBlockIds: TenderEditorManagedBlockId[];
+  overrideConflictBlockIds: TenderEditorManagedBlockId[];
+  conflictBlockIds: TenderEditorManagedBlockId[];
+  updatedBlockIds: TenderEditorManagedBlockId[];
+  removedBlockIds: TenderEditorManagedBlockId[];
+  skippedConflictBlockIds: TenderEditorManagedBlockId[];
+  missingInQuoteBlockIds: TenderEditorManagedBlockId[];
+  untouchedBlockIds: TenderEditorManagedBlockId[];
+}): TenderEditorImportRunExecutionMetadata {
+  const selectedUpdateBlockIds = toUniqueBlockIds(options.selectedUpdateBlockIds);
+  const selectedRemoveBlockIds = toUniqueBlockIds(options.selectedRemoveBlockIds);
+  const overrideConflictBlockIds = toUniqueBlockIds(options.overrideConflictBlockIds);
+  const conflictBlockIds = toUniqueBlockIds(options.conflictBlockIds);
+  const updatedBlockIds = toUniqueBlockIds(options.updatedBlockIds);
+  const removedBlockIds = toUniqueBlockIds(options.removedBlockIds);
+  const skippedConflictBlockIds = toUniqueBlockIds(options.skippedConflictBlockIds);
+  const missingInQuoteBlockIds = toUniqueBlockIds(options.missingInQuoteBlockIds);
+  const untouchedBlockIds = toUniqueBlockIds(options.untouchedBlockIds);
+
+  return {
+    selected_block_ids: toUniqueBlockIds([...selectedUpdateBlockIds, ...selectedRemoveBlockIds]),
+    selected_update_block_ids: selectedUpdateBlockIds,
+    selected_remove_block_ids: selectedRemoveBlockIds,
+    conflict_block_ids: conflictBlockIds,
+    skipped_conflict_block_ids: skippedConflictBlockIds,
+    override_conflict_block_ids: overrideConflictBlockIds,
+    updated_block_ids: updatedBlockIds,
+    removed_block_ids: removedBlockIds,
+    missing_in_quote_block_ids: missingInQuoteBlockIds,
+    untouched_block_ids: untouchedBlockIds,
+    run_mode: options.runMode,
+    conflict_policy: options.conflictPolicy,
+    summary_counts: {
+      selected_blocks: selectedUpdateBlockIds.length + selectedRemoveBlockIds.length,
+      conflict_blocks: conflictBlockIds.length,
+      skipped_conflicts: skippedConflictBlockIds.length,
+      updated_blocks: updatedBlockIds.length,
+      removed_blocks: removedBlockIds.length,
+      missing_in_quote_blocks: missingInQuoteBlockIds.length,
+      untouched_blocks: untouchedBlockIds.length,
+    },
+  };
 }
 
 async function updateExistingImportedQuote(options: {
@@ -585,6 +678,8 @@ async function updateExistingImportedQuote(options: {
   previousImportSyncedAt?: string | null;
   selectedUpdateBlockIds?: TenderEditorManagedBlockId[];
   selectedRemoveBlockIds?: TenderEditorManagedBlockId[];
+  overrideConflictBlockIds?: TenderEditorManagedBlockId[];
+  conflictPolicy?: TenderEditorReimportConflictPolicy;
   resolvedTarget: ResolvedImportTarget;
 }): Promise<TenderEditorImportResult | null> {
   const timestamp = nowIso();
@@ -599,8 +694,10 @@ async function updateExistingImportedQuote(options: {
 
   const selectedUpdateBlockIds = options.selectedUpdateBlockIds ?? managedSurface.blocks.map((block) => block.block_id);
   const selectedRemoveBlockIds = options.selectedRemoveBlockIds ?? [];
+  const overrideConflictBlockIds = options.overrideConflictBlockIds ?? [];
+  const conflictPolicy = options.conflictPolicy ?? (overrideConflictBlockIds.length > 0 ? 'override_selected_conflicts' : 'protect_conflicts');
   const quoteRows = existingRows.filter((row) => row.quoteId === quote.id);
-  const effectiveOwnedBlocks = buildTenderImportOwnedBlockBaselines({
+  const driftStates = buildTenderImportOwnedBlockDriftStates({
     draftPackageId: options.preview.payload.source_draft_package_id,
     ownedBlocks: options.ownedBlocks ?? [],
     fallbackBlocks: options.fallbackBlocks ?? [],
@@ -612,22 +709,88 @@ async function updateExistingImportedQuote(options: {
     quote,
     rows: quoteRows,
   });
+  const effectiveOwnedBlocks = driftStates.flatMap((state) => (state.baseline ? [state.baseline] : []));
+  const driftStatesById = new Map(driftStates.map((state) => [state.blockId, state]));
+  const requestedUpdateSet = new Set(selectedUpdateBlockIds);
+  const requestedRemoveSet = new Set(selectedRemoveBlockIds);
+  const overrideConflictSet = new Set(overrideConflictBlockIds);
+  const allowedUpdateBlockIds = selectedUpdateBlockIds.filter((blockId) => {
+    const driftState = driftStatesById.get(blockId);
+
+    if (!driftState) {
+      return false;
+    }
+
+    return !driftState.isConflict || (conflictPolicy === 'override_selected_conflicts' && overrideConflictSet.has(blockId));
+  });
+  const allowedRemoveBlockIds = selectedRemoveBlockIds.filter((blockId) => {
+    const driftState = driftStatesById.get(blockId);
+
+    if (!driftState) {
+      return false;
+    }
+
+    return !driftState.isConflict || (conflictPolicy === 'override_selected_conflicts' && overrideConflictSet.has(blockId));
+  });
+  const updatedBlockIds = toUniqueBlockIds(allowedUpdateBlockIds);
+  const removedBlockIds = toUniqueBlockIds(allowedRemoveBlockIds);
+  const skippedConflictBlockIds = new Set<TenderEditorManagedBlockId>();
+  const missingInQuoteBlockIds = new Set<TenderEditorManagedBlockId>();
+  const conflictBlockIds = driftStates.filter((state) => state.isConflict).map((state) => state.blockId);
+  const allManagedBlockIds = toUniqueBlockIds([
+    ...managedSurface.blocks.map((block) => block.block_id),
+    ...driftStates.map((state) => state.blockId),
+  ]);
+
+  driftStates.forEach((state) => {
+    const requestedUpdate = requestedUpdateSet.has(state.blockId);
+    const requestedRemove = requestedRemoveSet.has(state.blockId);
+
+    if (requestedUpdate && !updatedBlockIds.includes(state.blockId)) {
+      if (state.driftStatus === 'removed_from_quote') {
+        missingInQuoteBlockIds.add(state.blockId);
+      } else if (state.isConflict) {
+        skippedConflictBlockIds.add(state.blockId);
+      }
+
+      return;
+    }
+
+    if (requestedRemove && !removedBlockIds.includes(state.blockId)) {
+      if (state.driftStatus === 'removed_from_quote') {
+        missingInQuoteBlockIds.add(state.blockId);
+      } else if (state.isConflict) {
+        skippedConflictBlockIds.add(state.blockId);
+      }
+
+      return;
+    }
+
+    if (!requestedUpdate && !requestedRemove && state.driftStatus === 'removed_from_quote') {
+      missingInQuoteBlockIds.add(state.blockId);
+    }
+  });
+
+  const untouchedBlockIds = allManagedBlockIds.filter((blockId) => !updatedBlockIds.includes(blockId)
+    && !removedBlockIds.includes(blockId)
+    && !skippedConflictBlockIds.has(blockId)
+    && !missingInQuoteBlockIds.has(blockId));
 
   const nextNotes = syncTenderEditorManagedBlocks({
     existingValue: quote.notes,
     targetKind: 'quote_notes_section',
     currentBlocks: managedSurface.blocks,
     effectiveOwnedBlocks,
-    selectedUpdateBlockIds,
-    selectedRemoveBlockIds,
+    selectedUpdateBlockIds: updatedBlockIds,
+    selectedRemoveBlockIds: removedBlockIds,
   });
   const nextInternalNotes = syncTenderEditorManagedBlocks({
     existingValue: quote.internalNotes,
     targetKind: 'quote_internal_notes_section',
     currentBlocks: managedSurface.blocks,
     effectiveOwnedBlocks,
-    selectedUpdateBlockIds,
-    selectedRemoveBlockIds,
+    selectedUpdateBlockIds: updatedBlockIds,
+    selectedRemoveBlockIds: removedBlockIds,
   });
   const nextManagedRows = replaceManagedSectionRows({
     actorUserId: options.actorUserId,
@@ -638,48 +801,48 @@ async function updateExistingImportedQuote(options: {
     effectiveOwnedBlocks,
     existingRows,
     timestamp,
-    selectedUpdateBlockIds,
-    selectedRemoveBlockIds,
+    selectedUpdateBlockIds: updatedBlockIds,
+    selectedRemoveBlockIds: removedBlockIds,
   });
   const notesChanged = (quote.notes ?? '') !== (nextNotes ?? '');
   const internalNotesChanged = (quote.internalNotes ?? '') !== (nextInternalNotes ?? '');
-  const changed = notesChanged || internalNotesChanged || nextManagedRows.changed;
+  const quoteChanged = notesChanged || internalNotesChanged || nextManagedRows.changed;
 
-  if (!changed) {
-    return {
-      draft_package_id: options.preview.payload.source_draft_package_id,
-      imported_quote_id: quote.id,
-      imported_project_id: quote.projectId,
-      imported_customer_id: options.resolvedTarget.customerId,
-      created_placeholder_target: false,
-      import_mode: 'update_existing_quote',
-      result_status: 'no_changes',
-      payload_hash: options.preview.payload_hash,
-      import_revision: options.currentImportRevision,
-      summary: buildImportSummary({
-        importMode: 'update_existing_quote',
-        resultStatus: 'no_changes',
-        quoteTitle: quote.title,
-      }),
+  if (quoteChanged) {
+    const updatedQuote: Quote = {
+      ...quote,
+      notes: nextNotes,
+      internalNotes: nextInternalNotes,
+      updatedAt: timestamp,
+      updatedByUserId: options.actorUserId,
+      lastAutoSavedAt: timestamp,
     };
+    const updatedQuotes = quotes.map((candidate) => (candidate.id === quote.id ? updatedQuote : candidate));
+    const updatedRows = [
+      ...existingRows.filter((row) => row.quoteId !== quote.id),
+      ...nextManagedRows.rows,
+    ];
+
+    await writeUserBucket(options.client, 'quotes', options.actorUserId, updatedQuotes);
+    await writeUserBucket(options.client, 'quote-rows', options.actorUserId, updatedRows);
   }
 
-  const updatedQuote: Quote = {
-    ...quote,
-    notes: nextNotes,
-    internalNotes: nextInternalNotes,
-    updatedAt: timestamp,
-    updatedByUserId: options.actorUserId,
-    lastAutoSavedAt: timestamp,
-  };
-  const updatedQuotes = quotes.map((candidate) => (candidate.id === quote.id ? updatedQuote : candidate));
-  const updatedRows = [
-    ...existingRows.filter((row) => row.quoteId !== quote.id),
-    ...nextManagedRows.rows,
-  ];
-
-  await writeUserBucket(options.client, 'quotes', options.actorUserId, updatedQuotes);
-  await writeUserBucket(options.client, 'quote-rows', options.actorUserId, updatedRows);
+  const resultStatus: TenderEditorImportResult['result_status'] = quoteChanged || updatedBlockIds.length > 0 || removedBlockIds.length > 0
+    ? 'updated'
+    : 'no_changes';
+  const executionMetadata = buildImportExecutionMetadata({
+    runMode: overrideConflictBlockIds.length > 0 ? 'protected_reimport_with_override' : 'protected_reimport',
+    conflictPolicy,
+    selectedUpdateBlockIds,
+    selectedRemoveBlockIds,
+    overrideConflictBlockIds,
+    conflictBlockIds,
+    updatedBlockIds,
+    removedBlockIds,
+    skippedConflictBlockIds: [...skippedConflictBlockIds],
+    missingInQuoteBlockIds: [...missingInQuoteBlockIds],
+    untouchedBlockIds,
+  });
 
   return {
     draft_package_id: options.preview.payload.source_draft_package_id,
@@ -688,14 +851,16 @@ async function updateExistingImportedQuote(options: {
     imported_customer_id: options.resolvedTarget.customerId,
     created_placeholder_target: false,
     import_mode: 'update_existing_quote',
-    result_status: 'updated',
+    result_status: resultStatus,
     payload_hash: options.preview.payload_hash,
-    import_revision: options.currentImportRevision + 1,
+    import_revision: resultStatus === 'updated' ? options.currentImportRevision + 1 : options.currentImportRevision,
     summary: buildImportSummary({
       importMode: 'update_existing_quote',
-      resultStatus: 'updated',
+      resultStatus,
       quoteTitle: quote.title,
+      executionMetadata,
     }),
+    execution_metadata: executionMetadata,
   };
 }
 
@@ -810,6 +975,7 @@ async function createNewImportedQuote(options: {
   });
   const quotes = await readUserBucket<Quote[]>(options.client, 'quotes', options.actorUserId, []);
   const existingRows = await readUserBucket<QuoteRow[]>(options.client, 'quote-rows', options.actorUserId, []);
+  const managedBlocks = buildTenderEditorManagedSurfaceFromPayload(options.preview.payload).blocks;
   const quote = buildQuoteDraft({
     actorUserId: options.actorUserId,
     projectId: target.projectId,
@@ -822,8 +988,22 @@ async function createNewImportedQuote(options: {
     draftPackageId: options.preview.payload.source_draft_package_id,
     quoteId: quote.id,
     regionCoefficient: target.projectRegionCoefficient,
-    blocks: buildTenderEditorManagedSurfaceFromPayload(options.preview.payload).blocks,
+    blocks: managedBlocks,
     timestamp,
+  });
+  const selectedUpdateBlockIds = managedBlocks.map((block) => block.block_id);
+  const executionMetadata = buildImportExecutionMetadata({
+    runMode: 'create_new_quote',
+    conflictPolicy: 'protect_conflicts',
+    selectedUpdateBlockIds,
+    selectedRemoveBlockIds: [],
+    overrideConflictBlockIds: [],
+    conflictBlockIds: [],
+    updatedBlockIds: selectedUpdateBlockIds,
+    removedBlockIds: [],
+    skippedConflictBlockIds: [],
+    missingInQuoteBlockIds: [],
+    untouchedBlockIds: [],
   });
 
   await writeUserBucket(options.client, 'quotes', options.actorUserId, [...quotes, quote]);
@@ -843,7 +1023,9 @@ async function createNewImportedQuote(options: {
       importMode: 'create_new_quote',
       resultStatus: 'created',
       quoteTitle: quote.title,
+      executionMetadata,
     }),
+    execution_metadata: executionMetadata,
   };
 }
 
@@ -859,6 +1041,8 @@ export async function importTenderDraftPackageToEditor(options: {
   previousImportSyncedAt?: string | null;
   selectedUpdateBlockIds?: TenderEditorManagedBlockId[];
   selectedRemoveBlockIds?: TenderEditorManagedBlockId[];
+  overrideConflictBlockIds?: TenderEditorManagedBlockId[];
+  conflictPolicy?: TenderEditorReimportConflictPolicy;
 }): Promise<TenderEditorImportResult> {
   const resolvedTarget = await resolveTenderEditorImportTarget({
     client: options.client,
@@ -881,6 +1065,8 @@ export async function importTenderDraftPackageToEditor(options: {
       previousImportSyncedAt: options.previousImportSyncedAt ?? null,
       selectedUpdateBlockIds: options.selectedUpdateBlockIds,
       selectedRemoveBlockIds: options.selectedRemoveBlockIds,
+      overrideConflictBlockIds: options.overrideConflictBlockIds,
+      conflictPolicy: options.conflictPolicy,
       resolvedTarget,
     });
 

@@ -27,6 +27,16 @@ export function hasTenderEditorManagedTextBlock(existingValue: string | null | u
   return blockPattern.test(currentValue);
 }
 
+export function extractTenderEditorManagedTextBlockContent(existingValue: string | null | undefined, markerKey: string, options?: { legacy?: boolean }) {
+  const currentValue = existingValue ?? '';
+  const markers = getTenderEditorManagedTextBlockMarkers(markerKey, options);
+  const blockPattern = new RegExp(`${escapeRegex(markers.start)}\\s*([\\s\\S]*?)\\s*${escapeRegex(markers.end)}`, 'm');
+  const match = currentValue.match(blockPattern);
+  const nextContent = match?.[1]?.trim();
+
+  return nextContent ? nextContent : null;
+}
+
 export function extractTenderEditorManagedTextMarkerKeys(existingValue: string | null | undefined, draftPackageId: string) {
   const currentValue = existingValue ?? '';
   const markerPattern = new RegExp(`${escapeRegex(`<!-- ${TENDER_EDITOR_MANAGED_TEXT_BLOCK_PREFIX}:block:`)}(.+?)${escapeRegex(':start -->')}`, 'g');
@@ -73,4 +83,12 @@ export function hasTenderEditorManagedSectionRow(rows: QuoteRow[], sectionRowKey
   }
 
   return rows.some((row) => row.mode === 'section' && row.notes?.trim() === sectionRowKey);
+}
+
+export function findTenderEditorManagedSectionRow(rows: QuoteRow[], sectionRowKey: string | null | undefined) {
+  if (!sectionRowKey) {
+    return null;
+  }
+
+  return rows.find((row) => row.mode === 'section' && row.notes?.trim() === sectionRowKey) ?? null;
 }

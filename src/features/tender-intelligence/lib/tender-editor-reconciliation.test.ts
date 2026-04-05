@@ -7,6 +7,7 @@ import {
   buildTenderEditorReconciliationPreview,
   resolveTenderDraftPackageReimportStatus,
 } from './tender-editor-reconciliation';
+import { buildTenderImportOwnedBlockAppliedContentHash } from './tender-import-ownership-registry';
 import type { TenderDraftPackage } from '../types/tender-intelligence';
 import type { TenderDraftPackageImportRun, TenderImportOwnedBlock } from '../types/tender-editor-import';
 
@@ -90,6 +91,33 @@ function createPreview(draftPackage: TenderDraftPackage) {
   });
 }
 
+function createExecutionMetadata(overrides: Partial<TenderDraftPackageImportRun['execution_metadata']> = {}) {
+  return {
+    selected_block_ids: ['requirements_and_quote_notes', 'selected_references'],
+    selected_update_block_ids: ['requirements_and_quote_notes'],
+    selected_remove_block_ids: ['selected_references'],
+    conflict_block_ids: [],
+    skipped_conflict_block_ids: [],
+    override_conflict_block_ids: [],
+    updated_block_ids: ['requirements_and_quote_notes'],
+    removed_block_ids: ['selected_references'],
+    missing_in_quote_block_ids: [],
+    untouched_block_ids: [],
+    run_mode: 'protected_reimport',
+    conflict_policy: 'protect_conflicts',
+    summary_counts: {
+      selected_blocks: 2,
+      conflict_blocks: 0,
+      skipped_conflicts: 0,
+      updated_blocks: 1,
+      removed_blocks: 1,
+      missing_in_quote_blocks: 0,
+      untouched_blocks: 0,
+    },
+    ...overrides,
+  };
+}
+
 function createSuccessfulRun(overrides: Partial<TenderDraftPackageImportRun> = {}): TenderDraftPackageImportRun {
   return {
     id: '91919191-9191-4919-8919-919191919191',
@@ -146,6 +174,7 @@ function createSuccessfulRun(overrides: Partial<TenderDraftPackageImportRun> = {
     },
     result_status: 'success',
     summary: 'Aiempi import onnistui.',
+    execution_metadata: createExecutionMetadata(),
     created_by_user_id: '22222222-2222-4222-8222-222222222222',
     created_at: '2026-04-05T14:01:00.000Z',
     ...overrides,
@@ -153,6 +182,17 @@ function createSuccessfulRun(overrides: Partial<TenderDraftPackageImportRun> = {
 }
 
 function createOwnedBlocks(): TenderImportOwnedBlock[] {
+  const requirementsAppliedHash = buildTenderImportOwnedBlockAppliedContentHash({
+    targetField: 'quote_notes_section',
+    title: 'Vanha tarjoushuomio',
+    contentMd: 'Vanha tarjoushuomio.',
+  });
+  const referencesAppliedHash = buildTenderImportOwnedBlockAppliedContentHash({
+    targetField: 'quote_notes_section',
+    title: 'Vanha referenssiyhteenveto',
+    contentMd: 'Vanha referenssi.',
+  });
+
   return [
     {
       id: '11111111-1111-4111-8111-111111111111',
@@ -166,6 +206,10 @@ function createOwnedBlocks(): TenderImportOwnedBlock[] {
       target_section_key: 'tender-editor-import:66666666-6666-4666-8666-666666666666:requirements_and_quote_notes',
       block_title: 'Vanha tarjoushuomio',
       payload_hash: 'old-requirement-hash',
+      last_applied_content_hash: requirementsAppliedHash,
+      last_seen_quote_content_hash: requirementsAppliedHash,
+      drift_status: 'up_to_date',
+      last_drift_checked_at: '2026-04-05T14:01:00.000Z',
       revision: 1,
       last_synced_at: '2026-04-05T14:01:00.000Z',
       is_active: true,
@@ -184,6 +228,10 @@ function createOwnedBlocks(): TenderImportOwnedBlock[] {
       target_section_key: 'tender-editor-import:66666666-6666-4666-8666-666666666666:selected_references',
       block_title: 'Vanha referenssiyhteenveto',
       payload_hash: 'old-reference-hash',
+      last_applied_content_hash: referencesAppliedHash,
+      last_seen_quote_content_hash: referencesAppliedHash,
+      drift_status: 'up_to_date',
+      last_drift_checked_at: '2026-04-05T14:01:00.000Z',
       revision: 1,
       last_synced_at: '2026-04-05T14:01:00.000Z',
       is_active: true,
@@ -345,6 +393,10 @@ describe('tender-editor-reconciliation', () => {
     expect(importState.can_reimport).toBe(true);
     expect(importState.ownership_registry_status).toBe('stale');
     expect(importState.owned_block_count).toBe(2);
+    expect(importState.last_drift_checked_at).toBe('2026-04-05T14:01:00.000Z');
+    expect(importState.safe_reimport_now).toBe(true);
+    expect(importState.manual_quote_edit_detected).toBe(false);
+    expect(importState.conflict_block_count).toBe(0);
     expect(importState.suggested_import_mode).toBe('update_existing_quote');
   });
 
@@ -378,8 +430,17 @@ describe('tender-editor-reconciliation', () => {
     expect(reconciliation.unchanged_blocks).toBe(0);
     expect(reconciliation.blocks.map((block) => block.change_type)).toEqual(['changed', 'added', 'removed']);
     expect(reconciliation.registry_status).toBe('stale');
+    expect(reconciliation.safe_reimport_now).toBe(true);
+    expect(reconciliation.manual_quote_edit_detected).toBe(false);
+    expect(reconciliation.safe_update_block_count).toBe(2);
+    expect(reconciliation.conflict_block_count).toBe(0);
+    expect(reconciliation.missing_in_quote_block_count).toBe(0);
+    expect(reconciliation.registry_stale_block_count).toBe(0);
+    expect(reconciliation.skipped_block_count).toBe(0);
     expect(reconciliation.default_update_block_ids).toEqual(['requirements_and_quote_notes', 'notes_for_editor']);
     expect(reconciliation.default_remove_block_ids).toEqual(['selected_references']);
+    expect(reconciliation.default_override_conflict_block_ids).toEqual([]);
+    expect(reconciliation.blocks.map((block) => block.drift_status)).toEqual(['changed_in_draft', 'changed_in_draft', 'changed_in_draft']);
     expect(reconciliation.can_reimport).toBe(true);
     expect(reconciliation.warnings).toEqual([]);
   });

@@ -29,6 +29,7 @@ import type {
 } from '../types/tender-intelligence';
 import type {
   TenderEditorImportMode,
+  TenderEditorManagedBlockDriftStatus,
   TenderEditorImportRunResultStatus,
   TenderImportOwnershipRegistryStatus,
 } from '../types/tender-editor-import';
@@ -176,6 +177,19 @@ export const TENDER_IMPORT_OWNERSHIP_REGISTRY_STATUS_META: Record<
   missing: { label: 'Registry puuttuu', variant: 'secondary' },
   conflicted: { label: 'Registry ristiriidassa', variant: 'destructive' },
   not_available: { label: 'Registry ei vielä käytössä', variant: 'secondary' },
+};
+
+export const TENDER_EDITOR_MANAGED_BLOCK_DRIFT_STATUS_META: Record<
+  TenderEditorManagedBlockDriftStatus,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  up_to_date: { label: 'Quote ajan tasalla', variant: 'default' },
+  changed_in_draft: { label: 'Draft muuttunut', variant: 'outline' },
+  changed_in_quote: { label: 'Quote muuttunut käsin', variant: 'destructive' },
+  changed_in_both: { label: 'Draft ja quote ristiriidassa', variant: 'destructive' },
+  removed_from_quote: { label: 'Poistunut quote-puolelta', variant: 'destructive' },
+  registry_stale: { label: 'Registry epävireessä', variant: 'secondary' },
+  orphaned_registry: { label: 'Orpo registry-rivi', variant: 'outline' },
 };
 
 export const TENDER_EDITOR_IMPORT_MODE_META: Record<TenderEditorImportMode, { label: string; variant: TenderBadgeVariant }> = {

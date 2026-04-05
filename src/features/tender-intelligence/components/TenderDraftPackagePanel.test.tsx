@@ -286,6 +286,33 @@ function createEditorImportPreview(): TenderEditorImportPreview {
   };
 }
 
+function createExecutionMetadata(overrides: Partial<TenderDraftPackageImportRun['execution_metadata']> = {}) {
+  return {
+    selected_block_ids: ['requirements_and_quote_notes', 'notes_for_editor'],
+    selected_update_block_ids: ['requirements_and_quote_notes', 'notes_for_editor'],
+    selected_remove_block_ids: [],
+    conflict_block_ids: ['requirements_and_quote_notes'],
+    skipped_conflict_block_ids: ['requirements_and_quote_notes'],
+    override_conflict_block_ids: [],
+    updated_block_ids: ['notes_for_editor'],
+    removed_block_ids: [],
+    missing_in_quote_block_ids: [],
+    untouched_block_ids: [],
+    run_mode: 'protected_reimport',
+    conflict_policy: 'protect_conflicts',
+    summary_counts: {
+      selected_blocks: 2,
+      conflict_blocks: 1,
+      skipped_conflicts: 1,
+      updated_blocks: 1,
+      removed_blocks: 0,
+      missing_in_quote_blocks: 0,
+      untouched_blocks: 0,
+    },
+    ...overrides,
+  };
+}
+
 function createImportState(): TenderDraftPackageImportState {
   return {
     draft_package_id: '66666666-6666-4666-8666-666666666666',
@@ -304,8 +331,13 @@ function createImportState(): TenderDraftPackageImportState {
     can_reimport: true,
     owned_block_count: 2,
     owned_block_last_synced_at: '2026-04-05T13:07:00.000Z',
-    ownership_registry_status: 'stale',
+    last_drift_checked_at: '2026-04-05T13:09:00.000Z',
+    ownership_registry_status: 'conflicted',
     selective_reimport_available: true,
+    safe_reimport_now: false,
+    manual_quote_edit_detected: true,
+    conflict_block_count: 1,
+    missing_in_quote_block_count: 0,
     registry_warning_count: 1,
     suggested_import_mode: 'update_existing_quote',
     latest_run: createImportRuns()[0],
@@ -330,12 +362,21 @@ function createReimportPreview(): TenderEditorReconciliationPreview {
     removed_blocks: 0,
     unchanged_blocks: 0,
     can_reimport: true,
-    registry_status: 'stale',
+    registry_status: 'conflicted',
     registry_active_block_count: 2,
     registry_last_synced_at: '2026-04-05T13:07:00.000Z',
+    last_drift_checked_at: '2026-04-05T13:09:00.000Z',
     selective_reimport_available: true,
-    default_update_block_ids: ['requirements_and_quote_notes', 'notes_for_editor'],
+    safe_reimport_now: false,
+    manual_quote_edit_detected: true,
+    safe_update_block_count: 1,
+    conflict_block_count: 1,
+    missing_in_quote_block_count: 0,
+    registry_stale_block_count: 0,
+    skipped_block_count: 1,
+    default_update_block_ids: ['notes_for_editor'],
     default_remove_block_ids: [],
+    default_override_conflict_block_ids: [],
     warnings: [],
     blocks: [
       {
@@ -348,18 +389,27 @@ function createReimportPreview(): TenderEditorReconciliationPreview {
         change_type: 'changed',
         current_content_md: '## Tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nTämä on hyväksytty.',
         previous_content_md: '## Tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nVanha sisältö.',
+        quote_content_md: '## Tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nAsiakas muokkasi tätä.',
+        quote_section_title: 'Tarjoushuomiot',
+        quote_content_hash: 'quote-hash-1',
         current_item_count: 1,
         previous_item_count: 1,
         registry_entry_id: '11111111-1111-4111-8111-111111111111',
         registry_revision: 2,
         registry_last_synced_at: '2026-04-05T13:07:00.000Z',
+        last_applied_content_hash: 'applied-hash-1',
+        last_seen_quote_content_hash: 'quote-hash-1',
+        drift_status: 'changed_in_both',
+        is_conflict: true,
+        can_override_conflict: true,
         ownership_source: 'registry',
         text_marker_present: true,
         section_row_present: true,
         can_select_for_update: true,
         can_select_for_removal: false,
-        selected_for_update: true,
+        selected_for_update: false,
         selected_for_removal: false,
+        selected_conflict_override: false,
         warnings: [],
         owned_by_adapter: true,
       },
@@ -373,11 +423,19 @@ function createReimportPreview(): TenderEditorReconciliationPreview {
         change_type: 'added',
         current_content_md: '## Sisäiset editorihuomiot\n\n### Avoin editor-note\n\nPidä tämä mukana editorissa.',
         previous_content_md: null,
+        quote_content_md: null,
+        quote_section_title: null,
+        quote_content_hash: null,
         current_item_count: 1,
         previous_item_count: null,
         registry_entry_id: null,
         registry_revision: null,
         registry_last_synced_at: null,
+        last_applied_content_hash: null,
+        last_seen_quote_content_hash: null,
+        drift_status: 'changed_in_draft',
+        is_conflict: false,
+        can_override_conflict: false,
         ownership_source: 'current_payload',
         text_marker_present: false,
         section_row_present: false,
@@ -385,6 +443,7 @@ function createReimportPreview(): TenderEditorReconciliationPreview {
         can_select_for_removal: false,
         selected_for_update: true,
         selected_for_removal: false,
+        selected_conflict_override: false,
         warnings: [],
         owned_by_adapter: true,
       },
@@ -414,6 +473,7 @@ function createImportRuns(): TenderDraftPackageImportRun[] {
       payload_snapshot: createEditorImportPreview().payload,
       result_status: 'success',
       summary: 'Päivitettiin aiemmin importoitu tarjous “Tarjouspaketti / editor import”.',
+      execution_metadata: createExecutionMetadata(),
       created_by_user_id: '22222222-2222-4222-8222-222222222222',
       created_at: '2026-04-05T13:07:00.000Z',
     },
@@ -452,8 +512,11 @@ describe('TenderDraftPackagePanel', () => {
     expect(markup).toContain('Tarjousäly hallitsee vain alla näkyviä lohkoja');
     expect(markup).toContain('Selective block re-import');
     expect(markup).toContain('Valitse päivitettäväksi');
-    expect(markup).toContain('Registry vaatii päivityksen');
+    expect(markup).toContain('Registry ristiriidassa');
     expect(markup).toContain('Tarjoushuomiot');
+    expect(markup).toContain('Konflikti');
+    expect(markup).toContain('Pakota konfliktiblokki mukaan');
+    expect(markup).toContain('Skipatut konfliktit: 1');
     expect(markup).toContain('Import-ajohistoria');
     expect(markup).toContain('Draft muuttunut importin jälkeen');
     expect(markup).toContain('Revision 2');

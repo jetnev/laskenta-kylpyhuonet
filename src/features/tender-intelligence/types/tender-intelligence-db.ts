@@ -115,6 +115,15 @@ const tenderDraftPackageImportRunModeRowSchema = z.enum(['create_new_quote', 'up
 const tenderDraftPackageImportRunResultStatusRowSchema = z.enum(['success', 'failed']);
 const tenderDraftPackageItemTypeRowSchema = z.enum(['accepted_requirement', 'selected_reference', 'resolved_missing_item', 'review_note', 'draft_artifact']);
 const tenderDraftPackageSourceEntityTypeRowSchema = z.enum(['requirement', 'missing_item', 'reference_suggestion', 'review_task', 'draft_artifact']);
+const tenderImportOwnedBlockDriftStatusRowSchema = z.enum([
+  'up_to_date',
+  'changed_in_draft',
+  'changed_in_quote',
+  'changed_in_both',
+  'removed_from_quote',
+  'registry_stale',
+  'orphaned_registry',
+]);
 const tenderImportOwnedBlockIdRowSchema = z.enum([
   'requirements_and_quote_notes',
   'selected_references',
@@ -254,6 +263,7 @@ export const tenderDraftPackageImportRunRowSchema = z.object({
   payload_snapshot: z.unknown(),
   result_status: tenderDraftPackageImportRunResultStatusRowSchema,
   summary: z.string().nullable(),
+  execution_metadata: z.unknown(),
   created_by_user_id: z.string().uuid().nullable(),
   created_at: z.string(),
 });
@@ -270,6 +280,10 @@ export const tenderImportOwnedBlockRowSchema = z.object({
   target_section_key: z.string().nullable(),
   block_title: z.string(),
   payload_hash: z.string(),
+  last_applied_content_hash: z.string().nullable(),
+  last_seen_quote_content_hash: z.string().nullable(),
+  drift_status: tenderImportOwnedBlockDriftStatusRowSchema.nullable(),
+  last_drift_checked_at: z.string().nullable(),
   revision: z.number().int().min(0),
   last_synced_at: z.string(),
   is_active: z.boolean(),
