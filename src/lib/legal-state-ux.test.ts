@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getLegalAcceptanceSubjectKey, shouldBlockAppForLegalState } from './legal-state-ux';
+import { getLegalAcceptanceSubjectKey, sanitizeLegalLoadError, shouldBlockAppForLegalState } from './legal-state-ux';
 
 describe('getLegalAcceptanceSubjectKey', () => {
   it('stays stable across auth rehydrations when user identity and role stay the same', () => {
@@ -82,5 +82,31 @@ describe('shouldBlockAppForLegalState', () => {
         error: 'initial load failed',
       })
     ).toBe(true);
+  });
+});
+
+describe('sanitizeLegalLoadError', () => {
+  it('returns the Error message when an Error instance is provided', () => {
+    expect(sanitizeLegalLoadError(new Error('stack depth limit exceeded'))).toBe(
+      'stack depth limit exceeded'
+    );
+  });
+
+  it('returns a generic Finnish message for non-Error values', () => {
+    expect(sanitizeLegalLoadError('raw string')).toBe(
+      'Sopimusasiakirjojen tarkistus epäonnistui.'
+    );
+    expect(sanitizeLegalLoadError(null)).toBe(
+      'Sopimusasiakirjojen tarkistus epäonnistui.'
+    );
+    expect(sanitizeLegalLoadError(undefined)).toBe(
+      'Sopimusasiakirjojen tarkistus epäonnistui.'
+    );
+  });
+
+  it('returns a generic Finnish message when Error has an empty message', () => {
+    expect(sanitizeLegalLoadError(new Error(''))).toBe(
+      'Sopimusasiakirjojen tarkistus epäonnistui.'
+    );
   });
 });

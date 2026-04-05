@@ -460,7 +460,8 @@ export async function listPublicActiveLegalDocuments() {
     .order('created_at', { ascending: true });
 
   if (error) {
-    throw new Error(error.message || 'Sopimusasiakirjojen lataus epäonnistui.');
+    console.error('listPublicActiveLegalDocuments failed:', error);
+    throw new Error('Sopimusasiakirjojen lataus epäonnistui.');
   }
 
   return sortLegalDocumentVersions((data as LegalDocumentVersionRow[]) || []);
@@ -474,7 +475,8 @@ export async function listCurrentUserLegalAcceptances() {
     .order('accepted_at', { ascending: false });
 
   if (error) {
-    throw new Error(error.message || 'Hyväksyntähistorian lataus epäonnistui.');
+    console.error('listCurrentUserLegalAcceptances failed:', error);
+    throw new Error('Hyväksyntätietojen lataus epäonnistui.');
   }
 
   return (data as LegalDocumentAcceptanceRow[]) || [];
