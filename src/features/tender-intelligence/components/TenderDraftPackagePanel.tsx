@@ -31,6 +31,7 @@ import type {
   TenderDraftPackageImportRun,
   TenderDraftPackageImportState,
   TenderEditorImportPreview,
+  TenderEditorImportRunMode,
   TenderEditorManagedBlockId,
   TenderImportRegistryRepairAction,
   TenderImportRegistryRepairPreview,
@@ -67,6 +68,7 @@ interface TenderDraftPackagePanelProps {
   exportingDraftPackageId?: string | null;
   updatingDraftPackageItemIds?: string[];
   editorHandoff?: TenderIntelligenceResolvedHandoff | null;
+  actorNameById?: Record<string, string>;
   onSelectDraftPackage: (draftPackageId: string) => void;
   onCreateDraftPackage: (packageId: string) => Promise<unknown>;
   onImportDraftPackageToEditor: (draftPackageId: string) => Promise<unknown>;
@@ -146,6 +148,288 @@ function resolveOwnershipSourceLabel(source: 'registry' | 'latest_successful_run
     default:
       return source;
   }
+}
+
+const TENDER_EDITOR_MANAGED_BLOCK_META: Record<TenderEditorManagedBlockId, { title: string; targetLabel: string }> = {
+  requirements_and_quote_notes: {
+    title: 'Tarjoushuomiot',
+    targetLabel: 'Tarjouksen notes-kenttä',
+  },
+  selected_references: {
+    title: 'Referenssiyhteenveto',
+    targetLabel: 'Tarjouksen notes-kenttä',
+  },
+  resolved_missing_items_and_attachment_notes: {
+    title: 'Liitehuomiot ja ratkaistut puutteet',
+    targetLabel: 'Tarjouksen internalNotes-kenttä',
+  },
+  notes_for_editor: {
+    title: 'Sisäiset editorihuomiot',
+    targetLabel: 'Tarjouksen internalNotes-kenttä',
+  },
+};
+
+function resolveImportRunExecutionModeLabel(runMode?: TenderEditorImportRunMode | null) {
+  switch (runMode) {
+    case 'create_new_quote':
+      return 'Uuden quoten luonti';
+    case 'protected_reimport':
+      return 'Suojattu re-import';
+    case 'protected_reimport_with_override':
+      return 'Suojattu re-import overrideilla';
+    default:
+      return 'Tavanomainen import';
+  }
+}
+
+function resolveImportRunConflictPolicyLabel(policy?: TenderEditorSelectiveReimportSelection['conflict_policy'] | null) {
+  switch (policy) {
+    case 'override_selected_conflicts':
+      return 'Override vain valituille konflikteille';
+    case 'protect_conflicts':
+      return 'Suojaa konfliktiblokit';
+    default:
+      return 'Ei konfliktipolitiikkaa';
+  }
+}
+
+function resolveImportRunActorLabel(run: TenderDraftPackageImportRun, actorNameById: Record<string, string>) {
+  if (!run.created_by_user_id) {
+    return 'Järjestelmä';
+  }
+
+  return actorNameById[run.created_by_user_id] ?? `Käyttäjä ${shortenHash(run.created_by_user_id)}`;
+}
+
+function resolveImportRunBlockMeta(run: TenderDraftPackageImportRun, blockId: TenderEditorManagedBlockId) {
+  const managedBlock = run.payload_snapshot.managed_surface?.blocks.find((candidate) => candidate.block_id === blockId);
+
+  if (managedBlock) {
+    return {
+      title: managedBlock.title,
+      targetLabel: managedBlock.target_label,
+    };
+  }
+
+  return TENDER_EDITOR_MANAGED_BLOCK_META[blockId] ?? { title: blockId, targetLabel: blockId };
+}
+
+function buildImportRunMetricItems(run: TenderDraftPackageImportRun) {
+  const summaryCounts = run.execution_metadata?.summary_counts;
+
+  if (!summaryCounts) {
+    return [];
+  }
+
+  if (run.run_type === 'diagnostics_refresh') {
+    return [
+      { label: 'Healthy', value: summaryCounts.healthy_blocks },
+      { label: 'Stale', value: summaryCounts.stale_blocks },
+      { label: 'Conflicts', value: summaryCounts.conflict_blocks },
+      { label: 'Total registry', value: summaryCounts.total_registry_blocks },
+    ];
+  }
+
+  if (run.run_type === 'registry_repair') {
+    return [
+      { label: 'Hashit resynkattu', value: summaryCounts.refreshed_hash_blocks },
+      { label: 'Orphaned', value: summaryCounts.orphaned_blocks },
+      { label: 'Siivotut', value: summaryCounts.pruned_registry_blocks },
+      { label: 'Skipatut', value: summaryCounts.skipped_blocks },
+    ];
+  }
+
+  return [
+    { label: run.import_mode === 'create_new_quote' ? 'Luodut' : 'Päivitetyt', value: summaryCounts.updated_blocks },
+    { label: 'Poistetut', value: summaryCounts.removed_blocks },
+    { label: 'Skipatut konfliktit', value: summaryCounts.skipped_conflicts },
+    { label: 'Vaikutetut', value: summaryCounts.affected_blocks },
+  ];
+}
+
+function buildImportRunReasonLines(run: TenderDraftPackageImportRun) {
+  const executionMetadata = run.execution_metadata;
+  const summaryCounts = executionMetadata?.summary_counts;
+  const reasonLines: string[] = [];
+
+  if (run.run_type === 'diagnostics_refresh') {
+    reasonLines.push('Ajo päivitti live quote- ja registry-diagnostiikan kirjoittamatta quote-sisältöä.');
+  }
+
+  if (run.run_type === 'registry_repair') {
+    if (executionMetadata?.repair_action) {
+      reasonLines.push(`Ajo korjasi import-registryn toiminnolla "${TENDER_IMPORT_REGISTRY_REPAIR_ACTION_META[executionMetadata.repair_action].label}" ilman quote-kirjoitusta.`);
+    } else {
+      reasonLines.push('Ajo korjasi import-registryä ilman quote-kirjoitusta.');
+    }
+  }
+
+  if ((executionMetadata?.skipped_conflict_block_ids.length ?? 0) > 0) {
+    reasonLines.push(
+      executionMetadata?.conflict_policy === 'override_selected_conflicts'
+        ? `${executionMetadata.skipped_conflict_block_ids.length} konfliktiblokkia skipattiin, koska niitä ei valittu override-ajoon.`
+        : `${executionMetadata!.skipped_conflict_block_ids.length} konfliktiblokkia jätettiin suojaan konfliktipolitiikan vuoksi.`,
+    );
+  }
+
+  if ((executionMetadata?.override_conflict_block_ids.length ?? 0) > 0) {
+    reasonLines.push(`${executionMetadata!.override_conflict_block_ids.length} konfliktiblokkia yliajettiin eksplisiittisellä override-valinnalla.`);
+  }
+
+  if ((executionMetadata?.missing_in_quote_block_ids.length ?? 0) > 0) {
+    reasonLines.push(`${executionMetadata!.missing_in_quote_block_ids.length} valittua blokkia puuttui quote-puolelta, joten ajo ei voinut kohdistaa niitä.`);
+  }
+
+  if ((executionMetadata?.untouched_block_ids.length ?? 0) > 0 && (summaryCounts?.affected_blocks ?? 0) === 0) {
+    reasonLines.push(`${executionMetadata!.untouched_block_ids.length} valittua blokkia jäi ennalleen, koska sisältö oli jo synkassa.`);
+  }
+
+  if (run.result_status === 'failed') {
+    reasonLines.push('Ajo epäonnistui. Tarkista runin yhteenveto ja diagnostiikka ennen uutta yritystä.');
+  }
+
+  if (reasonLines.length === 0 && run.import_mode === 'create_new_quote') {
+    reasonLines.push('Ajo loi uuden tarjouksen ja kirjoitti valitut hallitut lohkot siihen.');
+  }
+
+  return reasonLines;
+}
+
+function ImportRunBlockList({
+  title,
+  blockIds,
+  run,
+}: {
+  title: string;
+  blockIds: TenderEditorManagedBlockId[];
+  run: TenderDraftPackageImportRun;
+}) {
+  const uniqueBlockIds = [...new Set(blockIds)];
+
+  if (uniqueBlockIds.length < 1) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{title}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {uniqueBlockIds.map((blockId) => {
+          const blockMeta = resolveImportRunBlockMeta(run, blockId);
+
+          return (
+            <Badge key={`${run.id}-${title}-${blockId}`} variant="outline">
+              {blockMeta.title}
+            </Badge>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ImportRunAuditCard({
+  run,
+  actorNameById,
+}: {
+  run: TenderDraftPackageImportRun;
+  actorNameById: Record<string, string>;
+}) {
+  const metricItems = buildImportRunMetricItems(run);
+  const reasonLines = buildImportRunReasonLines(run);
+  const executionMetadata = run.execution_metadata;
+  const blockListItems = [
+    {
+      title: run.import_mode === 'create_new_quote' ? 'Luodut lohkot' : 'Päivitetyt lohkot',
+      blockIds: executionMetadata?.updated_block_ids ?? [],
+    },
+    {
+      title: 'Poistetut lohkot',
+      blockIds: executionMetadata?.removed_block_ids ?? [],
+    },
+    {
+      title: 'Skipatut konfliktit',
+      blockIds: executionMetadata?.skipped_conflict_block_ids ?? [],
+    },
+    {
+      title: 'Override-konfliktit',
+      blockIds: executionMetadata?.override_conflict_block_ids ?? [],
+    },
+    {
+      title: 'Puuttuvat quote-puolelta',
+      blockIds: executionMetadata?.missing_in_quote_block_ids ?? [],
+    },
+    {
+      title: 'Ennallaan jätetyt',
+      blockIds: executionMetadata?.untouched_block_ids ?? [],
+    },
+    {
+      title: 'Hashit resynkattu',
+      blockIds: executionMetadata?.refreshed_hash_block_ids ?? [],
+    },
+    {
+      title: 'Merkitty orphanediksi',
+      blockIds: executionMetadata?.orphaned_block_ids ?? [],
+    },
+    {
+      title: 'Registrystä siivotut',
+      blockIds: executionMetadata?.pruned_registry_block_ids ?? [],
+    },
+  ].filter((item) => item.blockIds.length > 0);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[run.result_status].variant}>{TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[run.result_status].label}</Badge>
+            <Badge variant={TENDER_IMPORT_RUN_TYPE_META[run.run_type].variant}>{TENDER_IMPORT_RUN_TYPE_META[run.run_type].label}</Badge>
+            <Badge variant={TENDER_EDITOR_IMPORT_MODE_META[run.import_mode].variant}>{TENDER_EDITOR_IMPORT_MODE_META[run.import_mode].label}</Badge>
+          </div>
+          <p className="mt-2 text-sm font-medium text-slate-950">{formatTenderTimestamp(run.created_at)}</p>
+          <p className="mt-1 text-sm leading-6 text-slate-700">{run.summary ?? 'Ei erillistä yhteenvetoa.'}</p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
+          <p>Toimija: {resolveImportRunActorLabel(run, actorNameById)}</p>
+          <p className="mt-1">Ajotapa: {resolveImportRunExecutionModeLabel(executionMetadata?.run_mode)}</p>
+          {executionMetadata?.conflict_policy && <p className="mt-1">Konfliktipolitiikka: {resolveImportRunConflictPolicyLabel(executionMetadata.conflict_policy)}</p>}
+          <p className="mt-1">Payload hash: {shortenHash(run.payload_hash)}</p>
+          {executionMetadata?.repair_action && <p className="mt-1">Repair: {TENDER_IMPORT_REGISTRY_REPAIR_ACTION_META[executionMetadata.repair_action].label}</p>}
+          {run.target_quote_id && <p className="mt-1">Kohdequote: {run.target_quote_id}</p>}
+        </div>
+      </div>
+
+      {metricItems.length > 0 && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {metricItems.map((item) => (
+            <div key={`${run.id}-${item.label}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{item.label}</p>
+              <p className="mt-1 text-xl font-semibold text-slate-950">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {reasonLines.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {reasonLines.map((reason, index) => (
+            <div key={`${run.id}-reason-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-700">
+              {reason}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {blockListItems.length > 0 && (
+        <div className="mt-3 grid gap-3 xl:grid-cols-2">
+          {blockListItems.map((item) => (
+            <ImportRunBlockList key={`${run.id}-${item.title}`} title={item.title} blockIds={item.blockIds} run={run} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function formatOptionalTimestamp(value?: string | null) {
@@ -262,6 +546,7 @@ export default function TenderDraftPackagePanel({
   exportingDraftPackageId = null,
   updatingDraftPackageItemIds = [],
   editorHandoff = null,
+  actorNameById = {},
   onSelectDraftPackage,
   onCreateDraftPackage,
   onImportDraftPackageToEditor,
@@ -288,15 +573,19 @@ export default function TenderDraftPackagePanel({
     [editorImportPreview],
   );
   const managedBlocks = managedSurface?.blocks ?? [];
+  const sortedImportRuns = useMemo(
+    () => [...draftPackageImportRuns].sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)),
+    [draftPackageImportRuns],
+  );
   const latestImportRun = draftPackageImportDiagnostics?.latest_import_run
-    ?? draftPackageImportRuns.find((run) => run.run_type === 'import' || run.run_type === 'reimport')
+    ?? sortedImportRuns.find((run) => run.run_type === 'import' || run.run_type === 'reimport')
     ?? draftPackageImportState?.latest_run
     ?? null;
   const latestDiagnosticsRefreshRun = draftPackageImportDiagnostics?.latest_diagnostics_refresh_run
-    ?? draftPackageImportRuns.find((run) => run.run_type === 'diagnostics_refresh')
+    ?? sortedImportRuns.find((run) => run.run_type === 'diagnostics_refresh')
     ?? null;
   const latestRegistryRepairRun = draftPackageImportDiagnostics?.latest_registry_repair_run
-    ?? draftPackageImportRuns.find((run) => run.run_type === 'registry_repair')
+    ?? sortedImportRuns.find((run) => run.run_type === 'registry_repair')
     ?? null;
   const canOpenImportedQuote = Boolean(selectedDraftPackage?.importedQuoteId && selectedPackage.package.linkedProjectId);
   const repairPreviewActions = draftPackageImportRepairPreview?.actions ?? [];
@@ -315,9 +604,28 @@ export default function TenderDraftPackagePanel({
   const [selectedOverrideConflictBlockIds, setSelectedOverrideConflictBlockIds] = useState<TenderEditorManagedBlockId[]>([]);
   const [confirmSelectiveReimport, setConfirmSelectiveReimport] = useState(false);
   const [activeTab, setActiveTab] = useState<'included' | 'excluded' | 'payload' | 'import'>(editorHandoff?.isActive ? 'import' : 'included');
+  const [showAllImportRuns, setShowAllImportRuns] = useState(false);
   const selectedUpdateBlockIdSet = useMemo(() => new Set(selectedUpdateBlockIds), [selectedUpdateBlockIds]);
   const selectedRemoveBlockIdSet = useMemo(() => new Set(selectedRemoveBlockIds), [selectedRemoveBlockIds]);
   const selectedOverrideConflictBlockIdSet = useMemo(() => new Set(selectedOverrideConflictBlockIds), [selectedOverrideConflictBlockIds]);
+  const importRunHistorySummary = useMemo(
+    () => sortedImportRuns.reduce(
+      (summary, run) => ({
+        totalRuns: summary.totalRuns + 1,
+        successfulRuns: summary.successfulRuns + (run.result_status === 'success' ? 1 : 0),
+        failedRuns: summary.failedRuns + (run.result_status === 'failed' ? 1 : 0),
+        skippedConflicts: summary.skippedConflicts + (run.execution_metadata?.summary_counts.skipped_conflicts ?? 0),
+      }),
+      {
+        totalRuns: 0,
+        successfulRuns: 0,
+        failedRuns: 0,
+        skippedConflicts: 0,
+      },
+    ),
+    [sortedImportRuns],
+  );
+  const visibleImportRuns = showAllImportRuns ? sortedImportRuns : sortedImportRuns.slice(0, 4);
   const selectedSelectiveBlockCount = selectedUpdateBlockIds.length + selectedRemoveBlockIds.length;
   const canExecuteSelectiveReimport = Boolean(
     selectedDraftPackage
@@ -375,6 +683,10 @@ export default function TenderDraftPackagePanel({
     setActiveTab(editorHandoff?.isActive ? 'import' : 'included');
   }, [editorHandoff?.isActive, editorHandoff?.resolvedDraftPackageId, selectedDraftPackage?.id]);
 
+  useEffect(() => {
+    setShowAllImportRuns(false);
+  }, [selectedDraftPackage?.id]);
+
   return (
     <Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
       <CardHeader className="border-b">
@@ -382,10 +694,10 @@ export default function TenderDraftPackagePanel({
           <div className="space-y-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <FileText className="h-4.5 w-4.5 text-slate-500" />
-              Managed import surface hardening
+              Managed import surface + run audit
             </CardTitle>
             <CardDescription>
-              Tämä vaihe rajaa Tarjousälyn hallitsemat editorilohkot eksplisiittisesti, näyttää niiden block-level diffit ja päivittää re-importissa vain adapterin varmasti omistaman notes-, internalNotes- ja section-pinnan.
+              Tarjousäly rajaa editoriin vain hallitun pinnan, näyttää blokkitason diffit ja tarjoaa nyt myös käyttökelpoisen import-run-auditin siitä mitä päivitettiin, skipattiin tai korjattiin ja miksi.
             </CardDescription>
             {editorHandoff?.isActive && editorHandoff.title && editorHandoff.description && (
               <div className={[
@@ -601,11 +913,15 @@ export default function TenderDraftPackagePanel({
                   {latestImportRun ? (
                     <div className="mt-3 space-y-2 text-sm text-slate-700">
                       <p>Aika: {formatTenderTimestamp(latestImportRun.created_at)}</p>
+                      <p>Toimija: {resolveImportRunActorLabel(latestImportRun, actorNameById)}</p>
                       <p>Run type: {TENDER_IMPORT_RUN_TYPE_META[latestImportRun.run_type].label}</p>
                       <p>Mode: {TENDER_EDITOR_IMPORT_MODE_META[latestImportRun.import_mode].label}</p>
                       <p>Status: {TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[latestImportRun.result_status].label}</p>
+                      <p>Ajotapa: {resolveImportRunExecutionModeLabel(latestImportRun.execution_metadata?.run_mode)}</p>
                       <p>Summary: {latestImportRun.summary ?? 'Ei erillistä yhteenvetoa.'}</p>
+                      <p>Payload hash: {shortenHash(latestImportRun.payload_hash)}</p>
                       <p>Päivitetyt blokit: {latestImportRun.execution_metadata?.summary_counts.updated_blocks ?? 0}</p>
+                      <p>Override-konfliktit: {latestImportRun.execution_metadata?.override_conflict_block_ids.length ?? 0}</p>
                       <p>Skipatut konfliktit: {latestImportRun.execution_metadata?.summary_counts.skipped_conflicts ?? 0}</p>
                     </div>
                   ) : (
@@ -1396,25 +1712,46 @@ export default function TenderDraftPackagePanel({
                       </div>
 
                       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
-                          <ClockCounterClockwise className="h-4 w-4 text-slate-500" />
-                          Import-ajohistoria
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+                            <ClockCounterClockwise className="h-4 w-4 text-slate-500" />
+                            Import-ajohistoria
+                          </div>
+                          {sortedImportRuns.length > 4 && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setShowAllImportRuns((current) => !current)}
+                            >
+                              {showAllImportRuns ? 'Näytä vähemmän' : `Näytä kaikki (${sortedImportRuns.length})`}
+                            </Button>
+                          )}
                         </div>
-                        {draftPackageImportRuns.length > 0 ? (
+                        {sortedImportRuns.length > 0 ? (
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Ajot yhteensä</p>
+                              <p className="mt-1 text-xl font-semibold text-slate-950">{importRunHistorySummary.totalRuns}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Onnistuneet</p>
+                              <p className="mt-1 text-xl font-semibold text-slate-950">{importRunHistorySummary.successfulRuns}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Epäonnistuneet</p>
+                              <p className="mt-1 text-xl font-semibold text-slate-950">{importRunHistorySummary.failedRuns}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Skipatut konfliktit</p>
+                              <p className="mt-1 text-xl font-semibold text-slate-950">{importRunHistorySummary.skippedConflicts}</p>
+                            </div>
+                          </div>
+                        ) : null}
+                        {visibleImportRuns.length > 0 ? (
                           <div className="mt-3 space-y-3">
-                            {draftPackageImportRuns.slice(0, 4).map((run) => (
-                              <div key={run.id} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Badge variant={TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[run.result_status].variant}>{TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[run.result_status].label}</Badge>
-                                  <Badge variant={TENDER_IMPORT_RUN_TYPE_META[run.run_type].variant}>{TENDER_IMPORT_RUN_TYPE_META[run.run_type].label}</Badge>
-                                  <Badge variant={TENDER_EDITOR_IMPORT_MODE_META[run.import_mode].variant}>{TENDER_EDITOR_IMPORT_MODE_META[run.import_mode].label}</Badge>
-                                </div>
-                                <p className="mt-2 text-sm font-medium text-slate-950">{formatTenderTimestamp(run.created_at)}</p>
-                                <p className="mt-1 text-sm leading-6 text-slate-700">{run.summary ?? 'Ei erillistä yhteenvetoa.'}</p>
-                                <p className="mt-1 text-xs leading-5 text-slate-500">
-                                  Vaikutetut {run.execution_metadata?.summary_counts.affected_blocks ?? 0}, päivitetyt {run.execution_metadata?.summary_counts.updated_blocks ?? 0}, orphaned {run.execution_metadata?.summary_counts.orphaned_blocks ?? 0}, siivotut {run.execution_metadata?.summary_counts.pruned_registry_blocks ?? 0}
-                                </p>
-                              </div>
+                            {visibleImportRuns.map((run) => (
+                              <ImportRunAuditCard key={run.id} run={run} actorNameById={actorNameById} />
                             ))}
                           </div>
                         ) : (

@@ -506,6 +506,47 @@ function createImportRuns(): TenderDraftPackageImportRun[] {
       created_by_user_id: '22222222-2222-4222-8222-222222222222',
       created_at: '2026-04-05T13:07:00.000Z',
     },
+    {
+      id: '81818181-8181-4818-8818-818181818181',
+      tender_draft_package_id: '66666666-6666-4666-8666-666666666666',
+      target_quote_id: '61616161-6161-4616-8616-616161616161',
+      run_type: 'registry_repair',
+      import_mode: 'update_existing_quote',
+      payload_hash: '1234abcd',
+      payload_snapshot: createEditorImportPreview().payload,
+      result_status: 'failed',
+      summary: 'Registry repair keskeytyi ennen kuin kaikki hashit ehdittiin synkata.',
+      execution_metadata: createExecutionMetadata({
+        run_type: 'registry_repair',
+        repair_action: 'resync_registry_hashes_from_live_quote_markers',
+        refreshed_hash_block_ids: ['notes_for_editor'],
+        skipped_conflict_block_ids: [],
+        skipped_block_ids: [],
+        override_conflict_block_ids: ['requirements_and_quote_notes'],
+        summary_counts: {
+          selected_blocks: 1,
+          conflict_blocks: 1,
+          skipped_conflicts: 0,
+          updated_blocks: 0,
+          removed_blocks: 0,
+          missing_in_quote_blocks: 0,
+          untouched_blocks: 0,
+          affected_blocks: 0,
+          orphaned_blocks: 0,
+          refreshed_hash_blocks: 1,
+          pruned_registry_blocks: 0,
+          skipped_blocks: 0,
+          healthy_blocks: 0,
+          stale_blocks: 0,
+          orphaned_registry_blocks: 0,
+          drifted_quote_blocks: 0,
+          drifted_draft_blocks: 0,
+          total_registry_blocks: 2,
+        },
+      }),
+      created_by_user_id: '22222222-2222-4222-8222-222222222222',
+      created_at: '2026-04-05T13:09:00.000Z',
+    },
   ];
 }
 
@@ -521,6 +562,7 @@ describe('TenderDraftPackagePanel', () => {
         draftPackageReimportPreview={createReimportPreview()}
         draftPackageImportRuns={createImportRuns()}
         selectedDraftPackageId="66666666-6666-4666-8666-666666666666"
+        actorNameById={{ '22222222-2222-4222-8222-222222222222': 'Copilot Test' }}
         onSelectDraftPackage={async () => undefined as unknown as void}
         onCreateDraftPackage={async () => undefined}
         onImportDraftPackageToEditor={async () => undefined}
@@ -535,7 +577,7 @@ describe('TenderDraftPackagePanel', () => {
       />,
     );
 
-    expect(markup).toContain('Managed import surface hardening');
+  expect(markup).toContain('Managed import surface + run audit');
     expect(markup).toContain('Päivitä samaan quoteen');
     expect(markup).toContain('Avaa importoitu quote');
     expect(markup).toContain('Import handoff');
@@ -550,6 +592,12 @@ describe('TenderDraftPackagePanel', () => {
     expect(markup).toContain('Pakota konfliktiblokki mukaan');
     expect(markup).toContain('Skipatut konfliktit: 1');
     expect(markup).toContain('Import-ajohistoria');
+    expect(markup).toContain('Ajot yhteensä');
+    expect(markup).toContain('Epäonnistuneet');
+    expect(markup).toContain('Toimija: Copilot Test');
+    expect(markup).toContain('Override-konfliktit');
+    expect(markup).toContain('Hashit resynkattu');
+    expect(markup).toContain('Resynkkaa hashit markereista');
     expect(markup).toContain('Draft muuttunut importin jälkeen');
     expect(markup).toContain('Revision 2');
     expect(markup).toContain('Tarjouspaketti / editor import');

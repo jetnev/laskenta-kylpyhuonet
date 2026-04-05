@@ -421,6 +421,7 @@ export default function TenderPackageWorkspace({
         updatingDraftPackageItemIds={updatingDraftPackageItemIds}
         reviewingDraftPackageId={reviewingDraftPackageId}
         exportingDraftPackageId={exportingDraftPackageId}
+        actorNameById={actorNameById}
         onSelectDraftPackage={onSelectDraftPackage}
         onCreateDraftPackage={onCreateDraftPackage}
         onImportDraftPackageToEditor={onImportDraftPackageToEditor}
