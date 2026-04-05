@@ -16,7 +16,7 @@ function createAnalysisJob(overrides: Partial<TenderAnalysisJob> = {}): TenderAn
     packageId: '22222222-2222-4222-8222-222222222222',
     jobType: 'placeholder_analysis',
     status: 'completed',
-    stageLabel: 'Placeholder-analyysi valmistui',
+    stageLabel: 'Baseline-analyysi valmistui',
     provider: null,
     model: null,
     requestedAt: '2026-04-05T08:00:00.000Z',
@@ -73,7 +73,7 @@ describe('TENDER_ANALYSIS_JOB_STATUS_META', () => {
     expect(TENDER_ANALYSIS_JOB_STATUS_META.running.label).toBe('Käynnissä');
     expect(TENDER_ANALYSIS_JOB_STATUS_META.completed.label).toBe('Valmis');
     expect(TENDER_ANALYSIS_JOB_STATUS_META.failed.label).toBe('Epäonnistui');
-    expect(TENDER_ANALYSIS_JOB_TYPE_META.placeholder_analysis.label).toBe('Placeholder-analyysi');
+    expect(TENDER_ANALYSIS_JOB_TYPE_META.placeholder_analysis.label).toBe('Baseline-analyysi');
   });
 });
 
@@ -86,7 +86,7 @@ describe('getTenderAnalysisStartState', () => {
   });
 
   it('disables analysis start when a previous job is still active', () => {
-    const queuedJob = createAnalysisJob({ status: 'queued', completedAt: null, stageLabel: 'Placeholder-analyysi odottaa suoritusvuoroa' });
+    const queuedJob = createAnalysisJob({ status: 'queued', completedAt: null, stageLabel: 'Baseline-analyysi odottaa suoritusvuoroa' });
 
     expect(isTenderAnalysisJobActive(queuedJob.status)).toBe(true);
     expect(getTenderAnalysisStartState({ documentCount: 2, latestAnalysisJob: queuedJob })).toEqual({

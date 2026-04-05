@@ -58,7 +58,7 @@ export default function TenderAnalysisPanel({
               Analyysi
             </CardTitle>
             <CardDescription>
-              Analyysiajo käynnistyy server-side Edge Function -rajan kautta vasta kun vähintään yhdelle tuetulle dokumentille on tallennettu extracted chunk -dataa. Placeholder-analyysi ei vieläkään tee semanttista tulkintaa, mutta sen tulokset ankkuroidaan nyt pysyviin evidence-riveihin.
+              Analyysiajo käynnistyy server-side Edge Function -rajan kautta vasta kun vähintään yhdelle tuetulle dokumentille on tallennettu extracted chunk -dataa. Phase 8 käyttää nyt determinististä sääntökerrosta määräaika-, liite- ja referenssiosumien löytämiseen ilman LLM:ää tai muuta semanttista analyysiä.
             </CardDescription>
           </div>
 
@@ -69,7 +69,7 @@ export default function TenderAnalysisPanel({
             </Button>
             <p className="text-xs leading-5 text-muted-foreground">
               {startState.canStart
-                ? 'Analyysi käynnistetään palvelinpuolella. Placeholder-tulokset kirjoitetaan pysyviin result-tauluihin ja niiden provenance tallennetaan extracted chunk -lähteisiin.'
+                ? 'Analyysi käynnistetään palvelinpuolella. Sääntöpohjaiset baseline-löydökset kirjoitetaan pysyviin result-tauluihin ja niiden provenance tallennetaan extracted chunk -lähteisiin.'
                 : startState.reason}
             </p>
           </div>
@@ -80,7 +80,7 @@ export default function TenderAnalysisPanel({
         <div className="space-y-4">
           {!latestJob ? (
             <div className="rounded-2xl border border-dashed px-4 py-8 text-sm leading-6 text-muted-foreground">
-              Analyysiä ei ole vielä käynnistetty tälle paketille. Lisää vähintään yksi tuettu dokumentti, pura siitä extracted chunk -data ja käynnistä sen jälkeen ensimmäinen extraction-aware placeholder-ajo tästä paneelista.
+              Analyysiä ei ole vielä käynnistetty tälle paketille. Lisää vähintään yksi tuettu dokumentti, pura siitä extracted chunk -data ja käynnistä sen jälkeen ensimmäinen sääntöpohjainen baseline-ajo tästä paneelista.
             </div>
           ) : (
             <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
@@ -109,7 +109,7 @@ export default function TenderAnalysisPanel({
               {busy && (
                 <div className="mt-4 flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-700">
                   <SpinnerGap className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
-                  <span>Analyysiajo etenee server-sidellä tilojen pending → queued → running → completed läpi. Palvelin tallentaa placeholder-tulokset result-domainiin ja liittää niihin evidence-rivit oikeista extracted chunkeista.</span>
+                  <span>Analyysiajo etenee server-sidellä tilojen pending → queued → running → completed läpi. Palvelin tallentaa sääntöpohjaiset baseline-löydökset result-domainiin ja liittää niihin evidence-rivit oikeista extracted chunkeista.</span>
                 </div>
               )}
 
@@ -125,7 +125,7 @@ export default function TenderAnalysisPanel({
           {startState.canStart ? (
             <div className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-700">
               <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>Paketti on valmis placeholder-analyysiin: vähintään yksi dokumentti on purettu ja evidence-riveille on olemassa oikea chunk-lähde.</span>
+              <span>Paketti on valmis baseline-analyysiin: vähintään yksi dokumentti on purettu ja evidence-riveille on olemassa oikea chunk-lähde.</span>
             </div>
           ) : (
             <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-700">
@@ -135,7 +135,7 @@ export default function TenderAnalysisPanel({
           )}
 
           <div className="rounded-2xl border border-dashed px-4 py-6 text-sm leading-6 text-muted-foreground">
-            Analyysi kulkee nyt palvelinrajan (Edge Function) kautta ja käyttää extracted chunk -dataa lähtöaineistona. OCR, PDF/DOCX-purku, AI-providerit ja varsinainen tarjousluonnoksen generointi jätetään silti tarkoituksella myöhempiin vaiheisiin.
+            Analyysi kulkee nyt palvelinrajan (Edge Function) kautta ja käyttää extracted chunk -dataa lähtöaineistona. Tämän vaiheen löydökset ovat tarkoituksella baseline-tasoa: deadline-, liite- ja referenssiosumat näkyvät evidenssin kanssa, mutta OCR, AI-providerit ja varsinainen tarjousluonnoksen generointi jätetään myöhempiin vaiheisiin.
           </div>
         </div>
 
@@ -157,7 +157,7 @@ export default function TenderAnalysisPanel({
             <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{coverage.extractedChunks}</p>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               {coverage.extractedChunks > 0
-                ? 'Placeholder-analyysi käyttää näitä chunk-rivejä provenance-lähteinä requirement-, riski- ja review-task -tuloksille.'
+                ? 'Deterministinen baseline käyttää näitä chunk-rivejä provenance-lähteinä requirement-, missing item-, risk- ja review task -tuloksille.'
                 : 'Yhtään analyysiin kelpaavaa chunkia ei ole vielä tallennettu, joten evidence-pohjainen ajo pysyy estettynä.'}
             </p>
           </div>
@@ -165,7 +165,7 @@ export default function TenderAnalysisPanel({
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Jobit</p>
             <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{selectedPackage.analysisJobs.length}</p>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Kaikki ajot tallentuvat samaan Tarjousälyn job-historiaan. Runner hylkää nyt ajot, joilta puuttuu extraction-aware evidence-lähde.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Kaikki ajot tallentuvat samaan Tarjousälyn job-historiaan. Runner hylkää nyt ajot, joilta puuttuu extraction-aware evidence-lähde, ja kirjoittaa vain chunk-osumiin sidottuja baseline-löydöksiä.</p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
@@ -177,7 +177,7 @@ export default function TenderAnalysisPanel({
               {latestSuccessfulJob?.completedAt ? formatTenderTimestamp(latestSuccessfulJob.completedAt) : 'Ei vielä onnistunutta ajoa'}
             </p>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              {latestSuccessfulJob ? latestSuccessfulJob.stageLabel : 'Ensimmäinen onnistunut placeholder-ajo näkyy tässä ja toimii myöhemmän oikean analyysipalvelun vaihtopisteenä.'}
+              {latestSuccessfulJob ? latestSuccessfulJob.stageLabel : 'Ensimmäinen onnistunut baseline-ajo näkyy tässä ja toimii myöhemmän analyysipalvelun vaihtopisteenä.'}
             </p>
           </div>
 
@@ -186,7 +186,7 @@ export default function TenderAnalysisPanel({
               <ClockCountdown className="h-4 w-4" />
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Suoritusmalli</p>
             </div>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Placeholder-run suoritetaan Supabase Edge Function -rajapinnan kautta. Oikea analyysimoottori voidaan vaihtaa tämän rajan taakse ilman frontend-muutoksia, kunhan se tuottaa edelleen chunk-tason provenancea.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Sääntöpohjainen baseline-run suoritetaan Supabase Edge Function -rajapinnan kautta. Oikea analyysimoottori voidaan vaihtaa tämän rajan taakse ilman frontend-muutoksia, kunhan se tuottaa edelleen chunk-tason provenancea.</p>
           </div>
         </div>
       </CardContent>

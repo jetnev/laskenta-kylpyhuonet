@@ -118,9 +118,9 @@ export default function TenderResultPanels({ selectedPackage }: { selectedPackag
       <ResultCard
         icon={ListChecks}
         title="Vaatimukset"
-        description="Pysyvä vaatimusdomain tallentaa placeholder-rivit nyt omiin result-tauluihinsa ilman yhteyttä nykyiseen tarjouseditoriin."
+        description="Pysyvä vaatimusdomain tallentaa nyt deterministisen baseline-analyysin löydökset omiin result-tauluihinsa ilman yhteyttä nykyiseen tarjouseditoriin."
         countLabel={formatCountLabel(selectedPackage.results.requirements.length, 'vaatimus')}
-        emptyMessage="Ensimmäinen completed-analyysi kirjoittaa tähän vaatimusrungon omiin result-tauluihinsa."
+        emptyMessage="Ensimmäinen completed-analyysi kirjoittaa tähän sääntöpohjaiset vaatimuslöydökset omiin result-tauluihinsa."
         hasItems={selectedPackage.results.requirements.length > 0}
       >
         {selectedPackage.results.requirements.map((requirement) => {
@@ -146,9 +146,9 @@ export default function TenderResultPanels({ selectedPackage }: { selectedPackag
       <ResultCard
         icon={WarningCircle}
         title="Puutteet"
-        description="Puutelista käyttää nyt omaa persistenttiä result-domainia ja näkyy suoraan paketin työtilassa completed-ajon jälkeen."
+        description="Puutelista käyttää nyt omaa persistenttiä result-domainia ja näyttää varovaiset baseline-puutteet silloin, kun pakolliselle liitteelle ei löydy edes nimellistä dokumenttiosumaa paketista."
         countLabel={formatCountLabel(selectedPackage.results.missingItems.length, 'puute')}
-        emptyMessage="Puutteet syntyvät placeholder-ajon mukana vasta kun analyysi on viety completed-tilaan."
+        emptyMessage="Puutteet syntyvät baseline-ajon mukana vasta kun analyysi on viety completed-tilaan."
         hasItems={selectedPackage.results.missingItems.length > 0}
       >
         {selectedPackage.results.missingItems.map((item) => {
@@ -174,9 +174,9 @@ export default function TenderResultPanels({ selectedPackage }: { selectedPackag
       <ResultCard
         icon={ShieldWarning}
         title="Riskit"
-        description="Riskihavainnot kirjoitetaan nyt omiin riveihinsä, vaikka sisältö on vielä determinististä placeholder-dataa."
+        description="Riskihavainnot kirjoitetaan nyt omiin riveihinsä vain silloin, kun sääntö löytää selvästi korkean huomion ehdon kuten määräaikaan sidotun hylkäysriskin."
         countLabel={formatCountLabel(selectedPackage.results.riskFlags.length, 'riski')}
-        emptyMessage="Riskit näkyvät tässä kun ensimmäinen placeholder-analyysi on tallentanut tulokset pysyviin result-tauluihin."
+        emptyMessage="Riskit näkyvät tässä, jos baseline-analyysi löytää oikeasti selkeän riskiehdon extracted tekstistä."
         hasItems={selectedPackage.results.riskFlags.length > 0}
       >
         {selectedPackage.results.riskFlags.map((riskFlag) => {
@@ -202,9 +202,9 @@ export default function TenderResultPanels({ selectedPackage }: { selectedPackag
       <ResultCard
         icon={Sparkle}
         title="Referenssiehdotukset"
-        description="Referenssidomain on nyt oma persistentti osionsa, vaikka ehdotukset tuotetaan vielä hallitusta placeholder-mallista."
+        description="Referenssidomain on edelleen erillinen, mutta tässä vaiheessa baseline tuottaa ensisijaisesti referenssivaatimuksia ja review taskeja, ei vielä varsinaisia ehdotuksia organisaation historiasta."
         countLabel={formatCountLabel(selectedPackage.results.referenceSuggestions.length, 'ehdotus')}
-        emptyMessage="Referenssiehdotukset ilmestyvät tähän vasta ensimmäisen completed-placeholder-ajon jälkeen."
+        emptyMessage="Referenssiehdotukset jätetään tarkoituksella myöhempään vaiheeseen, jotta baseline pysyy sääntöpohjaisena eikä arvaile historiasta."
         hasItems={selectedPackage.results.referenceSuggestions.length > 0}
       >
         {selectedPackage.results.referenceSuggestions.map((suggestion) => {
@@ -228,9 +228,9 @@ export default function TenderResultPanels({ selectedPackage }: { selectedPackag
       <ResultCard
         icon={FileText}
         title="Luonnosartefaktit"
-        description="Luonnosartefaktit tulevat nyt oikeasta result-domainista. Sisältö on vielä placeholder-markdownia eikä oikeaa generoitua tarjousta."
+        description="Luonnosartefaktit säilyvät omassa result-domainissaan, mutta Phase 8 ei vielä generoi tarjousluonnoksia eikä kirjoita tähän sisältöä pelkkien sääntöosumien perusteella."
         countLabel={formatCountLabel(selectedPackage.results.draftArtifacts.length, 'artefakti')}
-        emptyMessage="Ensimmäinen completed-ajon placeholder-runko näkyy tässä markdown-pohjaisena artefaktina."
+        emptyMessage="Luonnosartefaktit jätetään tarkoituksella myöhempään vaiheeseen, jotta baseline pysyy deterministisenä analyysina eikä siirry vielä generointiin."
         hasItems={selectedPackage.results.draftArtifacts.length > 0}
       >
         {selectedPackage.results.draftArtifacts.map((artifact) => {
@@ -255,9 +255,9 @@ export default function TenderResultPanels({ selectedPackage }: { selectedPackag
       <ResultCard
         icon={Note}
         title="Tarkistustehtävät"
-        description="Review task -domain toimii nyt oikeista riveistä, joita placeholder-analyysi kirjoittaa completion-vaiheessa."
+        description="Review task -domain toimii nyt tarkoituksellisena osana työnkulkua: baseline ohjaa epäselvät tai ihmistulkintaa vaativat kohdat katselmointiin varman päätelmän sijaan."
         countLabel={formatCountLabel(selectedPackage.results.reviewTasks.length, 'tehtävä')}
-        emptyMessage="Tarkistustehtävät luodaan tähän ensimmäisen completed-ajon yhteydessä."
+        emptyMessage="Tarkistustehtävät luodaan tähän ensimmäisen completed-ajon yhteydessä aina kun sääntö löytää tärkeän mutta epäselvän osuman tai tarvitsee ihmisen varmistuksen."
         hasItems={selectedPackage.results.reviewTasks.length > 0}
       >
         {selectedPackage.results.reviewTasks.map((task) => {

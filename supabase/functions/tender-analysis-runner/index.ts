@@ -2,16 +2,17 @@
 /**
  * Supabase Edge Function — Tarjousäly server-side analysis runner boundary
  *
- * Phase 7 entry-point.
+ * Phase 8 entry-point.
  * Receives `{ tenderPackageId }`, validates auth + org access + extraction
  * readiness,
  * creates and transitions an analysis job through pending → queued → running →
- * completed, seeds placeholder results plus evidence rows, and returns a
+ * completed, writes deterministic baseline results plus evidence rows, and
+ * returns a
  * structured response.
  *
  * No AI, OCR, or semantic analysis happens here — the analysis is still a
- * deterministic placeholder run. The function now requires real extracted
- * chunk data so that placeholder results can point to persistent provenance.
+ * deterministic rule-based baseline. The function requires real extracted
+ * chunk data so that every stored finding can point to persistent provenance.
  */
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
@@ -57,7 +58,7 @@ function rejected(
 }
 
 /* ------------------------------------------------------------------ */
-/*  Placeholder seed writer                                            */
+/*  Baseline result writer                                             */
 /* ------------------------------------------------------------------ */
 
 async function clearAnalysisResults(client: SupabaseClient, packageId: string) {
@@ -138,6 +139,30 @@ async function insertTenderResultEvidenceRows<TSeed extends { evidenceLinks: Pla
   }
 }
 
+async function insertRowsIfAny(
+  client: SupabaseClient,
+  tableName:
+    | 'tender_requirements'
+    | 'tender_missing_items'
+    | 'tender_risk_flags'
+    | 'tender_reference_suggestions'
+    | 'tender_draft_artifacts'
+    | 'tender_review_tasks',
+  rows: Record<string, unknown>[],
+) {
+  if (rows.length < 1) {
+    return [];
+  }
+
+  const { data, error } = await client.from(tableName).insert(rows).select('id');
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as { id: string }[];
+}
+
 async function seedPlaceholderResults(
   client: SupabaseClient,
   packageId: string,
@@ -155,25 +180,21 @@ async function seedPlaceholderResults(
 
   await clearAnalysisResults(client, packageId);
 
-  // 1. Requirements
-  const { data: requirementData, error: reqErr } = await client
-    .from('tender_requirements')
-    .insert(
-      plan.requirements.map((r) => ({
-        tender_package_id: packageId,
-        source_document_id: r.sourceDocumentId,
-        requirement_type: r.requirementType,
-        title: r.title,
-        description: r.description,
-        status: r.status,
-        confidence: r.confidence,
-        source_excerpt: r.sourceExcerpt,
-      })),
-    )
-    .select('id');
-
-  if (reqErr) throw reqErr;
-  const reqIds: string[] = (requirementData ?? []).map((r: any) => r.id);
+  const requirementRows = await insertRowsIfAny(
+    client,
+    'tender_requirements',
+    plan.requirements.map((r) => ({
+      tender_package_id: packageId,
+      source_document_id: r.sourceDocumentId,
+      requirement_type: r.requirementType,
+      title: r.title,
+      description: r.description,
+      status: r.status,
+      confidence: r.confidence,
+      source_excerpt: r.sourceExcerpt,
+    })),
+  );
+  const reqIds: string[] = requirementRows.map((r: any) => r.id);
   await insertTenderResultEvidenceRows(client, {
     packageId,
     targetEntityType: 'requirement',
@@ -182,8 +203,9 @@ async function seedPlaceholderResults(
     evidenceSources: plan.evidenceSources,
   });
 
-  // 2. Missing items (FK-linked to requirements)
-  const { data: missingItemData, error: misErr } = await client.from('tender_missing_items').insert(
+  const missingItemData = await insertRowsIfAny(
+    client,
+    'tender_missing_items',
     plan.missingItems.map((m) => ({
       tender_package_id: packageId,
       related_requirement_id:
@@ -194,8 +216,7 @@ async function seedPlaceholderResults(
       severity: m.severity,
       status: m.status,
     })),
-  ).select('id');
-  if (misErr) throw misErr;
+  );
   await insertTenderResultEvidenceRows(client, {
     packageId,
     targetEntityType: 'missing_item',
@@ -204,8 +225,9 @@ async function seedPlaceholderResults(
     evidenceSources: plan.evidenceSources,
   });
 
-  // 3. Risk flags
-  const { data: riskFlagData, error: riskErr } = await client.from('tender_risk_flags').insert(
+  const riskFlagData = await insertRowsIfAny(
+    client,
+    'tender_risk_flags',
     plan.riskFlags.map((r) => ({
       tender_package_id: packageId,
       risk_type: r.riskType,
@@ -214,8 +236,7 @@ async function seedPlaceholderResults(
       severity: r.severity,
       status: r.status,
     })),
-  ).select('id');
-  if (riskErr) throw riskErr;
+  );
   await insertTenderResultEvidenceRows(client, {
     packageId,
     targetEntityType: 'risk_flag',
@@ -224,8 +245,9 @@ async function seedPlaceholderResults(
     evidenceSources: plan.evidenceSources,
   });
 
-  // 4. Reference suggestions
-  const { data: referenceSuggestionData, error: refErr } = await client.from('tender_reference_suggestions').insert(
+  const referenceSuggestionData = await insertRowsIfAny(
+    client,
+    'tender_reference_suggestions',
     plan.referenceSuggestions.map((s) => ({
       tender_package_id: packageId,
       source_type: s.sourceType,
@@ -234,8 +256,7 @@ async function seedPlaceholderResults(
       rationale: s.rationale,
       confidence: s.confidence,
     })),
-  ).select('id');
-  if (refErr) throw refErr;
+  );
   await insertTenderResultEvidenceRows(client, {
     packageId,
     targetEntityType: 'reference_suggestion',
@@ -244,8 +265,9 @@ async function seedPlaceholderResults(
     evidenceSources: plan.evidenceSources,
   });
 
-  // 5. Draft artifacts
-  const { data: draftArtifactData, error: draftErr } = await client.from('tender_draft_artifacts').insert(
+  const draftArtifactData = await insertRowsIfAny(
+    client,
+    'tender_draft_artifacts',
     plan.draftArtifacts.map((a) => ({
       tender_package_id: packageId,
       artifact_type: a.artifactType,
@@ -253,8 +275,7 @@ async function seedPlaceholderResults(
       content_md: a.contentMd,
       status: a.status,
     })),
-  ).select('id');
-  if (draftErr) throw draftErr;
+  );
   await insertTenderResultEvidenceRows(client, {
     packageId,
     targetEntityType: 'draft_artifact',
@@ -263,8 +284,9 @@ async function seedPlaceholderResults(
     evidenceSources: plan.evidenceSources,
   });
 
-  // 6. Review tasks
-  const { data: reviewTaskData, error: taskErr } = await client.from('tender_review_tasks').insert(
+  const reviewTaskData = await insertRowsIfAny(
+    client,
+    'tender_review_tasks',
     plan.reviewTasks.map((t) => ({
       tender_package_id: packageId,
       task_type: t.taskType,
@@ -273,8 +295,7 @@ async function seedPlaceholderResults(
       status: t.status,
       assigned_to_user_id: null,
     })),
-  ).select('id');
-  if (taskErr) throw taskErr;
+  );
   await insertTenderResultEvidenceRows(client, {
     packageId,
     targetEntityType: 'review_task',
@@ -283,7 +304,6 @@ async function seedPlaceholderResults(
     evidenceSources: plan.evidenceSources,
   });
 
-  // 7. Go / No-Go assessment
   const { error: goErr } = await client.from('tender_go_no_go_assessments').upsert(
     {
       tender_package_id: packageId,
@@ -513,7 +533,7 @@ Deno.serve(async (req: Request) => {
         error_message: null,
       });
 
-      /* ---- seed placeholder results ---- */
+      /* ---- write deterministic baseline results ---- */
       await seedPlaceholderResults(client, tenderPackageId, packageRow, documentRows, chunkRows);
 
       /* ---- running → completed ---- */
@@ -540,7 +560,7 @@ Deno.serve(async (req: Request) => {
       const errorMessage =
         runError instanceof Error
           ? runError.message
-          : 'Placeholder-analyysin suoritus epäonnistui.';
+          : 'Baseline-analyysin suoritus epäonnistui.';
 
       try {
         await updateJobStatus(client, jobId, {

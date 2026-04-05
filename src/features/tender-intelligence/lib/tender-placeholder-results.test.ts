@@ -9,7 +9,7 @@ function createPackageRow(overrides: Partial<TenderPackageRow> = {}): TenderPack
     organization_id: '22222222-2222-4222-8222-222222222222',
     created_by_user_id: '33333333-3333-4333-8333-333333333333',
     title: 'Kiinteistö Oy Aurinkopiha / tarjouspyyntö',
-    description: 'Result-domain placeholder',
+    description: 'Result-domain baseline',
     status: 'draft',
     linked_customer_id: null,
     linked_project_id: null,
@@ -27,9 +27,9 @@ function createDocumentRow(id: string, fileName: string): TenderDocumentRow {
     organization_id: '22222222-2222-4222-8222-222222222222',
     created_by_user_id: '33333333-3333-4333-8333-333333333333',
     file_name: fileName,
-    mime_type: 'application/pdf',
+    mime_type: 'text/plain',
     storage_bucket: 'tender-intelligence',
-    storage_path: `${fileName}.pdf`,
+    storage_path: `${fileName}.txt`,
     file_size_bytes: 100,
     checksum: null,
     upload_error: null,
@@ -56,26 +56,16 @@ function createChunkRow(id: string, documentId: string, extractionId: string, ch
 }
 
 describe('buildPlaceholderAnalysisSeedPlan', () => {
-  it('creates deterministic placeholder data from extracted chunk metadata and evidence sources', () => {
+  it('keeps the legacy wrapper deterministic while producing baseline findings from extracted chunks', () => {
     const packageRow = createPackageRow();
-    const documents = [
-      createDocumentRow('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'B-liite.pdf'),
-      createDocumentRow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'A-liite.pdf'),
-    ];
+    const documents = [createDocumentRow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'tarjouspyynto')];
     const chunkRows = [
       createChunkRow(
         'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
         'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
         'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
         0,
-        'A-liitteen ensimmäinen extracted chunk sisältää teknisen toimituslaajuuden rungon.'
-      ),
-      createChunkRow(
-        'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
-        'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-        'ffffffff-ffff-4fff-8fff-ffffffffffff',
-        0,
-        'B-liitteen ensimmäinen extracted chunk sisältää aikataulu- ja vastuurajamerkintöjä.'
+        'Tarjouksen viimeinen jättöpäivä on 15.05.2026 klo 12.00 ja verovelkatodistus tulee liittää tarjoukseen.'
       ),
     ];
 
@@ -83,24 +73,28 @@ describe('buildPlaceholderAnalysisSeedPlan', () => {
     const secondPlan = buildPlaceholderAnalysisSeedPlan({ packageRow, documentRows: documents, chunkRows });
 
     expect(firstPlan).toEqual(secondPlan);
-    expect(firstPlan.requirements).toHaveLength(2);
-    expect(firstPlan.requirements[0]?.sourceDocumentId).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
-    expect(firstPlan.requirements[0]?.sourceExcerpt).toContain('A-liitteen ensimmäinen extracted chunk');
-    expect(firstPlan.requirements[0]?.evidenceLinks[0]?.sourceIndex).toBe(0);
-    expect(firstPlan.goNoGoAssessment.summary).toContain(packageRow.title);
-    expect(firstPlan.referenceSuggestions[0]?.sourceReference).toBe('A-liite.pdf, B-liite.pdf');
-    expect(firstPlan.draftArtifacts[0]?.contentMd).toContain('Tarjousvastauksen placeholder-runko');
-    expect(firstPlan.evidenceSources[0]?.locatorText).toBe('A-liite.pdf / chunk 1');
-    expect(firstPlan.reviewTasks.map((task) => task.taskType)).toEqual(['documents', 'requirements']);
+    expect(firstPlan.requirements.map((item) => item.title)).toEqual([
+      'Tarjouksen määräaika: 15.05.2026 klo 12.00',
+      'Toimita verovelkatodistus',
+    ]);
+    expect(firstPlan.missingItems[0]).toMatchObject({
+      title: 'Verovelkatodistus puuttuu paketista',
+      relatedRequirementIndex: 1,
+    });
+    expect(firstPlan.reviewTasks[0]?.title).toBe('Käy sääntöpohjaiset löydökset läpi');
+    expect(firstPlan.referenceSuggestions).toHaveLength(0);
+    expect(firstPlan.draftArtifacts).toHaveLength(0);
+    expect(firstPlan.evidenceSources[0]?.locatorText).toBe('tarjouspyynto / chunk 1');
+    expect(firstPlan.requirements[0]?.evidenceLinks[0]?.matchedRule).toBe('deadline.tarjouksen_viimeinen_jattopaiva');
   });
 
-  it('rejects placeholder seeding when no extracted chunks exist', () => {
+  it('rejects baseline seeding when no extracted chunks exist', () => {
     expect(() =>
       buildPlaceholderAnalysisSeedPlan({
         packageRow: createPackageRow(),
-        documentRows: [createDocumentRow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'A-liite.pdf')],
+        documentRows: [createDocumentRow('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'tarjouspyynto')],
         chunkRows: [],
       })
-    ).toThrow('Placeholder-analyysi vaatii vähintään yhden extracted chunkin');
+    ).toThrow('Deterministinen baseline-analyysi vaatii vähintään yhden extracted chunkin');
   });
 });

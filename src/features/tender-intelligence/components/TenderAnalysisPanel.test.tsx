@@ -88,6 +88,6 @@ describe('TenderAnalysisPanel', () => {
 
     expect(markup).toContain('Käynnistä extraction vähintään yhdelle tuetulle dokumentille ennen analyysin käynnistämistä.');
     expect(markup).toContain('Evidence-chunkit');
-    expect(markup).toContain('Runner hylkää nyt ajot, joilta puuttuu extraction-aware evidence-lähde.');
+    expect(markup).toContain('Runner hylkää nyt ajot, joilta puuttuu extraction-aware evidence-lähde');
   });
 });

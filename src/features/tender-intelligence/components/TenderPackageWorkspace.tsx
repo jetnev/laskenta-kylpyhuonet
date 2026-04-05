@@ -104,11 +104,11 @@ export default function TenderPackageWorkspace({
     return (
       <Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
         <CardHeader className="space-y-4 border-b border-white/10 pb-6">
-          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 7 / Extraction-aware evidence foundation</Badge>
+          <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Phase 8 / Deterministinen analysis baseline</Badge>
           <div className="space-y-3">
-            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousälylle on nyt extraction-aware analyysiraja ja pysyvä evidence-domain</CardTitle>
+            <CardTitle className="text-3xl tracking-[-0.03em] text-white">Tarjousälyllä on nyt ensimmäinen oikea sääntöpohjainen analyysibaseline</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Luo ensimmäinen tarjouspyyntöpaketti. Dokumenteille voidaan nyt tallentaa pysyvä extracted text ja chunkit, ja placeholder-analyysi voi osoittaa tulostensa provenance-lähteen dokumentti- ja chunk-tasolle omassa domainissaan.
+              Luo ensimmäinen tarjouspyyntöpaketti. Dokumenteille voidaan nyt tallentaa pysyvä extracted text ja chunkit, ja baseline-analyysi voi nostaa extracted tekstistä määräaika-, liite- ja referenssiosumia evidenssin kanssa omassa domainissaan.
             </CardDescription>
           </div>
         </CardHeader>
@@ -122,7 +122,7 @@ export default function TenderPackageWorkspace({
             <TenderPanel
               title="Analyysijobit"
               value="0"
-              description="Ensimmäinen placeholder-run suoritetaan palvelinpuolella Edge Functionin kautta."
+              description="Ensimmäinen sääntöpohjainen baseline-run suoritetaan palvelinpuolella Edge Functionin kautta."
             />
             <TenderPanel
               title="Extraction"
@@ -132,7 +132,7 @@ export default function TenderPackageWorkspace({
             <TenderPanel
               title="Evidence"
               value="0"
-              description="Ensimmäinen extraction-aware analyysi kiinnittää result-rivit oikeisiin dokumentti- ja chunk-lähteisiin."
+              description="Ensimmäinen extraction-aware baseline kiinnittää result-rivit oikeisiin dokumentti- ja chunk-lähteisiin."
             />
             <TenderPanel
               title="Riskit"
@@ -146,8 +146,8 @@ export default function TenderPackageWorkspace({
             />
             <TenderPanel
               title="Luonnos"
-              value="Placeholder"
-              description="Luonnosartifaktit säilytetään erillään nykyisestä tarjouseditorista, kunnes import-adapteri rakennetaan hallitusti."
+              value="Ei vielä"
+              description="Luonnosartifaktit säilytetään edelleen erillään nykyisestä tarjouseditorista, kunnes generointi ja import-adapteri rakennetaan hallitusti myöhemmin."
             />
           </div>
 
@@ -183,7 +183,7 @@ export default function TenderPackageWorkspace({
           <div className="space-y-3">
             <CardTitle className="text-3xl tracking-[-0.03em] text-white">{selectedPackage.package.name}</CardTitle>
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
-              Tämä tarjouspyyntöpaketti elää omassa Tarjousäly-domainissaan. Dokumentit tallentuvat Supabase Storageen, analyysijobi toimii näkyvästi ja result-domain kirjoittuu nyt pysyvästi omiin tauluihinsa evidence-riveineen, mutta nykyinen quote-editori, exportit, laskentalogiikka ja raportointi eivät edelleenkään ole kytketty tähän näkymään.
+              Tämä tarjouspyyntöpaketti elää omassa Tarjousäly-domainissaan. Dokumentit tallentuvat Supabase Storageen, analyysijobi toimii näkyvästi ja result-domain kirjoittuu nyt pysyvästi omiin tauluihinsa sääntöpohjaisten löydösten ja evidence-rivien kanssa, mutta nykyinen quote-editori, exportit, laskentalogiikka ja raportointi eivät edelleenkään ole kytketty tähän näkymään.
             </CardDescription>
           </div>
         </CardHeader>
@@ -219,8 +219,8 @@ export default function TenderPackageWorkspace({
           value={String(selectedPackage.results.requirements.length)}
           description={
             selectedPackage.results.requirements.length > 0
-              ? 'Placeholder-vaatimukset luetaan nyt oikeasta result-domainista ja niillä on evidence-ankkurit extracted chunk -lähteisiin.'
-              : 'Vaatimuslista pysyy tyhjänä kunnes ensimmäinen completed-ajon placeholder-seed on kirjoitettu tietokantaan.'
+              ? 'Baseline-vaatimukset luetaan nyt oikeasta result-domainista ja niillä on evidence-ankkurit extracted chunk -lähteisiin.'
+              : 'Vaatimuslista pysyy tyhjänä kunnes ensimmäisen completed-ajon baseline-seed on kirjoitettu tietokantaan.'
           }
         />
         <TenderPanel
@@ -228,7 +228,7 @@ export default function TenderPackageWorkspace({
           value={String(selectedPackage.results.missingItems.length)}
           description={
             selectedPackage.results.missingItems.length > 0
-              ? 'Avoimet puutteet näkyvät tässä omana tulosobjektinaan.'
+              ? 'Avoimet puutteet näkyvät tässä omana tulosobjektinaan varovaisina liitebaseline-löydöksinä.'
               : 'Puutelistat muodostuvat myöhemmin ilman että nykyiseen tarjousdomainiin lisätään väliaikaisia hakkeja.'
           }
         />
@@ -238,7 +238,7 @@ export default function TenderPackageWorkspace({
           description={
             selectedPackage.results.riskFlags.length > 0
               ? 'Riskit säilyvät omassa domain-kerroksessaan ennen mahdollista hyväksyttyä importtia.'
-              : 'Riskianalyysiä ei vielä tehdä. Tässä näkyy valmis paikka myöhemmälle worker- ja AI-integraatiolle.'
+              : 'Riskit syntyvät tässä vaiheessa vain selkeistä sääntöosumista. AI-pohjainen riskianalyysi jätetään myöhemmäksi.'
           }
         />
         <TenderPanel
@@ -260,7 +260,7 @@ export default function TenderPackageWorkspace({
           description={
             selectedPackage.resultEvidence.length > 0
               ? `${selectedPackage.analysisReadiness.coverage.extractedChunks} chunkia toimii nyt tulosrivien provenance-lähteenä.`
-              : 'Evidence-rivit syntyvät ensimmäisen extraction-aware placeholder-ajon yhteydessä.'
+              : 'Evidence-rivit syntyvät ensimmäisen extraction-aware baseline-ajon yhteydessä.'
           }
         />
       </div>
@@ -315,7 +315,7 @@ export default function TenderPackageWorkspace({
             )}
 
             <div className="rounded-2xl border border-dashed px-4 py-8 text-sm leading-6 text-muted-foreground">
-              Referenssiehdotukset, puuteanalyysi ja varsinainen luonnoksen generointi tulevat myöhemmin omasta analyysipalvelusta. Phase 7 lisää nyt extraction-aware evidence-domainin analyysin rinnalle ja pitää nämä riippuvuudet yhä tietoisesti irti nykyisestä tarjouseditorista.
+              Baseline tunnistaa nyt deadline-, liite- ja referenssiosumia extracted tekstistä, mutta referenssiehdotukset organisaation historiasta, varsinainen luonnoksen generointi ja mahdollinen AI-tulkinta jätetään tarkoituksella myöhempiin vaiheisiin.
             </div>
           </CardContent>
         </Card>

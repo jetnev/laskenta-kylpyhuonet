@@ -36,7 +36,7 @@ import type {
 } from '../types/tender-intelligence-db';
 
 function getTenderAnalysisJobLabel(job: TenderAnalysisJobRow) {
-  return job.job_type === 'placeholder_analysis' ? 'Placeholder-analyysi' : 'Analyysiajo';
+  return job.job_type === 'placeholder_analysis' ? 'Baseline-analyysi' : 'Analyysiajo';
 }
 
 function getTenderAnalysisStageLabel(job: TenderAnalysisJobRow) {

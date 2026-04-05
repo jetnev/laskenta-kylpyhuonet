@@ -50,7 +50,7 @@ export const TENDER_ANALYSIS_JOB_TYPE_META: Record<
   'go-no-go': { label: 'Go / No-Go', variant: 'outline' },
   'reference-scan': { label: 'Referenssihaku', variant: 'outline' },
   'draft-preparation': { label: 'Luonnoksen valmistelu', variant: 'outline' },
-  placeholder_analysis: { label: 'Placeholder-analyysi', variant: 'secondary' },
+  placeholder_analysis: { label: 'Baseline-analyysi', variant: 'secondary' },
 };
 
 export const TENDER_REQUIREMENT_TYPE_META: Record<TenderRequirementType, { label: string; variant: TenderBadgeVariant }> = {

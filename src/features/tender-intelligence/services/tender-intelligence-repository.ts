@@ -408,6 +408,32 @@ async function insertTenderResultEvidenceRows<TSeed extends { evidenceLinks: Pla
   }
 }
 
+async function insertPackageRowsIfAny<Row>(options: {
+  client: ReturnType<typeof requireSupabase>;
+  tableName:
+    | 'tender_requirements'
+    | 'tender_missing_items'
+    | 'tender_risk_flags'
+    | 'tender_reference_suggestions'
+    | 'tender_draft_artifacts'
+    | 'tender_review_tasks';
+  rows: Record<string, unknown>[];
+  schema: { parse(data: unknown): Row[] };
+  fallbackMessage: string;
+}) {
+  if (options.rows.length < 1) {
+    return [] as Row[];
+  }
+
+  const { data, error } = await options.client.from(options.tableName).insert(options.rows).select('*');
+
+  if (error) {
+    throw toRepositoryError(error, options.fallbackMessage);
+  }
+
+  return options.schema.parse(data ?? []);
+}
+
 class SupabaseTenderIntelligenceRepository implements TenderIntelligenceRepository {
   private listeners = new Set<Listener>();
 
@@ -486,27 +512,22 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     try {
       await this.clearAnalysisResults(packageId, false);
 
-      const { data: requirementData, error: requirementError } = await client
-        .from('tender_requirements')
-        .insert(
-          plan.requirements.map((requirement) => ({
-            tender_package_id: packageId,
-            source_document_id: requirement.sourceDocumentId,
-            requirement_type: requirement.requirementType,
-            title: requirement.title,
-            description: requirement.description,
-            status: requirement.status,
-            confidence: requirement.confidence,
-            source_excerpt: requirement.sourceExcerpt,
-          }))
-        )
-        .select('*');
-
-      if (requirementError) {
-        throw requirementError;
-      }
-
-      const requirementRows = tenderRequirementRowsSchema.parse(requirementData ?? []);
+      const requirementRows = await insertPackageRowsIfAny({
+        client,
+        tableName: 'tender_requirements',
+        rows: plan.requirements.map((requirement) => ({
+          tender_package_id: packageId,
+          source_document_id: requirement.sourceDocumentId,
+          requirement_type: requirement.requirementType,
+          title: requirement.title,
+          description: requirement.description,
+          status: requirement.status,
+          confidence: requirement.confidence,
+          source_excerpt: requirement.sourceExcerpt,
+        })),
+        schema: tenderRequirementRowsSchema,
+        fallbackMessage: 'Vaatimusrivejä ei voitu tallentaa.',
+      });
       await insertTenderResultEvidenceRows({
         client,
         packageId,
@@ -517,26 +538,21 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         fallbackMessage: 'Vaatimusten evidence-rivejä ei voitu tallentaa.',
       });
 
-      const { data: missingItemData, error: missingItemError } = await client
-        .from('tender_missing_items')
-        .insert(
-          plan.missingItems.map((item) => ({
-            tender_package_id: packageId,
-            related_requirement_id: item.relatedRequirementIndex == null ? null : requirementRows[item.relatedRequirementIndex]?.id ?? null,
-            item_type: item.itemType,
-            title: item.title,
-            description: item.description,
-            severity: item.severity,
-            status: item.status,
-          }))
-        )
-        .select('*');
-
-      if (missingItemError) {
-        throw missingItemError;
-      }
-
-      const missingItemRows = tenderMissingItemRowsSchema.parse(missingItemData ?? []);
+      const missingItemRows = await insertPackageRowsIfAny({
+        client,
+        tableName: 'tender_missing_items',
+        rows: plan.missingItems.map((item) => ({
+          tender_package_id: packageId,
+          related_requirement_id: item.relatedRequirementIndex == null ? null : requirementRows[item.relatedRequirementIndex]?.id ?? null,
+          item_type: item.itemType,
+          title: item.title,
+          description: item.description,
+          severity: item.severity,
+          status: item.status,
+        })),
+        schema: tenderMissingItemRowsSchema,
+        fallbackMessage: 'Puuterivejä ei voitu tallentaa.',
+      });
       await insertTenderResultEvidenceRows({
         client,
         packageId,
@@ -547,25 +563,20 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         fallbackMessage: 'Puuterivien evidence-rivejä ei voitu tallentaa.',
       });
 
-      const { data: riskFlagData, error: riskFlagError } = await client
-        .from('tender_risk_flags')
-        .insert(
-          plan.riskFlags.map((riskFlag) => ({
-            tender_package_id: packageId,
-            risk_type: riskFlag.riskType,
-            title: riskFlag.title,
-            description: riskFlag.description,
-            severity: riskFlag.severity,
-            status: riskFlag.status,
-          }))
-        )
-        .select('*');
-
-      if (riskFlagError) {
-        throw riskFlagError;
-      }
-
-      const riskFlagRows = tenderRiskFlagRowsSchema.parse(riskFlagData ?? []);
+      const riskFlagRows = await insertPackageRowsIfAny({
+        client,
+        tableName: 'tender_risk_flags',
+        rows: plan.riskFlags.map((riskFlag) => ({
+          tender_package_id: packageId,
+          risk_type: riskFlag.riskType,
+          title: riskFlag.title,
+          description: riskFlag.description,
+          severity: riskFlag.severity,
+          status: riskFlag.status,
+        })),
+        schema: tenderRiskFlagRowsSchema,
+        fallbackMessage: 'Riskirivejä ei voitu tallentaa.',
+      });
       await insertTenderResultEvidenceRows({
         client,
         packageId,
@@ -576,25 +587,20 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         fallbackMessage: 'Riskirivien evidence-rivejä ei voitu tallentaa.',
       });
 
-      const { data: referenceSuggestionData, error: referenceSuggestionError } = await client
-        .from('tender_reference_suggestions')
-        .insert(
-          plan.referenceSuggestions.map((suggestion) => ({
-            tender_package_id: packageId,
-            source_type: suggestion.sourceType,
-            source_reference: suggestion.sourceReference,
-            title: suggestion.title,
-            rationale: suggestion.rationale,
-            confidence: suggestion.confidence,
-          }))
-        )
-        .select('*');
-
-      if (referenceSuggestionError) {
-        throw referenceSuggestionError;
-      }
-
-      const referenceSuggestionRows = tenderReferenceSuggestionRowsSchema.parse(referenceSuggestionData ?? []);
+      const referenceSuggestionRows = await insertPackageRowsIfAny({
+        client,
+        tableName: 'tender_reference_suggestions',
+        rows: plan.referenceSuggestions.map((suggestion) => ({
+          tender_package_id: packageId,
+          source_type: suggestion.sourceType,
+          source_reference: suggestion.sourceReference,
+          title: suggestion.title,
+          rationale: suggestion.rationale,
+          confidence: suggestion.confidence,
+        })),
+        schema: tenderReferenceSuggestionRowsSchema,
+        fallbackMessage: 'Referenssiehdotuksia ei voitu tallentaa.',
+      });
       await insertTenderResultEvidenceRows({
         client,
         packageId,
@@ -605,24 +611,19 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         fallbackMessage: 'Referenssien evidence-rivejä ei voitu tallentaa.',
       });
 
-      const { data: draftArtifactData, error: draftArtifactError } = await client
-        .from('tender_draft_artifacts')
-        .insert(
-          plan.draftArtifacts.map((artifact) => ({
-            tender_package_id: packageId,
-            artifact_type: artifact.artifactType,
-            title: artifact.title,
-            content_md: artifact.contentMd,
-            status: artifact.status,
-          }))
-        )
-        .select('*');
-
-      if (draftArtifactError) {
-        throw draftArtifactError;
-      }
-
-      const draftArtifactRows = tenderDraftArtifactRowsSchema.parse(draftArtifactData ?? []);
+      const draftArtifactRows = await insertPackageRowsIfAny({
+        client,
+        tableName: 'tender_draft_artifacts',
+        rows: plan.draftArtifacts.map((artifact) => ({
+          tender_package_id: packageId,
+          artifact_type: artifact.artifactType,
+          title: artifact.title,
+          content_md: artifact.contentMd,
+          status: artifact.status,
+        })),
+        schema: tenderDraftArtifactRowsSchema,
+        fallbackMessage: 'Luonnosartefakteja ei voitu tallentaa.',
+      });
       await insertTenderResultEvidenceRows({
         client,
         packageId,
@@ -633,25 +634,20 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         fallbackMessage: 'Luonnosartefaktien evidence-rivejä ei voitu tallentaa.',
       });
 
-      const { data: reviewTaskData, error: reviewTaskError } = await client
-        .from('tender_review_tasks')
-        .insert(
-          plan.reviewTasks.map((task) => ({
-            tender_package_id: packageId,
-            task_type: task.taskType,
-            title: task.title,
-            description: task.description,
-            status: task.status,
-            assigned_to_user_id: null,
-          }))
-        )
-        .select('*');
-
-      if (reviewTaskError) {
-        throw reviewTaskError;
-      }
-
-      const reviewTaskRows = tenderReviewTaskRowsSchema.parse(reviewTaskData ?? []);
+      const reviewTaskRows = await insertPackageRowsIfAny({
+        client,
+        tableName: 'tender_review_tasks',
+        rows: plan.reviewTasks.map((task) => ({
+          tender_package_id: packageId,
+          task_type: task.taskType,
+          title: task.title,
+          description: task.description,
+          status: task.status,
+          assigned_to_user_id: null,
+        })),
+        schema: tenderReviewTaskRowsSchema,
+        fallbackMessage: 'Tarkistustehtäviä ei voitu tallentaa.',
+      });
       await insertTenderResultEvidenceRows({
         client,
         packageId,
@@ -700,10 +696,10 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       try {
         await this.clearAnalysisResults(packageId, false);
       } catch (cleanupError) {
-        console.warn('Tender placeholder result cleanup failed after seed error.', cleanupError);
+        console.warn('Tender baseline result cleanup failed after seed error.', cleanupError);
       }
 
-      throw toRepositoryError(error, 'Placeholder-analyysitulosten kirjoitus epäonnistui.');
+      throw toRepositoryError(error, 'Baseline-analyysitulosten kirjoitus epäonnistui.');
     }
   }
 
@@ -1074,7 +1070,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
 
       return completedJob;
     } catch (error) {
-      const message = getRepositoryErrorMessage(error, 'Placeholder-analyysin suoritus epäonnistui.');
+      const message = getRepositoryErrorMessage(error, 'Baseline-analyysin suoritus epäonnistui.');
       throw new Error(message);
     }
   }
