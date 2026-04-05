@@ -19,6 +19,7 @@ import type {
   TenderRequirement,
   TenderReviewTask,
   TenderRiskFlag,
+  UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
 
 export interface TenderIntelligenceBackendAdapter {
@@ -37,6 +38,10 @@ export interface TenderIntelligenceBackendAdapter {
   listReferenceSuggestionsForPackage(packageId: string): Promise<TenderReferenceSuggestion[]>;
   listDraftArtifactsForPackage(packageId: string): Promise<TenderDraftArtifact[]>;
   listReviewTasksForPackage(packageId: string): Promise<TenderReviewTask[]>;
+  updateRequirementWorkflow(requirementId: string, input: UpdateTenderWorkflowInput): Promise<TenderRequirement>;
+  updateMissingItemWorkflow(missingItemId: string, input: UpdateTenderWorkflowInput): Promise<TenderMissingItem>;
+  updateRiskFlagWorkflow(riskFlagId: string, input: UpdateTenderWorkflowInput): Promise<TenderRiskFlag>;
+  updateReviewTaskWorkflow(reviewTaskId: string, input: UpdateTenderWorkflowInput): Promise<TenderReviewTask>;
   clearAnalysisResultsForPackage(packageId: string): Promise<void>;
   seedPlaceholderAnalysisResults(packageId: string): Promise<TenderPackageResults>;
   startPlaceholderAnalysis(packageId: string): Promise<TenderAnalysisJob>;

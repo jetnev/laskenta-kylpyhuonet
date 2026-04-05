@@ -19,13 +19,13 @@ const SUMMARY_CARDS = [
   },
   {
     key: 'openReviewTasks',
-    label: 'Avoimet tehtävät',
-    description: 'Katselmoinnin baseline-työt',
+    label: 'Review taskit',
+    description: 'Käsittelyyn nostetut workflow-rivit',
   },
   {
     key: 'openRisks',
     label: 'Riskit',
-    description: 'Tässä vaiheessa odottaa analyysiä',
+    description: 'Riskinostot ja niiden käsittely',
   },
   {
     key: 'documents',
@@ -58,6 +58,13 @@ export default function TenderIntelligencePage() {
     startDocumentExtraction,
     startPackageExtraction,
     deletingDocumentIds,
+    workflowUpdatingTargetIds,
+    actorNameById,
+    currentUserId,
+    updateRequirementWorkflow,
+    updateMissingItemWorkflow,
+    updateRiskFlagWorkflow,
+    updateReviewTaskWorkflow,
   } = useTenderIntelligence();
 
   return (
@@ -66,11 +73,11 @@ export default function TenderIntelligencePage() {
         <CardContent className="space-y-8 px-6 py-6 sm:px-8 sm:py-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4">
-              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 8</Badge>
+              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 9</Badge>
               <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Deterministinen baseline-analyysi tarjouspyyntöpaketeille</h1>
+                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Review workflow tarjouspyyntöpakettien baseline-löydöksille</h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-200 sm:text-base">
-                  Tarjousälyllä on nyt oma deterministinen sääntökerros, joka liittää deadline-, liite- ja referenssilöydökset oikeisiin extracted chunk -lähteisiin. Frontend käynnistää edelleen sekä extractionin että analyysin Supabase Edge Function -rajojen kautta.
+                  Tarjousälyllä on nyt oma review/resolution-kerros, joka rakentuu deterministisen baseline-analyysin päälle. Deadline-, liite- ja referenssilöydökset voidaan hyväksyä, hylätä tai ratkaista audit-tyyppisesti ilman että nykyinen tarjousydin muuttuu.
                 </p>
               </div>
             </div>
@@ -81,7 +88,7 @@ export default function TenderIntelligencePage() {
                 <Plus className="h-4 w-4" />
               </Button>
               <Button variant="outline" className="justify-between border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white" disabled>
-                Result-domain päivittyy baseline-ajosta
+                Result-domain päivittyy baseline- ja review-ajoista
                 <Sparkle className="h-4 w-4" />
               </Button>
             </div>
@@ -116,6 +123,8 @@ export default function TenderIntelligencePage() {
         />
         <TenderPackageWorkspace
           selectedPackage={selectedPackage}
+          currentUserId={currentUserId}
+          actorNameById={actorNameById}
           loading={loading}
           notFound={selectedPackageMissing}
           uploading={uploading}
@@ -123,6 +132,7 @@ export default function TenderIntelligencePage() {
           extractingPackage={Boolean(selectedPackage && extractingPackageId === selectedPackage.package.id)}
           extractingDocumentIds={extractingDocumentIds}
           deletingDocumentIds={deletingDocumentIds}
+          workflowUpdatingTargetIds={workflowUpdatingTargetIds}
           error={error}
           onCreateClick={() => setShowCreateDialog(true)}
           onStartAnalysis={async (packageId) => {
@@ -132,6 +142,10 @@ export default function TenderIntelligencePage() {
           onStartPackageExtraction={startPackageExtraction}
           onUploadDocuments={uploadDocuments}
           onDeleteDocument={deleteDocument}
+          onUpdateRequirement={updateRequirementWorkflow}
+          onUpdateMissingItem={updateMissingItemWorkflow}
+          onUpdateRiskFlag={updateRiskFlagWorkflow}
+          onUpdateReviewTask={updateReviewTaskWorkflow}
         />
       </div>
 
@@ -142,11 +156,11 @@ export default function TenderIntelligencePage() {
               <Stack className="h-4 w-4" />
               <span className="font-medium">Mitä tämä vaihe jo tekee</span>
             </div>
-            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit, extraction-data, analyysitulokset ja evidence-rivit tallentuvat Supabaseen. TXT-, Markdown-, CSV- ja XLSX-dokumenteille voidaan nyt tallentaa oikea extracted text ja chunkit, joita sääntöpohjainen baseline-analyysi käyttää provenance-lähteinä deadline-, liite- ja referenssilöydöksille.</p>
+            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit, extraction-data, analyysitulokset ja evidence-rivit tallentuvat Supabaseen. TXT-, Markdown-, CSV- ja XLSX-dokumenteille voidaan nyt tallentaa oikea extracted text ja chunkit, joita sääntöpohjainen baseline-analyysi käyttää provenance-lähteinä. Lisäksi käyttäjä voi nyt hyväksyä, hylätä, ratkaista ja kommentoida tuloksia omassa review workflow -kerroksessaan.</p>
           </div>
           <div className="space-y-2 sm:max-w-sm">
             <p className="font-medium text-slate-950">Mitä tästä puuttuu tarkoituksella</p>
-            <p>Ei vielä OCR:ää, PDF- tai DOCX-purkua, AI-provider-koodia, oikeaa analyysipalvelua tai kytkentää nykyiseen tarjouseditoriin. Oikea analyysimoottori voidaan vaihtaa nykyisten Edge Function -rajojen taakse niin, että evidence-domain säilyy ennallaan.</p>
+            <p>Ei vielä OCR:ää, PDF- tai DOCX-purkua, AI-provider-koodia, oikeaa analyysipalvelua, tarjousluonnoksen generointia tai kytkentää nykyiseen tarjouseditoriin. Oikea analyysimoottori voidaan vaihtaa nykyisten Edge Function -rajojen taakse niin, että evidence- ja review-domain säilyvät ennallaan.</p>
           </div>
         </CardContent>
       </Card>

@@ -105,6 +105,24 @@ export const tenderResultEvidenceRowSchema = z.object({
   updated_at: z.string(),
 });
 
+const tenderReviewStatusRowSchema = z.enum(['unreviewed', 'accepted', 'dismissed', 'needs_attention']);
+const tenderResolutionStatusRowSchema = z.enum(['open', 'in_progress', 'resolved', 'wont_fix']);
+
+const tenderWorkflowRowSchema = z.object({
+  review_status: tenderReviewStatusRowSchema,
+  review_note: z.string().nullable(),
+  reviewed_by_user_id: z.string().uuid().nullable(),
+  reviewed_at: z.string().nullable(),
+  resolution_status: tenderResolutionStatusRowSchema,
+  resolution_note: z.string().nullable(),
+  resolved_by_user_id: z.string().uuid().nullable(),
+  resolved_at: z.string().nullable(),
+});
+
+const tenderAssignableWorkflowRowSchema = tenderWorkflowRowSchema.extend({
+  assigned_to_user_id: z.string().uuid().nullable(),
+});
+
 export const tenderGoNoGoAssessmentRowSchema = z.object({
   id: z.string().uuid(),
   tender_package_id: z.string().uuid(),
@@ -129,7 +147,7 @@ export const tenderRequirementRowSchema = z.object({
   source_excerpt: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
-});
+}).merge(tenderAssignableWorkflowRowSchema);
 
 export const tenderMissingItemRowSchema = z.object({
   id: z.string().uuid(),
@@ -143,7 +161,7 @@ export const tenderMissingItemRowSchema = z.object({
   status: z.enum(['open', 'resolved']),
   created_at: z.string(),
   updated_at: z.string(),
-});
+}).merge(tenderAssignableWorkflowRowSchema);
 
 export const tenderRiskFlagRowSchema = z.object({
   id: z.string().uuid(),
@@ -156,7 +174,7 @@ export const tenderRiskFlagRowSchema = z.object({
   status: z.enum(['open', 'accepted', 'mitigated']),
   created_at: z.string(),
   updated_at: z.string(),
-});
+}).merge(tenderAssignableWorkflowRowSchema);
 
 export const tenderReferenceSuggestionRowSchema = z.object({
   id: z.string().uuid(),
@@ -169,7 +187,7 @@ export const tenderReferenceSuggestionRowSchema = z.object({
   confidence: z.number().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
-});
+}).merge(tenderWorkflowRowSchema);
 
 export const tenderDraftArtifactRowSchema = z.object({
   id: z.string().uuid(),
@@ -181,7 +199,7 @@ export const tenderDraftArtifactRowSchema = z.object({
   status: z.enum(['placeholder', 'ready-for-review', 'accepted']),
   created_at: z.string(),
   updated_at: z.string(),
-});
+}).merge(tenderWorkflowRowSchema);
 
 export const tenderReviewTaskRowSchema = z.object({
   id: z.string().uuid(),
@@ -194,7 +212,7 @@ export const tenderReviewTaskRowSchema = z.object({
   assigned_to_user_id: z.string().uuid().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
-});
+}).merge(tenderWorkflowRowSchema);
 
 export const tenderPackageRowsSchema = z.array(tenderPackageRowSchema);
 export const tenderDocumentRowsSchema = z.array(tenderDocumentRowSchema);

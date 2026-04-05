@@ -35,6 +35,49 @@ import type {
   TenderRiskFlagRow,
 } from '../types/tender-intelligence-db';
 
+function mapTenderWorkflowFields<
+  Row extends {
+    review_status: string;
+    review_note: string | null;
+    reviewed_by_user_id: string | null;
+    reviewed_at: string | null;
+    resolution_status: string;
+    resolution_note: string | null;
+    resolved_by_user_id: string | null;
+    resolved_at: string | null;
+  },
+>(row: Row) {
+  return {
+    reviewStatus: row.review_status,
+    reviewNote: row.review_note,
+    reviewedByUserId: row.reviewed_by_user_id,
+    reviewedAt: row.reviewed_at,
+    resolutionStatus: row.resolution_status,
+    resolutionNote: row.resolution_note,
+    resolvedByUserId: row.resolved_by_user_id,
+    resolvedAt: row.resolved_at,
+  };
+}
+
+function mapTenderAssignableWorkflowFields<
+  Row extends {
+    review_status: string;
+    review_note: string | null;
+    reviewed_by_user_id: string | null;
+    reviewed_at: string | null;
+    resolution_status: string;
+    resolution_note: string | null;
+    resolved_by_user_id: string | null;
+    resolved_at: string | null;
+    assigned_to_user_id: string | null;
+  },
+>(row: Row) {
+  return {
+    ...mapTenderWorkflowFields(row),
+    assignedToUserId: row.assigned_to_user_id,
+  };
+}
+
 function getTenderAnalysisJobLabel(job: TenderAnalysisJobRow) {
   return job.job_type === 'placeholder_analysis' ? 'Baseline-analyysi' : 'Analyysiajo';
 }
@@ -147,6 +190,7 @@ export function mapTenderRequirementRowToDomain(row: TenderRequirementRow): Tend
     status: row.status,
     confidence: row.confidence,
     sourceExcerpt: row.source_excerpt,
+    ...mapTenderAssignableWorkflowFields(row),
   };
 }
 
@@ -160,6 +204,7 @@ export function mapTenderMissingItemRowToDomain(row: TenderMissingItemRow): Tend
     description: row.description,
     severity: row.severity,
     status: row.status,
+    ...mapTenderAssignableWorkflowFields(row),
   };
 }
 
@@ -172,6 +217,7 @@ export function mapTenderRiskFlagRowToDomain(row: TenderRiskFlagRow): TenderRisk
     description: row.description,
     severity: row.severity,
     status: row.status,
+    ...mapTenderAssignableWorkflowFields(row),
   };
 }
 
@@ -184,6 +230,7 @@ export function mapTenderReferenceSuggestionRowToDomain(row: TenderReferenceSugg
     title: row.title,
     rationale: row.rationale,
     confidence: row.confidence,
+    ...mapTenderWorkflowFields(row),
   };
 }
 
@@ -197,6 +244,7 @@ export function mapTenderDraftArtifactRowToDomain(row: TenderDraftArtifactRow): 
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ...mapTenderWorkflowFields(row),
   };
 }
 
@@ -211,6 +259,7 @@ export function mapTenderReviewTaskRowToDomain(row: TenderReviewTaskRow): Tender
     assignedToUserId: row.assigned_to_user_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ...mapTenderWorkflowFields(row),
   };
 }
 

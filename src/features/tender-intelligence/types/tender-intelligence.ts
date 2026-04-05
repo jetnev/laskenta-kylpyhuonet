@@ -45,6 +45,8 @@ export const tenderMissingItemStatusSchema = z.enum(['open', 'resolved']);
 export const tenderRiskTypeSchema = z.enum(['commercial', 'delivery', 'technical', 'legal', 'resourcing', 'other']);
 export const tenderSeveritySchema = z.enum(['high', 'medium', 'low']);
 export const tenderRiskFlagStatusSchema = z.enum(['open', 'accepted', 'mitigated']);
+export const tenderReviewStatusSchema = z.enum(['unreviewed', 'accepted', 'dismissed', 'needs_attention']);
+export const tenderResolutionStatusSchema = z.enum(['open', 'in_progress', 'resolved', 'wont_fix']);
 export const tenderGoNoGoRecommendationSchema = z.enum(['pending', 'go', 'conditional-go', 'no-go']);
 export const tenderReferenceSuggestionSourceTypeSchema = z.enum(['quote', 'project', 'document-template', 'manual']);
 export const tenderDraftArtifactTypeSchema = z.enum(['quote-outline', 'response-summary', 'clarification-list']);
@@ -177,6 +179,29 @@ export const tenderAnalysisReadinessSchema = z.object({
   coverage: tenderExtractionCoverageSchema,
 });
 
+const tenderWorkflowStateSchema = z.object({
+  reviewStatus: tenderReviewStatusSchema,
+  reviewNote: z.string().trim().nullable().optional(),
+  reviewedByUserId: entityIdSchema.nullable().optional(),
+  reviewedAt: timestampSchema.nullable().optional(),
+  resolutionStatus: tenderResolutionStatusSchema,
+  resolutionNote: z.string().trim().nullable().optional(),
+  resolvedByUserId: entityIdSchema.nullable().optional(),
+  resolvedAt: timestampSchema.nullable().optional(),
+});
+
+const tenderAssignableWorkflowStateSchema = tenderWorkflowStateSchema.extend({
+  assignedToUserId: entityIdSchema.nullable().optional(),
+});
+
+export const updateTenderWorkflowInputSchema = z.object({
+  reviewStatus: tenderReviewStatusSchema.optional(),
+  reviewNote: z.string().trim().nullable().optional(),
+  resolutionStatus: tenderResolutionStatusSchema.optional(),
+  resolutionNote: z.string().trim().nullable().optional(),
+  assignedToUserId: entityIdSchema.nullable().optional(),
+});
+
 export const tenderRequirementSchema = z.object({
   id: entityIdSchema,
   packageId: entityIdSchema,
@@ -187,7 +212,7 @@ export const tenderRequirementSchema = z.object({
   sourceDocumentId: entityIdSchema.nullable().optional(),
   confidence: z.number().min(0).max(1).nullable().optional(),
   sourceExcerpt: z.string().trim().min(1).nullable().optional(),
-});
+}).merge(tenderAssignableWorkflowStateSchema);
 
 export const tenderMissingItemSchema = z.object({
   id: entityIdSchema,
@@ -198,7 +223,7 @@ export const tenderMissingItemSchema = z.object({
   description: z.string().trim().min(1).nullable().optional(),
   severity: tenderSeveritySchema,
   status: tenderMissingItemStatusSchema,
-});
+}).merge(tenderAssignableWorkflowStateSchema);
 
 export const tenderRiskFlagSchema = z.object({
   id: entityIdSchema,
@@ -208,7 +233,7 @@ export const tenderRiskFlagSchema = z.object({
   description: z.string().trim().min(1).nullable().optional(),
   severity: tenderSeveritySchema,
   status: tenderRiskFlagStatusSchema,
-});
+}).merge(tenderAssignableWorkflowStateSchema);
 
 export const tenderGoNoGoAssessmentSchema = z.object({
   packageId: entityIdSchema,
@@ -226,7 +251,7 @@ export const tenderReferenceSuggestionSchema = z.object({
   title: z.string().trim().min(1),
   rationale: z.string().trim().min(1).nullable().optional(),
   confidence: z.number().min(0).max(1).nullable().optional(),
-});
+}).merge(tenderWorkflowStateSchema);
 
 export const tenderDraftArtifactSchema = z.object({
   id: entityIdSchema,
@@ -237,7 +262,7 @@ export const tenderDraftArtifactSchema = z.object({
   status: tenderDraftArtifactStatusSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
-});
+}).merge(tenderWorkflowStateSchema);
 
 export const tenderReviewTaskSchema = z.object({
   id: entityIdSchema,
@@ -249,7 +274,7 @@ export const tenderReviewTaskSchema = z.object({
   assignedToUserId: entityIdSchema.nullable().optional(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
-});
+}).merge(tenderAssignableWorkflowStateSchema);
 
 export const tenderPackageResultsSchema = z.object({
   requirements: z.array(tenderRequirementSchema),
@@ -297,6 +322,8 @@ export type TenderMissingItemStatus = z.infer<typeof tenderMissingItemStatusSche
 export type TenderRiskType = z.infer<typeof tenderRiskTypeSchema>;
 export type TenderSeverity = z.infer<typeof tenderSeveritySchema>;
 export type TenderRiskFlagStatus = z.infer<typeof tenderRiskFlagStatusSchema>;
+export type TenderReviewStatus = z.infer<typeof tenderReviewStatusSchema>;
+export type TenderResolutionStatus = z.infer<typeof tenderResolutionStatusSchema>;
 export type TenderGoNoGoRecommendation = z.infer<typeof tenderGoNoGoRecommendationSchema>;
 export type TenderReferenceSuggestionSourceType = z.infer<typeof tenderReferenceSuggestionSourceTypeSchema>;
 export type TenderDraftArtifactType = z.infer<typeof tenderDraftArtifactTypeSchema>;
@@ -330,3 +357,4 @@ export type TenderPackageResults = z.infer<typeof tenderPackageResultsSchema>;
 export type TenderPackageDetails = z.infer<typeof tenderPackageDetailsSchema>;
 export type CreateTenderPackageInput = z.infer<typeof createTenderPackageInputSchema>;
 export type AddTenderDocumentInput = z.infer<typeof addTenderDocumentInputSchema>;
+export type UpdateTenderWorkflowInput = z.infer<typeof updateTenderWorkflowInputSchema>;

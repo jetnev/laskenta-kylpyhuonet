@@ -7,6 +7,8 @@ import {
   TENDER_DOCUMENT_EXTRACTOR_TYPE_META,
   TENDER_DRAFT_ARTIFACT_STATUS_META,
   TENDER_MISSING_ITEM_STATUS_META,
+  TENDER_RESOLUTION_STATUS_META,
+  TENDER_REVIEW_STATUS_META,
   TENDER_REQUIREMENT_STATUS_META,
   TENDER_REVIEW_TASK_STATUS_META,
   TENDER_RISK_FLAG_STATUS_META,
@@ -16,6 +18,8 @@ import {
 describe('Phase 6 Tender UI helpers', () => {
   it('maps result-domain statuses and severities into visible finnish labels', () => {
     expect(TENDER_REQUIREMENT_STATUS_META.unreviewed.label).toBe('Tarkistamatta');
+    expect(TENDER_REVIEW_STATUS_META.accepted.label).toBe('Hyväksytty');
+    expect(TENDER_RESOLUTION_STATUS_META.resolved.label).toBe('Ratkaistu');
     expect(TENDER_MISSING_ITEM_STATUS_META.open.label).toBe('Avoin');
     expect(TENDER_RISK_FLAG_STATUS_META.mitigated.label).toBe('Mitigoitu');
     expect(TENDER_REVIEW_TASK_STATUS_META.todo.label).toBe('Avoin');

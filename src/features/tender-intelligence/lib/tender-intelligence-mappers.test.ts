@@ -47,6 +47,47 @@ function createPackageRow(overrides: Partial<TenderPackageRow> = {}): TenderPack
   };
 }
 
+function createWorkflowFields(overrides: Partial<{
+  review_status: 'unreviewed' | 'accepted' | 'dismissed' | 'needs_attention';
+  review_note: string | null;
+  reviewed_by_user_id: string | null;
+  reviewed_at: string | null;
+  resolution_status: 'open' | 'in_progress' | 'resolved' | 'wont_fix';
+  resolution_note: string | null;
+  resolved_by_user_id: string | null;
+  resolved_at: string | null;
+}> = {}) {
+  return {
+    review_status: 'unreviewed' as const,
+    review_note: null,
+    reviewed_by_user_id: null,
+    reviewed_at: null,
+    resolution_status: 'open' as const,
+    resolution_note: null,
+    resolved_by_user_id: null,
+    resolved_at: null,
+    ...overrides,
+  };
+}
+
+function createAssignableWorkflowFields(overrides: Partial<{
+  review_status: 'unreviewed' | 'accepted' | 'dismissed' | 'needs_attention';
+  review_note: string | null;
+  reviewed_by_user_id: string | null;
+  reviewed_at: string | null;
+  resolution_status: 'open' | 'in_progress' | 'resolved' | 'wont_fix';
+  resolution_note: string | null;
+  resolved_by_user_id: string | null;
+  resolved_at: string | null;
+  assigned_to_user_id: string | null;
+}> = {}) {
+  return {
+    ...createWorkflowFields(overrides),
+    assigned_to_user_id: null,
+    ...overrides,
+  };
+}
+
 describe('mapTenderPackageRowToDomain', () => {
   it('maps package rows into the feature domain without coupling to the quote domain', () => {
     const packageRow = createPackageRow();
@@ -93,6 +134,17 @@ describe('result row mappers', () => {
       source_excerpt: 'Placeholder-ote',
       created_at: '2026-04-05T09:00:00.000Z',
       updated_at: '2026-04-05T09:00:00.000Z',
+      ...createAssignableWorkflowFields({
+        review_status: 'accepted',
+        review_note: 'Hyväksytty manuaalisesti',
+        reviewed_by_user_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab',
+        reviewed_at: '2026-04-05T09:01:00.000Z',
+        resolution_status: 'resolved',
+        resolution_note: 'Ratkaistu jatkokäsittelyyn',
+        resolved_by_user_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab',
+        resolved_at: '2026-04-05T09:02:00.000Z',
+        assigned_to_user_id: '33333333-3333-4333-8333-333333333333',
+      }),
     };
     const missingItemRow: TenderMissingItemRow = {
       id: '55555555-5555-4555-8555-555555555555',
@@ -106,6 +158,10 @@ describe('result row mappers', () => {
       status: 'open',
       created_at: '2026-04-05T09:05:00.000Z',
       updated_at: '2026-04-05T09:05:00.000Z',
+      ...createAssignableWorkflowFields({
+        review_status: 'needs_attention',
+        resolution_status: 'open',
+      }),
     };
     const riskFlagRow: TenderRiskFlagRow = {
       id: '66666666-6666-4666-8666-666666666666',
@@ -118,6 +174,10 @@ describe('result row mappers', () => {
       status: 'open',
       created_at: '2026-04-05T09:06:00.000Z',
       updated_at: '2026-04-05T09:06:00.000Z',
+      ...createAssignableWorkflowFields({
+        review_status: 'dismissed',
+        resolution_status: 'wont_fix',
+      }),
     };
     const referenceSuggestionRow: TenderReferenceSuggestionRow = {
       id: '77777777-7777-4777-8777-777777777777',
@@ -130,6 +190,7 @@ describe('result row mappers', () => {
       confidence: 0.31,
       created_at: '2026-04-05T09:07:00.000Z',
       updated_at: '2026-04-05T09:07:00.000Z',
+      ...createWorkflowFields(),
     };
     const draftArtifactRow: TenderDraftArtifactRow = {
       id: '88888888-8888-4888-8888-888888888888',
@@ -141,6 +202,7 @@ describe('result row mappers', () => {
       status: 'placeholder',
       created_at: '2026-04-05T09:08:00.000Z',
       updated_at: '2026-04-05T09:08:00.000Z',
+      ...createWorkflowFields(),
     };
     const reviewTaskRow: TenderReviewTaskRow = {
       id: '99999999-9999-4999-8999-999999999999',
@@ -153,6 +215,10 @@ describe('result row mappers', () => {
       assigned_to_user_id: null,
       created_at: '2026-04-05T09:09:00.000Z',
       updated_at: '2026-04-05T09:09:00.000Z',
+      ...createWorkflowFields({
+        review_status: 'accepted',
+        resolution_status: 'resolved',
+      }),
     };
     const extractionRow: TenderDocumentExtractionRow = {
       id: '10101010-1010-4010-8010-101010101010',
@@ -202,6 +268,9 @@ describe('result row mappers', () => {
       requirementType: 'technical',
       confidence: 0.42,
       sourceExcerpt: 'Placeholder-ote',
+      reviewStatus: 'accepted',
+      resolutionStatus: 'resolved',
+      assignedToUserId: '33333333-3333-4333-8333-333333333333',
     });
     expect(mapTenderMissingItemRowToDomain(missingItemRow)).toMatchObject({
       relatedRequirementId: requirementRow.id,
@@ -227,6 +296,8 @@ describe('result row mappers', () => {
       taskType: 'requirements',
       description: 'Placeholder-tehtävä',
       status: 'todo',
+      reviewStatus: 'accepted',
+      resolutionStatus: 'resolved',
     });
     expect(mapTenderDocumentExtractionRowToDomain(extractionRow)).toMatchObject({
       extractionStatus: 'extracted',
@@ -317,6 +388,7 @@ describe('buildTenderPackageDetails', () => {
         source_excerpt: 'Placeholder-ote',
         created_at: '2026-04-05T09:12:00.000Z',
         updated_at: '2026-04-05T09:12:00.000Z',
+        ...createAssignableWorkflowFields(),
       },
     ];
     const missingItemRows: TenderMissingItemRow[] = [
@@ -332,6 +404,7 @@ describe('buildTenderPackageDetails', () => {
         status: 'open',
         created_at: '2026-04-05T09:13:00.000Z',
         updated_at: '2026-04-05T09:13:00.000Z',
+        ...createAssignableWorkflowFields(),
       },
     ];
     const riskFlagRows: TenderRiskFlagRow[] = [
@@ -346,6 +419,7 @@ describe('buildTenderPackageDetails', () => {
         status: 'open',
         created_at: '2026-04-05T09:14:00.000Z',
         updated_at: '2026-04-05T09:14:00.000Z',
+        ...createAssignableWorkflowFields(),
       },
     ];
     const referenceSuggestionRows: TenderReferenceSuggestionRow[] = [
@@ -360,6 +434,7 @@ describe('buildTenderPackageDetails', () => {
         confidence: 0.31,
         created_at: '2026-04-05T09:15:00.000Z',
         updated_at: '2026-04-05T09:15:00.000Z',
+        ...createWorkflowFields(),
       },
     ];
     const draftArtifactRows: TenderDraftArtifactRow[] = [
@@ -373,6 +448,7 @@ describe('buildTenderPackageDetails', () => {
         status: 'placeholder',
         created_at: '2026-04-05T09:16:00.000Z',
         updated_at: '2026-04-05T09:16:00.000Z',
+        ...createWorkflowFields(),
       },
     ];
     const reviewTaskRows: TenderReviewTaskRow[] = [
@@ -387,6 +463,7 @@ describe('buildTenderPackageDetails', () => {
         assigned_to_user_id: null,
         created_at: '2026-04-05T09:17:00.000Z',
         updated_at: '2026-04-05T09:17:00.000Z',
+        ...createWorkflowFields(),
       },
     ];
     const assessmentRow: TenderGoNoGoAssessmentRow = {
@@ -466,6 +543,8 @@ describe('buildTenderPackageDetails', () => {
     expect(details.results.requirements[0]).toMatchObject({
       requirementType: 'technical',
       confidence: 0.42,
+      reviewStatus: 'unreviewed',
+      resolutionStatus: 'open',
     });
     expect(details.results.missingItems[0]).toMatchObject({
       relatedRequirementId: requirementRows[0].id,
@@ -486,6 +565,8 @@ describe('buildTenderPackageDetails', () => {
     expect(details.results.reviewTasks[0]).toMatchObject({
       taskType: 'requirements',
       title: 'Käy placeholder-vaatimukset läpi',
+      reviewStatus: 'unreviewed',
+      resolutionStatus: 'open',
     });
     expect(details.results.goNoGoAssessment).toMatchObject({
       packageId: packageRow.id,

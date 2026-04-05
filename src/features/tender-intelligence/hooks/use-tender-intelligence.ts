@@ -10,6 +10,7 @@ import type {
   TenderDocumentExtraction,
   TenderPackage,
   TenderPackageDetails,
+  UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
 
 export interface TenderDocumentsUploadFailure {
@@ -27,7 +28,7 @@ function getErrorMessage(error: unknown) {
 }
 
 export function useTenderIntelligence() {
-  const { user } = useAuth();
+  const { user, users } = useAuth();
   const repository = useMemo(() => getTenderIntelligenceRepository(), []);
   const [packages, setPackages] = useState<TenderPackage[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
@@ -40,8 +41,22 @@ export function useTenderIntelligence() {
   const [extractingPackageId, setExtractingPackageId] = useState<string | null>(null);
   const [extractingDocumentIds, setExtractingDocumentIds] = useState<string[]>([]);
   const [deletingDocumentIds, setDeletingDocumentIds] = useState<string[]>([]);
+  const [workflowUpdatingTargetIds, setWorkflowUpdatingTargetIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const hasOrganizationContext = Boolean(user?.organizationId);
+  const actorNameById = useMemo(() => {
+    const entries = new Map<string, string>();
+
+    users.forEach((nextUser) => {
+      entries.set(nextUser.id, nextUser.displayName);
+    });
+
+    if (user) {
+      entries.set(user.id, user.displayName);
+    }
+
+    return Object.fromEntries(entries);
+  }, [user, users]);
 
   const loadPackages = useCallback(async () => {
     const nextPackages = await repository.listTenderPackages();
@@ -353,6 +368,50 @@ export function useTenderIntelligence() {
     [hasOrganizationContext, loadSelectedPackage, repository, selectedPackage]
   );
 
+  const runWorkflowUpdate = useCallback(
+    async <TResult extends { packageId: string }>(targetId: string, updater: () => Promise<TResult>) => {
+      setWorkflowUpdatingTargetIds((current) => (current.includes(targetId) ? current : [...current, targetId]));
+
+      try {
+        const updated = await updater();
+        await loadSelectedPackage(updated.packageId);
+        setError(null);
+        return updated;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setWorkflowUpdatingTargetIds((current) => current.filter((item) => item !== targetId));
+      }
+    },
+    [loadSelectedPackage],
+  );
+
+  const updateRequirementWorkflow = useCallback(
+    async (requirementId: string, input: UpdateTenderWorkflowInput) =>
+      runWorkflowUpdate(`requirement:${requirementId}`, () => repository.updateRequirementWorkflow(requirementId, input)),
+    [repository, runWorkflowUpdate],
+  );
+
+  const updateMissingItemWorkflow = useCallback(
+    async (missingItemId: string, input: UpdateTenderWorkflowInput) =>
+      runWorkflowUpdate(`missing_item:${missingItemId}`, () => repository.updateMissingItemWorkflow(missingItemId, input)),
+    [repository, runWorkflowUpdate],
+  );
+
+  const updateRiskFlagWorkflow = useCallback(
+    async (riskFlagId: string, input: UpdateTenderWorkflowInput) =>
+      runWorkflowUpdate(`risk_flag:${riskFlagId}`, () => repository.updateRiskFlagWorkflow(riskFlagId, input)),
+    [repository, runWorkflowUpdate],
+  );
+
+  const updateReviewTaskWorkflow = useCallback(
+    async (reviewTaskId: string, input: UpdateTenderWorkflowInput) =>
+      runWorkflowUpdate(`review_task:${reviewTaskId}`, () => repository.updateReviewTaskWorkflow(reviewTaskId, input)),
+    [repository, runWorkflowUpdate],
+  );
+
   const overview = useMemo(
     () => ({
       packages: packages.length,
@@ -375,9 +434,12 @@ export function useTenderIntelligence() {
     extractingPackageId,
     extractingDocumentIds,
     deletingDocumentIds,
+    workflowUpdatingTargetIds,
     error,
     overview,
     canCreate: hasOrganizationContext,
+    actorNameById,
+    currentUserId: user?.id ?? null,
     hasPackages: packages.length > 0,
     selectPackage: setSelectedPackageId,
     createPackage,
@@ -386,5 +448,9 @@ export function useTenderIntelligence() {
     startPackageExtraction,
     uploadDocuments,
     deleteDocument,
+    updateRequirementWorkflow,
+    updateMissingItemWorkflow,
+    updateRiskFlagWorkflow,
+    updateReviewTaskWorkflow,
   };
 }

@@ -106,6 +106,15 @@ function createPackageWithEvidence(): TenderPackageDetails {
           status: 'unreviewed',
           confidence: 0.42,
           sourceExcerpt: 'Tekninen toimituslaajuus kuvataan tässä extracted chunkissa.',
+          reviewStatus: 'unreviewed',
+          reviewNote: null,
+          reviewedByUserId: null,
+          reviewedAt: null,
+          resolutionStatus: 'open',
+          resolutionNote: null,
+          resolvedByUserId: null,
+          resolvedAt: null,
+          assignedToUserId: null,
         },
       ],
       missingItems: [],
@@ -119,10 +128,24 @@ function createPackageWithEvidence(): TenderPackageDetails {
 }
 
 describe('TenderResultPanels', () => {
-  it('renders evidence previews for result rows with provenance', () => {
-    const markup = renderToStaticMarkup(<TenderResultPanels selectedPackage={createPackageWithEvidence()} />);
+  it('renders evidence previews and workflow actions for result rows with provenance', () => {
+    const markup = renderToStaticMarkup(
+      <TenderResultPanels
+        selectedPackage={createPackageWithEvidence()}
+        currentUserId="user-1"
+        actorNameById={{ 'user-1': 'Copilot Test' }}
+        onUpdateRequirement={async () => undefined}
+        onUpdateMissingItem={async () => undefined}
+        onUpdateRiskFlag={async () => undefined}
+        onUpdateReviewTask={async () => undefined}
+      />,
+    );
 
+    expect(markup).toContain('Review workflow');
     expect(markup).toContain('Evidence');
+    expect(markup).toContain('Hyväksy');
+    expect(markup).toContain('Vaatii huomiota');
+    expect(markup).toContain('Ratkaisu: Avoin');
     expect(markup).toContain('tarjouspyynto.txt');
     expect(markup).toContain('tarjouspyynto.txt / chunk 1');
     expect(markup).toContain('Tekninen toimituslaajuus kuvataan tässä extracted chunkissa.');

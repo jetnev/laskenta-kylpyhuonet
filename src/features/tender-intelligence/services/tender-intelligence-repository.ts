@@ -12,7 +12,9 @@ import {
   type TenderExtractionCoverage,
   type TenderResultEvidence,
   type TenderResultEvidenceTargetType,
+  type UpdateTenderWorkflowInput,
 } from '../types/tender-intelligence';
+import { buildTenderWorkflowMetadataUpdate, syncTenderReviewTaskStatus } from '../lib/tender-review-workflow';
 import {
   buildTenderDocumentStoragePath,
   TENDER_INTELLIGENCE_STORAGE_BUCKET,
@@ -146,13 +148,14 @@ async function fetchPackageRows<Row>(options: {
   packageId: string;
   schema: { parse(data: unknown): Row[] };
   fallbackMessage: string;
+  orderByColumn?: 'created_at' | 'updated_at';
 }) {
   const client = requireConfiguredSupabase();
   const { data, error } = await client
     .from(options.tableName)
     .select('*')
     .eq('tender_package_id', options.packageId)
-    .order('created_at', { ascending: false });
+    .order(options.orderByColumn ?? 'created_at', { ascending: false });
 
   if (error) {
     throw toRepositoryError(error, options.fallbackMessage);
@@ -199,6 +202,85 @@ async function fetchTenderAnalysisJobRowById(jobId: string) {
   }
 
   return data ? tenderAnalysisJobRowSchema.parse(data) : null;
+}
+
+async function fetchPackageResultRowById<Row>(options: {
+  tableName:
+    | 'tender_requirements'
+    | 'tender_missing_items'
+    | 'tender_risk_flags'
+    | 'tender_review_tasks';
+  rowId: string;
+  schema: { parse(data: unknown): Row };
+  fallbackMessage: string;
+}) {
+  const client = requireConfiguredSupabase();
+  const { data, error } = await client.from(options.tableName).select('*').eq('id', options.rowId).maybeSingle();
+
+  if (error) {
+    throw toRepositoryError(error, options.fallbackMessage);
+  }
+
+  return data ? options.schema.parse(data) : null;
+}
+
+async function getAuthenticatedActorUserId() {
+  const client = requireConfiguredSupabase();
+  const { data, error } = await client.auth.getUser();
+
+  if (error) {
+    throw toRepositoryError(error, 'Kirjautunutta käyttäjää ei voitu tunnistaa Tarjousälyn katselmointia varten.');
+  }
+
+  const actorUserId = typeof data.user?.id === 'string' ? data.user.id.trim() : '';
+
+  if (!actorUserId) {
+    throw new Error('Kirjautunutta käyttäjää ei voitu tunnistaa Tarjousälyn katselmointia varten.');
+  }
+
+  return actorUserId;
+}
+
+function mapTenderWorkflowUpdateToRowPatch(update: ReturnType<typeof buildTenderWorkflowMetadataUpdate>) {
+  const patch: Record<string, unknown> = {};
+
+  if (update.reviewStatus !== undefined) {
+    patch.review_status = update.reviewStatus;
+  }
+
+  if (update.reviewNote !== undefined) {
+    patch.review_note = update.reviewNote;
+  }
+
+  if (update.reviewedByUserId !== undefined) {
+    patch.reviewed_by_user_id = update.reviewedByUserId;
+  }
+
+  if (update.reviewedAt !== undefined) {
+    patch.reviewed_at = update.reviewedAt;
+  }
+
+  if (update.resolutionStatus !== undefined) {
+    patch.resolution_status = update.resolutionStatus;
+  }
+
+  if (update.resolutionNote !== undefined) {
+    patch.resolution_note = update.resolutionNote;
+  }
+
+  if (update.resolvedByUserId !== undefined) {
+    patch.resolved_by_user_id = update.resolvedByUserId;
+  }
+
+  if (update.resolvedAt !== undefined) {
+    patch.resolved_at = update.resolvedAt;
+  }
+
+  if (update.assignedToUserId !== undefined) {
+    patch.assigned_to_user_id = update.assignedToUserId;
+  }
+
+  return patch;
 }
 
 async function fetchTenderDocumentExtractionRowsForPackage(packageId: string) {
@@ -436,6 +518,79 @@ async function insertPackageRowsIfAny<Row>(options: {
 
 class SupabaseTenderIntelligenceRepository implements TenderIntelligenceRepository {
   private listeners = new Set<Listener>();
+
+  private async updateWorkflowRow<Row extends {
+    id: string;
+    tender_package_id: string;
+    review_status: 'unreviewed' | 'accepted' | 'dismissed' | 'needs_attention';
+    review_note: string | null;
+    reviewed_by_user_id: string | null;
+    reviewed_at: string | null;
+    resolution_status: 'open' | 'in_progress' | 'resolved' | 'wont_fix';
+    resolution_note: string | null;
+    resolved_by_user_id: string | null;
+    resolved_at: string | null;
+    assigned_to_user_id?: string | null;
+  }, DomainEntity>(options: {
+    tableName: 'tender_requirements' | 'tender_missing_items' | 'tender_risk_flags' | 'tender_review_tasks';
+    rowId: string;
+    input: UpdateTenderWorkflowInput;
+    schema: { parse(data: unknown): Row };
+    mapRow: (row: Row) => DomainEntity;
+    notFoundMessage: string;
+    fallbackMessage: string;
+    syncLegacyReviewTaskStatus?: boolean;
+  }) {
+    const existingRow = await fetchPackageResultRowById({
+      tableName: options.tableName,
+      rowId: options.rowId,
+      schema: options.schema,
+      fallbackMessage: options.fallbackMessage,
+    });
+
+    if (!existingRow) {
+      throw new Error(options.notFoundMessage);
+    }
+
+    await assertTenderPackageAccess(existingRow.tender_package_id);
+
+    const actorUserId = await getAuthenticatedActorUserId();
+    const workflowUpdate = buildTenderWorkflowMetadataUpdate({
+      current: {
+        reviewStatus: existingRow.review_status,
+        reviewNote: existingRow.review_note,
+        reviewedByUserId: existingRow.reviewed_by_user_id,
+        reviewedAt: existingRow.reviewed_at,
+        resolutionStatus: existingRow.resolution_status,
+        resolutionNote: existingRow.resolution_note,
+        resolvedByUserId: existingRow.resolved_by_user_id,
+        resolvedAt: existingRow.resolved_at,
+        assignedToUserId: 'assigned_to_user_id' in existingRow ? existingRow.assigned_to_user_id ?? null : undefined,
+      },
+      input: options.input,
+      actorUserId,
+      now: new Date().toISOString(),
+    });
+    const patch = mapTenderWorkflowUpdateToRowPatch(workflowUpdate);
+
+    if (options.syncLegacyReviewTaskStatus && workflowUpdate.resolutionStatus) {
+      patch.status = syncTenderReviewTaskStatus(workflowUpdate.resolutionStatus);
+    }
+
+    if (Object.keys(patch).length < 1) {
+      return options.mapRow(existingRow);
+    }
+
+    const client = requireConfiguredSupabase();
+    const { data, error } = await client.from(options.tableName).update(patch).eq('id', options.rowId).select('*').single();
+
+    if (error) {
+      throw toRepositoryError(error, options.fallbackMessage);
+    }
+
+    this.emit();
+    return options.mapRow(options.schema.parse(data));
+  }
 
   private async updateAnalysisJob(
     jobId: string,
@@ -777,36 +932,42 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
           packageId,
           schema: tenderRequirementRowsSchema,
           fallbackMessage: 'Tarjouspyyntöpaketin vaatimuksia ei voitu ladata.',
+          orderByColumn: 'updated_at',
         }),
         fetchPackageRows({
           tableName: 'tender_missing_items',
           packageId,
           schema: tenderMissingItemRowsSchema,
           fallbackMessage: 'Tarjouspyyntöpaketin puutteita ei voitu ladata.',
+          orderByColumn: 'updated_at',
         }),
         fetchPackageRows({
           tableName: 'tender_risk_flags',
           packageId,
           schema: tenderRiskFlagRowsSchema,
           fallbackMessage: 'Tarjouspyyntöpaketin riskejä ei voitu ladata.',
+          orderByColumn: 'updated_at',
         }),
         fetchPackageRows({
           tableName: 'tender_reference_suggestions',
           packageId,
           schema: tenderReferenceSuggestionRowsSchema,
           fallbackMessage: 'Tarjouspyyntöpaketin referenssiehdotuksia ei voitu ladata.',
+          orderByColumn: 'updated_at',
         }),
         fetchPackageRows({
           tableName: 'tender_draft_artifacts',
           packageId,
           schema: tenderDraftArtifactRowsSchema,
           fallbackMessage: 'Tarjouspyyntöpaketin luonnosartefakteja ei voitu ladata.',
+          orderByColumn: 'updated_at',
         }),
         fetchPackageRows({
           tableName: 'tender_review_tasks',
           packageId,
           schema: tenderReviewTaskRowsSchema,
           fallbackMessage: 'Tarjouspyyntöpaketin tarkistustehtäviä ei voitu ladata.',
+          orderByColumn: 'updated_at',
         }),
         client.from('tender_go_no_go_assessments').select('*').eq('tender_package_id', packageId).limit(1),
       ]);
@@ -931,6 +1092,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         packageId,
         schema: tenderRequirementRowsSchema,
         fallbackMessage: 'Tarjouspyyntöpaketin vaatimuksia ei voitu ladata.',
+        orderByColumn: 'updated_at',
       });
 
       return rows.map(mapTenderRequirementRowToDomain);
@@ -947,6 +1109,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         packageId,
         schema: tenderMissingItemRowsSchema,
         fallbackMessage: 'Tarjouspyyntöpaketin puutteita ei voitu ladata.',
+        orderByColumn: 'updated_at',
       });
 
       return rows.map(mapTenderMissingItemRowToDomain);
@@ -963,6 +1126,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         packageId,
         schema: tenderRiskFlagRowsSchema,
         fallbackMessage: 'Tarjouspyyntöpaketin riskihavaintoja ei voitu ladata.',
+        orderByColumn: 'updated_at',
       });
 
       return rows.map(mapTenderRiskFlagRowToDomain);
@@ -979,6 +1143,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         packageId,
         schema: tenderReferenceSuggestionRowsSchema,
         fallbackMessage: 'Tarjouspyyntöpaketin referenssiehdotuksia ei voitu ladata.',
+        orderByColumn: 'updated_at',
       });
 
       return rows.map(mapTenderReferenceSuggestionRowToDomain);
@@ -995,6 +1160,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         packageId,
         schema: tenderDraftArtifactRowsSchema,
         fallbackMessage: 'Tarjouspyyntöpaketin luonnosartefakteja ei voitu ladata.',
+        orderByColumn: 'updated_at',
       });
 
       return rows.map(mapTenderDraftArtifactRowToDomain);
@@ -1011,12 +1177,62 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         packageId,
         schema: tenderReviewTaskRowsSchema,
         fallbackMessage: 'Tarjouspyyntöpaketin tarkistustehtäviä ei voitu ladata.',
+        orderByColumn: 'updated_at',
       });
 
       return rows.map(mapTenderReviewTaskRowToDomain);
     } catch (error) {
       throw toRepositoryError(error, 'Tarjouspyyntöpaketin tarkistustehtäviä ei voitu ladata.');
     }
+  }
+
+  async updateRequirementWorkflow(requirementId: string, input: UpdateTenderWorkflowInput) {
+    return this.updateWorkflowRow({
+      tableName: 'tender_requirements',
+      rowId: requirementId,
+      input,
+      schema: tenderRequirementRowSchema,
+      mapRow: mapTenderRequirementRowToDomain,
+      notFoundMessage: 'Vaatimusta ei löytynyt tai se on jo poistettu.',
+      fallbackMessage: 'Vaatimuksen katselmointia ei voitu päivittää.',
+    });
+  }
+
+  async updateMissingItemWorkflow(missingItemId: string, input: UpdateTenderWorkflowInput) {
+    return this.updateWorkflowRow({
+      tableName: 'tender_missing_items',
+      rowId: missingItemId,
+      input,
+      schema: tenderMissingItemRowSchema,
+      mapRow: mapTenderMissingItemRowToDomain,
+      notFoundMessage: 'Puutehavaintoa ei löytynyt tai se on jo poistettu.',
+      fallbackMessage: 'Puutehavainnon katselmointia ei voitu päivittää.',
+    });
+  }
+
+  async updateRiskFlagWorkflow(riskFlagId: string, input: UpdateTenderWorkflowInput) {
+    return this.updateWorkflowRow({
+      tableName: 'tender_risk_flags',
+      rowId: riskFlagId,
+      input,
+      schema: tenderRiskFlagRowSchema,
+      mapRow: mapTenderRiskFlagRowToDomain,
+      notFoundMessage: 'Riskihavaintoa ei löytynyt tai se on jo poistettu.',
+      fallbackMessage: 'Riskihavainnon katselmointia ei voitu päivittää.',
+    });
+  }
+
+  async updateReviewTaskWorkflow(reviewTaskId: string, input: UpdateTenderWorkflowInput) {
+    return this.updateWorkflowRow({
+      tableName: 'tender_review_tasks',
+      rowId: reviewTaskId,
+      input,
+      schema: tenderReviewTaskRowSchema,
+      mapRow: mapTenderReviewTaskRowToDomain,
+      notFoundMessage: 'Tarkistustehtävää ei löytynyt tai se on jo poistettu.',
+      fallbackMessage: 'Tarkistustehtävän workflow-tilaa ei voitu päivittää.',
+      syncLegacyReviewTaskStatus: true,
+    });
   }
 
   async clearAnalysisResultsForPackage(packageId: string) {

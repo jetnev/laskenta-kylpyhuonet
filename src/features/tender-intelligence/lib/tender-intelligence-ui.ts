@@ -12,6 +12,8 @@ import type {
   TenderMissingItemType,
   TenderPackageStatus,
   TenderReferenceSuggestionSourceType,
+  TenderResolutionStatus,
+  TenderReviewStatus,
   TenderRequirementStatus,
   TenderRequirementType,
   TenderReviewTaskType,
@@ -67,6 +69,20 @@ export const TENDER_REQUIREMENT_STATUS_META: Record<TenderRequirementStatus, { l
   covered: { label: 'Katettu', variant: 'default' },
   missing: { label: 'Puuttuu', variant: 'destructive' },
   'at-risk': { label: 'Riskissä', variant: 'outline' },
+};
+
+export const TENDER_REVIEW_STATUS_META: Record<TenderReviewStatus, { label: string; variant: TenderBadgeVariant }> = {
+  unreviewed: { label: 'Tarkistamatta', variant: 'secondary' },
+  accepted: { label: 'Hyväksytty', variant: 'default' },
+  dismissed: { label: 'Hylätty', variant: 'outline' },
+  needs_attention: { label: 'Vaatii huomiota', variant: 'destructive' },
+};
+
+export const TENDER_RESOLUTION_STATUS_META: Record<TenderResolutionStatus, { label: string; variant: TenderBadgeVariant }> = {
+  open: { label: 'Avoin', variant: 'destructive' },
+  in_progress: { label: 'Työn alla', variant: 'outline' },
+  resolved: { label: 'Ratkaistu', variant: 'default' },
+  wont_fix: { label: 'Ei toteuteta', variant: 'secondary' },
 };
 
 export const TENDER_MISSING_ITEM_TYPE_META: Record<TenderMissingItemType, { label: string; variant: TenderBadgeVariant }> = {
