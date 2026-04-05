@@ -20,7 +20,7 @@ interface AppPageLayoutProps extends ComponentPropsWithoutRef<'div'> {
   pageType?: AppPageType;
 }
 
-interface AppPageHeaderProps extends ComponentPropsWithoutRef<'div'> {
+interface AppPageHeaderProps extends Omit<ComponentPropsWithoutRef<'div'>, 'title'> {
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;

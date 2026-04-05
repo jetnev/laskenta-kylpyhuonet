@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useRef, useState } from 'react';
+import { type ReactNode, type RefObject, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   ChartBar,
@@ -31,6 +31,13 @@ import { cn } from '../../lib/utils';
 
 type InvoiceFilter = 'all' | InvoiceStatus | 'overdue';
 type OperationalActionKey = 'eligible' | 'draft' | 'issued' | 'overdue';
+type OperationalHighlight = {
+  key: OperationalActionKey;
+  title: string;
+  description: string;
+  actionLabel: string;
+  tone: 'default' | 'warning';
+};
 
 const FILTERS: Array<{ value: InvoiceFilter; label: string }> = [
   { value: 'all', label: 'Kaikki' },
@@ -224,9 +231,9 @@ export default function InvoicesPage({ routeState, onNavigate }: InvoicesPagePro
 
   const filterLabel = FILTERS.find((item) => item.value === filter)?.label ?? 'Kaikki';
 
-  const operationalHighlights = useMemo(
-    () =>
-      [
+  const operationalHighlights = useMemo<OperationalHighlight[]>(
+    () => {
+      const highlights: Array<OperationalHighlight | null> = [
         eligibleQuotes.length > 0
           ? {
               key: 'eligible' as const,
@@ -263,21 +270,14 @@ export default function InvoicesPage({ routeState, onNavigate }: InvoicesPagePro
               tone: 'default' as const,
             }
           : null,
-      ].filter(
-        (
-          item
-        ): item is {
-          key: OperationalActionKey;
-          title: string;
-          description: string;
-          actionLabel: string;
-          tone: 'default' | 'warning';
-        } => Boolean(item)
-      ),
+      ];
+
+      return highlights.flatMap((item) => (item ? [item] : []));
+    },
     [eligibleQuotes.length, totals.draftCount, totals.issuedCount, totals.overdueCount]
   );
 
-  const scrollToSection = (target: React.RefObject<HTMLDivElement>) => {
+  const scrollToSection = (target: RefObject<HTMLDivElement | null>) => {
     target.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 

@@ -1,10 +1,8 @@
-import { format } from 'date-fns';
-import { fi } from 'date-fns/locale';
-
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
 import { cn } from '../../../lib/utils';
+import type { ReportingDrillKind } from './ReportingDrilldownMeta';
 import type {
   QuoteFamilySummary,
   ReportBadgeVariant,
@@ -32,10 +30,6 @@ function fp(value: number) {
   return `${FMT_PERCENT.format(value)}\u00a0%`;
 }
 
-function fd(value: string | Date) {
-  return format(value instanceof Date ? value : new Date(value), 'dd.MM.yyyy', { locale: fi });
-}
-
 function badgeVariant(value: ReportBadgeVariant): 'default' | 'secondary' | 'outline' | 'destructive' {
   return value as 'default' | 'secondary' | 'outline' | 'destructive';
 }
@@ -59,20 +53,6 @@ function OverflowText({
       {secondary ? (
         <div className={cn('mt-1 truncate text-xs text-muted-foreground', secondaryClassName)}>{secondary}</div>
       ) : null}
-    </div>
-  );
-}
-
-function CompactText({
-  value,
-  className,
-}: {
-  value: string;
-  className?: string;
-}) {
-  return (
-    <div className={cn('truncate text-sm', className)} title={value}>
-      {value}
     </div>
   );
 }
@@ -392,8 +372,6 @@ function renderProjectsTable(projects: ReportProjectSummary[]) {
   );
 }
 
-export type ReportingDrillKind = 'families' | 'family-detail' | 'customers' | 'projects';
-
 interface ReportingDrilldownContentProps {
   kind: ReportingDrillKind | null;
   title?: string;
@@ -401,20 +379,6 @@ interface ReportingDrilldownContentProps {
   customers: ReportCustomerSummary[];
   projects: ReportProjectSummary[];
   onOpenQuote?: (family: QuoteFamilySummary) => void;
-}
-
-export function getReportingDrilldownDescription(kind: ReportingDrillKind | null) {
-  switch (kind) {
-    case 'families':
-    case 'family-detail':
-      return 'Tarkista kohteen tila, arvo, kate ja vastuuhenkilö. Avaa tarjous jatkotoimia varten.';
-    case 'customers':
-      return 'Skannaa asiakkaat nopeasti ja poraudu tarvittaessa tarkempaan tarjousnäkymään.';
-    case 'projects':
-      return 'Tarkista projektipoikkeamat, vastuuhenkilöt ja kohteet jotka vaativat seuraavan toimenpiteen.';
-    default:
-      return 'Tarkista poikkeavat kohteet ja avaa tarvittavat tarjoukset seuraavaa toimenpidettä varten.';
-  }
 }
 
 export default function ReportingDrilldownContent({

@@ -65,6 +65,7 @@ Supabase Dashboardissa:
 6. Aseta `VITE_SITE_URL=https://projekta.fi` kaikille tuotantobuildeille, jotta canonical- ja some-metat osoittavat oikeaan domainiin.
 7. Aseta `VITE_SUPABASE_REDIRECT_URL=https://projekta.fi/auth/callback`, ellei authin paluulinkkiä tarvitse erikseen ohjata johonkin muuhun sallittuun callback-osoitteeseen.
 8. Callback-reitin on oltava julkinen, koska sekä sähköpostivahvistus että salasanan palautus palaavat siihen ennen kirjautumista.
+9. GitHub Actionsin `validate.yml` kannattaa pitää pakollisena laatutarkistuksena ennen `main`-mergeä. `deploy-cloudflare-pages.yml` ajaa validoinnin vielä uudelleen ennen varsinaista deployta.
 
 ## 5. Password reset
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ShieldCheck, UserCircle, UserPlus } from '@phosphor-icons/react';
-import { getOrganizationRoleLabel } from '../../lib/access-control';
+import { getOrganizationRoleBadgeLabel, getPlatformRoleLabel } from '../../lib/access-control';
 import { useAuth } from '../../hooks/use-auth';
 import { Card } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -42,7 +42,7 @@ export default function UsersPage() {
     return (
       <div className="p-4 sm:p-8">
         <Card className="p-8 text-center text-muted-foreground">
-          Käyttäjähallinta on vain yrityksen omistajalle tai pääkäyttäjälle.
+          Käyttäjähallinta on vain yrityksen pääkäyttäjälle tai Projektan ylläpidolle.
         </Card>
       </div>
     );
@@ -61,7 +61,7 @@ export default function UsersPage() {
           password: createForm.password,
           status: createForm.status,
         });
-        toast.success('Työntekijä luotu onnistuneesti.');
+        toast.success('Käyttäjä luotu onnistuneesti.');
       }
 
       setShowCreateDialog(false);
@@ -77,11 +77,11 @@ export default function UsersPage() {
     <div className="p-4 sm:p-8 space-y-6">
       <div>
         <h1 className="text-2xl sm:text-3xl font-semibold">
-          {isPlatformAdmin ? 'Käyttäjähallinta' : 'Työntekijät'}
+          {isPlatformAdmin ? 'Käyttäjähallinta' : 'Työtilan käyttäjät'}
         </h1>
         <p className="text-muted-foreground mt-1">
           {isPlatformAdmin
-            ? 'Hallitse alustan käyttäjärooleja, työtiloja ja tilien tilaa.'
+            ? 'Hallitse alustan rooleja, työtiloja ja tilien tilaa.'
             : `Hallitse yrityksesi ${organization?.name || 'työtilan'} työntekijätilejä ja käyttöoikeuksia.`}
         </p>
       </div>
@@ -91,12 +91,12 @@ export default function UsersPage() {
           <DialogTrigger asChild>
             <Button>
               <UserPlus className="h-4 w-4" />
-              {isPlatformAdmin ? 'Luo käyttäjä' : 'Luo työntekijä'}
+              Luo käyttäjä
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{isPlatformAdmin ? 'Luo uusi käyttäjä' : 'Luo uusi työntekijä'}</DialogTitle>
+              <DialogTitle>Luo uusi käyttäjä</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
@@ -137,7 +137,7 @@ export default function UsersPage() {
               <div className={`grid grid-cols-1 ${isPlatformAdmin ? 'sm:grid-cols-2' : ''} gap-4`}>
                 {isPlatformAdmin && (
                   <div className="space-y-2">
-                    <Label htmlFor="create-user-role">Pääkäyttäjärooli</Label>
+                    <Label htmlFor="create-user-role">Alustan rooli</Label>
                     <Select
                       value={createForm.role}
                       onValueChange={(value) =>
@@ -148,8 +148,8 @@ export default function UsersPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="user">Käyttäjä</SelectItem>
-                        <SelectItem value="admin">Pääkäyttäjä</SelectItem>
+                        <SelectItem value="user">{getPlatformRoleLabel('user')}</SelectItem>
+                        <SelectItem value="admin">{getPlatformRoleLabel('admin')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -176,20 +176,14 @@ export default function UsersPage() {
               {!isPlatformAdmin && (
                 <Alert>
                   <AlertDescription>
-                    Luotu käyttäjä liitetään suoraan työtilaan {organization?.name || 'yrityksesi'} työntekijänä.
-                    Työntekijä ei voi saada pääkäyttäjän roolia tästä näkymästä.
+                    Luotu käyttäjä liitetään suoraan työtilaan {organization?.name || 'yrityksesi'} käyttäjänä.
+                    Projektan ylläpidon roolia ei voi myöntää tästä näkymästä.
                   </AlertDescription>
                 </Alert>
               )}
 
               <Button className="w-full" disabled={creatingUser} onClick={() => void handleCreateUser()}>
-                {creatingUser
-                  ? isPlatformAdmin
-                    ? 'Luodaan käyttäjää...'
-                    : 'Luodaan työntekijää...'
-                  : isPlatformAdmin
-                    ? 'Luo käyttäjä'
-                    : 'Luo työntekijä'}
+                {creatingUser ? 'Luodaan käyttäjää...' : 'Luo käyttäjä'}
               </Button>
             </div>
           </DialogContent>
@@ -200,8 +194,8 @@ export default function UsersPage() {
         <ShieldCheck className="h-4 w-4" />
         <AlertDescription>
           {isPlatformAdmin
-            ? 'Pääkäyttäjä hallitsee alustan pääkäyttäjärooleja, käyttäjätiloja ja työtilojen kokonaisnäkymää. Yrityksen omistaja hallitsee vain oman yrityksensä työntekijöitä eikä voi antaa pääkäyttäjäroolia.'
-            : `Yrityksen omistaja hallitsee vain työtilan ${organization?.name || 'oman yrityksen'} työntekijöitä. Pääkäyttäjärooli on erillinen eikä sitä voi myöntää tästä näkymästä.`}
+            ? 'Projektan ylläpito hallitsee alustan rooleja, käyttäjätiloja ja työtilojen kokonaisnäkymää. Yrityksen pääkäyttäjä hallitsee vain oman työtilansa käyttäjiä eikä voi myöntää ylläpitoroolia.'
+            : `Yrityksen pääkäyttäjä hallitsee vain työtilan ${organization?.name || 'oman yrityksen'} käyttäjiä. Projektan ylläpidon rooli on erillinen eikä sitä voi myöntää tästä näkymästä.`}
         </AlertDescription>
       </Alert>
 
@@ -213,8 +207,8 @@ export default function UsersPage() {
                 <TableHead>Käyttäjä</TableHead>
                 <TableHead>Sähköposti</TableHead>
                 <TableHead>Työtila</TableHead>
-                <TableHead>Yritysrooli</TableHead>
-                <TableHead>Pääkäyttäjärooli</TableHead>
+                <TableHead>Työtilarooli</TableHead>
+                <TableHead>Alustan rooli</TableHead>
                 <TableHead>Tila</TableHead>
                 <TableHead>Luotu</TableHead>
                 <TableHead>Viimeksi kirjautunut</TableHead>
@@ -238,7 +232,7 @@ export default function UsersPage() {
                   <TableCell>{account.organizationName || '-'}</TableCell>
                   <TableCell>
                     <Badge variant={account.organizationRole === 'owner' ? 'secondary' : 'outline'}>
-                      {getOrganizationRoleLabel(account.organizationRole)}
+                      {getOrganizationRoleBadgeLabel(account.organizationRole)}
                     </Badge>
                   </TableCell>
                   <TableCell className="w-[180px]">
@@ -247,7 +241,7 @@ export default function UsersPage() {
                       onValueChange={async (nextRole) => {
                         try {
                           await updateUserRole(account.id, nextRole as 'admin' | 'user');
-                          toast.success('Pääkäyttäjärooli päivitetty.');
+                          toast.success('Alustan rooli päivitetty.');
                         } catch (error) {
                           toast.error(error instanceof Error ? error.message : 'Roolin päivitys epäonnistui.');
                         }
@@ -258,8 +252,8 @@ export default function UsersPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="admin">Pääkäyttäjä</SelectItem>
-                        <SelectItem value="user">Käyttäjä</SelectItem>
+                        <SelectItem value="admin">{getPlatformRoleLabel('admin')}</SelectItem>
+                        <SelectItem value="user">{getPlatformRoleLabel('user')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </TableCell>
@@ -329,7 +323,7 @@ export default function UsersPage() {
                     <TableCell>{account.email}</TableCell>
                     <TableCell>
                       <Badge variant={isOwnerRow ? 'secondary' : 'outline'}>
-                        {getOrganizationRoleLabel(account.organizationRole)}
+                        {getOrganizationRoleBadgeLabel(account.organizationRole)}
                       </Badge>
                     </TableCell>
                     <TableCell className="w-[220px]">
@@ -347,7 +341,7 @@ export default function UsersPage() {
                                 account.id,
                                 account.status === 'active' ? 'disabled' : 'active'
                               );
-                              toast.success('Työntekijän tila päivitetty.');
+                              toast.success('Käyttäjän tila päivitetty.');
                             } catch (error) {
                               toast.error(error instanceof Error ? error.message : 'Tilapäivitys epäonnistui.');
                             }

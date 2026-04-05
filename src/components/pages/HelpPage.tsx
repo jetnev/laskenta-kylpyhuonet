@@ -264,7 +264,7 @@ export default function HelpPage({ onNavigate }: HelpPageProps) {
         actionLabel: 'Täytä yritystiedot',
         target: 'account',
         isComplete: companyBasicsCompleted,
-        permissionNote: canManageSharedData ? undefined : 'Yritystietoja voi päivittää vain pääkäyttäjä tai omistaja.',
+        permissionNote: canManageSharedData ? undefined : 'Yritystietoja voi päivittää vain yrityksen pääkäyttäjä tai Projektan ylläpito.',
       },
       {
         title: 'Asiakas lisätty',

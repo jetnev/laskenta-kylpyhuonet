@@ -1,6 +1,6 @@
 name: Deploy Cloudflare Pages
 
-on:
+"on":
   push:
     branches:
       - main
@@ -26,6 +26,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Validate
+        run: npm run validate
 
       - name: Build
         run: npm run build

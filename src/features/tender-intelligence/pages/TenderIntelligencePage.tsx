@@ -1,15 +1,23 @@
 import { Plus, Sparkle, Stack } from '@phosphor-icons/react';
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import type { AppLocationState } from '@/lib/app-routing';
 
 import CreateTenderPackageDialog from '../components/CreateTenderPackageDialog';
 import TenderPackageList from '../components/TenderPackageList';
+import TenderReferenceCorpusPanel from '../components/TenderReferenceCorpusPanel';
 import TenderPackageWorkspace from '../components/TenderPackageWorkspace';
 import { useTenderIntelligence } from '../hooks/use-tender-intelligence';
+import { getTenderIntelligenceRepository } from '../services/tender-intelligence-repository';
+import {
+  resolveTenderIntelligenceHandoff,
+  resolveTenderIntelligenceHandoffLabel,
+  type TenderIntelligenceResolvedHandoff,
+} from '../lib/tender-intelligence-handoff';
 
 const SUMMARY_CARDS = [
   {
@@ -19,13 +27,18 @@ const SUMMARY_CARDS = [
   },
   {
     key: 'openReviewTasks',
-    label: 'Avoimet tehtävät',
-    description: 'Katselmoinnin placeholder-työt',
+    label: 'Review taskit',
+    description: 'Käsittelyyn nostetut workflow-rivit',
+  },
+  {
+    key: 'referenceProfiles',
+    label: 'Referenssit',
+    description: 'Organisaation oma referenssikorpus',
   },
   {
     key: 'openRisks',
     label: 'Riskit',
-    description: 'Tässä vaiheessa odottaa analyysiä',
+    description: 'Riskinostot ja niiden käsittely',
   },
   {
     key: 'documents',
@@ -34,25 +47,178 @@ const SUMMARY_CARDS = [
   },
 ] as const;
 
-export default function TenderIntelligencePage() {
+interface TenderIntelligencePageProps {
+  routeState?: AppLocationState;
+  onNavigate?: (location: AppLocationState, options?: { replace?: boolean }) => void;
+}
+
+function createEmptyHandoffState(): TenderIntelligenceResolvedHandoff {
+  return {
+    isActive: false,
+    status: 'none',
+    context: null,
+    resolvedTenderPackageId: null,
+    resolvedDraftPackageId: null,
+    focusedBlockIds: [],
+    bannerTone: 'default',
+    title: null,
+    description: null,
+    ctaLabel: null,
+  };
+}
+
+export default function TenderIntelligencePage({ routeState, onNavigate }: TenderIntelligencePageProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [editorHandoff, setEditorHandoff] = useState<TenderIntelligenceResolvedHandoff>(() => createEmptyHandoffState());
+  const repository = useMemo(() => getTenderIntelligenceRepository(), []);
   const {
     packages,
+    draftPackages,
+    editorImportPreview,
+    editorImportValidation,
+    draftPackageImportState,
+    draftPackageReimportPreview,
+    draftPackageImportDiagnostics,
+    draftPackageImportRepairPreview,
+    draftPackageImportRuns,
     selectedPackage,
     selectedPackageId,
+    selectedDraftPackageId,
     selectedPackageMissing,
     loading,
     creating,
+    creatingDraftPackagePackageId,
+    previewingEditorImportDraftPackageId,
+    importingDraftPackageId,
+    refreshingDraftPackageImportDiagnosticsId,
+    repairingDraftPackageId,
+    repairingDraftPackageRegistryAction,
     error,
     overview,
     canCreate,
     selectPackage,
+    selectDraftPackage,
     createPackage,
+    referenceProfiles,
+    startAnalysis,
     uploadDocuments,
     deleteDocument,
     uploading,
+    updatingDraftPackageItemIds,
+    referenceProfileSubmittingId,
+    deletingReferenceProfileIds,
+    reviewingDraftPackageId,
+    startingAnalysisPackageId,
+    extractingPackageId,
+    extractingDocumentIds,
+    startDocumentExtraction,
+    startPackageExtraction,
     deletingDocumentIds,
+    exportingDraftPackageId,
+    workflowUpdatingTargetIds,
+    recomputingReferenceSuggestionPackageId,
+    actorNameById,
+    currentUserId,
+    createDraftPackage,
+    importDraftPackageToEditor,
+    reimportDraftPackageToEditor,
+    refreshDraftPackageImportRegistryRepairPreview,
+    refreshDraftPackageImportDiagnosticsFromQuote,
+    repairDraftPackageImportRegistry,
+    updateDraftPackageItem,
+    markDraftPackageReviewed,
+    markDraftPackageExported,
+    createReferenceProfile,
+    updateReferenceProfile,
+    deleteReferenceProfile,
+    recomputeReferenceSuggestions,
+    updateRequirementWorkflow,
+    updateMissingItemWorkflow,
+    updateRiskFlagWorkflow,
+    updateReferenceSuggestionWorkflow,
+    updateReviewTaskWorkflow,
   } = useTenderIntelligence();
+
+  useEffect(() => {
+    let active = true;
+
+    const resolveRouteHandoff = async () => {
+      if (!routeState) {
+        if (active) {
+          setEditorHandoff(createEmptyHandoffState());
+        }
+        return;
+      }
+
+      const tenderPackageId = routeState.tenderContext?.tenderPackageId;
+      const draftPackageId = routeState.tenderContext?.draftPackageId;
+
+      try {
+        const [tenderPackage, draftPackage] = await Promise.all([
+          tenderPackageId ? repository.getTenderPackageById(tenderPackageId) : Promise.resolve(null),
+          draftPackageId ? repository.getDraftPackageById(draftPackageId) : Promise.resolve(null),
+        ]);
+
+        if (active) {
+          setEditorHandoff(resolveTenderIntelligenceHandoff(routeState, {
+            tenderPackage: tenderPackage?.package ?? null,
+            draftPackage,
+          }));
+        }
+      } catch {
+        if (active) {
+          setEditorHandoff({
+            isActive: true,
+            status: 'missing_context',
+            context: routeState.tenderContext ?? null,
+            resolvedTenderPackageId: routeState.tenderContext?.tenderPackageId ?? null,
+            resolvedDraftPackageId: routeState.tenderContext?.draftPackageId ?? null,
+            focusedBlockIds: (routeState.tenderContext?.blockIds ?? []) as TenderIntelligenceResolvedHandoff['focusedBlockIds'],
+            bannerTone: 'warning',
+            title: 'Editorin lähdekontekstia ei voitu tarkistaa',
+            description: 'Tarjousäly avattiin editorista, mutta lähdedraftin tarkistaminen epäonnistui. Työtila pysyy ehjänä ja voit valita luonnoksen myös käsin.',
+            ctaLabel: routeState.tenderContext?.intent
+              ? resolveTenderIntelligenceHandoffLabel(routeState.tenderContext.intent)
+              : null,
+          });
+        }
+      }
+    };
+
+    void resolveRouteHandoff();
+
+    return () => {
+      active = false;
+    };
+  }, [repository, routeState]);
+
+  useEffect(() => {
+    if (!editorHandoff.isActive) {
+      return;
+    }
+
+    if (editorHandoff.resolvedTenderPackageId && selectedPackageId !== editorHandoff.resolvedTenderPackageId) {
+      selectPackage(editorHandoff.resolvedTenderPackageId);
+      return;
+    }
+
+    if (
+      editorHandoff.resolvedDraftPackageId
+      && selectedPackageId === editorHandoff.resolvedTenderPackageId
+      && selectedDraftPackageId !== editorHandoff.resolvedDraftPackageId
+    ) {
+      selectDraftPackage(editorHandoff.resolvedDraftPackageId);
+    }
+  }, [editorHandoff, selectDraftPackage, selectPackage, selectedDraftPackageId, selectedPackageId]);
+
+  const openImportedQuote = useCallback((projectId: string, quoteId: string) => {
+    onNavigate?.({
+      page: 'projects',
+      projectId,
+      quoteId,
+      editor: 'quote',
+    });
+  }, [onNavigate]);
 
   return (
     <div className="space-y-6 p-4 sm:p-8">
@@ -60,11 +226,11 @@ export default function TenderIntelligencePage() {
         <CardContent className="space-y-8 px-6 py-6 sm:px-8 sm:py-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4">
-              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 2</Badge>
+              <Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Tarjousäly / Phase 13</Badge>
               <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Dokumenttiupload ja Storage-perusta tarjouspyyntöpaketeille ilman muutoksia tarjousytimeen</h1>
+                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Imported quote handoff ja re-import reconciliation Tarjousäly-draft packageille</h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-200 sm:text-base">
-                  Tarjousäly käyttää nyt omaa organisaatio-scoped Supabase-domainiaan sekä yksityistä Storage-bucketia. Tässä vaiheessa dokumentit voidaan liittää paketteihin turvallisesti, mutta parsinta, OCR, analyysipalvelu, AI-providerit ja tarjousluonnoksen generointi jätetään edelleen myöhempiin vaiheisiin.
+                  Tarjousäly osaa nyt näyttää importoidun quoten handoffin, havaita draft packagen muutokset viime importin jälkeen ja päivittää saman quote-luonnoksen hallitusti vain adapterin omistamalta import-surfacelta.
                 </p>
               </div>
             </div>
@@ -75,7 +241,7 @@ export default function TenderIntelligencePage() {
                 <Plus className="h-4 w-4" />
               </Button>
               <Button variant="outline" className="justify-between border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white" disabled>
-                Analyysipalvelu myöhemmässä vaiheessa
+                Result-domain päivittyy baseline-, workflow-, reference-matchaus-, draft package-, import handoff- ja reconciliation-ajoista
                 <Sparkle className="h-4 w-4" />
               </Button>
             </div>
@@ -99,6 +265,18 @@ export default function TenderIntelligencePage() {
         </div>
       )}
 
+      {editorHandoff.isActive && editorHandoff.title && editorHandoff.description && (editorHandoff.status !== 'ready' || !selectedPackage || !selectedDraftPackageId || selectedDraftPackageId === editorHandoff.resolvedDraftPackageId) && (
+        <div className={[
+          'rounded-2xl border px-4 py-4 text-sm leading-6',
+          editorHandoff.bannerTone === 'warning'
+            ? 'border-amber-200 bg-amber-50 text-amber-950'
+            : 'border-sky-200 bg-sky-50 text-sky-950',
+        ].join(' ')}>
+          <div className="font-medium">{editorHandoff.title}</div>
+          <p className="mt-1">{editorHandoff.description}</p>
+        </div>
+      )}
+
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <TenderPackageList
           packages={packages}
@@ -110,16 +288,104 @@ export default function TenderIntelligencePage() {
         />
         <TenderPackageWorkspace
           selectedPackage={selectedPackage}
+          draftPackages={draftPackages}
+          referenceProfiles={referenceProfiles}
+          currentUserId={currentUserId}
+          actorNameById={actorNameById}
           loading={loading}
           notFound={selectedPackageMissing}
           uploading={uploading}
+          analysisStarting={Boolean(selectedPackage && startingAnalysisPackageId === selectedPackage.package.id)}
+          extractingPackage={Boolean(selectedPackage && extractingPackageId === selectedPackage.package.id)}
+          extractingDocumentIds={extractingDocumentIds}
           deletingDocumentIds={deletingDocumentIds}
+          selectedDraftPackageId={selectedDraftPackageId}
+          creatingDraftPackagePackageId={creatingDraftPackagePackageId}
+          editorImportPreview={editorImportPreview}
+          editorImportValidation={editorImportValidation}
+          draftPackageImportState={draftPackageImportState}
+          draftPackageReimportPreview={draftPackageReimportPreview}
+          draftPackageImportDiagnostics={draftPackageImportDiagnostics}
+          draftPackageImportRepairPreview={draftPackageImportRepairPreview}
+          draftPackageImportRuns={draftPackageImportRuns}
+          previewingEditorImportDraftPackageId={previewingEditorImportDraftPackageId}
+          importingDraftPackageId={importingDraftPackageId}
+          refreshingDraftPackageImportDiagnosticsId={refreshingDraftPackageImportDiagnosticsId}
+          repairingDraftPackageId={repairingDraftPackageId}
+          repairingDraftPackageRegistryAction={repairingDraftPackageRegistryAction}
+          updatingDraftPackageItemIds={updatingDraftPackageItemIds}
+          reviewingDraftPackageId={reviewingDraftPackageId}
+          exportingDraftPackageId={exportingDraftPackageId}
+          referenceProfileSubmittingId={referenceProfileSubmittingId}
+          deletingReferenceProfileIds={deletingReferenceProfileIds}
+          workflowUpdatingTargetIds={workflowUpdatingTargetIds}
+          recomputingReferenceSuggestionPackageId={recomputingReferenceSuggestionPackageId}
           error={error}
           onCreateClick={() => setShowCreateDialog(true)}
+          onStartAnalysis={async (packageId) => {
+            await startAnalysis(packageId);
+          }}
+          onStartDocumentExtraction={startDocumentExtraction}
+          onStartPackageExtraction={startPackageExtraction}
           onUploadDocuments={uploadDocuments}
           onDeleteDocument={deleteDocument}
+          onSelectDraftPackage={selectDraftPackage}
+          onCreateDraftPackage={createDraftPackage}
+          onImportDraftPackageToEditor={async (draftPackageId) => {
+            const result = await importDraftPackageToEditor(draftPackageId);
+            toast.success(result.summary);
+            return result;
+          }}
+          onReimportDraftPackageToEditor={async (draftPackageId, selection) => {
+            const result = await reimportDraftPackageToEditor(draftPackageId, selection);
+            toast.success(result.summary);
+            return result;
+          }}
+          onRefreshDraftPackageImportRegistryRepairPreview={async (draftPackageId) => {
+            const preview = await refreshDraftPackageImportRegistryRepairPreview(draftPackageId);
+            toast.success('Registry repair -preview päivitettiin.');
+            return preview;
+          }}
+          onRefreshDraftPackageImportDiagnosticsFromQuote={async (draftPackageId) => {
+            const diagnostics = await refreshDraftPackageImportDiagnosticsFromQuote(draftPackageId);
+            toast.success('Import-diagnostiikka päivitettiin live quotesta.');
+            return diagnostics;
+          }}
+          onRepairDraftPackageImportRegistry={async (draftPackageId, action) => {
+            const result = await repairDraftPackageImportRegistry(draftPackageId, action);
+            toast.success(result.summary);
+            return result;
+          }}
+          onOpenImportedQuote={openImportedQuote}
+          onUpdateDraftPackageItem={updateDraftPackageItem}
+          onMarkDraftPackageReviewed={markDraftPackageReviewed}
+          onMarkDraftPackageExported={markDraftPackageExported}
+          onCreateReferenceProfile={createReferenceProfile}
+          onUpdateReferenceProfile={updateReferenceProfile}
+          onDeleteReferenceProfile={deleteReferenceProfile}
+          onUpdateReferenceSuggestion={updateReferenceSuggestionWorkflow}
+          onRecomputeReferenceSuggestions={recomputeReferenceSuggestions}
+          onUpdateRequirement={updateRequirementWorkflow}
+          onUpdateMissingItem={updateMissingItemWorkflow}
+          onUpdateRiskFlag={updateRiskFlagWorkflow}
+          onUpdateReviewTask={updateReviewTaskWorkflow}
+          editorHandoff={editorHandoff}
         />
       </div>
+
+      {!selectedPackage && (
+        <TenderReferenceCorpusPanel
+          referenceProfiles={referenceProfiles}
+          selectedPackageId={null}
+          selectedPackageName={null}
+          submittingProfileId={referenceProfileSubmittingId}
+          deletingProfileIds={deletingReferenceProfileIds}
+          recomputingPackageId={recomputingReferenceSuggestionPackageId}
+          onCreateProfile={createReferenceProfile}
+          onUpdateProfile={updateReferenceProfile}
+          onDeleteProfile={deleteReferenceProfile}
+        />
+      )}
 
       <Card className="border-dashed border-slate-200 bg-slate-50/70 shadow-none">
         <CardContent className="flex flex-col gap-4 px-6 py-5 text-sm text-slate-700 sm:flex-row sm:items-start sm:justify-between">
@@ -128,11 +394,11 @@ export default function TenderIntelligencePage() {
               <Stack className="h-4 w-4" />
               <span className="font-medium">Mitä tämä vaihe jo tekee</span>
             </div>
-            <p>Tarjouspyyntöpaketit ja niiden dokumentit tallentuvat nyt oikeasti Supabaseen. Jokainen tiedosto saa organisaatio- ja pakettikohtaisen Storage-polun ja näkyy paketin työtilassa metatietoineen.</p>
+            <p>Tarjouspyyntöpaketit, dokumentit, analyysijobit, extraction-data, analyysitulokset, evidence-rivit, review workflow, referenssikorpus ja draft package -staging tallentuvat Supabaseen. Reviewed löydöksistä voidaan nyt muodostaa import-preview, nähdä imported quote handoff, diffata muutokset viimeiseen onnistuneeseen importiin ja päivittää samaa tarjousluonnosta idempotentisti.</p>
           </div>
           <div className="space-y-2 sm:max-w-sm">
             <p className="font-medium text-slate-950">Mitä tästä puuttuu tarkoituksella</p>
-            <p>Ei vielä dokumenttien sisällön lukua, OCR:ää, AI-provider-koodia, analyysipalvelua, taustajonoa tai kytkentää nykyiseen tarjouseditoriin.</p>
+            <p>Ei vielä OCR:ää, AI-provider-koodia, täydellistä automaattista tarjousgenerointia tai riskialtista syväkirjoitusta quote-riveihin. Nykyinen quote-, project-, invoice- ja reporting-ydin jätetään edelleen mahdollisimman koskemattomaksi, ja re-import päivittää vain adapterin omistaman notes/internalNotes/section-surface-alueen.</p>
           </div>
         </CardContent>
       </Card>

@@ -85,7 +85,7 @@ function formatDateTime(value?: string | null) {
 }
 
 export default function LegalDocumentsPage() {
-  const { canManageUsers, isPlatformAdmin, organization } = useAuth();
+  const { canManageLegalDocuments } = useAuth();
   const [documents, setDocuments] = useState<LegalDocumentVersionRow[]>([]);
   const [acceptances, setAcceptances] = useState<LegalAcceptanceAuditRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,25 +104,25 @@ export default function LegalDocumentsPage() {
       setError(null);
       const [nextDocuments, nextAcceptances] = await Promise.all([
         listLegalDocumentVersionsForManagement(),
-        listLegalAcceptanceAudit(isPlatformAdmin ? null : organization?.id || null),
+        listLegalAcceptanceAudit(null),
       ]);
       setDocuments(nextDocuments);
       setAcceptances(nextAcceptances);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Juridisten dokumenttien lataus epäonnistui.');
+      setError(reason instanceof Error ? reason.message : 'Sopimusasiakirjojen lataus epäonnistui.');
     } finally {
       setLoading(false);
     }
-  }, [isPlatformAdmin, organization?.id]);
+  }, []);
 
   useEffect(() => {
-    if (!canManageUsers) {
+    if (!canManageLegalDocuments) {
       setLoading(false);
       return;
     }
 
     void loadData();
-  }, [canManageUsers, loadData]);
+  }, [canManageLegalDocuments, loadData]);
 
   const groupedDocuments = useMemo(() => groupLegalDocumentVersionsByType(documents), [documents]);
   const filteredAcceptances = useMemo(() => {
@@ -188,11 +188,11 @@ export default function LegalDocumentsPage() {
     }
   };
 
-  if (!canManageUsers) {
+  if (!canManageLegalDocuments) {
     return (
       <div className="p-4 sm:p-8">
         <Card className="p-8 text-center text-muted-foreground">
-          Juridiset dokumentit ovat näkyvissä vain yrityksen omistajalle tai pääkäyttäjälle.
+          Sopimusasiat ovat näkyvissä vain Projektan ylläpidolle.
         </Card>
       </div>
     );
@@ -202,9 +202,9 @@ export default function LegalDocumentsPage() {
     <div className="space-y-6 p-4 sm:p-8">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold sm:text-3xl">Juridiset dokumentit</h1>
+          <h1 className="text-2xl font-semibold sm:text-3xl">Sopimusasiat</h1>
           <p className="mt-1 text-muted-foreground">
-            Hallitse juridisten dokumenttien versioita, julkaisuja ja hyväksyntäauditointia samasta näkymästä.
+            Hallitse julkaistavia sopimusasiakirjoja, versioita, julkaisuja ja hyväksyntäauditointia samasta näkymästä.
           </p>
         </div>
       </div>
@@ -236,7 +236,7 @@ export default function LegalDocumentsPage() {
                 <div>Hyväksyntä: <span className="font-medium text-slate-950">{activeDocument ? getLegalRequirementLabel(activeDocument.acceptance_requirement) : '-'}</span></div>
               </div>
 
-              {isPlatformAdmin && (
+              {canManageLegalDocuments && (
                 <Button className="mt-4 w-full" onClick={() => openDraftEditor(documentType, activeDocument)}>
                   Luo uusi luonnos
                 </Button>
@@ -252,7 +252,7 @@ export default function LegalDocumentsPage() {
             <ShieldCheck className="h-4 w-4" />
             Hyväksynnät
           </TabsTrigger>
-          {isPlatformAdmin && (
+          {canManageLegalDocuments && (
             <TabsTrigger value="versions">
               <CheckCircle className="h-4 w-4" />
               Dokumenttiversiot
@@ -328,7 +328,7 @@ export default function LegalDocumentsPage() {
           </Card>
         </TabsContent>
 
-        {isPlatformAdmin && (
+        {canManageLegalDocuments && (
           <TabsContent value="versions" className="space-y-4 pt-4">
             {(['terms', 'privacy', 'dpa', 'cookies'] as LegalDocumentType[]).map((documentType) => (
               <Card key={documentType} className="space-y-4 rounded-[28px] border-slate-200/90 bg-white p-6 shadow-[0_22px_60px_-40px_rgba(15,23,42,0.35)]">
@@ -425,7 +425,7 @@ export default function LegalDocumentsPage() {
         )}
       </Tabs>
 
-      {isPlatformAdmin && (
+      {canManageLegalDocuments && (
         <ResponsiveDialog
           open={editorOpen}
           onOpenChange={setEditorOpen}
@@ -499,7 +499,7 @@ export default function LegalDocumentsPage() {
                       }
                     >
                       <option value="all-users">Pakollinen kaikille käyttäjille</option>
-                      <option value="organization-owner">Pakollinen organisaation omistajalle</option>
+                      <option value="organization-owner">Pakollinen yrityksen pääkäyttäjälle</option>
                       <option value="none">Ei erillistä hyväksyntää</option>
                     </select>
                   </div>

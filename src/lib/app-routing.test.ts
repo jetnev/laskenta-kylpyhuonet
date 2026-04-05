@@ -36,17 +36,15 @@ describe('resolveAccessibleAppPage', () => {
   it('redirects ordinary users away from juridiset dokumentit', () => {
     expect(
       resolveAccessibleAppPage('legal', {
-        canManageSharedData: false,
-        canManageUsers: false,
+        canManageLegalDocuments: false,
       })
-    ).toBe('dashboard');
+    ).toBe('account');
   });
 
-  it('keeps juridiset dokumentit available for owner/admin users', () => {
+  it('keeps juridiset dokumentit available for legal managers', () => {
     expect(
       resolveAccessibleAppPage('legal', {
-        canManageSharedData: true,
-        canManageUsers: true,
+        canManageLegalDocuments: true,
       })
     ).toBe('legal');
   });
@@ -56,7 +54,7 @@ describe('resolveAccessibleAppPage', () => {
     const legalDocumentsPath = getAppPagePath('legal');
     const tenderIntelligencePath = getAppPagePath('tender-intelligence');
 
-    expect(resolveAccessibleAppPage('terms', { canManageSharedData: false, canManageUsers: false })).toBe('terms');
+    expect(resolveAccessibleAppPage('terms', { canManageLegalDocuments: false })).toBe('terms');
     expect(quoteTermsPath).toBe('/app/tarjousehdot');
     expect(legalDocumentsPath).toBe('/app/juridiset-dokumentit');
     expect(tenderIntelligencePath).toBe('/app/tarjousaly');
@@ -88,6 +86,25 @@ describe('resolveAppLocation', () => {
       invoiceId: 'invoice-9',
     });
   });
+
+  it('reads tender intelligence handoff context from search params', () => {
+    expect(
+      resolveAppLocation(
+        '/app/tarjousaly',
+        '?source=quote-editor&tenderPackage=package-1&draftPackage=draft-1&importQuote=quote-1&intent=repair-managed-import&blocks=requirements_and_quote_notes,notes_for_editor',
+      ),
+    ).toEqual({
+      page: 'tender-intelligence',
+      tenderContext: {
+        source: 'quote-editor',
+        tenderPackageId: 'package-1',
+        draftPackageId: 'draft-1',
+        importedQuoteId: 'quote-1',
+        intent: 'repair-managed-import',
+        blockIds: ['requirements_and_quote_notes', 'notes_for_editor'],
+      },
+    });
+  });
 });
 
 describe('buildAppUrl', () => {
@@ -115,6 +132,22 @@ describe('buildAppUrl', () => {
   it('keeps invoice deep-links scoped to laskut', () => {
     expect(buildAppUrl({ page: 'invoices', invoiceId: 'invoice-9' })).toBe('/app/laskut?invoice=invoice-9');
   });
+
+  it('serializes tender intelligence handoff context into a precise url', () => {
+    expect(
+      buildAppUrl({
+        page: 'tender-intelligence',
+        tenderContext: {
+          source: 'quote-editor',
+          tenderPackageId: 'package-1',
+          draftPackageId: 'draft-1',
+          importedQuoteId: 'quote-1',
+          intent: 'reimport-managed-import',
+          blockIds: ['requirements_and_quote_notes', 'notes_for_editor'],
+        },
+      }),
+    ).toBe('/app/tarjousaly?source=quote-editor&tenderPackage=package-1&draftPackage=draft-1&importQuote=quote-1&intent=reimport-managed-import&blocks=requirements_and_quote_notes%2Cnotes_for_editor');
+  });
 });
 
 describe('resolveAccessibleAppLocation', () => {
@@ -128,24 +161,22 @@ describe('resolveAccessibleAppLocation', () => {
           editor: 'quote',
         },
         {
-          canManageSharedData: false,
-          canManageUsers: false,
+          canManageLegalDocuments: false,
         }
       )
-    ).toEqual({ page: 'dashboard' });
+    ).toEqual({ page: 'account' });
   });
 
-  it('redirects shared-data managers without user management rights to asetukset', () => {
+  it('keeps legal routes available for legal managers', () => {
     expect(
       resolveAccessibleAppLocation(
         {
           page: 'legal',
         },
         {
-          canManageSharedData: true,
-          canManageUsers: false,
+          canManageLegalDocuments: true,
         }
       )
-    ).toEqual({ page: 'settings' });
+    ).toEqual({ page: 'legal' });
   });
 });

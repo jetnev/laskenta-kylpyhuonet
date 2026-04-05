@@ -46,7 +46,8 @@ import { cn } from '../../lib/utils';
 import { useAuth } from '../../hooks/use-auth';
 import { AppPageLayout } from '../layout/AppPageLayout';
 import { exportReportsToPDF } from '../../lib/export';
-import ReportingDrilldownContent, { getReportingDrilldownDescription } from './reporting/ReportingDrilldownContent';
+import ReportingDrilldownContent from './reporting/ReportingDrilldownContent';
+import { getReportingDrilldownDescription } from './reporting/ReportingDrilldownMeta';
 import type { AppLocationState } from '../../lib/app-routing';
 import {
   buildReportingModel,
@@ -789,7 +790,7 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
             <ScrollArea className="max-h-[70vh] w-full">
               <div className="pr-2 sm:pr-4">
                 <ReportingDrilldownContent
-                  kind={drill?.kind ?? null}
+                  kind={drill?.kind === 'products' ? null : drill?.kind ?? null}
                   title={drill?.title}
                   families={drillFamilies}
                   customers={drillCustomers}

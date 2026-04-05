@@ -107,7 +107,7 @@ export default function LegalAcceptanceGate({
           {organizationRole === 'employee' && organizationName && (
             <Alert>
               <AlertDescription>
-                Käytät työtilaa {organizationName}. Organisaation omistaja vastaa organisaatiotason sopimuksista erikseen, mutta sinun tulee silti hyväksyä käyttäjäkohtaiset käyttöehdot ennen jatkamista.
+                Käytät työtilaa {organizationName}. Yrityksen pääkäyttäjä vastaa organisaatiotason sopimuksista erikseen, mutta sinun tulee silti hyväksyä käyttäjäkohtaiset käyttöehdot ennen jatkamista.
               </AlertDescription>
             </Alert>
           )}

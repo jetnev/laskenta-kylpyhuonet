@@ -39,7 +39,7 @@ export default function SettingsPage() {
     return (
       <div className="p-4 sm:p-8">
         <Card className="p-8 text-center text-muted-foreground">
-          Asetukset ovat vain yrityksen omistajalle tai pääkäyttäjälle.
+          Asetukset ovat vain yrityksen pääkäyttäjälle tai Projektan ylläpidolle.
         </Card>
       </div>
     );
@@ -55,7 +55,7 @@ export default function SettingsPage() {
       <Alert>
         <Shield className="h-4 w-4" />
         <AlertDescription>
-          Muutokset vaikuttavat koko yritystyötilaan. Yrityksen omistaja hallitsee yhteisiä oletusarvoja, ja työntekijöiden dokumenteissa käytetään työtilan yritystietoja ilman että pääkäyttäjän yhteystiedot vuotavat fallbackina.
+          Muutokset vaikuttavat koko yritystyötilaan. Yrityksen pääkäyttäjä hallitsee yhteisiä oletusarvoja, ja työntekijöiden dokumenteissa käytetään työtilan yritystietoja ilman että yksittäisen ylläpitäjän yhteystiedot vuotavat fallbackina.
         </AlertDescription>
       </Alert>
 

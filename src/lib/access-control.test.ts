@@ -13,7 +13,9 @@ describe('deriveAccessState', () => {
       isPlatformAdmin: true,
       canManageUsers: true,
       canManageSharedData: true,
-      roleLabel: 'Pääkäyttäjä',
+      canManageLegalDocuments: true,
+      roleLabel: 'Projektan ylläpito',
+      roleBadgeLabel: 'Ylläpito',
     });
   });
 
@@ -29,7 +31,9 @@ describe('deriveAccessState', () => {
       isOrganizationOwner: true,
       canManageUsers: true,
       canManageSharedData: true,
-      roleLabel: 'Omistaja',
+      canManageLegalDocuments: false,
+      roleLabel: 'Yrityksen pääkäyttäjä',
+      roleBadgeLabel: 'Pääkäyttäjä',
     });
   });
 
@@ -45,7 +49,9 @@ describe('deriveAccessState', () => {
       canDelete: true,
       canManageUsers: false,
       canManageSharedData: false,
-      roleLabel: 'Työntekijä',
+      canManageLegalDocuments: false,
+      roleLabel: 'Käyttäjä',
+      roleBadgeLabel: 'Käyttäjä',
     });
   });
 
@@ -61,6 +67,7 @@ describe('deriveAccessState', () => {
       canDelete: false,
       canManageUsers: false,
       canManageSharedData: false,
+      canManageLegalDocuments: false,
     });
   });
 });

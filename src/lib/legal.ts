@@ -203,7 +203,7 @@ export function getLegalRequirementLabel(requirement: LegalDocumentAcceptanceReq
   }
 
   if (requirement === 'organization-owner') {
-    return 'Pakollinen organisaation omistajalle';
+    return 'Pakollinen yrityksen pääkäyttäjälle';
   }
 
   return 'Ei erillistä hyväksyntää';

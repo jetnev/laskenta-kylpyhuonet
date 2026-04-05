@@ -478,7 +478,7 @@ export function useKV<T>(key: string, defaultValue: T, options?: UseKVOptions): 
     } satisfies RecordContext;
   }, [key, scope, organizationId, userId]);
 
-  return useRecordValue(recordContext, defaultValue);
+  return useRecordValue(recordContext, defaultValue) as [T, (value: SetValueAction<T>) => void, boolean];
 }
 
 export function useUserScopedKVMany<T>(

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Key, SignOut, UserCircle } from '@phosphor-icons/react';
+import { Key, ShieldCheck, SignOut, UserCircle } from '@phosphor-icons/react';
 import { deriveAccessState, getOrganizationRoleLabel, getPlatformRoleLabel } from '../../lib/access-control';
 import { useAuth } from '../../hooks/use-auth';
 import { useCompanyProfile } from '../../hooks/use-data';
+import LegalDocumentLinks from '../legal/LegalDocumentLinks';
 import { Card } from '../ui/card';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
@@ -29,10 +30,12 @@ function getExampleSurname(displayName?: string, email?: string) {
     ?.split(/[._-]+/)
     .map((part) => part.replace(/[^\p{L}\p{M}-]/gu, ''))
     .filter(Boolean) || [];
+  const lastDisplayNamePart = displayNameParts.length > 1 ? displayNameParts[displayNameParts.length - 1] : undefined;
+  const lastEmailPart = emailParts.length > 1 ? emailParts[emailParts.length - 1] : undefined;
 
   const candidate =
-    (displayNameParts.length > 1 ? displayNameParts.at(-1) : undefined) ||
-    (emailParts.length > 1 ? emailParts.at(-1) : undefined) ||
+    lastDisplayNamePart ||
+    lastEmailPart ||
     displayNameParts[0] ||
     emailParts[0] ||
     '';
@@ -41,7 +44,7 @@ function getExampleSurname(displayName?: string, email?: string) {
 }
 
 export default function AccountPage() {
-  const { user, organization, canManageSharedData, updateProfile, changePassword, logout } = useAuth();
+  const { user, organization, canManageSharedData, canManageLegalDocuments, updateProfile, changePassword, logout } = useAuth();
   const { companyProfile, updateCompanyProfile } = useCompanyProfile();
   const [profileError, setProfileError] = useState<string | null>(null);
   const [companyError, setCompanyError] = useState<string | null>(null);
@@ -213,6 +216,30 @@ export default function AccountPage() {
       </Card>
 
       <Card className="p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+            <ShieldCheck className="h-5 w-5" weight="bold" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">Sopimusasiakirjat</h2>
+            <p className="text-sm text-muted-foreground">Avaa ajantasaiset käyttöehdot, tietosuojaseloste ja muut palveludokumentit tästä.</p>
+          </div>
+        </div>
+
+        <Alert>
+          <AlertDescription>
+            {canManageLegalDocuments
+              ? 'Projektan ylläpito hallitsee asiakirjaversioita erillisessä Sopimusasiat-näkymässä. Tästä kortista avaat julkaistut dokumentit nopeasti.'
+              : accessState.isOrganizationOwner
+                ? 'Yrityksen pääkäyttäjänä näet tästä ajantasaiset dokumentit. Organisaatiotason tietojenkäsittelyliitteen hyväksyntä pyydetään tarvittaessa kirjautumisen yhteydessä.'
+                : 'Näet tästä ajantasaiset palveludokumentit. Yrityksesi pääkäyttäjä huolehtii mahdollisista organisaatiotason hyväksynnöistä erikseen.'}
+          </AlertDescription>
+        </Alert>
+
+        <LegalDocumentLinks openInNewTab className="gap-x-6 gap-y-3" />
+      </Card>
+
+      <Card className="p-6 space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Yritys- ja laskutustiedot</h2>
           <p className="text-sm text-muted-foreground">Nämä tiedot näkyvät yrityksesi tarjous- ja laskudokumenteissa. Täytä erityisesti Y-tunnus, IBAN ja BIC ennen laskujen luontia.</p>
@@ -225,7 +252,7 @@ export default function AccountPage() {
         {!canManageSharedData && (
           <Alert>
             <AlertDescription>
-              Yritystietoja hallitsee yrityksen omistaja tai pääkäyttäjä. Näet tässä samat tiedot, joita käytetään työtilan dokumenteissa.
+              Yritystietoja hallitsee yrityksen pääkäyttäjä tai Projektan ylläpito. Näet tässä samat tiedot, joita käytetään työtilan dokumenteissa.
             </AlertDescription>
           </Alert>
         )}

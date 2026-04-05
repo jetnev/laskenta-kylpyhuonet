@@ -17,6 +17,17 @@ export type AppPage =
 export type AppRoute = 'login' | 'app';
 
 export type AppWorkspaceEditor = 'quote';
+export type TenderIntelligenceHandoffSource = 'quote-editor';
+export type TenderIntelligenceHandoffIntent = 'open-source-draft' | 'reimport-managed-import' | 'repair-managed-import';
+
+export interface TenderIntelligenceLocationState {
+  source?: TenderIntelligenceHandoffSource;
+  tenderPackageId?: string;
+  draftPackageId?: string;
+  importedQuoteId?: string;
+  intent?: TenderIntelligenceHandoffIntent;
+  blockIds?: string[];
+}
 
 export interface AppLocationState {
   page: AppPage;
@@ -24,16 +35,29 @@ export interface AppLocationState {
   quoteId?: string;
   invoiceId?: string;
   editor?: AppWorkspaceEditor;
+  tenderContext?: TenderIntelligenceLocationState;
 }
 
 export const DEFAULT_APP_PAGE: AppPage = 'dashboard';
 
 const APP_QUERY_PARAM = {
+  blocks: 'blocks',
+  draftPackage: 'draftPackage',
   editor: 'editor',
   invoice: 'invoice',
+  intent: 'intent',
+  importQuote: 'importQuote',
   project: 'project',
   quote: 'quote',
+  source: 'source',
+  tenderPackage: 'tenderPackage',
 } as const;
+
+const TENDER_INTELLIGENCE_HANDOFF_INTENTS = new Set<TenderIntelligenceHandoffIntent>([
+  'open-source-draft',
+  'reimport-managed-import',
+  'repair-managed-import',
+]);
 
 const APP_PAGE_PATHS: Record<AppPage, string> = {
   dashboard: '/app/etusivu',
@@ -100,6 +124,54 @@ function normalizeEntityId(value?: string | null) {
   return trimmed ? trimmed : undefined;
 }
 
+function normalizeTenderIntelligenceBlocks(value?: string[] | null) {
+  if (!value || value.length < 1) {
+    return undefined;
+  }
+
+  const normalized = [...new Set(
+    value
+      .flatMap((entry) => entry.split(','))
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  )];
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeTenderIntelligenceIntent(value?: string | null) {
+  const trimmed = value?.trim();
+  return trimmed && TENDER_INTELLIGENCE_HANDOFF_INTENTS.has(trimmed as TenderIntelligenceHandoffIntent)
+    ? trimmed as TenderIntelligenceHandoffIntent
+    : undefined;
+}
+
+function normalizeTenderIntelligenceLocationState(state?: TenderIntelligenceLocationState | null) {
+  if (!state) {
+    return undefined;
+  }
+
+  const source = state.source === 'quote-editor' ? 'quote-editor' : undefined;
+  const tenderPackageId = normalizeEntityId(state.tenderPackageId);
+  const draftPackageId = normalizeEntityId(state.draftPackageId);
+  const importedQuoteId = normalizeEntityId(state.importedQuoteId);
+  const intent = normalizeTenderIntelligenceIntent(state.intent);
+  const blockIds = normalizeTenderIntelligenceBlocks(state.blockIds);
+
+  if (!source && !tenderPackageId && !draftPackageId && !importedQuoteId && !intent && !blockIds) {
+    return undefined;
+  }
+
+  return {
+    source,
+    tenderPackageId,
+    draftPackageId,
+    importedQuoteId,
+    intent,
+    blockIds,
+  } satisfies TenderIntelligenceLocationState;
+}
+
 function normalizeLocationShape(state: AppLocationState): AppLocationState {
   if (state.page === 'projects') {
     const projectId = normalizeEntityId(state.projectId);
@@ -121,6 +193,13 @@ function normalizeLocationShape(state: AppLocationState): AppLocationState {
     };
   }
 
+  if (state.page === 'tender-intelligence') {
+    return {
+      page: 'tender-intelligence',
+      tenderContext: normalizeTenderIntelligenceLocationState(state.tenderContext),
+    };
+  }
+
   return { page: state.page };
 }
 
@@ -134,6 +213,16 @@ export function resolveAppLocation(pathname: string, search = ''): AppLocationSt
     quoteId: params.get(APP_QUERY_PARAM.quote) ?? undefined,
     invoiceId: params.get(APP_QUERY_PARAM.invoice) ?? undefined,
     editor: params.get(APP_QUERY_PARAM.editor) === 'quote' ? 'quote' : undefined,
+    tenderContext: requestedPage === 'tender-intelligence'
+      ? {
+          source: params.get(APP_QUERY_PARAM.source) === 'quote-editor' ? 'quote-editor' : undefined,
+          tenderPackageId: params.get(APP_QUERY_PARAM.tenderPackage) ?? undefined,
+          draftPackageId: params.get(APP_QUERY_PARAM.draftPackage) ?? undefined,
+          importedQuoteId: params.get(APP_QUERY_PARAM.importQuote) ?? undefined,
+          intent: normalizeTenderIntelligenceIntent(params.get(APP_QUERY_PARAM.intent)),
+          blockIds: params.get(APP_QUERY_PARAM.blocks)?.split(',') ?? undefined,
+        }
+      : undefined,
   });
 }
 
@@ -159,6 +248,32 @@ export function buildAppSearch(state: AppLocationState) {
     params.set(APP_QUERY_PARAM.invoice, normalizedState.invoiceId);
   }
 
+  if (normalizedState.page === 'tender-intelligence' && normalizedState.tenderContext) {
+    if (normalizedState.tenderContext.source) {
+      params.set(APP_QUERY_PARAM.source, normalizedState.tenderContext.source);
+    }
+
+    if (normalizedState.tenderContext.tenderPackageId) {
+      params.set(APP_QUERY_PARAM.tenderPackage, normalizedState.tenderContext.tenderPackageId);
+    }
+
+    if (normalizedState.tenderContext.draftPackageId) {
+      params.set(APP_QUERY_PARAM.draftPackage, normalizedState.tenderContext.draftPackageId);
+    }
+
+    if (normalizedState.tenderContext.importedQuoteId) {
+      params.set(APP_QUERY_PARAM.importQuote, normalizedState.tenderContext.importedQuoteId);
+    }
+
+    if (normalizedState.tenderContext.intent) {
+      params.set(APP_QUERY_PARAM.intent, normalizedState.tenderContext.intent);
+    }
+
+    if (normalizedState.tenderContext.blockIds && normalizedState.tenderContext.blockIds.length > 0) {
+      params.set(APP_QUERY_PARAM.blocks, normalizedState.tenderContext.blockIds.join(','));
+    }
+  }
+
   const search = params.toString();
   return search ? `?${search}` : '';
 }
@@ -171,16 +286,15 @@ export function buildAppUrl(state: AppLocationState) {
 export function resolveAccessibleAppPage(
   requestedPage: AppPage | null,
   options: {
-    canManageUsers: boolean;
-    canManageSharedData: boolean;
+    canManageLegalDocuments: boolean;
   }
 ) {
   if (!requestedPage) {
     return DEFAULT_APP_PAGE;
   }
 
-  if (requestedPage === 'legal' && !options.canManageUsers) {
-    return options.canManageSharedData ? 'settings' : DEFAULT_APP_PAGE;
+  if (requestedPage === 'legal' && !options.canManageLegalDocuments) {
+    return 'account';
   }
 
   return requestedPage;
@@ -189,8 +303,7 @@ export function resolveAccessibleAppPage(
 export function resolveAccessibleAppLocation(
   requestedLocation: AppLocationState,
   options: {
-    canManageUsers: boolean;
-    canManageSharedData: boolean;
+    canManageLegalDocuments: boolean;
   }
 ) {
   const nextPage = resolveAccessibleAppPage(requestedLocation.page, options);
