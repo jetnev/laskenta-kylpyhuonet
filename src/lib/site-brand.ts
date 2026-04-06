@@ -10,7 +10,7 @@ export const APP_META_DESCRIPTION =
   'Projekta on tarjouslaskennan ja projektiseurannan jarjestelma rakennusalan yrityksille.';
 
 export const APP_MARKETING_META_DESCRIPTION =
-  'Rakennusalan yrityksille suunniteltu jarjestelma, jolla hallitset tarjouslaskennan, tuotekannan ja projektiseurannan ilman Excel-rumbaa.';
+  'Projekta on rakennusalan yrityksille suunniteltu jarjestelma, joka kokoaa tarjouslaskennan, kateohjauksen, projektiseurannan ja tarjouspyyntojen katselmoinnin yhteen hallittuun tyotilaan.';
 
 export const APP_LOGIN_META_DESCRIPTION =
   'Kirjaudu Projekta-tyotilaan hallitsemaan tarjouksia, tuotteita ja projekteja samassa jarjestelmassa.';

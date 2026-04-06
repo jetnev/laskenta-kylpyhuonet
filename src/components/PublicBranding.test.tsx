@@ -10,6 +10,7 @@ describe('public branding surfaces', () => {
 
     expect(markup).toContain('Projekta');
     expect(markup).toContain('Varaa esittely');
+    expect(markup).toContain('Tarjousäly');
   });
 
   it('renders the Projekta brand in the public legal shell', () => {
