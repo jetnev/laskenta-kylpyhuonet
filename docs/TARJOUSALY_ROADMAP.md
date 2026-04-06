@@ -222,6 +222,22 @@ Ensimmäinen inkrementti valmis:
 - bulk-ajot hyödyntävät olemassa olevia workflow-update-rajapintoja, joten audit- ja käyttöoikeuspolku pysyy yhtenäisenä yksittäisrivien päivitysten kanssa
 - workflow-suodatin toimii nyt samalla myös operatiivisena työjonon rajauksena bulk-käsittelylle
 
+### Työpaketti 7 — draft-paketin laatugate ennen editorivientiä
+
+Ensimmäinen inkrementti valmis:
+
+- draft package -paneeli näyttää nyt eksplisiittisen laatugaten, joka kokoaa yhteen luonnospaketin tilan, ydinsisällön, import-validoinnin, avoimet workflow-rivit sekä re-import-turvallisuuden
+- editoriviennin ensisijainen CTA pysyy lukittuna niin kauan kuin laatugate havaitsee blokkaavan ehdon, kuten tarkistamattoman draft-tilan tai import-validoinnin virheen
+- gate nostaa näkyviin seuraavat toimenpiteet ennen vientiä, jolloin editoriin siirtyminen ei enää perustu vain yksittäisen napin disabled-logiikkaan
+
+### Työpaketti 8 — Go / No-Go -päätöstuki
+
+Ensimmäinen inkrementti valmis:
+
+- workspace näyttää nyt erillisen Go / No-Go -päätöstukikortin, joka yhdistää suosituksen, analyysi- ja evidence-valmiuden, korkean prioriteetin riskit, avoimet workflow-rivit sekä draft package -valmiuden samaan näkymään
+- päätöstuki tuottaa operatiiviset seuraavat askeleet, jotta käyttäjä näkee heti, pysäyttääkö paketin analyysin puute, avoin high-risk-rivi vai keskeneräinen review
+- sama päätöstukilogiikka syötetään myös draft-paketin laatugateen, jolloin editorivienti huomioi koko päätössignaalin tilan eikä vain yksittäistä recommendation-kenttää
+
 ## Seuraava tavoitesuunta
 
 Tarjousälyn seuraavien syventävien vaiheiden tulee jatkua tästä järjestyksestä tuotannollistavien työpakettien rinnalla, ellei erikseen päätetä muuta:

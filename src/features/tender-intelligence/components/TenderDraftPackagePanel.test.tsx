@@ -578,6 +578,8 @@ describe('TenderDraftPackagePanel', () => {
     );
 
   expect(markup).toContain('Managed import surface + run audit');
+  expect(markup).toContain('Laatugate ennen editorivientiä');
+  expect(markup).toContain('Merkitse draft package tarkistetuksi ennen editorivientiä.');
     expect(markup).toContain('Päivitä samaan quoteen');
     expect(markup).toContain('Avaa importoitu quote');
     expect(markup).toContain('Import handoff');

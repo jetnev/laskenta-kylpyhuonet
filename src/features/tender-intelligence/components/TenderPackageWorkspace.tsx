@@ -9,6 +9,7 @@ import TenderDraftPackagePanel from './TenderDraftPackagePanel';
 import TenderDocumentsPanel from './TenderDocumentsPanel';
 import TenderReferenceCorpusPanel from './TenderReferenceCorpusPanel';
 import TenderResultPanels from './TenderResultPanels';
+import { buildTenderGoNoGoDecisionSupport } from '../lib/tender-go-no-go';
 import { buildTenderPackageLinkItems } from '../lib/tender-package-links';
 import {
   TENDER_ANALYSIS_JOB_STATUS_META,
@@ -60,6 +61,30 @@ function TenderPanel({ title, value, description }: TenderPanelProps) {
       </CardContent>
     </Card>
   );
+}
+
+function resolveDecisionVariant(state: 'ready' | 'warning' | 'blocked') {
+  if (state === 'blocked') {
+    return 'destructive' as const;
+  }
+
+  if (state === 'warning') {
+    return 'outline' as const;
+  }
+
+  return 'default' as const;
+}
+
+function resolveDecisionLabel(state: 'ready' | 'warning' | 'blocked') {
+  if (state === 'blocked') {
+    return 'Estää etenemisen';
+  }
+
+  if (state === 'warning') {
+    return 'Vaatii tarkistuksen';
+  }
+
+  return 'Valmis päätökseen';
 }
 
 interface TenderPackageWorkspaceProps {
@@ -289,6 +314,7 @@ export default function TenderPackageWorkspace({
     : null;
   const goNoGo = selectedPackage.results.goNoGoAssessment;
   const goNoGoMeta = goNoGo ? TENDER_GO_NO_GO_META[goNoGo.recommendation] : null;
+  const goNoGoDecision = buildTenderGoNoGoDecisionSupport(selectedPackage);
   const nextReviewTask = selectedPackage.results.reviewTasks[0] ?? null;
   const nextReviewTaskMeta = nextReviewTask ? TENDER_REVIEW_TASK_STATUS_META[nextReviewTask.status] : null;
   const linkItems = buildTenderPackageLinkItems(selectedPackage.package, {
@@ -399,6 +425,56 @@ export default function TenderPackageWorkspace({
           }
         />
       </div>
+
+      <Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
+        <CardHeader className="border-b">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <CardTitle className="flex items-center gap-2">
+                <WarningCircle className="h-5 w-5 text-slate-500" />
+                Go / No-Go päätöstuki
+              </CardTitle>
+              <CardDescription>
+                Päätöstuki kokoaa analyysin, riskit, workflow-tilanteen ja draft-valmiuden yhdeksi operatiiviseksi signaalinäkymäksi ennen editorivientiä tai tarjouksen jättöpäätöstä.
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={goNoGoMeta?.variant ?? 'secondary'}>{goNoGoMeta?.label ?? 'Odottaa analyysiä'}</Badge>
+              <Badge variant={resolveDecisionVariant(goNoGoDecision.state)}>{resolveDecisionLabel(goNoGoDecision.state)}</Badge>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5 pt-6">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-700">
+            {goNoGoDecision.summary}
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-2">
+            {goNoGoDecision.signals.map((signal) => (
+              <div key={signal.key} className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-950">{signal.label}</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-700">{signal.detail}</p>
+                  </div>
+                  <Badge variant={resolveDecisionVariant(signal.state)}>{resolveDecisionLabel(signal.state)}</Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {goNoGoDecision.nextActions.length > 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <p className="text-sm font-medium text-slate-950">Seuraavat päätösaskelmat</p>
+              <div className="mt-3 space-y-2">
+                {goNoGoDecision.nextActions.map((action, index) => (
+                  <p key={`go-no-go-action-${index}`} className="text-sm leading-6 text-slate-700">{index + 1}. {action}</p>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <TenderAnalysisPanel
         selectedPackage={selectedPackage}

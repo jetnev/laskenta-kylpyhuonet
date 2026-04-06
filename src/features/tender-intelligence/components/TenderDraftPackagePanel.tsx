@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { buildTenderDraftPackageReadiness } from '../lib/tender-draft-package';
+import { buildTenderDraftQualityGate } from '../lib/tender-draft-quality-gate';
 import { buildTenderEditorManagedSurfaceFromPayload } from '../lib/tender-editor-managed-surface';
 import {
   formatTenderTimestamp,
@@ -446,6 +447,30 @@ function ReadinessCard({ title, value, description }: { title: string; value: st
   );
 }
 
+function resolveGateVariant(state: 'ready' | 'warning' | 'blocked') {
+  if (state === 'blocked') {
+    return 'destructive' as const;
+  }
+
+  if (state === 'warning') {
+    return 'outline' as const;
+  }
+
+  return 'default' as const;
+}
+
+function resolveGateLabel(state: 'ready' | 'warning' | 'blocked') {
+  if (state === 'blocked') {
+    return 'Estää viennin';
+  }
+
+  if (state === 'warning') {
+    return 'Tarkista ennen vientiä';
+  }
+
+  return 'Valmis editorivientiin';
+}
+
 function resolveSourceEntity(selectedPackage: TenderPackageDetails, item: TenderDraftPackageItem) {
   switch (item.sourceEntityType) {
     case 'requirement':
@@ -568,6 +593,15 @@ export default function TenderDraftPackagePanel({
   const excludedItems = selectedDraftPackage?.items.filter((item) => !item.isIncluded) ?? [];
   const payload = selectedDraftPackage?.exportPayload ?? null;
   const importValidation = editorImportValidation ?? editorImportPreview?.validation ?? null;
+  const qualityGate = useMemo(
+    () => buildTenderDraftQualityGate({
+      packageDetails: selectedPackage,
+      selectedDraftPackage,
+      importValidation,
+      draftPackageImportState,
+    }),
+    [draftPackageImportState, importValidation, selectedDraftPackage, selectedPackage],
+  );
   const managedSurface = useMemo(
     () => (editorImportPreview ? buildTenderEditorManagedSurfaceFromPayload(editorImportPreview.payload) : null),
     [editorImportPreview],
@@ -758,6 +792,7 @@ export default function TenderDraftPackagePanel({
                   disabled={
                     previewingEditorImportDraftPackageId === selectedDraftPackage.id
                     || importingDraftPackageId === selectedDraftPackage.id
+                    || !qualityGate.canExportToEditor
                     || !importValidation?.can_import
                     || (
                       draftPackageImportState?.suggested_import_mode === 'update_existing_quote'
@@ -817,6 +852,41 @@ export default function TenderDraftPackagePanel({
             value={readiness.canGenerate ? 'Kyllä' : 'Ei vielä'}
             description={readiness.blockedReason ?? 'Reviewed dataa on riittävästi mielekkään draft package -stagingin muodostamiseen.'}
           />
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-slate-950">Laatugate ennen editorivientiä</p>
+              <p className="mt-2 text-sm leading-6 text-slate-700">{qualityGate.summary}</p>
+            </div>
+            <Badge variant={resolveGateVariant(qualityGate.state)}>{resolveGateLabel(qualityGate.state)}</Badge>
+          </div>
+
+          <div className="mt-4 grid gap-3 xl:grid-cols-2">
+            {qualityGate.checks.map((check) => (
+              <div key={check.key} className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-950">{check.label}</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-700">{check.detail}</p>
+                  </div>
+                  <Badge variant={resolveGateVariant(check.state)}>{resolveGateLabel(check.state)}</Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {qualityGate.nextActions.length > 0 && (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+              <p className="text-sm font-medium text-slate-950">Tarkista seuraavaksi</p>
+              <div className="mt-3 space-y-2">
+                {qualityGate.nextActions.map((action, index) => (
+                  <p key={`quality-gate-action-${index}`} className="text-sm leading-6 text-slate-700">{index + 1}. {action}</p>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
