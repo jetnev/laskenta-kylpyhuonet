@@ -24,8 +24,44 @@ function getErrorCode(error: unknown) {
   return typeof candidate.code === 'string' ? candidate.code.toUpperCase().trim() : '';
 }
 
+function includesAny(message: string, candidates: string[]) {
+  return candidates.some((candidate) => message.includes(candidate));
+}
+
+function isEdgeFunctionUnavailableMessage(message: string) {
+  return (
+    message.includes('functionsfetcherror')
+    || (
+      message.includes('edge function')
+      && includesAny(message, ['failed to send a request', 'non-2xx status code', '404', 'not found'])
+    )
+  );
+}
+
+function isStorageBucketUnavailableMessage(message: string) {
+  return (
+    message.includes('bucket')
+    && includesAny(message, ['not found', 'does not exist', 'missing'])
+  );
+}
+
+export type TenderIntelligenceEnvironmentIssueType = 'schema' | 'storage' | 'analysis-runner' | 'extraction-runner';
+export type TenderIntelligenceEnvironmentOperation = 'generic' | 'storage-upload' | 'analysis-runner' | 'extraction-runner';
+
 export function getTenderIntelligenceSchemaUnavailableMessage() {
   return 'Tarjousäly ei ole käytössä tässä ympäristössä vielä. Tämän ympäristön Supabase-tietokannasta puuttuvat Tarjousälyn taulut tai niiden schema cache ei ole päivittynyt. Ota Tarjousälyn migraatiot käyttöön tässä ympäristössä ja päivitä sen jälkeen palvelun schema.';
+}
+
+export function getTenderIntelligenceStorageUnavailableMessage() {
+  return 'Tarjousälyn dokumenttivarasto ei ole käytössä tässä ympäristössä vielä. Tarkista että Supabase Storage -bucket `tender-intelligence` on olemassa ja että ympäristön storage-oikeudet ovat kunnossa ennen dokumenttien latausta.';
+}
+
+export function getTenderIntelligenceAnalysisRunnerUnavailableMessage() {
+  return 'Tarjousälyn analyysipalvelu ei ole käytössä tässä ympäristössä vielä. Julkaise Edge Function `tender-analysis-runner` ja varmista, että tietokantamuutokset on viety tähän ympäristöön ennen analyysin käynnistämistä.';
+}
+
+export function getTenderIntelligenceExtractionRunnerUnavailableMessage() {
+  return 'Tarjousälyn extraction-palvelu ei ole käytössä tässä ympäristössä vielä. Julkaise Edge Function `tender-document-extractor` ja varmista, että dokumenttien storage sekä migraatiot ovat valmiina ennen extractionin käynnistämistä.';
 }
 
 export function isTenderIntelligenceSchemaUnavailableError(error: unknown) {
@@ -68,4 +104,62 @@ export function isTenderIntelligenceSchemaUnavailableMessage(message?: string | 
       )
     )
   );
+}
+
+export function getTenderIntelligenceEnvironmentIssueTypeFromMessage(message?: string | null): TenderIntelligenceEnvironmentIssueType | null {
+  const normalizedMessage = message?.trim().toLowerCase() ?? '';
+
+  if (!normalizedMessage) {
+    return null;
+  }
+
+  if (isTenderIntelligenceSchemaUnavailableMessage(normalizedMessage)) {
+    return 'schema';
+  }
+
+  if (
+    normalizedMessage.includes(getTenderIntelligenceStorageUnavailableMessage().toLowerCase())
+    || isStorageBucketUnavailableMessage(normalizedMessage)
+  ) {
+    return 'storage';
+  }
+
+  if (normalizedMessage.includes(getTenderIntelligenceAnalysisRunnerUnavailableMessage().toLowerCase())) {
+    return 'analysis-runner';
+  }
+
+  if (normalizedMessage.includes(getTenderIntelligenceExtractionRunnerUnavailableMessage().toLowerCase())) {
+    return 'extraction-runner';
+  }
+
+  return null;
+}
+
+export function getTenderIntelligenceEnvironmentIssueMessage(
+  error: unknown,
+  options: { operation?: TenderIntelligenceEnvironmentOperation } = {},
+) {
+  if (isTenderIntelligenceSchemaUnavailableError(error)) {
+    return getTenderIntelligenceSchemaUnavailableMessage();
+  }
+
+  const message = getErrorMessage(error).toLowerCase();
+
+  if (!message) {
+    return null;
+  }
+
+  if (options.operation === 'storage-upload' && isStorageBucketUnavailableMessage(message)) {
+    return getTenderIntelligenceStorageUnavailableMessage();
+  }
+
+  if (options.operation === 'analysis-runner' && isEdgeFunctionUnavailableMessage(message)) {
+    return getTenderIntelligenceAnalysisRunnerUnavailableMessage();
+  }
+
+  if (options.operation === 'extraction-runner' && isEdgeFunctionUnavailableMessage(message)) {
+    return getTenderIntelligenceExtractionRunnerUnavailableMessage();
+  }
+
+  return null;
 }

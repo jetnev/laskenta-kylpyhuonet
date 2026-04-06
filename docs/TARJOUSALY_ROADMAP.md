@@ -190,6 +190,14 @@ Ensimmäinen inkrementti valmis:
 - paketti-listaa voi rajata operatiivisilla suodattimilla: linkitetyt, analyysi, katselmointi ja valmiit
 - juuri lisätty liiketoimintakonteksti toimii nyt myös Tarjousälyn listan löydettävyys- ja työjonopintana
 
+### Työpaketti 3 — ympäristö- ja deployment-readiness
+
+Ensimmäinen inkrementti valmis:
+
+- Tarjousäly tunnistaa nyt käyttäjäystävällisesti puuttuvan skeeman lisäksi myös puuttuvan storage-bucketin sekä julkaisemattomat extraction- ja analysis-runnerit
+- sivu näyttää environment-readiness-kortin, joka erottaa tietokannan, storage-bucketin, extraction-runnerin, analysis-runnerin ja rollout-järjestyksen omiksi tarkistuskohdikseen
+- virhepolku ohjaa nyt suoraan oikeaan korjausjärjestykseen sen sijaan, että käyttäjälle jäisi vain yksi raakavirhe ilman rollout-ohjetta
+
 ## Seuraava tavoitesuunta
 
 Tarjousälyn seuraavien syventävien vaiheiden tulee jatkua tästä järjestyksestä tuotannollistavien työpakettien rinnalla, ellei erikseen päätetä muuta:

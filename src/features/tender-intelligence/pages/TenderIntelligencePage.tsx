@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { AppLocationState } from '@/lib/app-routing';
 import { useCustomers, useProjects, useQuotes } from '@/hooks/use-data';
 
@@ -13,7 +13,12 @@ import TenderPackageList from '../components/TenderPackageList';
 import TenderReferenceCorpusPanel from '../components/TenderReferenceCorpusPanel';
 import TenderPackageWorkspace from '../components/TenderPackageWorkspace';
 import { useTenderIntelligence } from '../hooks/use-tender-intelligence';
-import { isTenderIntelligenceSchemaUnavailableMessage } from '../lib/tender-intelligence-errors';
+import { getTenderIntelligenceEnvironmentIssueTypeFromMessage } from '../lib/tender-intelligence-errors';
+import {
+  buildTenderIntelligenceReadinessItems,
+  buildTenderIntelligenceReadinessSteps,
+  getTenderIntelligenceEnvironmentIssueTitle,
+} from '../lib/tender-intelligence-readiness';
 import { getTenderIntelligenceRepository } from '../services/tender-intelligence-repository';
 import {
   resolveTenderIntelligenceHandoff,
@@ -54,16 +59,20 @@ function resolveTenderIntelligenceErrorState(error: string | null) {
     return null;
   }
 
-  if (isTenderIntelligenceSchemaUnavailableMessage(error)) {
+  const issueType = getTenderIntelligenceEnvironmentIssueTypeFromMessage(error);
+
+  if (issueType) {
     return {
       tone: 'warning' as const,
-      title: 'Tarjousäly ei ole käytössä tässä ympäristössä',
+      issueType,
+      title: getTenderIntelligenceEnvironmentIssueTitle(issueType),
       description: error,
     };
   }
 
   return {
     tone: 'error' as const,
+    issueType: null,
     title: 'Tarjousälyn lataus epäonnistui',
     description: error,
   };
@@ -257,6 +266,38 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
     () => Object.fromEntries(quotes.map((quote) => [quote.id, `${quote.quoteNumber} • ${quote.title}`])),
     [quotes],
   );
+  const readinessItems = useMemo(
+    () => (errorState?.tone === 'warning' && errorState.issueType ? buildTenderIntelligenceReadinessItems(errorState.issueType) : []),
+    [errorState],
+  );
+  const readinessSteps = useMemo(
+    () => (errorState?.tone === 'warning' && errorState.issueType ? buildTenderIntelligenceReadinessSteps(errorState.issueType) : []),
+    [errorState],
+  );
+
+  const resolveReadinessBadgeVariant = (state: 'ready' | 'check' | 'blocked') => {
+    if (state === 'blocked') {
+      return 'destructive' as const;
+    }
+
+    if (state === 'ready') {
+      return 'default' as const;
+    }
+
+    return 'outline' as const;
+  };
+
+  const resolveReadinessBadgeLabel = (state: 'ready' | 'check' | 'blocked') => {
+    if (state === 'blocked') {
+      return 'Estää käytön';
+    }
+
+    if (state === 'ready') {
+      return 'Näyttää valmiilta';
+    }
+
+    return 'Tarkista';
+  };
 
   return (
     <div className="space-y-6 p-4 sm:p-8">
@@ -310,6 +351,43 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
           </div>
           <p className="mt-1">{errorState.description}</p>
         </div>
+      )}
+
+      {errorState?.tone === 'warning' && errorState.issueType && (
+        <Card className="border-amber-200 bg-amber-50/70 shadow-none">
+          <CardHeader className="border-b border-amber-200/80">
+            <CardTitle className="text-base text-amber-950">Ympäristövalmius Tarjousälylle</CardTitle>
+            <CardDescription className="text-amber-900/90">
+              Nykyinen virhe näyttää siltä, että ympäristöstä puuttuu yksi tai useampi Tarjousälyn käyttöönoton peruspalikka. Tarkista nämä kohdat ennen uutta testiä tai frontend-rolloutia.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5 pt-6">
+            <div className="grid gap-3 lg:grid-cols-2">
+              {readinessItems.map((item) => (
+                <div key={item.key} className="rounded-2xl border border-amber-200 bg-white/70 px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-amber-950">{item.label}</p>
+                      <p className="mt-2 text-sm leading-6 text-amber-900/90">{item.detail}</p>
+                    </div>
+                    <Badge variant={resolveReadinessBadgeVariant(item.state)}>{resolveReadinessBadgeLabel(item.state)}</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 bg-white/70 px-4 py-4">
+              <p className="text-sm font-medium text-amber-950">Tarkista seuraavaksi tässä järjestyksessä</p>
+              <div className="mt-3 space-y-2">
+                {readinessSteps.map((step, index) => (
+                  <p key={`${errorState.issueType}-step-${index}`} className="text-sm leading-6 text-amber-900/90">
+                    {index + 1}. {step}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {editorHandoff.isActive && editorHandoff.title && editorHandoff.description && (editorHandoff.status !== 'ready' || !selectedPackage || !selectedDraftPackageId || selectedDraftPackageId === editorHandoff.resolvedDraftPackageId) && (

@@ -5,6 +5,7 @@ import { getSupabaseConfigError, isSupabaseConfigured, requireSupabase } from '@
 import type { TenderIntelligenceBackendAdapter } from './tender-intelligence-backend-adapter';
 import { buildTenderAnalysisReadiness, buildTenderExtractionCoverage } from '../lib/tender-analysis';
 import {
+  getTenderIntelligenceEnvironmentIssueMessage,
   getTenderIntelligenceSchemaUnavailableMessage,
   isTenderIntelligenceSchemaUnavailableError,
 } from '../lib/tender-intelligence-errors';
@@ -2905,7 +2906,8 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
 
       return completedJob;
     } catch (error) {
-      const message = getRepositoryErrorMessage(error, 'Baseline-analyysin suoritus epäonnistui.');
+      const message = getTenderIntelligenceEnvironmentIssueMessage(error, { operation: 'analysis-runner' })
+        ?? getRepositoryErrorMessage(error, 'Baseline-analyysin suoritus epäonnistui.');
       throw new Error(message);
     }
   }
@@ -3013,10 +3015,11 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       });
 
       if (uploadError) {
-        const uploadFailureMessage = getRepositoryErrorMessage(
-          uploadError,
-          `Tiedoston “${validatedFile.fileName}” lataus Storageen epäonnistui.`
-        );
+        const uploadFailureMessage = getTenderIntelligenceEnvironmentIssueMessage(uploadError, { operation: 'storage-upload' })
+          ?? getRepositoryErrorMessage(
+            uploadError,
+            `Tiedoston “${validatedFile.fileName}” lataus Storageen epäonnistui.`
+          );
         const { data: failedData, error: failedUpdateError } = await client
           .from('tender_documents')
           .update({
@@ -3117,7 +3120,10 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
 
       return extraction;
     } catch (error) {
-      throw new Error(getRepositoryErrorMessage(error, 'Dokumentin extraction epäonnistui.'));
+      throw new Error(
+        getTenderIntelligenceEnvironmentIssueMessage(error, { operation: 'extraction-runner' })
+        ?? getRepositoryErrorMessage(error, 'Dokumentin extraction epäonnistui.')
+      );
     }
   }
 
