@@ -182,6 +182,14 @@ Valmis:
 - projektivalinta ohjaa asiakas- ja tarjouskontekstia jo luontivaiheessa
 - Tarjousälyn paketti-lista ja valitun paketin työtila näyttävät tallennetun liiketoimintakontekstin näkyvästi
 
+### Työpaketti 2 — paketti-inboxin operatiivinen löydettävyys
+
+Ensimmäinen inkrementti valmis:
+
+- paketti-listassa on nyt haku paketin nimen, asiakkaan, projektin ja tarjouksen perusteella
+- paketti-listaa voi rajata operatiivisilla suodattimilla: linkitetyt, analyysi, katselmointi ja valmiit
+- juuri lisätty liiketoimintakonteksti toimii nyt myös Tarjousälyn listan löydettävyys- ja työjonopintana
+
 ## Seuraava tavoitesuunta
 
 Tarjousälyn seuraavien syventävien vaiheiden tulee jatkua tästä järjestyksestä tuotannollistavien työpakettien rinnalla, ellei erikseen päätetä muuta:

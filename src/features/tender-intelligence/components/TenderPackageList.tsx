@@ -1,13 +1,25 @@
-import { ClockCountdown, Plus } from '@phosphor-icons/react';
+import { ClockCountdown, MagnifyingGlass, Plus } from '@phosphor-icons/react';
+import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 import { buildTenderPackageLinkItems } from '../lib/tender-package-links';
+import { filterTenderPackages, type TenderPackageListFilter } from '../lib/tender-package-list-filters';
 import { TENDER_PACKAGE_STATUS_META, formatCountLabel, formatTenderTimestamp } from '../lib/tender-intelligence-ui';
 import type { TenderPackage } from '../types/tender-intelligence';
+
+const FILTER_OPTIONS: Array<{ value: TenderPackageListFilter; label: string }> = [
+  { value: 'all', label: 'Kaikki' },
+  { value: 'linked', label: 'Linkitetyt' },
+  { value: 'analysis', label: 'Analyysi' },
+  { value: 'review', label: 'Katselmointi' },
+  { value: 'completed', label: 'Valmiit' },
+];
 
 interface TenderPackageListProps {
   packages: TenderPackage[];
@@ -32,6 +44,19 @@ export default function TenderPackageList({
   onCreateClick,
   onSelectPackage,
 }: TenderPackageListProps) {
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<TenderPackageListFilter>('all');
+  const filteredPackages = filterTenderPackages({
+    packages,
+    filter,
+    search,
+    lookups: {
+      customerNameById,
+      projectNameById,
+      quoteLabelById,
+    },
+  });
+
   return (
     <Card className="h-full border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
       <CardHeader className="border-b">
@@ -49,7 +74,30 @@ export default function TenderPackageList({
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3 pt-6">
+      <CardContent className="space-y-4 pt-6">
+        <div className="space-y-3">
+          <div className="relative">
+            <MagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Hae paketin nimellä, asiakkaalla, projektilla tai tarjouksella"
+              className="pl-9"
+            />
+          </div>
+
+          <Select value={filter} onValueChange={(value) => setFilter(value as TenderPackageListFilter)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Rajaa paketteja" />
+            </SelectTrigger>
+            <SelectContent>
+              {FILTER_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {loading ? (
           <div className="rounded-2xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
             Ladataan Tarjousälyn organisaatiodataa...
@@ -58,8 +106,12 @@ export default function TenderPackageList({
           <div className="rounded-3xl border border-dashed px-5 py-10 text-center text-sm text-muted-foreground">
             Organisaatiolle ei ole vielä tallennettu tarjouspyyntöpaketteja. Ensimmäinen paketti luodaan tästä näkymästä ja säilyy myös sivun päivityksen yli.
           </div>
+        ) : filteredPackages.length === 0 ? (
+          <div className="rounded-3xl border border-dashed px-5 py-10 text-center text-sm text-muted-foreground">
+            Yksikään tarjouspyyntöpaketti ei vastannut nykyistä hakua tai suodatinta.
+          </div>
         ) : (
-          packages.map((item) => {
+          filteredPackages.map((item) => {
             const statusMeta = TENDER_PACKAGE_STATUS_META[item.status];
             const isActive = selectedPackageId === item.id;
             const linkItems = buildTenderPackageLinkItems(item, {
