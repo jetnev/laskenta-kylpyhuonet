@@ -108,6 +108,19 @@ export const tenderResultEvidenceRowSchema = z.object({
 const tenderReviewStatusRowSchema = z.enum(['unreviewed', 'accepted', 'dismissed', 'needs_attention']);
 const tenderResolutionStatusRowSchema = z.enum(['open', 'in_progress', 'resolved', 'wont_fix']);
 const tenderReferenceProfileSourceKindRowSchema = z.enum(['manual', 'imported', 'other']);
+const tenderProviderDeliveryScopeRowSchema = z.enum(['local', 'regional', 'national', 'international']);
+const tenderProviderCredentialTypeRowSchema = z.enum(['certificate', 'qualification', 'insurance', 'license', 'other']);
+const tenderProviderConstraintTypeRowSchema = z.enum(['eligibility', 'capacity', 'commercial', 'resourcing', 'compliance', 'other']);
+const tenderProviderConstraintSeverityRowSchema = z.enum(['hard', 'soft', 'info']);
+const tenderProviderDocumentTypeRowSchema = z.enum(['case-study', 'certificate', 'insurance', 'cv', 'policy', 'other']);
+const tenderProviderResponseTemplateTypeRowSchema = z.enum([
+  'company-overview',
+  'technical-approach',
+  'delivery-plan',
+  'pricing-note',
+  'quality',
+  'other',
+]);
 const tenderDraftPackageStatusRowSchema = z.enum(['draft', 'reviewed', 'exported', 'archived']);
 const tenderDraftPackageImportStatusRowSchema = z.enum(['not_imported', 'imported', 'failed']);
 const tenderDraftPackageReimportStatusRowSchema = z.enum(['up_to_date', 'stale', 'never_imported', 'import_failed']);
@@ -215,6 +228,85 @@ export const tenderReferenceProfileRowSchema = z.object({
   source_kind: tenderReferenceProfileSourceKindRowSchema,
   source_reference: z.string().nullable(),
   created_by_user_id: z.string().uuid().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const tenderProviderProfileRowSchema = z.object({
+  id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  company_name: z.string(),
+  business_id: z.string().nullable(),
+  website_url: z.string().nullable(),
+  headquarters: z.string().nullable(),
+  summary: z.string().nullable(),
+  service_area: z.string().nullable(),
+  max_travel_km: z.number().int().nullable(),
+  delivery_scope: tenderProviderDeliveryScopeRowSchema,
+  created_by_user_id: z.string().uuid().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const tenderProviderContactRowSchema = z.object({
+  id: z.string().uuid(),
+  tender_provider_profile_id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  full_name: z.string(),
+  role_title: z.string().nullable(),
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  is_primary: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const tenderProviderCredentialRowSchema = z.object({
+  id: z.string().uuid(),
+  tender_provider_profile_id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  title: z.string(),
+  issuer: z.string().nullable(),
+  credential_type: tenderProviderCredentialTypeRowSchema,
+  valid_until: z.string().nullable(),
+  document_reference: z.string().nullable(),
+  notes: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const tenderProviderConstraintRowSchema = z.object({
+  id: z.string().uuid(),
+  tender_provider_profile_id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  title: z.string(),
+  constraint_type: tenderProviderConstraintTypeRowSchema,
+  severity: tenderProviderConstraintSeverityRowSchema,
+  rule_text: z.string(),
+  mitigation_note: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const tenderProviderDocumentRowSchema = z.object({
+  id: z.string().uuid(),
+  tender_provider_profile_id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  title: z.string(),
+  document_type: tenderProviderDocumentTypeRowSchema,
+  source_reference: z.string().nullable(),
+  notes: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const tenderProviderResponseTemplateRowSchema = z.object({
+  id: z.string().uuid(),
+  tender_provider_profile_id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  title: z.string(),
+  template_type: tenderProviderResponseTemplateTypeRowSchema,
+  content_md: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -344,6 +436,12 @@ export const tenderRequirementRowsSchema = z.array(tenderRequirementRowSchema);
 export const tenderMissingItemRowsSchema = z.array(tenderMissingItemRowSchema);
 export const tenderRiskFlagRowsSchema = z.array(tenderRiskFlagRowSchema);
 export const tenderReferenceProfileRowsSchema = z.array(tenderReferenceProfileRowSchema);
+export const tenderProviderProfileRowsSchema = z.array(tenderProviderProfileRowSchema);
+export const tenderProviderContactRowsSchema = z.array(tenderProviderContactRowSchema);
+export const tenderProviderCredentialRowsSchema = z.array(tenderProviderCredentialRowSchema);
+export const tenderProviderConstraintRowsSchema = z.array(tenderProviderConstraintRowSchema);
+export const tenderProviderDocumentRowsSchema = z.array(tenderProviderDocumentRowSchema);
+export const tenderProviderResponseTemplateRowsSchema = z.array(tenderProviderResponseTemplateRowSchema);
 export const tenderReferenceSuggestionRowsSchema = z.array(tenderReferenceSuggestionRowSchema);
 export const tenderDraftPackageRowsSchema = z.array(tenderDraftPackageRowSchema);
 export const tenderDraftPackageImportRunRowsSchema = z.array(tenderDraftPackageImportRunRowSchema);
@@ -363,6 +461,12 @@ export type TenderRequirementRow = z.infer<typeof tenderRequirementRowSchema>;
 export type TenderMissingItemRow = z.infer<typeof tenderMissingItemRowSchema>;
 export type TenderRiskFlagRow = z.infer<typeof tenderRiskFlagRowSchema>;
 export type TenderReferenceProfileRow = z.infer<typeof tenderReferenceProfileRowSchema>;
+export type TenderProviderProfileRow = z.infer<typeof tenderProviderProfileRowSchema>;
+export type TenderProviderContactRow = z.infer<typeof tenderProviderContactRowSchema>;
+export type TenderProviderCredentialRow = z.infer<typeof tenderProviderCredentialRowSchema>;
+export type TenderProviderConstraintRow = z.infer<typeof tenderProviderConstraintRowSchema>;
+export type TenderProviderDocumentRow = z.infer<typeof tenderProviderDocumentRowSchema>;
+export type TenderProviderResponseTemplateRow = z.infer<typeof tenderProviderResponseTemplateRowSchema>;
 export type TenderReferenceSuggestionRow = z.infer<typeof tenderReferenceSuggestionRowSchema>;
 export type TenderDraftPackageRow = z.infer<typeof tenderDraftPackageRowSchema>;
 export type TenderDraftPackageImportRunRow = z.infer<typeof tenderDraftPackageImportRunRowSchema>;

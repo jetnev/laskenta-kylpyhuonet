@@ -6,6 +6,12 @@ import {
   createTenderPackageInputSchema,
   tenderDraftExportPayloadSchema,
   tenderPackageDetailsSchema,
+  upsertTenderProviderConstraintInputSchema,
+  upsertTenderProviderContactInputSchema,
+  upsertTenderProviderCredentialInputSchema,
+  upsertTenderProviderDocumentInputSchema,
+  upsertTenderProviderProfileInputSchema,
+  upsertTenderProviderResponseTemplateInputSchema,
   updateTenderDraftPackageItemInputSchema,
   updateTenderReferenceProfileInputSchema,
   type CreateTenderReferenceProfileInput,
@@ -22,12 +28,25 @@ import {
   type TenderPackage,
   type TenderPackageDetails,
   type TenderPackageResults,
+  type TenderProviderConstraint,
+  type TenderProviderContact,
+  type TenderProviderCredential,
+  type TenderProviderDocument,
+  type TenderProviderProfile,
+  type TenderProviderProfileDetails,
+  type TenderProviderResponseTemplate,
   type TenderReferenceProfile,
   type TenderResultEvidence,
   type TenderReferenceSuggestion,
   type TenderRequirement,
   type TenderReviewTask,
   type TenderRiskFlag,
+  type UpsertTenderProviderConstraintInput,
+  type UpsertTenderProviderContactInput,
+  type UpsertTenderProviderCredentialInput,
+  type UpsertTenderProviderDocumentInput,
+  type UpsertTenderProviderProfileInput,
+  type UpsertTenderProviderResponseTemplateInput,
   type UpdateTenderDraftPackageItemInput,
   type UpdateTenderReferenceProfileInput,
 } from '../types/tender-intelligence';
@@ -49,6 +68,12 @@ import type {
   TenderMissingItemRow,
   TenderImportOwnedBlockRow,
   TenderPackageRow,
+  TenderProviderConstraintRow,
+  TenderProviderContactRow,
+  TenderProviderCredentialRow,
+  TenderProviderDocumentRow,
+  TenderProviderProfileRow,
+  TenderProviderResponseTemplateRow,
   TenderReferenceProfileRow,
   TenderResultEvidenceRow,
   TenderReferenceSuggestionRow,
@@ -260,6 +285,117 @@ export function mapTenderReferenceProfileRowToDomain(row: TenderReferenceProfile
     createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+export function mapTenderProviderProfileRowToDomain(row: TenderProviderProfileRow): TenderProviderProfile {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    companyName: row.company_name,
+    businessId: row.business_id,
+    websiteUrl: row.website_url,
+    headquarters: row.headquarters,
+    summary: row.summary,
+    serviceArea: row.service_area,
+    maxTravelKm: row.max_travel_km,
+    deliveryScope: row.delivery_scope,
+    createdByUserId: row.created_by_user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapTenderProviderContactRowToDomain(row: TenderProviderContactRow): TenderProviderContact {
+  return {
+    id: row.id,
+    profileId: row.tender_provider_profile_id,
+    organizationId: row.organization_id,
+    fullName: row.full_name,
+    roleTitle: row.role_title,
+    email: row.email,
+    phone: row.phone,
+    isPrimary: row.is_primary,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapTenderProviderCredentialRowToDomain(row: TenderProviderCredentialRow): TenderProviderCredential {
+  return {
+    id: row.id,
+    profileId: row.tender_provider_profile_id,
+    organizationId: row.organization_id,
+    title: row.title,
+    issuer: row.issuer,
+    credentialType: row.credential_type,
+    validUntil: row.valid_until,
+    documentReference: row.document_reference,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapTenderProviderConstraintRowToDomain(row: TenderProviderConstraintRow): TenderProviderConstraint {
+  return {
+    id: row.id,
+    profileId: row.tender_provider_profile_id,
+    organizationId: row.organization_id,
+    title: row.title,
+    constraintType: row.constraint_type,
+    severity: row.severity,
+    ruleText: row.rule_text,
+    mitigationNote: row.mitigation_note,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapTenderProviderDocumentRowToDomain(row: TenderProviderDocumentRow): TenderProviderDocument {
+  return {
+    id: row.id,
+    profileId: row.tender_provider_profile_id,
+    organizationId: row.organization_id,
+    title: row.title,
+    documentType: row.document_type,
+    sourceReference: row.source_reference,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapTenderProviderResponseTemplateRowToDomain(
+  row: TenderProviderResponseTemplateRow,
+): TenderProviderResponseTemplate {
+  return {
+    id: row.id,
+    profileId: row.tender_provider_profile_id,
+    organizationId: row.organization_id,
+    title: row.title,
+    templateType: row.template_type,
+    contentMd: row.content_md,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapTenderProviderProfileDetailsRowsToDomain(input: {
+  profileRow: TenderProviderProfileRow;
+  contactRows: TenderProviderContactRow[];
+  credentialRows: TenderProviderCredentialRow[];
+  constraintRows: TenderProviderConstraintRow[];
+  documentRows: TenderProviderDocumentRow[];
+  responseTemplateRows: TenderProviderResponseTemplateRow[];
+}): TenderProviderProfileDetails {
+  return {
+    profile: mapTenderProviderProfileRowToDomain(input.profileRow),
+    contacts: input.contactRows.map(mapTenderProviderContactRowToDomain),
+    credentials: input.credentialRows.map(mapTenderProviderCredentialRowToDomain),
+    constraints: input.constraintRows.map(mapTenderProviderConstraintRowToDomain),
+    documents: input.documentRows.map(mapTenderProviderDocumentRowToDomain),
+    responseTemplates: input.responseTemplateRows.map(mapTenderProviderResponseTemplateRowToDomain),
   };
 }
 
@@ -481,6 +617,7 @@ export function mapTenderPackageResultsRowsToDomain(input: {
 
 export function buildTenderPackageDetails(input: {
   packageRow: TenderPackageRow;
+  providerProfile?: TenderProviderProfileDetails | null;
   documentRows: TenderDocumentRow[];
   documentExtractionRows: TenderDocumentExtractionRow[];
   resultEvidenceRows: TenderResultEvidenceRow[];
@@ -525,6 +662,7 @@ export function buildTenderPackageDetails(input: {
       reviewTaskCount: results.reviewTasks.length,
       currentJobId: latestAnalysisJob?.id ?? null,
     }),
+    providerProfile: input.providerProfile ?? null,
     documents,
     documentExtractions,
     resultEvidence,
@@ -571,6 +709,127 @@ export function mapCreateTenderReferenceProfileInputToInsert(input: CreateTender
 export function mapUpdateTenderReferenceProfileInputToPatch(input: UpdateTenderReferenceProfileInput) {
   const parsedInput = updateTenderReferenceProfileInputSchema.parse(input);
   return mapTenderReferenceProfileInputToRow(parsedInput);
+}
+
+function mapTenderProviderProfileInputToRow(input: UpsertTenderProviderProfileInput) {
+  return {
+    company_name: input.companyName,
+    business_id: input.businessId ?? null,
+    website_url: input.websiteUrl ?? null,
+    headquarters: input.headquarters ?? null,
+    summary: input.summary ?? null,
+    service_area: input.serviceArea ?? null,
+    max_travel_km: input.maxTravelKm ?? null,
+    delivery_scope: input.deliveryScope,
+  };
+}
+
+export function mapUpsertTenderProviderProfileInputToInsert(input: UpsertTenderProviderProfileInput) {
+  const parsedInput = upsertTenderProviderProfileInputSchema.parse(input);
+  return mapTenderProviderProfileInputToRow(parsedInput);
+}
+
+export function mapUpsertTenderProviderProfileInputToPatch(input: UpsertTenderProviderProfileInput) {
+  const parsedInput = upsertTenderProviderProfileInputSchema.parse(input);
+  return mapTenderProviderProfileInputToRow(parsedInput);
+}
+
+function mapTenderProviderContactInputToRow(input: UpsertTenderProviderContactInput) {
+  return {
+    full_name: input.fullName,
+    role_title: input.roleTitle ?? null,
+    email: input.email ?? null,
+    phone: input.phone ?? null,
+    is_primary: input.isPrimary,
+  };
+}
+
+export function mapUpsertTenderProviderContactInputToInsert(input: UpsertTenderProviderContactInput) {
+  const parsedInput = upsertTenderProviderContactInputSchema.parse(input);
+  return mapTenderProviderContactInputToRow(parsedInput);
+}
+
+export function mapUpsertTenderProviderContactInputToPatch(input: UpsertTenderProviderContactInput) {
+  const parsedInput = upsertTenderProviderContactInputSchema.parse(input);
+  return mapTenderProviderContactInputToRow(parsedInput);
+}
+
+function mapTenderProviderCredentialInputToRow(input: UpsertTenderProviderCredentialInput) {
+  return {
+    title: input.title,
+    issuer: input.issuer ?? null,
+    credential_type: input.credentialType,
+    valid_until: input.validUntil ?? null,
+    document_reference: input.documentReference ?? null,
+    notes: input.notes ?? null,
+  };
+}
+
+export function mapUpsertTenderProviderCredentialInputToInsert(input: UpsertTenderProviderCredentialInput) {
+  const parsedInput = upsertTenderProviderCredentialInputSchema.parse(input);
+  return mapTenderProviderCredentialInputToRow(parsedInput);
+}
+
+export function mapUpsertTenderProviderCredentialInputToPatch(input: UpsertTenderProviderCredentialInput) {
+  const parsedInput = upsertTenderProviderCredentialInputSchema.parse(input);
+  return mapTenderProviderCredentialInputToRow(parsedInput);
+}
+
+function mapTenderProviderConstraintInputToRow(input: UpsertTenderProviderConstraintInput) {
+  return {
+    title: input.title,
+    constraint_type: input.constraintType,
+    severity: input.severity,
+    rule_text: input.ruleText,
+    mitigation_note: input.mitigationNote ?? null,
+  };
+}
+
+export function mapUpsertTenderProviderConstraintInputToInsert(input: UpsertTenderProviderConstraintInput) {
+  const parsedInput = upsertTenderProviderConstraintInputSchema.parse(input);
+  return mapTenderProviderConstraintInputToRow(parsedInput);
+}
+
+export function mapUpsertTenderProviderConstraintInputToPatch(input: UpsertTenderProviderConstraintInput) {
+  const parsedInput = upsertTenderProviderConstraintInputSchema.parse(input);
+  return mapTenderProviderConstraintInputToRow(parsedInput);
+}
+
+function mapTenderProviderDocumentInputToRow(input: UpsertTenderProviderDocumentInput) {
+  return {
+    title: input.title,
+    document_type: input.documentType,
+    source_reference: input.sourceReference ?? null,
+    notes: input.notes ?? null,
+  };
+}
+
+export function mapUpsertTenderProviderDocumentInputToInsert(input: UpsertTenderProviderDocumentInput) {
+  const parsedInput = upsertTenderProviderDocumentInputSchema.parse(input);
+  return mapTenderProviderDocumentInputToRow(parsedInput);
+}
+
+export function mapUpsertTenderProviderDocumentInputToPatch(input: UpsertTenderProviderDocumentInput) {
+  const parsedInput = upsertTenderProviderDocumentInputSchema.parse(input);
+  return mapTenderProviderDocumentInputToRow(parsedInput);
+}
+
+function mapTenderProviderResponseTemplateInputToRow(input: UpsertTenderProviderResponseTemplateInput) {
+  return {
+    title: input.title,
+    template_type: input.templateType,
+    content_md: input.contentMd,
+  };
+}
+
+export function mapUpsertTenderProviderResponseTemplateInputToInsert(input: UpsertTenderProviderResponseTemplateInput) {
+  const parsedInput = upsertTenderProviderResponseTemplateInputSchema.parse(input);
+  return mapTenderProviderResponseTemplateInputToRow(parsedInput);
+}
+
+export function mapUpsertTenderProviderResponseTemplateInputToPatch(input: UpsertTenderProviderResponseTemplateInput) {
+  const parsedInput = upsertTenderProviderResponseTemplateInputSchema.parse(input);
+  return mapTenderProviderResponseTemplateInputToRow(parsedInput);
 }
 
 export function mapUpdateTenderDraftPackageItemInputToPatch(input: UpdateTenderDraftPackageItemInput) {

@@ -142,6 +142,8 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
     referenceProfileSubmittingId,
     deletingReferenceProfileIds,
     importingReferenceProfiles,
+    providerProfileSubmittingKey,
+    deletingProviderProfileItemKeys,
     reviewingDraftPackageId,
     startingAnalysisPackageId,
     extractingPackageId,
@@ -167,6 +169,17 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
     importReferenceProfiles,
     updateReferenceProfile,
     deleteReferenceProfile,
+    upsertProviderProfile,
+    upsertProviderContact,
+    deleteProviderContact,
+    upsertProviderCredential,
+    deleteProviderCredential,
+    upsertProviderConstraint,
+    deleteProviderConstraint,
+    upsertProviderDocument,
+    deleteProviderDocument,
+    upsertProviderResponseTemplate,
+    deleteProviderResponseTemplate,
     recomputeReferenceSuggestions,
     updateRequirementWorkflow,
     updateMissingItemWorkflow,
@@ -453,6 +466,8 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
           referenceProfileSubmittingId={referenceProfileSubmittingId}
           deletingReferenceProfileIds={deletingReferenceProfileIds}
           importingReferenceProfiles={importingReferenceProfiles}
+          providerProfileSubmittingKey={providerProfileSubmittingKey}
+          deletingProviderProfileItemKeys={deletingProviderProfileItemKeys}
           workflowUpdatingTargetIds={workflowUpdatingTargetIds}
           recomputingReferenceSuggestionPackageId={recomputingReferenceSuggestionPackageId}
           error={error}
@@ -499,6 +514,17 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
           onImportReferenceProfiles={importReferenceProfiles}
           onUpdateReferenceProfile={updateReferenceProfile}
           onDeleteReferenceProfile={deleteReferenceProfile}
+          onUpsertProviderProfile={upsertProviderProfile}
+          onUpsertProviderContact={upsertProviderContact}
+          onDeleteProviderContact={deleteProviderContact}
+          onUpsertProviderCredential={upsertProviderCredential}
+          onDeleteProviderCredential={deleteProviderCredential}
+          onUpsertProviderConstraint={upsertProviderConstraint}
+          onDeleteProviderConstraint={deleteProviderConstraint}
+          onUpsertProviderDocument={upsertProviderDocument}
+          onDeleteProviderDocument={deleteProviderDocument}
+          onUpsertProviderResponseTemplate={upsertProviderResponseTemplate}
+          onDeleteProviderResponseTemplate={deleteProviderResponseTemplate}
           onUpdateReferenceSuggestion={updateReferenceSuggestionWorkflow}
           onRecomputeReferenceSuggestions={recomputeReferenceSuggestions}
           onUpdateRequirement={updateRequirementWorkflow}

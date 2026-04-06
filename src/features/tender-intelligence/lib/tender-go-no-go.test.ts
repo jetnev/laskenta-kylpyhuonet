@@ -3,6 +3,81 @@ import { describe, expect, it } from 'vitest';
 import { buildTenderGoNoGoDecisionSupport } from './tender-go-no-go';
 import type { TenderPackageDetails } from '../types/tender-intelligence';
 
+function createReadyProviderProfile() {
+  return {
+    profile: {
+      id: '77777777-7777-4777-8777-777777777777',
+      organizationId: '88888888-8888-4888-8888-888888888888',
+      companyName: 'Copilot Oy',
+      businessId: '1234567-8',
+      websiteUrl: 'https://copilot.example.com',
+      headquarters: 'Helsinki',
+      summary: 'Korjausrakentamisen ja tarjousvastauksen ydinosaaja.',
+      serviceArea: 'Uusimaa',
+      maxTravelKm: 250,
+      deliveryScope: 'regional' as const,
+      createdByUserId: null,
+      createdAt: '2026-04-06T08:00:00.000Z',
+      updatedAt: '2026-04-06T08:00:00.000Z',
+    },
+    contacts: [
+      {
+        id: '99999999-9999-4999-8999-999999999999',
+        profileId: '77777777-7777-4777-8777-777777777777',
+        organizationId: '88888888-8888-4888-8888-888888888888',
+        fullName: 'Tarjousvastaava',
+        roleTitle: 'Tarjousjohtaja',
+        email: 'tarjous@copilot.example.com',
+        phone: null,
+        isPrimary: true,
+        createdAt: '2026-04-06T08:00:00.000Z',
+        updatedAt: '2026-04-06T08:00:00.000Z',
+      },
+    ],
+    credentials: [
+      {
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        profileId: '77777777-7777-4777-8777-777777777777',
+        organizationId: '88888888-8888-4888-8888-888888888888',
+        title: 'Vastuuvakuutus',
+        issuer: 'Vakuutusyhtiö',
+        credentialType: 'insurance' as const,
+        validUntil: '2027-04-06T08:00:00.000Z',
+        documentReference: null,
+        notes: null,
+        createdAt: '2026-04-06T08:00:00.000Z',
+        updatedAt: '2026-04-06T08:00:00.000Z',
+      },
+    ],
+    constraints: [],
+    documents: [
+      {
+        id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        profileId: '77777777-7777-4777-8777-777777777777',
+        organizationId: '88888888-8888-4888-8888-888888888888',
+        title: 'Yritysesite',
+        documentType: 'case-study' as const,
+        sourceReference: null,
+        notes: null,
+        createdAt: '2026-04-06T08:00:00.000Z',
+        updatedAt: '2026-04-06T08:00:00.000Z',
+      },
+    ],
+    responseTemplates: [
+      {
+        id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        profileId: '77777777-7777-4777-8777-777777777777',
+        organizationId: '88888888-8888-4888-8888-888888888888',
+        title: 'Yritysesittely',
+        templateType: 'company-overview' as const,
+        contentMd: 'Yritysesittelyteksti',
+        createdAt: '2026-04-06T08:00:00.000Z',
+        updatedAt: '2026-04-06T08:00:00.000Z',
+      },
+    ],
+  };
+}
+
 function createPackageDetails(): TenderPackageDetails {
   return {
     package: {
@@ -110,6 +185,7 @@ function createPackageDetails(): TenderPackageDetails {
       draftArtifacts: [],
       reviewTasks: [],
     },
+    providerProfile: createReadyProviderProfile(),
   };
 }
 
@@ -148,5 +224,44 @@ describe('tender-go-no-go', () => {
     expect(decision.state).toBe('blocked');
     expect(decision.openHighRiskCount).toBe(1);
     expect(decision.canProceed).toBe(false);
+  });
+
+  it('warns when provider profile is missing even if baseline signals are otherwise ready', () => {
+    const details = createPackageDetails();
+    details.providerProfile = null;
+
+    const decision = buildTenderGoNoGoDecisionSupport(details);
+    const providerSignal = decision.signals.find((signal) => signal.key === 'provider-profile');
+
+    expect(decision.state).toBe('warning');
+    expect(decision.canProceed).toBe(true);
+    expect(providerSignal).toMatchObject({
+      state: 'warning',
+    });
+    expect(providerSignal?.detail).toContain('Tarjoajaprofiilia ei ole vielä muodostettu');
+    expect(decision.nextActions).toContain('Luo tarjoajaprofiilin runko yrityksen ydintiedoilla.');
+  });
+
+  it('warns when hard provider constraints need manual fit-checking', () => {
+    const details = createPackageDetails();
+    details.providerProfile?.constraints.push({
+      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      profileId: details.providerProfile?.profile.id ?? '77777777-7777-4777-8777-777777777777',
+      organizationId: details.providerProfile?.profile.organizationId ?? '88888888-8888-4888-8888-888888888888',
+      title: 'Ei yli 300 km toimituksia',
+      constraintType: 'capacity',
+      severity: 'hard',
+      ruleText: 'Tarjouksia ei jätetä yli 300 km toimitusalueelle.',
+      mitigationNote: null,
+      createdAt: '2026-04-06T08:00:00.000Z',
+      updatedAt: '2026-04-06T08:00:00.000Z',
+    });
+
+    const decision = buildTenderGoNoGoDecisionSupport(details);
+    const providerSignal = decision.signals.find((signal) => signal.key === 'provider-profile');
+
+    expect(decision.state).toBe('warning');
+    expect(providerSignal?.detail).toContain('1 kovaa rajausta');
+    expect(decision.nextActions).toContain('Tarkista 1 kovan rajauksen sopivuus tarjouspyynnön ehtoihin ennen sitovaa go / no-go -päätöstä.');
   });
 });

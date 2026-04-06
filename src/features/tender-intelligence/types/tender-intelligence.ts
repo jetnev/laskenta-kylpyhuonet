@@ -50,6 +50,19 @@ export const tenderResolutionStatusSchema = z.enum(['open', 'in_progress', 'reso
 export const tenderGoNoGoRecommendationSchema = z.enum(['pending', 'go', 'conditional-go', 'no-go']);
 export const tenderReferenceSuggestionSourceTypeSchema = z.enum(['quote', 'project', 'document-template', 'manual', 'organization_reference_profile']);
 export const tenderReferenceProfileSourceKindSchema = z.enum(['manual', 'imported', 'other']);
+export const tenderProviderDeliveryScopeSchema = z.enum(['local', 'regional', 'national', 'international']);
+export const tenderProviderCredentialTypeSchema = z.enum(['certificate', 'qualification', 'insurance', 'license', 'other']);
+export const tenderProviderConstraintTypeSchema = z.enum(['eligibility', 'capacity', 'commercial', 'resourcing', 'compliance', 'other']);
+export const tenderProviderConstraintSeveritySchema = z.enum(['hard', 'soft', 'info']);
+export const tenderProviderDocumentTypeSchema = z.enum(['case-study', 'certificate', 'insurance', 'cv', 'policy', 'other']);
+export const tenderProviderResponseTemplateTypeSchema = z.enum([
+  'company-overview',
+  'technical-approach',
+  'delivery-plan',
+  'pricing-note',
+  'quality',
+  'other',
+]);
 export const tenderDraftPackageStatusSchema = z.enum(['draft', 'reviewed', 'exported', 'archived']);
 export const tenderDraftPackageImportStatusSchema = z.enum(['not_imported', 'imported', 'failed']);
 export const tenderDraftPackageReimportStatusSchema = z.enum(['up_to_date', 'stale', 'never_imported', 'import_failed']);
@@ -242,6 +255,150 @@ const tenderReferenceProfileInputSchema = z.object({
 export const createTenderReferenceProfileInputSchema = tenderReferenceProfileInputSchema;
 export const updateTenderReferenceProfileInputSchema = tenderReferenceProfileInputSchema;
 
+export const tenderProviderProfileSchema = z.object({
+  id: entityIdSchema,
+  organizationId: entityIdSchema,
+  companyName: z.string().trim().min(1),
+  businessId: z.string().trim().nullable().optional(),
+  websiteUrl: z.string().trim().nullable().optional(),
+  headquarters: z.string().trim().nullable().optional(),
+  summary: z.string().trim().nullable().optional(),
+  serviceArea: z.string().trim().nullable().optional(),
+  maxTravelKm: z.number().int().min(0).nullable().optional(),
+  deliveryScope: tenderProviderDeliveryScopeSchema,
+  createdByUserId: entityIdSchema.nullable().optional(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+
+export const tenderProviderContactSchema = z.object({
+  id: entityIdSchema,
+  profileId: entityIdSchema,
+  organizationId: entityIdSchema,
+  fullName: z.string().trim().min(1),
+  roleTitle: z.string().trim().nullable().optional(),
+  email: z.string().trim().nullable().optional(),
+  phone: z.string().trim().nullable().optional(),
+  isPrimary: z.boolean(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+
+export const tenderProviderCredentialSchema = z.object({
+  id: entityIdSchema,
+  profileId: entityIdSchema,
+  organizationId: entityIdSchema,
+  title: z.string().trim().min(1),
+  issuer: z.string().trim().nullable().optional(),
+  credentialType: tenderProviderCredentialTypeSchema,
+  validUntil: timestampSchema.nullable().optional(),
+  documentReference: z.string().trim().nullable().optional(),
+  notes: z.string().trim().nullable().optional(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+
+export const tenderProviderConstraintSchema = z.object({
+  id: entityIdSchema,
+  profileId: entityIdSchema,
+  organizationId: entityIdSchema,
+  title: z.string().trim().min(1),
+  constraintType: tenderProviderConstraintTypeSchema,
+  severity: tenderProviderConstraintSeveritySchema,
+  ruleText: z.string().trim().min(1),
+  mitigationNote: z.string().trim().nullable().optional(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+
+export const tenderProviderDocumentSchema = z.object({
+  id: entityIdSchema,
+  profileId: entityIdSchema,
+  organizationId: entityIdSchema,
+  title: z.string().trim().min(1),
+  documentType: tenderProviderDocumentTypeSchema,
+  sourceReference: z.string().trim().nullable().optional(),
+  notes: z.string().trim().nullable().optional(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+
+export const tenderProviderResponseTemplateSchema = z.object({
+  id: entityIdSchema,
+  profileId: entityIdSchema,
+  organizationId: entityIdSchema,
+  title: z.string().trim().min(1),
+  templateType: tenderProviderResponseTemplateTypeSchema,
+  contentMd: z.string().trim().min(1),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+
+export const tenderProviderProfileDetailsSchema = z.object({
+  profile: tenderProviderProfileSchema,
+  contacts: z.array(tenderProviderContactSchema),
+  credentials: z.array(tenderProviderCredentialSchema),
+  constraints: z.array(tenderProviderConstraintSchema),
+  documents: z.array(tenderProviderDocumentSchema),
+  responseTemplates: z.array(tenderProviderResponseTemplateSchema),
+});
+
+const tenderProviderProfileInputSchema = z.object({
+  companyName: z.string().trim().min(1, 'Anna tarjoajaprofiilille yrityksen nimi.'),
+  businessId: z.string().trim().nullable().optional(),
+  websiteUrl: z.string().trim().nullable().optional(),
+  headquarters: z.string().trim().nullable().optional(),
+  summary: z.string().trim().nullable().optional(),
+  serviceArea: z.string().trim().nullable().optional(),
+  maxTravelKm: z.number().int().min(0).nullable().optional(),
+  deliveryScope: tenderProviderDeliveryScopeSchema.default('regional'),
+});
+
+const tenderProviderContactInputSchema = z.object({
+  fullName: z.string().trim().min(1, 'Anna yhteyshenkilön nimi.'),
+  roleTitle: z.string().trim().nullable().optional(),
+  email: z.string().trim().nullable().optional(),
+  phone: z.string().trim().nullable().optional(),
+  isPrimary: z.boolean().default(false),
+});
+
+const tenderProviderCredentialInputSchema = z.object({
+  title: z.string().trim().min(1, 'Anna pätevyydelle otsikko.'),
+  issuer: z.string().trim().nullable().optional(),
+  credentialType: tenderProviderCredentialTypeSchema.default('certificate'),
+  validUntil: timestampSchema.nullable().optional(),
+  documentReference: z.string().trim().nullable().optional(),
+  notes: z.string().trim().nullable().optional(),
+});
+
+const tenderProviderConstraintInputSchema = z.object({
+  title: z.string().trim().min(1, 'Anna rajoitteelle otsikko.'),
+  constraintType: tenderProviderConstraintTypeSchema.default('other'),
+  severity: tenderProviderConstraintSeveritySchema.default('soft'),
+  ruleText: z.string().trim().min(1, 'Kuvaa rajoite tai ehto.'),
+  mitigationNote: z.string().trim().nullable().optional(),
+});
+
+const tenderProviderDocumentInputSchema = z.object({
+  title: z.string().trim().min(1, 'Anna dokumentille nimi.'),
+  documentType: tenderProviderDocumentTypeSchema.default('other'),
+  sourceReference: z.string().trim().nullable().optional(),
+  notes: z.string().trim().nullable().optional(),
+});
+
+const tenderProviderResponseTemplateInputSchema = z.object({
+  title: z.string().trim().min(1, 'Anna vastauspohjalle nimi.'),
+  templateType: tenderProviderResponseTemplateTypeSchema.default('other'),
+  contentMd: z.string().trim().min(1, 'Kirjoita vastauspohjan sisältö.'),
+});
+
+export const upsertTenderProviderProfileInputSchema = tenderProviderProfileInputSchema;
+export const upsertTenderProviderContactInputSchema = tenderProviderContactInputSchema;
+export const upsertTenderProviderCredentialInputSchema = tenderProviderCredentialInputSchema;
+export const upsertTenderProviderConstraintInputSchema = tenderProviderConstraintInputSchema;
+export const upsertTenderProviderDocumentInputSchema = tenderProviderDocumentInputSchema;
+export const upsertTenderProviderResponseTemplateInputSchema = tenderProviderResponseTemplateInputSchema;
+
 export const TENDER_DRAFT_EXPORT_SCHEMA_VERSION = 'tender-draft-package/v1' as const;
 
 export const tenderDraftPackageItemSchema = z.object({
@@ -420,6 +577,7 @@ export const tenderPackageResultsSchema = z.object({
 
 export const tenderPackageDetailsSchema = z.object({
   package: tenderPackageSchema,
+  providerProfile: tenderProviderProfileDetailsSchema.nullable().optional(),
   documents: z.array(tenderDocumentSchema),
   documentExtractions: z.array(tenderDocumentExtractionSchema),
   resultEvidence: z.array(tenderResultEvidenceSchema),
@@ -459,6 +617,12 @@ export type TenderResolutionStatus = z.infer<typeof tenderResolutionStatusSchema
 export type TenderGoNoGoRecommendation = z.infer<typeof tenderGoNoGoRecommendationSchema>;
 export type TenderReferenceSuggestionSourceType = z.infer<typeof tenderReferenceSuggestionSourceTypeSchema>;
 export type TenderReferenceProfileSourceKind = z.infer<typeof tenderReferenceProfileSourceKindSchema>;
+export type TenderProviderDeliveryScope = z.infer<typeof tenderProviderDeliveryScopeSchema>;
+export type TenderProviderCredentialType = z.infer<typeof tenderProviderCredentialTypeSchema>;
+export type TenderProviderConstraintType = z.infer<typeof tenderProviderConstraintTypeSchema>;
+export type TenderProviderConstraintSeverity = z.infer<typeof tenderProviderConstraintSeveritySchema>;
+export type TenderProviderDocumentType = z.infer<typeof tenderProviderDocumentTypeSchema>;
+export type TenderProviderResponseTemplateType = z.infer<typeof tenderProviderResponseTemplateTypeSchema>;
 export type TenderDraftPackageStatus = z.infer<typeof tenderDraftPackageStatusSchema>;
 export type TenderDraftPackageImportStatus = z.infer<typeof tenderDraftPackageImportStatusSchema>;
 export type TenderDraftPackageReimportStatus = z.infer<typeof tenderDraftPackageReimportStatusSchema>;
@@ -489,6 +653,13 @@ export type TenderMissingItem = z.infer<typeof tenderMissingItemSchema>;
 export type TenderRiskFlag = z.infer<typeof tenderRiskFlagSchema>;
 export type TenderGoNoGoAssessment = z.infer<typeof tenderGoNoGoAssessmentSchema>;
 export type TenderReferenceProfile = z.infer<typeof tenderReferenceProfileSchema>;
+export type TenderProviderProfile = z.infer<typeof tenderProviderProfileSchema>;
+export type TenderProviderContact = z.infer<typeof tenderProviderContactSchema>;
+export type TenderProviderCredential = z.infer<typeof tenderProviderCredentialSchema>;
+export type TenderProviderConstraint = z.infer<typeof tenderProviderConstraintSchema>;
+export type TenderProviderDocument = z.infer<typeof tenderProviderDocumentSchema>;
+export type TenderProviderResponseTemplate = z.infer<typeof tenderProviderResponseTemplateSchema>;
+export type TenderProviderProfileDetails = z.infer<typeof tenderProviderProfileDetailsSchema>;
 export type TenderReferenceSuggestion = z.infer<typeof tenderReferenceSuggestionSchema>;
 export type TenderDraftPackageItem = z.infer<typeof tenderDraftPackageItemSchema>;
 export type TenderDraftExportPayload = z.infer<typeof tenderDraftExportPayloadSchema>;
@@ -501,5 +672,11 @@ export type CreateTenderPackageInput = z.infer<typeof createTenderPackageInputSc
 export type AddTenderDocumentInput = z.infer<typeof addTenderDocumentInputSchema>;
 export type CreateTenderReferenceProfileInput = z.infer<typeof createTenderReferenceProfileInputSchema>;
 export type UpdateTenderReferenceProfileInput = z.infer<typeof updateTenderReferenceProfileInputSchema>;
+export type UpsertTenderProviderProfileInput = z.infer<typeof upsertTenderProviderProfileInputSchema>;
+export type UpsertTenderProviderContactInput = z.infer<typeof upsertTenderProviderContactInputSchema>;
+export type UpsertTenderProviderCredentialInput = z.infer<typeof upsertTenderProviderCredentialInputSchema>;
+export type UpsertTenderProviderConstraintInput = z.infer<typeof upsertTenderProviderConstraintInputSchema>;
+export type UpsertTenderProviderDocumentInput = z.infer<typeof upsertTenderProviderDocumentInputSchema>;
+export type UpsertTenderProviderResponseTemplateInput = z.infer<typeof upsertTenderProviderResponseTemplateInputSchema>;
 export type UpdateTenderDraftPackageItemInput = z.infer<typeof updateTenderDraftPackageItemInputSchema>;
 export type UpdateTenderWorkflowInput = z.infer<typeof updateTenderWorkflowInputSchema>;

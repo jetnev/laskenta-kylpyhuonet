@@ -4,6 +4,81 @@ import { buildTenderDraftQualityGate } from './tender-draft-quality-gate';
 import type { TenderDraftPackageImportState, TenderEditorImportValidationResult } from '../types/tender-editor-import';
 import type { TenderDraftPackage, TenderPackageDetails } from '../types/tender-intelligence';
 
+function createReadyProviderProfile() {
+  return {
+    profile: {
+      id: '99999999-9999-4999-8999-999999999999',
+      organizationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      companyName: 'Copilot Oy',
+      businessId: '1234567-8',
+      websiteUrl: 'https://copilot.example.com',
+      headquarters: 'Helsinki',
+      summary: 'Korjausrakentamisen tarjouskumppani.',
+      serviceArea: 'Uusimaa',
+      maxTravelKm: 250,
+      deliveryScope: 'regional' as const,
+      createdByUserId: null,
+      createdAt: '2026-04-06T09:00:00.000Z',
+      updatedAt: '2026-04-06T09:00:00.000Z',
+    },
+    contacts: [
+      {
+        id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        profileId: '99999999-9999-4999-8999-999999999999',
+        organizationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        fullName: 'Tarjousvastaava',
+        roleTitle: 'Tarjousjohtaja',
+        email: 'tarjous@copilot.example.com',
+        phone: null,
+        isPrimary: true,
+        createdAt: '2026-04-06T09:00:00.000Z',
+        updatedAt: '2026-04-06T09:00:00.000Z',
+      },
+    ],
+    credentials: [
+      {
+        id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        profileId: '99999999-9999-4999-8999-999999999999',
+        organizationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        title: 'Vastuuvakuutus',
+        issuer: 'Vakuutusyhtiö',
+        credentialType: 'insurance' as const,
+        validUntil: '2027-04-06T09:00:00.000Z',
+        documentReference: null,
+        notes: null,
+        createdAt: '2026-04-06T09:00:00.000Z',
+        updatedAt: '2026-04-06T09:00:00.000Z',
+      },
+    ],
+    constraints: [],
+    documents: [
+      {
+        id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+        profileId: '99999999-9999-4999-8999-999999999999',
+        organizationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        title: 'Yritysesite',
+        documentType: 'case-study' as const,
+        sourceReference: null,
+        notes: null,
+        createdAt: '2026-04-06T09:00:00.000Z',
+        updatedAt: '2026-04-06T09:00:00.000Z',
+      },
+    ],
+    responseTemplates: [
+      {
+        id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+        profileId: '99999999-9999-4999-8999-999999999999',
+        organizationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        title: 'Yritysesittely',
+        templateType: 'company-overview' as const,
+        contentMd: 'Yritysesittelyteksti',
+        createdAt: '2026-04-06T09:00:00.000Z',
+        updatedAt: '2026-04-06T09:00:00.000Z',
+      },
+    ],
+  };
+}
+
 function createPackageDetails(): TenderPackageDetails {
   return {
     package: {
@@ -111,6 +186,7 @@ function createPackageDetails(): TenderPackageDetails {
       draftArtifacts: [],
       reviewTasks: [],
     },
+    providerProfile: createReadyProviderProfile(),
   };
 }
 
@@ -223,5 +299,21 @@ describe('tender-draft-quality-gate', () => {
     expect(gate.state).toBe('blocked');
     expect(gate.canExportToEditor).toBe(false);
     expect(gate.summary).toContain('Merkitse draft package tarkistetuksi');
+  });
+
+  it('keeps export possible but warns when provider profile is missing', () => {
+    const packageDetails = createPackageDetails();
+    packageDetails.providerProfile = null;
+
+    const gate = buildTenderDraftQualityGate({
+      packageDetails,
+      selectedDraftPackage: createDraftPackage('reviewed'),
+      importValidation: createImportValidation(true),
+      draftPackageImportState: createImportState(),
+    });
+
+    expect(gate.state).toBe('warning');
+    expect(gate.canExportToEditor).toBe(true);
+    expect(gate.checks.find((check) => check.key === 'go-no-go')?.detail).toContain('Tarjoajaprofiilia ei ole vielä muodostettu');
   });
 });

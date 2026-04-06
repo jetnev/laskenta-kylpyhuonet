@@ -7,10 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import TenderAnalysisPanel from './TenderAnalysisPanel';
 import TenderDraftPackagePanel from './TenderDraftPackagePanel';
 import TenderDocumentsPanel from './TenderDocumentsPanel';
+import TenderProviderProfilePanel from './TenderProviderProfilePanel';
 import TenderReferenceCorpusPanel from './TenderReferenceCorpusPanel';
 import TenderResultPanels from './TenderResultPanels';
 import { buildTenderGoNoGoDecisionSupport } from '../lib/tender-go-no-go';
 import { buildTenderPackageLinkItems } from '../lib/tender-package-links';
+import { buildTenderProviderProfileReadiness } from '../lib/tender-provider-profile';
 import {
   TENDER_ANALYSIS_JOB_STATUS_META,
   TENDER_GO_NO_GO_META,
@@ -36,6 +38,12 @@ import type {
   CreateTenderReferenceProfileInput,
   TenderDocumentExtraction,
   TenderPackageDetails,
+  UpsertTenderProviderConstraintInput,
+  UpsertTenderProviderContactInput,
+  UpsertTenderProviderCredentialInput,
+  UpsertTenderProviderDocumentInput,
+  UpsertTenderProviderProfileInput,
+  UpsertTenderProviderResponseTemplateInput,
   TenderReferenceProfile,
   UpdateTenderDraftPackageItemInput,
   UpdateTenderReferenceProfileInput,
@@ -87,6 +95,10 @@ function resolveDecisionLabel(state: 'ready' | 'warning' | 'blocked') {
   return 'Valmis päätökseen';
 }
 
+async function noopAsync() {
+  return undefined;
+}
+
 interface TenderPackageWorkspaceProps {
   selectedPackage: TenderPackageDetails | null;
   draftPackages?: TenderDraftPackage[];
@@ -123,6 +135,8 @@ interface TenderPackageWorkspaceProps {
   referenceProfileSubmittingId?: string | 'new' | 'import' | null;
   deletingReferenceProfileIds?: string[];
   importingReferenceProfiles?: boolean;
+  providerProfileSubmittingKey?: string | null;
+  deletingProviderProfileItemKeys?: string[];
   workflowUpdatingTargetIds?: string[];
   recomputingReferenceSuggestionPackageId?: string | null;
   error?: string | null;
@@ -148,6 +162,21 @@ interface TenderPackageWorkspaceProps {
   onImportReferenceProfiles: (inputs: CreateTenderReferenceProfileInput[]) => Promise<unknown>;
   onUpdateReferenceProfile: (profileId: string, input: UpdateTenderReferenceProfileInput) => Promise<unknown>;
   onDeleteReferenceProfile: (profileId: string) => Promise<void>;
+  onUpsertProviderProfile?: (packageId: string, input: UpsertTenderProviderProfileInput) => Promise<unknown>;
+  onUpsertProviderContact?: (packageId: string, contactId: string | null, input: UpsertTenderProviderContactInput) => Promise<unknown>;
+  onDeleteProviderContact?: (packageId: string, contactId: string) => Promise<void>;
+  onUpsertProviderCredential?: (packageId: string, credentialId: string | null, input: UpsertTenderProviderCredentialInput) => Promise<unknown>;
+  onDeleteProviderCredential?: (packageId: string, credentialId: string) => Promise<void>;
+  onUpsertProviderConstraint?: (packageId: string, constraintId: string | null, input: UpsertTenderProviderConstraintInput) => Promise<unknown>;
+  onDeleteProviderConstraint?: (packageId: string, constraintId: string) => Promise<void>;
+  onUpsertProviderDocument?: (packageId: string, documentId: string | null, input: UpsertTenderProviderDocumentInput) => Promise<unknown>;
+  onDeleteProviderDocument?: (packageId: string, documentId: string) => Promise<void>;
+  onUpsertProviderResponseTemplate?: (
+    packageId: string,
+    templateId: string | null,
+    input: UpsertTenderProviderResponseTemplateInput,
+  ) => Promise<unknown>;
+  onDeleteProviderResponseTemplate?: (packageId: string, templateId: string) => Promise<void>;
   onUpdateReferenceSuggestion: (referenceSuggestionId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
   onRecomputeReferenceSuggestions: (packageId: string) => Promise<unknown>;
   onUpdateRequirement: (requirementId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
@@ -193,6 +222,8 @@ export default function TenderPackageWorkspace({
   referenceProfileSubmittingId = null,
   deletingReferenceProfileIds = [],
   importingReferenceProfiles = false,
+  providerProfileSubmittingKey = null,
+  deletingProviderProfileItemKeys = [],
   workflowUpdatingTargetIds = [],
   recomputingReferenceSuggestionPackageId = null,
   error = null,
@@ -218,6 +249,17 @@ export default function TenderPackageWorkspace({
   onImportReferenceProfiles,
   onUpdateReferenceProfile,
   onDeleteReferenceProfile,
+  onUpsertProviderProfile = noopAsync,
+  onUpsertProviderContact = noopAsync,
+  onDeleteProviderContact = noopAsync,
+  onUpsertProviderCredential = noopAsync,
+  onDeleteProviderCredential = noopAsync,
+  onUpsertProviderConstraint = noopAsync,
+  onDeleteProviderConstraint = noopAsync,
+  onUpsertProviderDocument = noopAsync,
+  onDeleteProviderDocument = noopAsync,
+  onUpsertProviderResponseTemplate = noopAsync,
+  onDeleteProviderResponseTemplate = noopAsync,
   onUpdateReferenceSuggestion,
   onRecomputeReferenceSuggestions,
   onUpdateRequirement,
@@ -321,6 +363,7 @@ export default function TenderPackageWorkspace({
   const goNoGo = selectedPackage.results.goNoGoAssessment;
   const goNoGoMeta = goNoGo ? TENDER_GO_NO_GO_META[goNoGo.recommendation] : null;
   const goNoGoDecision = buildTenderGoNoGoDecisionSupport(selectedPackage);
+  const providerProfileReadiness = buildTenderProviderProfileReadiness(selectedPackage.providerProfile ?? null);
   const nextReviewTask = selectedPackage.results.reviewTasks[0] ?? null;
   const nextReviewTaskMeta = nextReviewTask ? TENDER_REVIEW_TASK_STATUS_META[nextReviewTask.status] : null;
   const linkItems = buildTenderPackageLinkItems(selectedPackage.package, {
@@ -409,6 +452,15 @@ export default function TenderPackageWorkspace({
           }
         />
         <TenderPanel
+          title="Tarjoajaprofiili"
+          value={providerProfileReadiness.label}
+          description={
+            selectedPackage.providerProfile
+              ? `Profiilissa on ${providerProfileReadiness.counts.contacts} kontaktia, ${providerProfileReadiness.counts.activeCredentials} aktiivista pätevyyttä ja ${providerProfileReadiness.counts.responseTemplates} vastauspohjaa.`
+              : 'Organisaation tarjoajaprofiili puuttuu vielä. Tämä vaihe avaa sen paketin yhteyteen myöhempää provider-aware analyysiä varten.'
+          }
+        />
+        <TenderPanel
           title="Go / No-Go"
           value={goNoGoMeta?.label || 'Odottaa analyysiä'}
           description={goNoGo?.summary || 'Go / No-Go -päätöstukea ei ole vielä muodostettu.'}
@@ -432,6 +484,24 @@ export default function TenderPackageWorkspace({
         />
       </div>
 
+      <TenderProviderProfilePanel
+        packageId={selectedPackage.package.id}
+        providerProfile={selectedPackage.providerProfile}
+        submittingKey={providerProfileSubmittingKey}
+        deletingItemKeys={deletingProviderProfileItemKeys}
+        onUpsertProfile={onUpsertProviderProfile}
+        onUpsertContact={onUpsertProviderContact}
+        onDeleteContact={onDeleteProviderContact}
+        onUpsertCredential={onUpsertProviderCredential}
+        onDeleteCredential={onDeleteProviderCredential}
+        onUpsertConstraint={onUpsertProviderConstraint}
+        onDeleteConstraint={onDeleteProviderConstraint}
+        onUpsertDocument={onUpsertProviderDocument}
+        onDeleteDocument={onDeleteProviderDocument}
+        onUpsertResponseTemplate={onUpsertProviderResponseTemplate}
+        onDeleteResponseTemplate={onDeleteProviderResponseTemplate}
+      />
+
       <Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
         <CardHeader className="border-b">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -441,7 +511,7 @@ export default function TenderPackageWorkspace({
                 Go / No-Go päätöstuki
               </CardTitle>
               <CardDescription>
-                Päätöstuki kokoaa analyysin, riskit, workflow-tilanteen ja draft-valmiuden yhdeksi operatiiviseksi signaalinäkymäksi ennen editorivientiä tai tarjouksen jättöpäätöstä.
+                Päätöstuki kokoaa analyysin, tarjoajaprofiilin, riskit, workflow-tilanteen ja draft-valmiuden yhdeksi operatiiviseksi signaalinäkymäksi ennen editorivientiä tai tarjouksen jättöpäätöstä.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">

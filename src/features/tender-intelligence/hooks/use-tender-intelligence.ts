@@ -27,6 +27,12 @@ import type {
   TenderPackage,
   TenderPackageDetails,
   TenderReferenceProfile,
+  UpsertTenderProviderConstraintInput,
+  UpsertTenderProviderContactInput,
+  UpsertTenderProviderCredentialInput,
+  UpsertTenderProviderDocumentInput,
+  UpsertTenderProviderProfileInput,
+  UpsertTenderProviderResponseTemplateInput,
   UpdateTenderDraftPackageItemInput,
   UpdateTenderReferenceProfileInput,
   UpdateTenderWorkflowInput,
@@ -88,6 +94,8 @@ export function useTenderIntelligence() {
   const [referenceProfileSubmittingId, setReferenceProfileSubmittingId] = useState<string | 'new' | 'import' | null>(null);
   const [deletingReferenceProfileIds, setDeletingReferenceProfileIds] = useState<string[]>([]);
   const [importingReferenceProfiles, setImportingReferenceProfiles] = useState(false);
+  const [providerProfileSubmittingKey, setProviderProfileSubmittingKey] = useState<string | null>(null);
+  const [deletingProviderProfileItemKeys, setDeletingProviderProfileItemKeys] = useState<string[]>([]);
   const [startingAnalysisPackageId, setStartingAnalysisPackageId] = useState<string | null>(null);
   const [extractingPackageId, setExtractingPackageId] = useState<string | null>(null);
   const [extractingDocumentIds, setExtractingDocumentIds] = useState<string[]>([]);
@@ -728,6 +736,151 @@ export function useTenderIntelligence() {
     [loadReferenceProfiles, refreshSelectedPackageReferenceSuggestions, repository],
   );
 
+  const runProviderProfileMutation = useCallback(
+    async <TResult>(submissionKey: string, packageId: string, updater: () => Promise<TResult>) => {
+      setProviderProfileSubmittingKey(submissionKey);
+
+      try {
+        const result = await updater();
+        await loadSelectedPackage(packageId);
+        setError(null);
+        return result;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setProviderProfileSubmittingKey((current) => (current === submissionKey ? null : current));
+      }
+    },
+    [loadSelectedPackage],
+  );
+
+  const deleteProviderProfileItem = useCallback(
+    async (itemKey: string, packageId: string, deleter: () => Promise<void>) => {
+      setDeletingProviderProfileItemKeys((current) => (current.includes(itemKey) ? current : [...current, itemKey]));
+
+      try {
+        await deleter();
+        await loadSelectedPackage(packageId);
+        setError(null);
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setDeletingProviderProfileItemKeys((current) => current.filter((item) => item !== itemKey));
+      }
+    },
+    [loadSelectedPackage],
+  );
+
+  const upsertProviderProfile = useCallback(
+    async (packageId: string, input: UpsertTenderProviderProfileInput) =>
+      runProviderProfileMutation('provider-profile', packageId, () => repository.upsertTenderProviderProfile(packageId, input)),
+    [repository, runProviderProfileMutation],
+  );
+
+  const upsertProviderContact = useCallback(
+    async (packageId: string, contactId: string | null, input: UpsertTenderProviderContactInput) =>
+      runProviderProfileMutation(
+        `provider-contact:${contactId ?? 'new'}`,
+        packageId,
+        () => repository.upsertTenderProviderContact(packageId, contactId, input),
+      ),
+    [repository, runProviderProfileMutation],
+  );
+
+  const deleteProviderContact = useCallback(
+    async (packageId: string, contactId: string) =>
+      deleteProviderProfileItem(
+        `provider-contact:${contactId}`,
+        packageId,
+        () => repository.deleteTenderProviderContact(packageId, contactId),
+      ),
+    [deleteProviderProfileItem, repository],
+  );
+
+  const upsertProviderCredential = useCallback(
+    async (packageId: string, credentialId: string | null, input: UpsertTenderProviderCredentialInput) =>
+      runProviderProfileMutation(
+        `provider-credential:${credentialId ?? 'new'}`,
+        packageId,
+        () => repository.upsertTenderProviderCredential(packageId, credentialId, input),
+      ),
+    [repository, runProviderProfileMutation],
+  );
+
+  const deleteProviderCredential = useCallback(
+    async (packageId: string, credentialId: string) =>
+      deleteProviderProfileItem(
+        `provider-credential:${credentialId}`,
+        packageId,
+        () => repository.deleteTenderProviderCredential(packageId, credentialId),
+      ),
+    [deleteProviderProfileItem, repository],
+  );
+
+  const upsertProviderConstraint = useCallback(
+    async (packageId: string, constraintId: string | null, input: UpsertTenderProviderConstraintInput) =>
+      runProviderProfileMutation(
+        `provider-constraint:${constraintId ?? 'new'}`,
+        packageId,
+        () => repository.upsertTenderProviderConstraint(packageId, constraintId, input),
+      ),
+    [repository, runProviderProfileMutation],
+  );
+
+  const deleteProviderConstraint = useCallback(
+    async (packageId: string, constraintId: string) =>
+      deleteProviderProfileItem(
+        `provider-constraint:${constraintId}`,
+        packageId,
+        () => repository.deleteTenderProviderConstraint(packageId, constraintId),
+      ),
+    [deleteProviderProfileItem, repository],
+  );
+
+  const upsertProviderDocument = useCallback(
+    async (packageId: string, documentId: string | null, input: UpsertTenderProviderDocumentInput) =>
+      runProviderProfileMutation(
+        `provider-document:${documentId ?? 'new'}`,
+        packageId,
+        () => repository.upsertTenderProviderDocument(packageId, documentId, input),
+      ),
+    [repository, runProviderProfileMutation],
+  );
+
+  const deleteProviderDocument = useCallback(
+    async (packageId: string, documentId: string) =>
+      deleteProviderProfileItem(
+        `provider-document:${documentId}`,
+        packageId,
+        () => repository.deleteTenderProviderDocument(packageId, documentId),
+      ),
+    [deleteProviderProfileItem, repository],
+  );
+
+  const upsertProviderResponseTemplate = useCallback(
+    async (packageId: string, templateId: string | null, input: UpsertTenderProviderResponseTemplateInput) =>
+      runProviderProfileMutation(
+        `provider-template:${templateId ?? 'new'}`,
+        packageId,
+        () => repository.upsertTenderProviderResponseTemplate(packageId, templateId, input),
+      ),
+    [repository, runProviderProfileMutation],
+  );
+
+  const deleteProviderResponseTemplate = useCallback(
+    async (packageId: string, templateId: string) =>
+      deleteProviderProfileItem(
+        `provider-template:${templateId}`,
+        packageId,
+        () => repository.deleteTenderProviderResponseTemplate(packageId, templateId),
+      ),
+    [deleteProviderProfileItem, repository],
+  );
+
   const createDraftPackage = useCallback(
     async (packageId: string) => {
       setCreatingDraftPackagePackageId(packageId);
@@ -959,6 +1112,8 @@ export function useTenderIntelligence() {
     referenceProfileSubmittingId,
     deletingReferenceProfileIds,
     importingReferenceProfiles,
+    providerProfileSubmittingKey,
+    deletingProviderProfileItemKeys,
     startingAnalysisPackageId,
     extractingPackageId,
     extractingDocumentIds,
@@ -992,6 +1147,17 @@ export function useTenderIntelligence() {
     importReferenceProfiles,
     updateReferenceProfile,
     deleteReferenceProfile,
+    upsertProviderProfile,
+    upsertProviderContact,
+    deleteProviderContact,
+    upsertProviderCredential,
+    deleteProviderCredential,
+    upsertProviderConstraint,
+    deleteProviderConstraint,
+    upsertProviderDocument,
+    deleteProviderDocument,
+    upsertProviderResponseTemplate,
+    deleteProviderResponseTemplate,
     recomputeReferenceSuggestions: refreshReferenceSuggestionsForPackage,
     updateRequirementWorkflow,
     updateMissingItemWorkflow,

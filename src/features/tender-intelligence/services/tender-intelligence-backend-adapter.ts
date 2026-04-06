@@ -16,6 +16,7 @@ import type {
   TenderPackage,
   TenderPackageDetails,
   TenderPackageResults,
+  TenderProviderProfileDetails,
   TenderReferenceProfile,
   TenderResultEvidence,
   TenderResultEvidenceTargetType,
@@ -23,6 +24,12 @@ import type {
   TenderRequirement,
   TenderReviewTask,
   TenderRiskFlag,
+  UpsertTenderProviderConstraintInput,
+  UpsertTenderProviderContactInput,
+  UpsertTenderProviderCredentialInput,
+  UpsertTenderProviderDocumentInput,
+  UpsertTenderProviderProfileInput,
+  UpsertTenderProviderResponseTemplateInput,
   UpdateTenderDraftPackageItemInput,
   UpdateTenderReferenceProfileInput,
   UpdateTenderWorkflowInput,
@@ -45,6 +52,37 @@ export interface TenderIntelligenceBackendAdapter {
   listTenderPackages(): Promise<TenderPackage[]>;
   getTenderPackageById(packageId: string): Promise<TenderPackageDetails | null>;
   createTenderPackage(input: CreateTenderPackageInput): Promise<TenderPackageDetails>;
+  upsertTenderProviderProfile(packageId: string, input: UpsertTenderProviderProfileInput): Promise<TenderProviderProfileDetails>;
+  upsertTenderProviderContact(
+    packageId: string,
+    contactId: string | null,
+    input: UpsertTenderProviderContactInput,
+  ): Promise<TenderProviderProfileDetails>;
+  deleteTenderProviderContact(packageId: string, contactId: string): Promise<void>;
+  upsertTenderProviderCredential(
+    packageId: string,
+    credentialId: string | null,
+    input: UpsertTenderProviderCredentialInput,
+  ): Promise<TenderProviderProfileDetails>;
+  deleteTenderProviderCredential(packageId: string, credentialId: string): Promise<void>;
+  upsertTenderProviderConstraint(
+    packageId: string,
+    constraintId: string | null,
+    input: UpsertTenderProviderConstraintInput,
+  ): Promise<TenderProviderProfileDetails>;
+  deleteTenderProviderConstraint(packageId: string, constraintId: string): Promise<void>;
+  upsertTenderProviderDocument(
+    packageId: string,
+    documentId: string | null,
+    input: UpsertTenderProviderDocumentInput,
+  ): Promise<TenderProviderProfileDetails>;
+  deleteTenderProviderDocument(packageId: string, documentId: string): Promise<void>;
+  upsertTenderProviderResponseTemplate(
+    packageId: string,
+    templateId: string | null,
+    input: UpsertTenderProviderResponseTemplateInput,
+  ): Promise<TenderProviderProfileDetails>;
+  deleteTenderProviderResponseTemplate(packageId: string, templateId: string): Promise<void>;
   createAnalysisJob(
     packageId: string,
     options?: { jobType?: TenderAnalysisJobType; status?: TenderAnalysisJobStatus }

@@ -1,10 +1,11 @@
 import { buildTenderDraftPackageReadiness } from './tender-draft-package';
+import { buildTenderProviderProfileReadiness } from './tender-provider-profile';
 import type { TenderGoNoGoRecommendation, TenderPackageDetails } from '../types/tender-intelligence';
 
 export type TenderGoNoGoSignalState = 'ready' | 'warning' | 'blocked';
 
 export interface TenderGoNoGoSignal {
-  key: 'assessment' | 'analysis' | 'risks' | 'workflow' | 'draft';
+  key: 'assessment' | 'provider-profile' | 'analysis' | 'risks' | 'workflow' | 'draft';
   label: string;
   state: TenderGoNoGoSignalState;
   detail: string;
@@ -45,10 +46,75 @@ function buildRecommendationSummary(recommendation: TenderGoNoGoRecommendation) 
   }
 }
 
+function buildProviderProfileSignal(packageDetails: TenderPackageDetails): {
+  signal: TenderGoNoGoSignal;
+  nextActions: string[];
+} {
+  const providerProfile = packageDetails.providerProfile ?? null;
+  const readiness = buildTenderProviderProfileReadiness(providerProfile);
+
+  if (!providerProfile) {
+    return {
+      signal: {
+        key: 'provider-profile',
+        label: 'Tarjoajaprofiili',
+        state: 'warning',
+        detail: 'Tarjoajaprofiilia ei ole vielä muodostettu, joten soveltuvuus, pätevyydet ja vastauspohjat pitää varmistaa manuaalisesti ennen sitovaa päätöstä.',
+      },
+      nextActions: readiness.nextActions,
+    };
+  }
+
+  const hardConstraintCount = providerProfile.constraints.filter((constraint) => constraint.severity === 'hard').length;
+  const softConstraintCount = providerProfile.constraints.filter((constraint) => constraint.severity === 'soft').length;
+  const inventoryDetail = `${readiness.counts.primaryContacts} ensisijaista kontaktia, ${readiness.counts.activeCredentials} aktiivista pätevyyttä ja ${readiness.counts.responseTemplates} vastauspohjaa`;
+
+  if (hardConstraintCount > 0) {
+    return {
+      signal: {
+        key: 'provider-profile',
+        label: 'Tarjoajaprofiili',
+        state: 'warning',
+        detail: `${readiness.summary} Profiili sisältää ${hardConstraintCount} kovaa rajausta, jotka pitää verrata tarjouspyynnön ehtoihin ennen sitovaa päätöstä.`,
+      },
+      nextActions: [
+        `Tarkista ${hardConstraintCount} kovan rajauksen sopivuus tarjouspyynnön ehtoihin ennen sitovaa go / no-go -päätöstä.`,
+        ...readiness.nextActions,
+      ],
+    };
+  }
+
+  if (readiness.state === 'ready') {
+    return {
+      signal: {
+        key: 'provider-profile',
+        label: 'Tarjoajaprofiili',
+        state: 'ready',
+        detail:
+          softConstraintCount > 0
+            ? `Tarjoajaprofiili tukee päätöstä: profiilissa on ${inventoryDetail}. Lisäksi ${softConstraintCount} pehmeää rajausta kannattaa huomioida resursoinnissa ja toimitustavassa.`
+            : `Tarjoajaprofiili tukee päätöstä: profiilissa on ${inventoryDetail}.`,
+      },
+      nextActions: readiness.nextActions,
+    };
+  }
+
+  return {
+    signal: {
+      key: 'provider-profile',
+      label: 'Tarjoajaprofiili',
+      state: 'warning',
+      detail: `${readiness.summary} Profiilissa on tällä hetkellä ${inventoryDetail}.`,
+    },
+    nextActions: readiness.nextActions,
+  };
+}
+
 export function buildTenderGoNoGoDecisionSupport(packageDetails: TenderPackageDetails): TenderGoNoGoDecisionSupport {
   const draftReadiness = buildTenderDraftPackageReadiness(packageDetails);
   const assessment = packageDetails.results.goNoGoAssessment;
   const recommendation = assessment?.recommendation ?? 'pending';
+  const providerProfile = buildProviderProfileSignal(packageDetails);
   const unresolvedWorkflowCount = countUnresolvedWorkflowItems(packageDetails);
   const openHighRiskCount = packageDetails.results.riskFlags.filter(
     (risk) => risk.severity === 'high' && (risk.resolutionStatus === 'open' || risk.resolutionStatus === 'in_progress'),
@@ -68,6 +134,7 @@ export function buildTenderGoNoGoDecisionSupport(packageDetails: TenderPackageDe
             : 'warning',
       detail: assessment?.summary?.trim() || buildRecommendationSummary(recommendation),
     },
+    providerProfile.signal,
     {
       key: 'analysis',
       label: 'Analyysi ja evidence',
@@ -122,6 +189,7 @@ export function buildTenderGoNoGoDecisionSupport(packageDetails: TenderPackageDe
       : 'ready';
 
   const nextActions = [
+    ...providerProfile.nextActions,
     ...(signals.find((signal) => signal.key === 'analysis')?.state !== 'ready'
       ? ['Varmista että pakettiin on purettu evidence-lähteet ja että analyysiajo on valmis ennen lopullista päätöstä.']
       : []),

@@ -44,8 +44,15 @@ import {
   type TenderAnalysisJobType,
   type TenderAnalysisReadiness,
   type TenderExtractionCoverage,
+  type TenderProviderProfileDetails,
   type TenderResultEvidence,
   type TenderResultEvidenceTargetType,
+  type UpsertTenderProviderConstraintInput,
+  type UpsertTenderProviderContactInput,
+  type UpsertTenderProviderCredentialInput,
+  type UpsertTenderProviderDocumentInput,
+  type UpsertTenderProviderProfileInput,
+  type UpsertTenderProviderResponseTemplateInput,
   type UpdateTenderDraftPackageItemInput,
   type UpdateTenderReferenceProfileInput,
   type UpdateTenderWorkflowInput,
@@ -100,6 +107,7 @@ import {
 import {
   buildTenderPackageDetails,
   mapCreateTenderReferenceProfileInputToInsert,
+  mapTenderProviderProfileDetailsRowsToDomain,
   mapTenderAnalysisJobRowToDomain,
   mapTenderDraftPackageImportRunRowToDomain,
   mapTenderImportOwnedBlockRowToDomain,
@@ -119,6 +127,18 @@ import {
   mapTenderRequirementRowToDomain,
   mapTenderReviewTaskRowToDomain,
   mapTenderRiskFlagRowToDomain,
+  mapUpsertTenderProviderConstraintInputToInsert,
+  mapUpsertTenderProviderConstraintInputToPatch,
+  mapUpsertTenderProviderContactInputToInsert,
+  mapUpsertTenderProviderContactInputToPatch,
+  mapUpsertTenderProviderCredentialInputToInsert,
+  mapUpsertTenderProviderCredentialInputToPatch,
+  mapUpsertTenderProviderDocumentInputToInsert,
+  mapUpsertTenderProviderDocumentInputToPatch,
+  mapUpsertTenderProviderProfileInputToInsert,
+  mapUpsertTenderProviderProfileInputToPatch,
+  mapUpsertTenderProviderResponseTemplateInputToInsert,
+  mapUpsertTenderProviderResponseTemplateInputToPatch,
   mapUpdateTenderDraftPackageItemInputToPatch,
   mapUpdateTenderReferenceProfileInputToPatch,
 } from '../lib/tender-intelligence-mappers';
@@ -145,6 +165,17 @@ import {
   tenderMissingItemRowsSchema,
   tenderPackageRowSchema,
   tenderPackageRowsSchema,
+  tenderProviderConstraintRowSchema,
+  tenderProviderConstraintRowsSchema,
+  tenderProviderContactRowSchema,
+  tenderProviderContactRowsSchema,
+  tenderProviderCredentialRowSchema,
+  tenderProviderCredentialRowsSchema,
+  tenderProviderDocumentRowSchema,
+  tenderProviderDocumentRowsSchema,
+  tenderProviderProfileRowSchema,
+  tenderProviderResponseTemplateRowSchema,
+  tenderProviderResponseTemplateRowsSchema,
   tenderReferenceProfileRowSchema,
   tenderReferenceProfileRowsSchema,
   tenderResultEvidenceRowsSchema,
@@ -325,6 +356,148 @@ async function fetchReferenceProfileRowById(profileId: string) {
   }
 
   return data ? tenderReferenceProfileRowSchema.parse(data) : null;
+}
+
+async function fetchTenderProviderProfileRowByOrganizationId(options: {
+  client?: ReturnType<typeof requireSupabase>;
+  organizationId: string;
+}) {
+  const client = options.client ?? requireConfiguredSupabase();
+  const { data, error } = await client
+    .from('tender_provider_profiles')
+    .select('*')
+    .eq('organization_id', options.organizationId)
+    .maybeSingle();
+
+  if (error) {
+    throw toRepositoryError(error, 'Organisaation tarjoajaprofiilia ei voitu ladata.');
+  }
+
+  return data ? tenderProviderProfileRowSchema.parse(data) : null;
+}
+
+async function fetchTenderProviderChildRowById<Row>(options: {
+  tableName:
+    | 'tender_provider_contacts'
+    | 'tender_provider_credentials'
+    | 'tender_provider_constraints'
+    | 'tender_provider_documents'
+    | 'tender_provider_response_templates';
+  rowId: string;
+  schema: { parse(data: unknown): Row };
+  fallbackMessage: string;
+}) {
+  const client = requireConfiguredSupabase();
+  const { data, error } = await client.from(options.tableName).select('*').eq('id', options.rowId).maybeSingle();
+
+  if (error) {
+    throw toRepositoryError(error, options.fallbackMessage);
+  }
+
+  return data ? options.schema.parse(data) : null;
+}
+
+async function fetchTenderProviderChildRowsForProfile<Row>(options: {
+  client?: ReturnType<typeof requireSupabase>;
+  tableName:
+    | 'tender_provider_contacts'
+    | 'tender_provider_credentials'
+    | 'tender_provider_constraints'
+    | 'tender_provider_documents'
+    | 'tender_provider_response_templates';
+  profileId: string;
+  schema: { parse(data: unknown): Row[] };
+  fallbackMessage: string;
+}) {
+  const client = options.client ?? requireConfiguredSupabase();
+  const { data, error } = await client
+    .from(options.tableName)
+    .select('*')
+    .eq('tender_provider_profile_id', options.profileId)
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    throw toRepositoryError(error, options.fallbackMessage);
+  }
+
+  return options.schema.parse(data ?? []);
+}
+
+async function fetchTenderProviderProfileDetailsForOrganization(options: {
+  client?: ReturnType<typeof requireSupabase>;
+  organizationId: string;
+}): Promise<TenderProviderProfileDetails | null> {
+  const client = options.client ?? requireConfiguredSupabase();
+  const profileRow = await fetchTenderProviderProfileRowByOrganizationId({
+    client,
+    organizationId: options.organizationId,
+  });
+
+  if (!profileRow) {
+    return null;
+  }
+
+  const [contactRows, credentialRows, constraintRows, documentRows, responseTemplateRows] = await Promise.all([
+    fetchTenderProviderChildRowsForProfile({
+      client,
+      tableName: 'tender_provider_contacts',
+      profileId: profileRow.id,
+      schema: tenderProviderContactRowsSchema,
+      fallbackMessage: 'Tarjoajaprofiilin yhteyshenkilöitä ei voitu ladata.',
+    }),
+    fetchTenderProviderChildRowsForProfile({
+      client,
+      tableName: 'tender_provider_credentials',
+      profileId: profileRow.id,
+      schema: tenderProviderCredentialRowsSchema,
+      fallbackMessage: 'Tarjoajaprofiilin pätevyyksiä ei voitu ladata.',
+    }),
+    fetchTenderProviderChildRowsForProfile({
+      client,
+      tableName: 'tender_provider_constraints',
+      profileId: profileRow.id,
+      schema: tenderProviderConstraintRowsSchema,
+      fallbackMessage: 'Tarjoajaprofiilin rajoitteita ei voitu ladata.',
+    }),
+    fetchTenderProviderChildRowsForProfile({
+      client,
+      tableName: 'tender_provider_documents',
+      profileId: profileRow.id,
+      schema: tenderProviderDocumentRowsSchema,
+      fallbackMessage: 'Tarjoajaprofiilin dokumenttiviitteitä ei voitu ladata.',
+    }),
+    fetchTenderProviderChildRowsForProfile({
+      client,
+      tableName: 'tender_provider_response_templates',
+      profileId: profileRow.id,
+      schema: tenderProviderResponseTemplateRowsSchema,
+      fallbackMessage: 'Tarjoajaprofiilin vastauspohjia ei voitu ladata.',
+    }),
+  ]);
+
+  return mapTenderProviderProfileDetailsRowsToDomain({
+    profileRow,
+    contactRows,
+    credentialRows,
+    constraintRows,
+    documentRows,
+    responseTemplateRows,
+  });
+}
+
+async function resolveTenderProviderProfileContext(packageId: string) {
+  const client = requireConfiguredSupabase();
+  const packageRow = await assertTenderPackageAccess(packageId);
+  const profileRow = await fetchTenderProviderProfileRowByOrganizationId({
+    client,
+    organizationId: packageRow.organization_id,
+  });
+
+  return {
+    client,
+    packageRow,
+    profileRow,
+  };
 }
 
 async function fetchTenderDraftPackageRowById(draftPackageId: string) {
@@ -1036,6 +1209,150 @@ async function insertPackageRowsIfAny<Row>(options: {
 class SupabaseTenderIntelligenceRepository implements TenderIntelligenceRepository {
   private listeners = new Set<Listener>();
 
+  private async getProviderProfileForPackage(packageId: string, missingMessage = 'Tarjoajaprofiilia ei löytynyt organisaatiolta.') {
+    const context = await resolveTenderProviderProfileContext(packageId);
+
+    if (!context.profileRow) {
+      throw new Error(missingMessage);
+    }
+
+    const details = await fetchTenderProviderProfileDetailsForOrganization({
+      client: context.client,
+      organizationId: context.packageRow.organization_id,
+    });
+
+    if (!details) {
+      throw new Error(missingMessage);
+    }
+
+    return {
+      ...context,
+      profileRow: context.profileRow,
+      details,
+    };
+  }
+
+  private async upsertProviderProfileChild<Row extends { organization_id: string; tender_provider_profile_id: string }>(options: {
+    tableName:
+      | 'tender_provider_contacts'
+      | 'tender_provider_credentials'
+      | 'tender_provider_constraints'
+      | 'tender_provider_documents'
+      | 'tender_provider_response_templates';
+    packageId: string;
+    rowId: string | null;
+    input:
+      | UpsertTenderProviderContactInput
+      | UpsertTenderProviderCredentialInput
+      | UpsertTenderProviderConstraintInput
+      | UpsertTenderProviderDocumentInput
+      | UpsertTenderProviderResponseTemplateInput;
+    rowSchema: { parse(data: unknown): Row };
+    mapInsert: (
+      input:
+        | UpsertTenderProviderContactInput
+        | UpsertTenderProviderCredentialInput
+        | UpsertTenderProviderConstraintInput
+        | UpsertTenderProviderDocumentInput
+        | UpsertTenderProviderResponseTemplateInput,
+    ) => Record<string, unknown>;
+    mapPatch: (
+      input:
+        | UpsertTenderProviderContactInput
+        | UpsertTenderProviderCredentialInput
+        | UpsertTenderProviderConstraintInput
+        | UpsertTenderProviderDocumentInput
+        | UpsertTenderProviderResponseTemplateInput,
+    ) => Record<string, unknown>;
+    notFoundMessage: string;
+    fallbackMessage: string;
+  }) {
+    const context = await this.getProviderProfileForPackage(options.packageId);
+    const client = context.client;
+
+    if (options.rowId) {
+      const existingRow = await fetchTenderProviderChildRowById({
+        tableName: options.tableName,
+        rowId: options.rowId,
+        schema: options.rowSchema,
+        fallbackMessage: options.fallbackMessage,
+      });
+
+      if (!existingRow
+        || existingRow.organization_id !== context.packageRow.organization_id
+        || existingRow.tender_provider_profile_id !== context.profileRow.id) {
+        throw new Error(options.notFoundMessage);
+      }
+
+      const { error } = await client
+        .from(options.tableName)
+        .update(options.mapPatch(options.input))
+        .eq('id', options.rowId);
+
+      if (error) {
+        throw toRepositoryError(error, options.fallbackMessage);
+      }
+    } else {
+      const { error } = await client.from(options.tableName).insert({
+        tender_provider_profile_id: context.profileRow.id,
+        organization_id: context.packageRow.organization_id,
+        ...options.mapInsert(options.input),
+      });
+
+      if (error) {
+        throw toRepositoryError(error, options.fallbackMessage);
+      }
+    }
+
+    const details = await fetchTenderProviderProfileDetailsForOrganization({
+      client,
+      organizationId: context.packageRow.organization_id,
+    });
+
+    if (!details) {
+      throw new Error('Tarjoajaprofiilia ei voitu ladata tallennuksen jälkeen.');
+    }
+
+    this.emit();
+    return details;
+  }
+
+  private async deleteProviderProfileChild<Row extends { organization_id: string; tender_provider_profile_id: string }>(options: {
+    tableName:
+      | 'tender_provider_contacts'
+      | 'tender_provider_credentials'
+      | 'tender_provider_constraints'
+      | 'tender_provider_documents'
+      | 'tender_provider_response_templates';
+    packageId: string;
+    rowId: string;
+    rowSchema: { parse(data: unknown): Row };
+    notFoundMessage: string;
+    fallbackMessage: string;
+  }) {
+    const context = await this.getProviderProfileForPackage(options.packageId);
+    const existingRow = await fetchTenderProviderChildRowById({
+      tableName: options.tableName,
+      rowId: options.rowId,
+      schema: options.rowSchema,
+      fallbackMessage: options.fallbackMessage,
+    });
+
+    if (!existingRow
+      || existingRow.organization_id !== context.packageRow.organization_id
+      || existingRow.tender_provider_profile_id !== context.profileRow.id) {
+      throw new Error(options.notFoundMessage);
+    }
+
+    const { error } = await context.client.from(options.tableName).delete().eq('id', options.rowId);
+
+    if (error) {
+      throw toRepositoryError(error, options.fallbackMessage);
+    }
+
+    this.emit();
+  }
+
   private async updateWorkflowRow<Row extends {
     id: string;
     tender_package_id: string;
@@ -1489,6 +1806,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
 
       const packageRow = tenderPackageRowSchema.parse(data);
       const [
+        providerProfile,
         documentRows,
         documentExtractionRows,
         resultEvidenceRows,
@@ -1501,6 +1819,10 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         reviewTaskRows,
         assessmentResponse,
       ] = await Promise.all([
+        fetchTenderProviderProfileDetailsForOrganization({
+          client,
+          organizationId: packageRow.organization_id,
+        }),
         fetchTenderDocumentRowsForPackage(packageId),
         fetchTenderDocumentExtractionRowsForPackage(packageId),
         fetchTenderResultEvidenceRowsForPackage(packageId),
@@ -1558,6 +1880,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
 
       return buildTenderPackageDetails({
         packageRow,
+        providerProfile,
         documentRows,
         documentExtractionRows,
         resultEvidenceRows,
@@ -1610,6 +1933,226 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       return createdPackage;
     } catch (error) {
       throw toRepositoryError(error, 'Tarjouspyyntöpaketin luonti epäonnistui.');
+    }
+  }
+
+  async upsertTenderProviderProfile(packageId: string, input: UpsertTenderProviderProfileInput) {
+    try {
+      const context = await resolveTenderProviderProfileContext(packageId);
+      const payload = context.profileRow
+        ? mapUpsertTenderProviderProfileInputToPatch(input)
+        : {
+            organization_id: context.packageRow.organization_id,
+            ...mapUpsertTenderProviderProfileInputToInsert(input),
+          };
+
+      if (context.profileRow) {
+        const { error } = await context.client
+          .from('tender_provider_profiles')
+          .update(payload)
+          .eq('id', context.profileRow.id);
+
+        if (error) {
+          throw error;
+        }
+      } else {
+        const { error } = await context.client.from('tender_provider_profiles').insert(payload);
+
+        if (error) {
+          throw error;
+        }
+      }
+
+      const details = await fetchTenderProviderProfileDetailsForOrganization({
+        client: context.client,
+        organizationId: context.packageRow.organization_id,
+      });
+
+      if (!details) {
+        throw new Error('Tarjoajaprofiilia ei voitu ladata tallennuksen jälkeen.');
+      }
+
+      this.emit();
+      return details;
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjoajaprofiilia ei voitu tallentaa.');
+    }
+  }
+
+  async upsertTenderProviderContact(packageId: string, contactId: string | null, input: UpsertTenderProviderContactInput) {
+    try {
+      return await this.upsertProviderProfileChild({
+        tableName: 'tender_provider_contacts',
+        packageId,
+        rowId: contactId,
+        input,
+        rowSchema: tenderProviderContactRowSchema,
+        mapInsert: (value) => mapUpsertTenderProviderContactInputToInsert(value as UpsertTenderProviderContactInput),
+        mapPatch: (value) => mapUpsertTenderProviderContactInputToPatch(value as UpsertTenderProviderContactInput),
+        notFoundMessage: 'Tarjoajaprofiilin yhteyshenkilöä ei löytynyt.',
+        fallbackMessage: 'Tarjoajaprofiilin yhteyshenkilöä ei voitu tallentaa.',
+      });
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjoajaprofiilin yhteyshenkilöä ei voitu tallentaa.');
+    }
+  }
+
+  async deleteTenderProviderContact(packageId: string, contactId: string) {
+    try {
+      await this.deleteProviderProfileChild({
+        tableName: 'tender_provider_contacts',
+        packageId,
+        rowId: contactId,
+        rowSchema: tenderProviderContactRowSchema,
+        notFoundMessage: 'Tarjoajaprofiilin yhteyshenkilöä ei löytynyt.',
+        fallbackMessage: 'Tarjoajaprofiilin yhteyshenkilöä ei voitu poistaa.',
+      });
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjoajaprofiilin yhteyshenkilöä ei voitu poistaa.');
+    }
+  }
+
+  async upsertTenderProviderCredential(
+    packageId: string,
+    credentialId: string | null,
+    input: UpsertTenderProviderCredentialInput,
+  ) {
+    try {
+      return await this.upsertProviderProfileChild({
+        tableName: 'tender_provider_credentials',
+        packageId,
+        rowId: credentialId,
+        input,
+        rowSchema: tenderProviderCredentialRowSchema,
+        mapInsert: (value) => mapUpsertTenderProviderCredentialInputToInsert(value as UpsertTenderProviderCredentialInput),
+        mapPatch: (value) => mapUpsertTenderProviderCredentialInputToPatch(value as UpsertTenderProviderCredentialInput),
+        notFoundMessage: 'Tarjoajaprofiilin pätevyyttä ei löytynyt.',
+        fallbackMessage: 'Tarjoajaprofiilin pätevyyttä ei voitu tallentaa.',
+      });
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjoajaprofiilin pätevyyttä ei voitu tallentaa.');
+    }
+  }
+
+  async deleteTenderProviderCredential(packageId: string, credentialId: string) {
+    try {
+      await this.deleteProviderProfileChild({
+        tableName: 'tender_provider_credentials',
+        packageId,
+        rowId: credentialId,
+        rowSchema: tenderProviderCredentialRowSchema,
+        notFoundMessage: 'Tarjoajaprofiilin pätevyyttä ei löytynyt.',
+        fallbackMessage: 'Tarjoajaprofiilin pätevyyttä ei voitu poistaa.',
+      });
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjoajaprofiilin pätevyyttä ei voitu poistaa.');
+    }
+  }
+
+  async upsertTenderProviderConstraint(
+    packageId: string,
+    constraintId: string | null,
+    input: UpsertTenderProviderConstraintInput,
+  ) {
+    try {
+      return await this.upsertProviderProfileChild({
+        tableName: 'tender_provider_constraints',
+        packageId,
+        rowId: constraintId,
+        input,
+        rowSchema: tenderProviderConstraintRowSchema,
+        mapInsert: (value) => mapUpsertTenderProviderConstraintInputToInsert(value as UpsertTenderProviderConstraintInput),
+        mapPatch: (value) => mapUpsertTenderProviderConstraintInputToPatch(value as UpsertTenderProviderConstraintInput),
+        notFoundMessage: 'Tarjoajaprofiilin rajoitetta ei löytynyt.',
+        fallbackMessage: 'Tarjoajaprofiilin rajoitetta ei voitu tallentaa.',
+      });
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjoajaprofiilin rajoitetta ei voitu tallentaa.');
+    }
+  }
+
+  async deleteTenderProviderConstraint(packageId: string, constraintId: string) {
+    try {
+      await this.deleteProviderProfileChild({
+        tableName: 'tender_provider_constraints',
+        packageId,
+        rowId: constraintId,
+        rowSchema: tenderProviderConstraintRowSchema,
+        notFoundMessage: 'Tarjoajaprofiilin rajoitetta ei löytynyt.',
+        fallbackMessage: 'Tarjoajaprofiilin rajoitetta ei voitu poistaa.',
+      });
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjoajaprofiilin rajoitetta ei voitu poistaa.');
+    }
+  }
+
+  async upsertTenderProviderDocument(packageId: string, documentId: string | null, input: UpsertTenderProviderDocumentInput) {
+    try {
+      return await this.upsertProviderProfileChild({
+        tableName: 'tender_provider_documents',
+        packageId,
+        rowId: documentId,
+        input,
+        rowSchema: tenderProviderDocumentRowSchema,
+        mapInsert: (value) => mapUpsertTenderProviderDocumentInputToInsert(value as UpsertTenderProviderDocumentInput),
+        mapPatch: (value) => mapUpsertTenderProviderDocumentInputToPatch(value as UpsertTenderProviderDocumentInput),
+        notFoundMessage: 'Tarjoajaprofiilin dokumenttiviitettä ei löytynyt.',
+        fallbackMessage: 'Tarjoajaprofiilin dokumenttiviitettä ei voitu tallentaa.',
+      });
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjoajaprofiilin dokumenttiviitettä ei voitu tallentaa.');
+    }
+  }
+
+  async deleteTenderProviderDocument(packageId: string, documentId: string) {
+    try {
+      await this.deleteProviderProfileChild({
+        tableName: 'tender_provider_documents',
+        packageId,
+        rowId: documentId,
+        rowSchema: tenderProviderDocumentRowSchema,
+        notFoundMessage: 'Tarjoajaprofiilin dokumenttiviitettä ei löytynyt.',
+        fallbackMessage: 'Tarjoajaprofiilin dokumenttiviitettä ei voitu poistaa.',
+      });
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjoajaprofiilin dokumenttiviitettä ei voitu poistaa.');
+    }
+  }
+
+  async upsertTenderProviderResponseTemplate(
+    packageId: string,
+    templateId: string | null,
+    input: UpsertTenderProviderResponseTemplateInput,
+  ) {
+    try {
+      return await this.upsertProviderProfileChild({
+        tableName: 'tender_provider_response_templates',
+        packageId,
+        rowId: templateId,
+        input,
+        rowSchema: tenderProviderResponseTemplateRowSchema,
+        mapInsert: (value) => mapUpsertTenderProviderResponseTemplateInputToInsert(value as UpsertTenderProviderResponseTemplateInput),
+        mapPatch: (value) => mapUpsertTenderProviderResponseTemplateInputToPatch(value as UpsertTenderProviderResponseTemplateInput),
+        notFoundMessage: 'Tarjoajaprofiilin vastauspohjaa ei löytynyt.',
+        fallbackMessage: 'Tarjoajaprofiilin vastauspohjaa ei voitu tallentaa.',
+      });
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjoajaprofiilin vastauspohjaa ei voitu tallentaa.');
+    }
+  }
+
+  async deleteTenderProviderResponseTemplate(packageId: string, templateId: string) {
+    try {
+      await this.deleteProviderProfileChild({
+        tableName: 'tender_provider_response_templates',
+        packageId,
+        rowId: templateId,
+        rowSchema: tenderProviderResponseTemplateRowSchema,
+        notFoundMessage: 'Tarjoajaprofiilin vastauspohjaa ei löytynyt.',
+        fallbackMessage: 'Tarjoajaprofiilin vastauspohjaa ei voitu poistaa.',
+      });
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjoajaprofiilin vastauspohjaa ei voitu poistaa.');
     }
   }
 
