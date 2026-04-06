@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Gear, Shield } from '@phosphor-icons/react';
+import { useEffect, useMemo, useState } from 'react';
+import { Gear, Shield, ShieldCheck } from '@phosphor-icons/react';
+import { deriveAccessState, getOrganizationRoleLabel, getPlatformRoleLabel } from '../../lib/access-control';
 import { Card } from '../ui/card';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Alert, AlertDescription } from '../ui/alert';
+import { AppPageContentGrid, AppPageHeader, AppPageLayout } from '../layout/AppPageLayout';
+import PageEmptyState from '../layout/PageEmptyState';
 import { useSettings } from '../../hooks/use-data';
 import { useAuth } from '../../hooks/use-auth';
 import { toast } from 'sonner';
@@ -24,9 +27,19 @@ const SETTINGS_FIELD_HELP = {
 
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings();
-  const { canManageSharedData } = useAuth();
+  const { canManageSharedData, organization, user } = useAuth();
   const [formData, setFormData] = useState(settings);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const accessState = useMemo(
+    () =>
+      deriveAccessState({
+        platformRole: user?.role,
+        organizationRole: user?.organizationRole,
+        status: user?.status,
+      }),
+    [user?.organizationRole, user?.role, user?.status]
+  );
+  const workspaceName = organization?.name || user?.organizationName || 'Ei työtilaa';
 
   useEffect(() => {
     setFormData(settings);
@@ -36,31 +49,32 @@ export default function SettingsPage() {
     setSavedAt(null);
   }, [formData]);
 
-  if (!canManageSharedData) {
-    return (
-      <div className="p-4 sm:p-8">
-        <Card className="p-8 text-center text-muted-foreground">
-          Asetukset ovat vain yrityksen pääkäyttäjälle tai Projektan ylläpidolle.
-        </Card>
-      </div>
-    );
-  }
-
   return (
-    <div className="p-4 sm:p-8 space-y-6 max-w-5xl">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-semibold">Asetukset</h1>
-        <p className="text-muted-foreground mt-1">Yhteiset oletusarvot koko yritystyötilalle.</p>
-      </div>
+    <AppPageLayout pageType="registry" className="max-w-[1440px]">
+      <AppPageHeader
+        title="Asetukset"
+        description="Yhteiset oletusarvot koko yritystyötilalle. Hallitse yritystietoja, tarjouksen oletuksia ja desktop-päivitysten lähdettä samasta näkymästä."
+        eyebrow={<Badge variant="outline">Yritystason oletukset</Badge>}
+      />
 
-      <Alert>
-        <Shield className="h-4 w-4" />
-        <AlertDescription>
-          Muutokset vaikuttavat koko yritystyötilaan. Yrityksen pääkäyttäjä hallitsee yhteisiä oletusarvoja, ja työntekijöiden dokumenteissa käytetään työtilan yritystietoja ilman että yksittäisen ylläpitäjän yhteystiedot vuotavat fallbackina.
-        </AlertDescription>
-      </Alert>
+      <AppPageContentGrid pageType="registry">
+        <div className="space-y-6 xl:col-span-8">
+          {!canManageSharedData ? (
+            <PageEmptyState
+              icon={<Shield className="h-6 w-6" weight="duotone" />}
+              title="Asetukset ovat lukittu tälle roolille"
+              description="Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi muuttaa yhteisiä oletusarvoja. Näet oikeusmallin ja vaikutusalueet oikean reunan paneelissa."
+            />
+          ) : (
+            <>
+              <Alert>
+                <Shield className="h-4 w-4" />
+                <AlertDescription>
+                  Muutokset vaikuttavat koko yritystyötilaan. Yrityksen pääkäyttäjä hallitsee yhteisiä oletusarvoja, ja työntekijöiden dokumenteissa käytetään työtilan yritystietoja ilman että yksittäisen ylläpitäjän yhteystiedot vuotavat fallbackina.
+                </AlertDescription>
+              </Alert>
 
-      <Card className="p-6 space-y-4">
+              <Card className="p-6 space-y-4">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
             <Gear className="h-5 w-5" weight="bold" />
@@ -93,9 +107,9 @@ export default function SettingsPage() {
             <Input id="settings-company-address" value={formData.companyAddress} onChange={(event) => setFormData((current) => ({ ...current, companyAddress: event.target.value }))} />
           </div>
         </div>
-      </Card>
+              </Card>
 
-      <Card className="p-6 space-y-4">
+              <Card className="p-6 space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Tarjouksen oletusarvot</h2>
           <p className="text-sm text-muted-foreground">Näitä arvoja käytetään uusien tarjousten luonnissa.</p>
@@ -122,9 +136,9 @@ export default function SettingsPage() {
             <Input id="settings-prefix" value={formData.quoteNumberPrefix} onChange={(event) => setFormData((current) => ({ ...current, quoteNumberPrefix: event.target.value.toUpperCase() }))} />
           </div>
         </div>
-      </Card>
+              </Card>
 
-      <Card className="p-6 space-y-4">
+              <Card className="p-6 space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Automaattiset päivitykset</h2>
           <p className="text-sm text-muted-foreground">
@@ -149,44 +163,100 @@ export default function SettingsPage() {
           Voit käyttää omaa domainia, GitHub Pages -osoitetta tai muuta HTTPS-palvelinta. Jätä kenttä tyhjäksi, jos
           feed määritetään ympäristömuuttujalla.
         </p>
-      </Card>
+              </Card>
 
-      <div className="flex items-center justify-end gap-3">
-        {savedAt && (
-          <p className="text-sm text-emerald-600">
-            Asetukset tallennettu {savedAt}
-          </p>
-        )}
-        <Button
-          onClick={() => {
-            try {
-              const nextFeedUrl = formData.updateFeedUrl?.trim() || '';
-              if (nextFeedUrl) {
-                try {
-                  const parsedUrl = new URL(nextFeedUrl);
-                  const normalizedFeedUrl = parsedUrl.toString().endsWith('/') ? parsedUrl.toString() : `${parsedUrl.toString()}/`;
-                  updateSettings({ ...formData, updateFeedUrl: normalizedFeedUrl });
-                } catch {
-                  toast.error('Päivitysfeedin URL ei ole kelvollinen.');
-                  return;
-                }
-              } else {
-                updateSettings({ ...formData, updateFeedUrl: '' });
-              }
-              setSavedAt(new Intl.DateTimeFormat('fi-FI', {
-                hour: '2-digit',
-                minute: '2-digit',
-              }).format(new Date()));
-              toast.success('Asetukset tallennettu.');
-            } catch (error) {
-              setSavedAt(null);
-              toast.error(error instanceof Error ? error.message : 'Tallennus epäonnistui.');
-            }
-          }}
-        >
-          Tallenna asetukset
-        </Button>
-      </div>
-    </div>
+              <div className="flex items-center justify-end gap-3">
+                {savedAt && (
+                  <p className="text-sm text-emerald-600">
+                    Asetukset tallennettu {savedAt}
+                  </p>
+                )}
+                <Button
+                  onClick={() => {
+                    try {
+                      const nextFeedUrl = formData.updateFeedUrl?.trim() || '';
+                      if (nextFeedUrl) {
+                        try {
+                          const parsedUrl = new URL(nextFeedUrl);
+                          const normalizedFeedUrl = parsedUrl.toString().endsWith('/') ? parsedUrl.toString() : `${parsedUrl.toString()}/`;
+                          updateSettings({ ...formData, updateFeedUrl: normalizedFeedUrl });
+                        } catch {
+                          toast.error('Päivitysfeedin URL ei ole kelvollinen.');
+                          return;
+                        }
+                      } else {
+                        updateSettings({ ...formData, updateFeedUrl: '' });
+                      }
+                      setSavedAt(new Intl.DateTimeFormat('fi-FI', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }).format(new Date()));
+                      toast.success('Asetukset tallennettu.');
+                    } catch (error) {
+                      setSavedAt(null);
+                      toast.error(error instanceof Error ? error.message : 'Tallennus epäonnistui.');
+                    }
+                  }}
+                >
+                  Tallenna asetukset
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="space-y-6 xl:col-span-4">
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <ShieldCheck className="h-5 w-5" weight="duotone" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Sinun oikeutesi</h2>
+                <p className="text-sm text-muted-foreground">Asetussivu kertoo heti, mitä voit hallita tässä työtilassa.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={accessState.roleBadgeVariant}>{accessState.roleBadgeLabel}</Badge>
+              <Badge variant="outline">{getOrganizationRoleLabel(user?.organizationRole)}</Badge>
+              <Badge variant="outline">{getPlatformRoleLabel(user?.role)}</Badge>
+            </div>
+
+            <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em]">Työtila</p>
+              <p className="mt-2 font-medium text-foreground">{workspaceName}</p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="rounded-xl border bg-muted/20 p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Asetusten muokkaus</p>
+                <p className="mt-2 text-sm font-medium text-foreground">{accessState.canManageSharedData ? 'Kyllä' : 'Ei'}</p>
+              </div>
+              <div className="rounded-xl border bg-muted/20 p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Käyttäjähallinta</p>
+                <p className="mt-2 text-sm font-medium text-foreground">{accessState.canManageUsers ? 'Kyllä' : 'Ei'}</p>
+              </div>
+              <div className="rounded-xl border bg-muted/20 p-4 sm:col-span-2 xl:col-span-1">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Sopimusasiat</p>
+                <p className="mt-2 text-sm font-medium text-foreground">{accessState.canManageLegalDocuments ? 'Kyllä (vain Projektan ylläpito)' : 'Ei'}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6 space-y-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Mihin asetukset vaikuttavat</p>
+              <h2 className="mt-2 text-lg font-semibold">Hallinnan rajat yhdellä silmäyksellä</h2>
+            </div>
+            <div className="space-y-3 text-sm leading-6 text-muted-foreground">
+              <p>Yritystiedot vaikuttavat tarjouksiin, laskuihin ja PDF-dokumentteihin koko työtilassa.</p>
+              <p>Tarjouksen oletusarvot ohjaavat uusia tarjouksia ja tarjouseditorin lähtöasetuksia, mutta eivät muuta vanhoja tarjouksia jälkikäteen.</p>
+              <p>Päivitysfeedin URL koskee vain desktop-sovellusta. Selainversio käyttää julkaisua ilman tätä asetusta.</p>
+            </div>
+          </Card>
+        </div>
+      </AppPageContentGrid>
+    </AppPageLayout>
   );
 }

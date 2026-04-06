@@ -3,6 +3,7 @@ import {
   Check,
   DownloadSimple,
   MagnifyingGlass,
+  Package,
   PencilSimple,
   Plus,
   Trash,
@@ -17,6 +18,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import FieldHelpLabel from '../FieldHelpLabel';
+import { AppPageHeader, AppPageLayout } from '../layout/AppPageLayout';
+import PageEmptyState from '../layout/PageEmptyState';
 import { useAuth } from '../../hooks/use-auth';
 import { useInstallationGroups, useProducts } from '../../hooks/use-data';
 import { Product } from '../../lib/types';
@@ -236,6 +239,10 @@ export default function ProductsPage() {
   const activeCount = products.filter((product) => product.active ?? product.isActive ?? true).length;
   const inactiveCount = products.length - activeCount;
   const incompleteCount = products.filter((product) => isProductIncomplete(product)).length;
+  const hasActiveFilters = search.trim().length > 0
+    || categoryFilter !== 'all'
+    || brandFilter !== 'all'
+    || activeFilter !== 'all';
 
   useEffect(() => {
     try {
@@ -355,6 +362,16 @@ export default function ProductsPage() {
 
   const clearSelection = () => setSelectedIds([]);
 
+  const resetFilters = () => {
+    setSearch('');
+    setCategoryFilter('all');
+    setBrandFilter('all');
+    setActiveFilter('all');
+    setSortBy('updatedAt');
+    setSortDirection('desc');
+    setPage(1);
+  };
+
   const saveCurrentFilter = () => {
     const name = window.prompt('Anna suodattimelle nimi', `Suodatin ${savedFilters.length + 1}`)?.trim();
     if (!name) {
@@ -466,26 +483,24 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="p-4 sm:p-8 space-y-4 sm:space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold">Tuoterekisteri</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Jokainen käyttäjä hallitsee omaa tuoterekisteriään. Tänne lisätyt tuotteet näkyvät
-            vain omassa tarjouslaskennassasi.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={exportSelected} disabled={selectedIds.length === 0} className="gap-2">
-            <DownloadSimple />
-            Vie valitut CSV
-          </Button>
-          <Button onClick={() => openEditor()} className="gap-2" disabled={!canEdit}>
-            <Plus />
-            Lisää tuote
-          </Button>
-        </div>
-      </div>
+    <AppPageLayout pageType="registry" className="space-y-4 sm:space-y-6">
+      <AppPageHeader
+        title="Tuoterekisteri"
+        description="Jokainen käyttäjä hallitsee omaa tuoterekisteriään. Tänne lisätyt tuotteet näkyvät vain omassa tarjouslaskennassasi."
+        eyebrow={<Badge variant="outline">Oma katalogi</Badge>}
+        actions={
+          <>
+            <Button variant="outline" onClick={exportSelected} disabled={selectedIds.length === 0} className="gap-2">
+              <DownloadSimple />
+              Vie valitut CSV
+            </Button>
+            <Button onClick={() => openEditor()} className="gap-2" disabled={!canEdit}>
+              <Plus />
+              Lisää tuote
+            </Button>
+          </>
+        }
+      />
 
       {!canEdit && <ReadOnlyAlert />}
 
@@ -643,8 +658,35 @@ export default function ProductsPage() {
             <TableBody>
               {pagedProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
-                    Tuoterekisterisi on tyhjä. Lisää ensimmäinen tuote, niin voit käyttää sitä tarjouksilla.
+                  <TableCell colSpan={11} className="py-6">
+                    <PageEmptyState
+                      compact
+                      icon={<Package className="h-5 w-5" weight="duotone" />}
+                      title={products.length === 0 ? 'Tuoterekisteri on vielä tyhjä' : 'Ei tuotteita tällä rajauksella'}
+                      description={
+                        products.length === 0
+                          ? 'Lisää ensimmäinen tuote, niin saat sen heti käyttöön tarjousriveille ja omaan hakunäkymääsi.'
+                          : 'Laajenna hakua tai palauta suodattimet, jotta näet tuotteet taas tässä taulukossa.'
+                      }
+                      primaryActionLabel={
+                        products.length === 0
+                          ? canEdit
+                            ? 'Lisää tuote'
+                            : undefined
+                          : hasActiveFilters
+                            ? 'Tyhjennä suodattimet'
+                            : undefined
+                      }
+                      onPrimaryAction={
+                        products.length === 0
+                          ? canEdit
+                            ? () => openEditor()
+                            : undefined
+                          : hasActiveFilters
+                            ? resetFilters
+                            : undefined
+                      }
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -813,6 +855,6 @@ export default function ProductsPage() {
           </div>
         </div>
       </ResponsiveDialog>
-    </div>
+    </AppPageLayout>
   );
 }

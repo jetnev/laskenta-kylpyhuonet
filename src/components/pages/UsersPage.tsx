@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { ShieldCheck, UserCircle, UserPlus } from '@phosphor-icons/react';
-import { getOrganizationRoleBadgeLabel, getPlatformRoleLabel } from '../../lib/access-control';
+import {
+  deriveAccessState,
+  getOrganizationRoleBadgeLabel,
+  getOrganizationRoleLabel,
+  getPlatformRoleLabel,
+} from '../../lib/access-control';
 import { useAuth } from '../../hooks/use-auth';
+import { AppPageContentGrid, AppPageHeader, AppPageLayout } from '../layout/AppPageLayout';
+import PageEmptyState from '../layout/PageEmptyState';
 import { Card } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
@@ -37,16 +44,12 @@ export default function UsersPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [creatingUser, setCreatingUser] = useState(false);
   const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM);
-
-  if (!canManageUsers) {
-    return (
-      <div className="p-4 sm:p-8">
-        <Card className="p-8 text-center text-muted-foreground">
-          Käyttäjähallinta on vain yrityksen pääkäyttäjälle tai Projektan ylläpidolle.
-        </Card>
-      </div>
-    );
-  }
+  const accessState = deriveAccessState({
+    platformRole: user?.role,
+    organizationRole: user?.organizationRole,
+    status: user?.status,
+  });
+  const workspaceName = organization?.name || user?.organizationName || 'Ei työtilaa';
 
   const handleCreateUser = async () => {
     try {
@@ -73,147 +76,143 @@ export default function UsersPage() {
     }
   };
 
-  return (
-    <div className="p-4 sm:p-8 space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-semibold">
-          {isPlatformAdmin ? 'Käyttäjähallinta' : 'Työtilan käyttäjät'}
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          {isPlatformAdmin
-            ? 'Hallitse alustan rooleja, työtiloja ja tilien tilaa.'
-            : `Hallitse yrityksesi ${organization?.name || 'työtilan'} työntekijätilejä ja käyttöoikeuksia.`}
-        </p>
-      </div>
-
-      <div className="flex justify-end">
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <UserPlus className="h-4 w-4" />
-              Luo käyttäjä
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Luo uusi käyttäjä</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
+  const createUserAction = canManageUsers ? (
+    <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      <DialogTrigger asChild>
+        <Button>
+          <UserPlus className="h-4 w-4" />
+          Luo käyttäjä
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Luo uusi käyttäjä</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="create-user-name">Nimi</Label>
+            <Input
+              id="create-user-name"
+              value={createForm.displayName}
+              onChange={(event) =>
+                setCreateForm((current) => ({ ...current, displayName: event.target.value }))
+              }
+              placeholder="Etunimi Sukunimi"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="create-user-email">Sähköposti</Label>
+            <Input
+              id="create-user-email"
+              type="email"
+              value={createForm.email}
+              onChange={(event) =>
+                setCreateForm((current) => ({ ...current, email: event.target.value }))
+              }
+              placeholder="kayttaja@yritys.fi"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="create-user-password">Väliaikainen salasana</Label>
+            <Input
+              id="create-user-password"
+              type="password"
+              value={createForm.password}
+              onChange={(event) =>
+                setCreateForm((current) => ({ ...current, password: event.target.value }))
+              }
+              placeholder="Vähintään 8 merkkiä"
+            />
+          </div>
+          <div className={`grid grid-cols-1 ${isPlatformAdmin ? 'sm:grid-cols-2' : ''} gap-4`}>
+            {isPlatformAdmin ? (
               <div className="space-y-2">
-                <Label htmlFor="create-user-name">Nimi</Label>
-                <Input
-                  id="create-user-name"
-                  value={createForm.displayName}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({ ...current, displayName: event.target.value }))
+                <Label htmlFor="create-user-role">Alustan rooli</Label>
+                <Select
+                  value={createForm.role}
+                  onValueChange={(value) =>
+                    setCreateForm((current) => ({ ...current, role: value as 'admin' | 'user' }))
                   }
-                  placeholder="Etunimi Sukunimi"
-                />
+                >
+                  <SelectTrigger id="create-user-role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">{getPlatformRoleLabel('user')}</SelectItem>
+                    <SelectItem value="admin">{getPlatformRoleLabel('admin')}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="create-user-email">Sähköposti</Label>
-                <Input
-                  id="create-user-email"
-                  type="email"
-                  value={createForm.email}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({ ...current, email: event.target.value }))
-                  }
-                  placeholder="kayttaja@yritys.fi"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create-user-password">Väliaikainen salasana</Label>
-                <Input
-                  id="create-user-password"
-                  type="password"
-                  value={createForm.password}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({ ...current, password: event.target.value }))
-                  }
-                  placeholder="Vähintään 8 merkkiä"
-                />
-              </div>
-              <div className={`grid grid-cols-1 ${isPlatformAdmin ? 'sm:grid-cols-2' : ''} gap-4`}>
-                {isPlatformAdmin && (
-                  <div className="space-y-2">
-                    <Label htmlFor="create-user-role">Alustan rooli</Label>
-                    <Select
-                      value={createForm.role}
-                      onValueChange={(value) =>
-                        setCreateForm((current) => ({ ...current, role: value as 'admin' | 'user' }))
-                      }
-                    >
-                      <SelectTrigger id="create-user-role">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">{getPlatformRoleLabel('user')}</SelectItem>
-                        <SelectItem value="admin">{getPlatformRoleLabel('admin')}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <Label htmlFor="create-user-status">Tila</Label>
-                  <Select
-                    value={createForm.status}
-                    onValueChange={(value) =>
-                      setCreateForm((current) => ({ ...current, status: value as 'active' | 'disabled' }))
-                    }
-                  >
-                    <SelectTrigger id="create-user-status">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Aktiivinen</SelectItem>
-                      <SelectItem value="disabled">Pois käytöstä</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {!isPlatformAdmin && (
-                <Alert>
-                  <AlertDescription>
-                    Luotu käyttäjä liitetään suoraan työtilaan {organization?.name || 'yrityksesi'} käyttäjänä.
-                    Projektan ylläpidon roolia ei voi myöntää tästä näkymästä.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              <Button className="w-full" disabled={creatingUser} onClick={() => void handleCreateUser()}>
-                {creatingUser ? 'Luodaan käyttäjää...' : 'Luo käyttäjä'}
-              </Button>
+            ) : null}
+            <div className="space-y-2">
+              <Label htmlFor="create-user-status">Tila</Label>
+              <Select
+                value={createForm.status}
+                onValueChange={(value) =>
+                  setCreateForm((current) => ({ ...current, status: value as 'active' | 'disabled' }))
+                }
+              >
+                <SelectTrigger id="create-user-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Aktiivinen</SelectItem>
+                  <SelectItem value="disabled">Pois käytöstä</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+          </div>
 
-      <Alert>
-        <ShieldCheck className="h-4 w-4" />
-        <AlertDescription>
-          {isPlatformAdmin
-            ? 'Projektan ylläpito hallitsee alustan rooleja, käyttäjätiloja ja työtilojen kokonaisnäkymää. Yrityksen pääkäyttäjä hallitsee vain oman työtilansa käyttäjiä eikä voi myöntää ylläpitoroolia.'
-            : `Yrityksen pääkäyttäjä hallitsee vain työtilan ${organization?.name || 'oman yrityksen'} käyttäjiä. Projektan ylläpidon rooli on erillinen eikä sitä voi myöntää tästä näkymästä.`}
-        </AlertDescription>
-      </Alert>
+          {!isPlatformAdmin ? (
+            <Alert>
+              <AlertDescription>
+                Luotu käyttäjä liitetään suoraan työtilaan {organization?.name || 'yrityksesi'} käyttäjänä.
+                Projektan ylläpidon roolia ei voi myöntää tästä näkymästä.
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
-      <Card className="p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Roolimalli</p>
-        <div className="mt-3 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-          <p>
-            Työtilarooli:
-            <span className="ml-1 font-medium text-foreground">Työntekijä / Yrityksen pääkäyttäjä</span>
-          </p>
-          <p>
-            Alustarooli:
-            <span className="ml-1 font-medium text-foreground">Käyttäjä / Projektan ylläpito</span>
-          </p>
+          <Button className="w-full" disabled={creatingUser} onClick={() => void handleCreateUser()}>
+            {creatingUser ? 'Luodaan käyttäjää...' : 'Luo käyttäjä'}
+          </Button>
         </div>
-      </Card>
+      </DialogContent>
+    </Dialog>
+  ) : null;
 
-      {isPlatformAdmin ? (
+  return (
+    <AppPageLayout pageType="registry">
+      <AppPageHeader
+        title={isPlatformAdmin ? 'Käyttäjähallinta' : 'Työtilan käyttäjät'}
+        description={
+          isPlatformAdmin
+            ? 'Hallitse alustan rooleja, työtiloja ja tilien tilaa.'
+            : `Hallitse yrityksesi ${organization?.name || 'työtilan'} työntekijätilejä ja käyttöoikeuksia.`
+        }
+        eyebrow={<Badge variant="outline">{isPlatformAdmin ? 'Projektan ylläpito' : 'Työtilan käyttäjät'}</Badge>}
+        actions={createUserAction}
+      />
+
+      <AppPageContentGrid pageType="registry">
+        <div className="space-y-6 xl:col-span-8">
+          {!canManageUsers ? (
+            <PageEmptyState
+              icon={<ShieldCheck className="h-6 w-6" weight="duotone" />}
+              title="Käyttäjähallinta on lukittu tälle roolille"
+              description="Vain yrityksen pääkäyttäjä tai Projektan ylläpito voi hallita käyttäjiä. Oikean reunan paneeli näyttää roolimallin ja nykyiset oikeutesi."
+            />
+          ) : (
+            <>
+              <Alert>
+                <ShieldCheck className="h-4 w-4" />
+                <AlertDescription>
+                  {isPlatformAdmin
+                    ? 'Projektan ylläpito hallitsee alustan rooleja, käyttäjätiloja ja työtilojen kokonaisnäkymää. Yrityksen pääkäyttäjä hallitsee vain oman työtilansa käyttäjiä eikä voi myöntää ylläpitoroolia.'
+                    : `Yrityksen pääkäyttäjä hallitsee vain työtilan ${organization?.name || 'oman yrityksen'} käyttäjiä. Projektan ylläpidon rooli on erillinen eikä sitä voi myöntää tästä näkymästä.`}
+                </AlertDescription>
+              </Alert>
+
+              {isPlatformAdmin ? (
         <Card className="p-6">
           <Table>
             <TableHeader>
@@ -305,7 +304,7 @@ export default function UsersPage() {
             </TableBody>
           </Table>
         </Card>
-      ) : (
+              ) : (
         <Card className="p-6">
           <Table>
             <TableHeader>
@@ -375,7 +374,69 @@ export default function UsersPage() {
             </TableBody>
           </Table>
         </Card>
-      )}
-    </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="space-y-6 xl:col-span-4">
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <ShieldCheck className="h-5 w-5" weight="duotone" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Sinun oikeutesi</h2>
+                <p className="text-sm text-muted-foreground">Näet tästä heti, mitä voit hallita nykyisellä roolillasi.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={accessState.roleBadgeVariant}>{accessState.roleBadgeLabel}</Badge>
+              <Badge variant="outline">{getOrganizationRoleLabel(user?.organizationRole)}</Badge>
+              <Badge variant="outline">{getPlatformRoleLabel(user?.role)}</Badge>
+            </div>
+
+            <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em]">Työtila</p>
+              <p className="mt-2 font-medium text-foreground">{workspaceName}</p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="rounded-xl border bg-muted/20 p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Käyttäjähallinta</p>
+                <p className="mt-2 text-sm font-medium text-foreground">{accessState.canManageUsers ? 'Kyllä' : 'Ei'}</p>
+              </div>
+              <div className="rounded-xl border bg-muted/20 p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Yhteiset tiedot</p>
+                <p className="mt-2 text-sm font-medium text-foreground">{accessState.canManageSharedData ? 'Kyllä' : 'Ei'}</p>
+              </div>
+              <div className="rounded-xl border bg-muted/20 p-4 sm:col-span-2 xl:col-span-1">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Sopimusasiat</p>
+                <p className="mt-2 text-sm font-medium text-foreground">{accessState.canManageLegalDocuments ? 'Kyllä (vain Projektan ylläpito)' : 'Ei'}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6 space-y-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Roolimalli</p>
+              <h2 className="mt-2 text-lg font-semibold">Työtila ja alusta ovat eri tasoja</h2>
+            </div>
+            <div className="space-y-3 text-sm leading-6 text-muted-foreground">
+              <p>
+                Työtilarooli:
+                <span className="ml-1 font-medium text-foreground">Käyttäjä / Yrityksen pääkäyttäjä</span>
+              </p>
+              <p>
+                Alustarooli:
+                <span className="ml-1 font-medium text-foreground">Käyttäjä / Projektan ylläpito</span>
+              </p>
+              <p>Yrityksen pääkäyttäjä voi hallita oman työtilansa käyttäjiä, mutta vain Projektan ylläpito näkee koko alustatason roolit ja työtilat.</p>
+            </div>
+          </Card>
+        </div>
+      </AppPageContentGrid>
+    </AppPageLayout>
   );
 }

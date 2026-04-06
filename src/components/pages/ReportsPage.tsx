@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -45,6 +45,7 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../hooks/use-auth';
 import { AppPageLayout } from '../layout/AppPageLayout';
+import EmptyState from '../layout/PageEmptyState';
 import { exportReportsToPDF } from '../../lib/export';
 import ReportingDrilldownContent from './reporting/ReportingDrilldownContent';
 import { getReportingDrilldownDescription } from './reporting/ReportingDrilldownMeta';
@@ -85,17 +86,6 @@ function deltaSign(value: number | null) {
 
 type DrillKind = 'families' | 'family-detail' | 'customers' | 'products' | 'projects';
 interface DrillState { kind: DrillKind; title: string; ids: string[]; }
-
-function EmptyState({ icon, title, description, action }: { icon: ReactNode; title: string; description: string; action?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="text-muted-foreground/40 mb-4">{icon}</div>
-      <h3 className="text-lg font-semibold mb-1">{title}</h3>
-      <p className="text-sm text-muted-foreground max-w-md">{description}</p>
-      {action && <p className="text-sm text-muted-foreground mt-2 font-medium">{action}</p>}
-    </div>
-  );
-}
 
 function ReportsLoadingState() {
   return (

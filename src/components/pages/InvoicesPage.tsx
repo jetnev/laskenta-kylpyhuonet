@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 
 import InvoiceEditor from '../InvoiceEditor';
 import { AppPageContentGrid, AppPageHeader, AppPageLayout } from '../layout/AppPageLayout';
+import PageEmptyState from '../layout/PageEmptyState';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -103,46 +104,6 @@ function InvoiceKpiCard({
         <p className="text-sm leading-6 text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
-  );
-}
-
-function SectionEmptyState({
-  icon,
-  title,
-  description,
-  primaryActionLabel,
-  onPrimaryAction,
-  secondaryActionLabel,
-  onSecondaryAction,
-}: {
-  icon: ReactNode;
-  title: string;
-  description: string;
-  primaryActionLabel: string;
-  onPrimaryAction: () => void;
-  secondaryActionLabel?: string;
-  onSecondaryAction?: () => void;
-}) {
-  return (
-    <div className="rounded-[28px] border border-dashed border-border/80 bg-muted/20 px-6 py-10 text-center sm:px-8">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-background text-muted-foreground shadow-sm">
-        {icon}
-      </div>
-      <h3 className="mt-4 text-lg font-semibold tracking-[-0.02em] text-foreground">{title}</h3>
-      <p className="mx-auto mt-2 max-w-xl text-sm leading-7 text-muted-foreground">{description}</p>
-      <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
-        <Button onClick={onPrimaryAction} className="justify-between sm:min-w-48">
-          {primaryActionLabel}
-          <ArrowRight className="h-4 w-4" />
-        </Button>
-        {secondaryActionLabel && onSecondaryAction ? (
-          <Button variant="outline" onClick={onSecondaryAction} className="justify-between sm:min-w-48">
-            {secondaryActionLabel}
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-        ) : null}
-      </div>
-    </div>
   );
 }
 
@@ -400,7 +361,7 @@ export default function InvoicesPage({ routeState, onNavigate }: InvoicesPagePro
               </CardHeader>
               <CardContent className="pt-6">
                 {eligibleQuotes.length === 0 ? (
-                  <SectionEmptyState
+                  <PageEmptyState
                     icon={<FolderOpen className="h-6 w-6" />}
                     title="Laskutettavia hyväksyttyjä tarjouksia ei vielä ole"
                     description="Kun tarjous hyväksytään projektityötilassa ja sillä on laskutettavat rivit, se ilmestyy tähän valmiina laskun luontiin."
@@ -486,7 +447,7 @@ export default function InvoicesPage({ routeState, onNavigate }: InvoicesPagePro
               <CardContent className="pt-6">
                 {filteredInvoices.length === 0 ? (
                   invoices.length === 0 ? (
-                    <SectionEmptyState
+                    <PageEmptyState
                       icon={<Receipt className="h-6 w-6" />}
                       title="Ensimmäinen lasku syntyy hyväksytystä tarjouksesta"
                       description="Luo tarjous projektityötilassa, hyväksy se ja palaa sitten tähän näkymään muodostamaan lasku snapshotiksi. Tästä eteenpäin kaikki laskudokumentit pysyvät samassa työjonossa."
@@ -496,7 +457,7 @@ export default function InvoicesPage({ routeState, onNavigate }: InvoicesPagePro
                       onSecondaryAction={() => onNavigate?.({ page: 'account' })}
                     />
                   ) : (
-                    <SectionEmptyState
+                    <PageEmptyState
                       icon={<WarningCircle className="h-6 w-6" />}
                       title={`Suodatuksella ${filterLabel.toLowerCase()} ei löytynyt laskuja`}
                       description="Nykyinen suodatus ei tuota rivejä. Palaa kaikkiin laskuihin tai tarkista toinen tila nähdäksesi dokumentit."
@@ -711,15 +672,12 @@ export default function InvoicesPage({ routeState, onNavigate }: InvoicesPagePro
               </CardHeader>
               <CardContent>
                 {operationalHighlights.length === 0 ? (
-                  <div className="rounded-[24px] border border-dashed border-border/80 bg-muted/20 px-5 py-8 text-center">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-background text-muted-foreground shadow-sm">
-                      <TrendUp className="h-5 w-5" />
-                    </div>
-                    <h3 className="mt-4 text-base font-semibold">Laskutuksen tilanne näyttää hallitulta</h3>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Tässä näkymässä ei ole juuri nyt kiireellisiä laskutustoimia. Voit silti avata raportoinnin tai projektityötilan jatkaaksesi seuraavaa vaihetta.
-                    </p>
-                  </div>
+                  <PageEmptyState
+                    compact
+                    icon={<TrendUp className="h-5 w-5" />}
+                    title="Laskutuksen tilanne näyttää hallitulta"
+                    description="Tässä näkymässä ei ole juuri nyt kiireellisiä laskutustoimia. Voit silti avata raportoinnin tai projektityötilan jatkaaksesi seuraavaa vaihetta."
+                  />
                 ) : (
                   <div className="space-y-3">
                     {operationalHighlights.map((item) => (
