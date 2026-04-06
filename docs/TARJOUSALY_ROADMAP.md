@@ -159,9 +159,32 @@ Tarjousälyssä on tällä hetkellä toteutettuna seuraavat kyvykkyydet:
 - laaja audit/event log kaikkiin toimintoihin
 - deployment-smoketestit staging-/tuotantoympäristössä
 
+## Käynnissä oleva tuotannollistava työpakettirunko
+
+Tarjousälyn seuraava eteneminen ei ole enää vain syvempiä analyysi- ja import-vaiheita, vaan myös tuotannollistamista. Nykyinen toteutuspolku jatkuu seuraavilla työpaketeilla:
+
+1. tarjouspyyntöpaketin kytkentä asiakkaaseen, projektiin ja quoteen
+2. operatiivinen paketti-inboxi: haku, suodatus ja työjono
+3. ympäristö- ja deployment-readiness Tarjousälylle
+4. vahvempi PDF/DOCX-extraction
+5. dokumenttien intake-luokittelu
+6. review-workflown bulk-toiminnot
+7. draft-paketin laatugate ennen editorivientiä
+8. Go / No-Go -päätöstuki
+9. referenssikorpuksen tuonti ja deduplikointi
+10. myöhempi intelligent drafting vasta vahvemman dataperustan päälle
+
+### Työpaketti 1 — tarjouspyyntöpaketin kontekstilinkitys
+
+Valmis:
+
+- paketin luonti voi linkittää tarjouspyyntöpaketin olemassa olevaan asiakkaaseen, projektiin ja tarjousluonnokseen
+- projektivalinta ohjaa asiakas- ja tarjouskontekstia jo luontivaiheessa
+- Tarjousälyn paketti-lista ja valitun paketin työtila näyttävät tallennetun liiketoimintakontekstin näkyvästi
+
 ## Seuraava tavoitesuunta
 
-Tarjousälyn seuraavien vaiheiden tulee jatkaa tästä järjestyksestä, ellei erikseen päätetä muuta:
+Tarjousälyn seuraavien syventävien vaiheiden tulee jatkua tästä järjestyksestä tuotannollistavien työpakettien rinnalla, ellei erikseen päätetä muuta:
 
 ### Phase 18 — editor import idempotency and resume
 

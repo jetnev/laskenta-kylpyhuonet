@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import type { AppLocationState } from '@/lib/app-routing';
+import { useCustomers, useProjects, useQuotes } from '@/hooks/use-data';
 
 import CreateTenderPackageDialog from '../components/CreateTenderPackageDialog';
 import TenderPackageList from '../components/TenderPackageList';
@@ -92,6 +93,9 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editorHandoff, setEditorHandoff] = useState<TenderIntelligenceResolvedHandoff>(() => createEmptyHandoffState());
   const repository = useMemo(() => getTenderIntelligenceRepository(), []);
+  const { customers } = useCustomers();
+  const { projects } = useProjects();
+  const { quotes } = useQuotes();
   const {
     packages,
     draftPackages,
@@ -241,6 +245,18 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
     });
   }, [onNavigate]);
   const errorState = resolveTenderIntelligenceErrorState(error);
+  const customerNameById = useMemo(
+    () => Object.fromEntries(customers.map((customer) => [customer.id, customer.name])),
+    [customers],
+  );
+  const projectNameById = useMemo(
+    () => Object.fromEntries(projects.map((project) => [project.id, project.name])),
+    [projects],
+  );
+  const quoteLabelById = useMemo(
+    () => Object.fromEntries(quotes.map((quote) => [quote.id, `${quote.quoteNumber} • ${quote.title}`])),
+    [quotes],
+  );
 
   return (
     <div className="space-y-6 p-4 sm:p-8">
@@ -312,6 +328,9 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
         <TenderPackageList
           packages={packages}
           selectedPackageId={selectedPackageId}
+          customerNameById={customerNameById}
+          projectNameById={projectNameById}
+          quoteLabelById={quoteLabelById}
           loading={loading}
           createDisabled={!canCreate || creating}
           onCreateClick={() => setShowCreateDialog(true)}
@@ -323,6 +342,9 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
           referenceProfiles={referenceProfiles}
           currentUserId={currentUserId}
           actorNameById={actorNameById}
+          customerNameById={customerNameById}
+          projectNameById={projectNameById}
+          quoteLabelById={quoteLabelById}
           loading={loading}
           notFound={selectedPackageMissing}
           uploading={uploading}
@@ -437,9 +459,12 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
       <CreateTenderPackageDialog
         open={showCreateDialog}
         submitting={creating}
+        customers={customers}
+        projects={projects}
+        quotes={quotes}
         onOpenChange={setShowCreateDialog}
-        onCreate={async ({ name }) => {
-          const created = await createPackage({ name });
+        onCreate={async (input) => {
+          const created = await createPackage(input);
           toast.success(`Tarjouspyyntöpaketti “${created.package.name}” tallennettiin organisaation Tarjousäly-dataan.`);
         }}
       />

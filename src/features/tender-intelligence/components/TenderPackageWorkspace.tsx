@@ -9,6 +9,7 @@ import TenderDraftPackagePanel from './TenderDraftPackagePanel';
 import TenderDocumentsPanel from './TenderDocumentsPanel';
 import TenderReferenceCorpusPanel from './TenderReferenceCorpusPanel';
 import TenderResultPanels from './TenderResultPanels';
+import { buildTenderPackageLinkItems } from '../lib/tender-package-links';
 import {
   TENDER_ANALYSIS_JOB_STATUS_META,
   TENDER_GO_NO_GO_META,
@@ -67,6 +68,9 @@ interface TenderPackageWorkspaceProps {
   referenceProfiles?: TenderReferenceProfile[];
   currentUserId?: string | null;
   actorNameById?: Record<string, string>;
+  customerNameById?: Record<string, string>;
+  projectNameById?: Record<string, string>;
+  quoteLabelById?: Record<string, string>;
   loading?: boolean;
   notFound?: boolean;
   uploading?: boolean;
@@ -131,6 +135,9 @@ export default function TenderPackageWorkspace({
   referenceProfiles = [],
   currentUserId = null,
   actorNameById = {},
+  customerNameById = {},
+  projectNameById = {},
+  quoteLabelById = {},
   loading = false,
   notFound = false,
   uploading = false,
@@ -284,6 +291,11 @@ export default function TenderPackageWorkspace({
   const goNoGoMeta = goNoGo ? TENDER_GO_NO_GO_META[goNoGo.recommendation] : null;
   const nextReviewTask = selectedPackage.results.reviewTasks[0] ?? null;
   const nextReviewTaskMeta = nextReviewTask ? TENDER_REVIEW_TASK_STATUS_META[nextReviewTask.status] : null;
+  const linkItems = buildTenderPackageLinkItems(selectedPackage.package, {
+    customerNameById,
+    projectNameById,
+    quoteLabelById,
+  });
 
   return (
     <div className="space-y-6">
@@ -299,6 +311,15 @@ export default function TenderPackageWorkspace({
             <CardDescription className="max-w-3xl text-sm leading-7 text-slate-200">
               Tähän pakettiin kerätään tarjouspyyntöön liittyvät dokumentit, analyysihavainnot, katselmointi ja myöhemmät luonnospaketit. Tarjouseditoriin vienti tehdään erikseen vasta silloin, kun sisältö on valmis vietäväksi.
             </CardDescription>
+            {linkItems.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {linkItems.map((linkItem) => (
+                  <Badge key={`${selectedPackage.package.id}-${linkItem.key}`} className="border border-white/15 bg-white/5 text-white hover:bg-white/5">
+                    {linkItem.label}: {linkItem.value}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
         </CardHeader>
 

@@ -5,12 +5,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
+import { buildTenderPackageLinkItems } from '../lib/tender-package-links';
 import { TENDER_PACKAGE_STATUS_META, formatCountLabel, formatTenderTimestamp } from '../lib/tender-intelligence-ui';
 import type { TenderPackage } from '../types/tender-intelligence';
 
 interface TenderPackageListProps {
   packages: TenderPackage[];
   selectedPackageId: string | null;
+  customerNameById?: Record<string, string>;
+  projectNameById?: Record<string, string>;
+  quoteLabelById?: Record<string, string>;
   loading?: boolean;
   createDisabled?: boolean;
   onCreateClick: () => void;
@@ -20,6 +24,9 @@ interface TenderPackageListProps {
 export default function TenderPackageList({
   packages,
   selectedPackageId,
+  customerNameById = {},
+  projectNameById = {},
+  quoteLabelById = {},
   loading = false,
   createDisabled = false,
   onCreateClick,
@@ -55,6 +62,11 @@ export default function TenderPackageList({
           packages.map((item) => {
             const statusMeta = TENDER_PACKAGE_STATUS_META[item.status];
             const isActive = selectedPackageId === item.id;
+            const linkItems = buildTenderPackageLinkItems(item, {
+              customerNameById,
+              projectNameById,
+              quoteLabelById,
+            });
 
             return (
               <button
@@ -75,6 +87,21 @@ export default function TenderPackageList({
                       <ClockCountdown className="h-3.5 w-3.5" />
                       <span>Päivitetty {formatTenderTimestamp(item.updatedAt)}</span>
                     </div>
+                    {linkItems.length > 0 && (
+                      <div className={cn('mt-3 flex flex-wrap gap-2 text-xs', isActive ? 'text-slate-200' : 'text-slate-600')}>
+                        {linkItems.map((linkItem) => (
+                          <span
+                            key={`${item.id}-${linkItem.key}`}
+                            className={cn(
+                              'rounded-full border px-2.5 py-1',
+                              isActive ? 'border-white/15 bg-white/10 text-slate-100' : 'border-slate-200 bg-slate-50 text-slate-700'
+                            )}
+                          >
+                            {linkItem.label}: {linkItem.value}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
                 </div>
