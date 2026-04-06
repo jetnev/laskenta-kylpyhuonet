@@ -180,6 +180,10 @@ const TENDER_EDITOR_MANAGED_BLOCK_META: Record<TenderEditorManagedBlockId, { tit
   },
 };
 
+function resolveManagedBlockMeta(blockId: TenderEditorManagedBlockId) {
+  return TENDER_EDITOR_MANAGED_BLOCK_META[blockId] ?? { title: blockId, targetLabel: blockId };
+}
+
 function resolveImportRunExecutionModeLabel(runMode?: TenderEditorImportRunMode | null) {
   switch (runMode) {
     case 'create_new_quote':
@@ -222,7 +226,7 @@ function resolveImportRunBlockMeta(run: TenderDraftPackageImportRun, blockId: Te
     };
   }
 
-  return TENDER_EDITOR_MANAGED_BLOCK_META[blockId] ?? { title: blockId, targetLabel: blockId };
+  return resolveManagedBlockMeta(blockId);
 }
 
 function buildImportRunMetricItems(run: TenderDraftPackageImportRun) {
@@ -720,6 +724,21 @@ export default function TenderDraftPackagePanel({
     () => payload?.notes_for_editor.filter((item) => !hasProviderContext(item.content_md)) ?? [],
     [payload],
   );
+  const focusedBlockIds = editorHandoff?.focusedBlockIds ?? [];
+  const focusedBlockIdSet = new Set(focusedBlockIds);
+  const focusedHandoffBlocks = focusedBlockIds.map((blockId) => {
+    const meta = resolveManagedBlockMeta(blockId);
+
+    return {
+      blockId,
+      title: meta.title,
+      targetLabel: meta.targetLabel,
+      inManagedSurface: managedBlocks.some((block) => block.block_id === blockId),
+      inSectionPreview: editorImportPreview?.sections.some((section) => section.key === blockId) ?? false,
+      inReimportPreview: draftPackageReimportPreview?.blocks.some((block) => block.block_id === blockId) ?? false,
+      inRegistryDiagnostics: repairPreviewBlocks.some((block) => block.block_id === blockId),
+    };
+  });
   const repairActionKeys: TenderImportRegistryRepairAction[] = [
     'refresh_registry_metadata',
     'mark_orphaned_registry_entries',
@@ -875,7 +894,9 @@ export default function TenderDraftPackagePanel({
                 <div className="mt-2 font-medium">{editorHandoff.title}</div>
                 <p className="mt-1">{editorHandoff.description}</p>
                 {editorHandoff.focusedBlockIds.length > 0 && (
-                  <p className="mt-2 text-xs opacity-80">Kohdistetut blockit: {editorHandoff.focusedBlockIds.join(', ')}</p>
+                  <p className="mt-2 text-xs opacity-80">
+                    Kohdistetut blokit: {editorHandoff.focusedBlockIds.map((blockId) => resolveManagedBlockMeta(blockId).title).join(', ')}
+                  </p>
                 )}
               </div>
             )}
@@ -1612,6 +1633,46 @@ export default function TenderDraftPackagePanel({
                       </div>
                     )}
 
+                    {focusedHandoffBlocks.length > 0 && (
+                      <div className="rounded-2xl border border-sky-300 bg-sky-50 px-4 py-4">
+                        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+                          <ArrowSquareOut className="h-4 w-4 text-sky-700" />
+                          QuoteEditorin kohdeblokit
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-slate-700">
+                          QuoteEditor palasi tähän näkymään korostamaan seuraavia hallittuja lohkoja. Tarkista ensin näiden blokkien
+                          import-pinta, payload-preview ja mahdollinen re-import-diff ennen kuin ajat uuden importin tai repairin.
+                        </p>
+                        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                          {focusedHandoffBlocks.map((block) => {
+                            const matchedSurfaceCount = [
+                              block.inManagedSurface,
+                              block.inSectionPreview,
+                              block.inReimportPreview,
+                              block.inRegistryDiagnostics,
+                            ].filter(Boolean).length;
+
+                            return (
+                              <div key={block.blockId} className="rounded-xl border border-sky-200 bg-white px-3 py-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant="outline">{block.title}</Badge>
+                                  <Badge variant="secondary">Kohdistettu editorista</Badge>
+                                  {matchedSurfaceCount < 1 && <Badge variant="outline">Ei nykyisessä previewssa</Badge>}
+                                </div>
+                                <p className="mt-2 text-xs uppercase tracking-[0.14em] text-slate-500">{block.targetLabel}</p>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {block.inManagedSurface && <Badge variant="outline">Adapterin pinta</Badge>}
+                                  {block.inSectionPreview && <Badge variant="outline">Payload preview</Badge>}
+                                  {block.inReimportPreview && <Badge variant="outline">Re-import diff</Badge>}
+                                  {block.inRegistryDiagnostics && <Badge variant="outline">Registry status</Badge>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                       <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
                         <FileText className="h-4 w-4 text-slate-500" />
@@ -1622,9 +1683,16 @@ export default function TenderDraftPackagePanel({
                       </p>
                       <div className="mt-4 grid gap-4 xl:grid-cols-2">
                         {managedBlocks.length > 0 ? managedBlocks.map((block) => (
-                          <div key={block.marker_key} className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                          <div
+                            key={block.marker_key}
+                            className={[
+                              'rounded-2xl border bg-white px-4 py-4',
+                              focusedBlockIdSet.has(block.block_id) ? 'border-sky-300 ring-2 ring-sky-100' : 'border-slate-200',
+                            ].join(' ')}
+                          >
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge variant="outline">{block.title}</Badge>
+                              {focusedBlockIdSet.has(block.block_id) && <Badge variant="secondary">Kohdistettu editorista</Badge>}
                               <Badge variant="outline">{block.target_label}</Badge>
                               <Badge variant="outline">{block.item_count} riviä</Badge>
                             </div>
@@ -1652,7 +1720,13 @@ export default function TenderDraftPackagePanel({
 
                         <div className="mt-4 space-y-3">
                           {repairPreviewBlocks.length > 0 ? repairPreviewBlocks.map((block) => (
-                            <div key={block.marker_key} className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                            <div
+                              key={block.marker_key}
+                              className={[
+                                'rounded-2xl border bg-white px-4 py-4',
+                                focusedBlockIdSet.has(block.block_id) ? 'border-sky-300 ring-2 ring-sky-100' : 'border-slate-200',
+                              ].join(' ')}
+                            >
                               <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                                 <div>
                                   <div className="flex flex-wrap items-center gap-2">
@@ -1662,6 +1736,7 @@ export default function TenderDraftPackagePanel({
                                     <Badge variant={TENDER_EDITOR_MANAGED_BLOCK_DRIFT_STATUS_META[block.drift_status].variant}>
                                       {TENDER_EDITOR_MANAGED_BLOCK_DRIFT_STATUS_META[block.drift_status].label}
                                     </Badge>
+                                    {focusedBlockIdSet.has(block.block_id) && <Badge variant="secondary">Kohdistettu editorista</Badge>}
                                     <Badge variant="outline">{block.target_label}</Badge>
                                     {!block.registry_is_active && <Badge variant="secondary">Registry inactive</Badge>}
                                     {block.is_conflict && <Badge variant="destructive">Konflikti</Badge>}
@@ -1908,7 +1983,13 @@ export default function TenderDraftPackagePanel({
                             <div className="space-y-2">
                               <p className="text-sm font-medium text-slate-950">Lohkokohtaiset muutokset</p>
                               {draftPackageReimportPreview.blocks.map((block) => (
-                                <div key={block.marker_key} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                                <div
+                                  key={block.marker_key}
+                                  className={[
+                                    'rounded-xl border bg-white px-3 py-3',
+                                    focusedBlockIdSet.has(block.block_id) ? 'border-sky-300 ring-2 ring-sky-100' : 'border-slate-200',
+                                  ].join(' ')}
+                                >
                                   <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                                     <div>
                                       <div className="flex flex-wrap items-center gap-2">
@@ -1916,6 +1997,7 @@ export default function TenderDraftPackagePanel({
                                         <Badge variant="outline">{block.target_label}</Badge>
                                         <Badge variant="outline">{resolveOwnershipSourceLabel(block.ownership_source)}</Badge>
                                         <Badge variant={TENDER_EDITOR_MANAGED_BLOCK_DRIFT_STATUS_META[block.drift_status].variant}>{TENDER_EDITOR_MANAGED_BLOCK_DRIFT_STATUS_META[block.drift_status].label}</Badge>
+                                        {focusedBlockIdSet.has(block.block_id) && <Badge variant="secondary">Kohdistettu editorista</Badge>}
                                         {block.is_conflict && <Badge variant="destructive">Konflikti</Badge>}
                                         {block.registry_revision != null && <Badge variant="outline">Rev {block.registry_revision}</Badge>}
                                       </div>
@@ -2081,8 +2163,15 @@ export default function TenderDraftPackagePanel({
 
                     <div className="grid gap-4 xl:grid-cols-2">
                       {editorImportPreview.sections.map((section) => (
-                        <div key={section.key} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                        <div
+                          key={section.key}
+                          className={[
+                            'rounded-2xl border bg-slate-50 px-4 py-4',
+                            focusedBlockIdSet.has(section.key) ? 'border-sky-300 ring-2 ring-sky-100' : 'border-slate-200',
+                          ].join(' ')}
+                        >
                           <div className="flex flex-wrap items-center gap-2">
+                            {focusedBlockIdSet.has(section.key) && <Badge variant="secondary">Kohdistettu editorista</Badge>}
                             <Badge variant="outline">{section.target_label}</Badge>
                             <Badge variant="outline">{section.item_count} riviä</Badge>
                           </div>

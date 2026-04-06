@@ -8,6 +8,7 @@ import type {
   TenderEditorImportPreview,
   TenderEditorReconciliationPreview,
 } from '../types/tender-editor-import';
+import type { TenderIntelligenceResolvedHandoff } from '../lib/tender-intelligence-handoff';
 import type { TenderDraftPackage, TenderPackageDetails } from '../types/tender-intelligence';
 
 const PROVIDER_AWARE_ARTIFACT_CONTENT_MD = [
@@ -780,6 +781,30 @@ function createImportRuns(): TenderDraftPackageImportRun[] {
   ];
 }
 
+function createEditorHandoff(
+  focusedBlockIds: TenderIntelligenceResolvedHandoff['focusedBlockIds'] = ['provider_profile_context'],
+): TenderIntelligenceResolvedHandoff {
+  return {
+    isActive: true,
+    status: 'ready',
+    context: {
+      source: 'quote-editor',
+      tenderPackageId: '11111111-1111-4111-8111-111111111111',
+      draftPackageId: '66666666-6666-4666-8666-666666666666',
+      importedQuoteId: '61616161-6161-4616-8616-616161616161',
+      intent: 'reimport-managed-import',
+      blockIds: focusedBlockIds,
+    },
+    resolvedTenderPackageId: '11111111-1111-4111-8111-111111111111',
+    resolvedDraftPackageId: '66666666-6666-4666-8666-666666666666',
+    focusedBlockIds,
+    bannerTone: 'default',
+    title: 'Palaa hallittuun importtiin',
+    description: 'QuoteEditor ohjasi sinut tänne, koska hallittu sisältö kannattaa päivittää Tarjousälyn re-importin kautta editorin sijaan.',
+    ctaLabel: 'Palaa hallittuun importtiin',
+  };
+}
+
 describe('TenderDraftPackagePanel', () => {
   it('renders imported quote handoff and re-import reconciliation state for draft packages', () => {
     const markup = renderToStaticMarkup(
@@ -869,4 +894,34 @@ describe('TenderDraftPackagePanel', () => {
     expect(markup).toContain('Provider-kontekstiblokkeja: 1');
     expect(markup).toContain('Tarjoajaprofiilin konteksti');
   });
+
+    it('highlights focused managed blocks when QuoteEditor returns to the import view', () => {
+      const markup = renderToStaticMarkup(
+        <TenderDraftPackagePanel
+          selectedPackage={createProviderAwarePackageDetails()}
+          draftPackages={[createProviderAwareDraftPackage()]}
+          editorImportPreview={createProviderAwareEditorImportPreview()}
+          editorImportValidation={createProviderAwareEditorImportPreview().validation}
+          selectedDraftPackageId="66666666-6666-4666-8666-666666666666"
+          editorHandoff={createEditorHandoff()}
+          onSelectDraftPackage={() => undefined}
+          onCreateDraftPackage={async () => undefined}
+          onImportDraftPackageToEditor={async () => undefined}
+          onReimportDraftPackageToEditor={async () => undefined}
+          onRefreshDraftPackageImportRegistryRepairPreview={async () => undefined}
+          onRefreshDraftPackageImportDiagnosticsFromQuote={async () => undefined}
+          onRepairDraftPackageImportRegistry={async () => undefined}
+          onOpenImportedQuote={() => undefined}
+          onUpdateDraftPackageItem={async () => undefined}
+          onMarkDraftPackageReviewed={async () => undefined}
+          onMarkDraftPackageExported={async () => undefined}
+        />,
+      );
+
+      expect(markup).toContain('QuoteEditorin kohdeblokit');
+      expect(markup).toContain('Kohdistettu editorista');
+      expect(markup).toContain('Kohdistetut blokit: Tarjoajaprofiilin konteksti');
+      expect(markup).toContain('Adapterin pinta');
+      expect(markup).toContain('Payload preview');
+    });
 });
