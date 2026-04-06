@@ -23,6 +23,7 @@ import type {
   TenderAnalysisJob,
   TenderDocument,
   TenderDocumentExtraction,
+  TenderDraftArtifact,
   TenderPackage,
   TenderPackageDetails,
   TenderReferenceProfile,
@@ -630,6 +631,12 @@ export function useTenderIntelligence() {
     [repository, runWorkflowUpdate],
   );
 
+  const updateDraftArtifactWorkflow = useCallback(
+    async (draftArtifactId: string, input: UpdateTenderWorkflowInput): Promise<TenderDraftArtifact> =>
+      runWorkflowUpdate(`draft_artifact:${draftArtifactId}`, () => repository.updateDraftArtifactWorkflow(draftArtifactId, input)),
+    [repository, runWorkflowUpdate],
+  );
+
   const updateReviewTaskWorkflow = useCallback(
     async (reviewTaskId: string, input: UpdateTenderWorkflowInput) =>
       runWorkflowUpdate(`review_task:${reviewTaskId}`, () => repository.updateReviewTaskWorkflow(reviewTaskId, input)),
@@ -990,6 +997,7 @@ export function useTenderIntelligence() {
     updateMissingItemWorkflow,
     updateRiskFlagWorkflow,
     updateReferenceSuggestionWorkflow,
+    updateDraftArtifactWorkflow,
     updateReviewTaskWorkflow,
   };
 }

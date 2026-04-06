@@ -132,6 +132,17 @@ export function syncTenderReviewTaskStatus(resolutionStatus: TenderResolutionSta
   }
 }
 
+export function syncTenderDraftArtifactStatus(input: {
+  reviewStatus: TenderReviewStatus;
+  resolutionStatus: TenderResolutionStatus;
+}) {
+  if (input.reviewStatus === 'accepted' && input.resolutionStatus === 'resolved') {
+    return 'accepted' as const;
+  }
+
+  return 'ready-for-review' as const;
+}
+
 export function buildTenderWorkflowMetadataUpdate(options: {
   current: TenderWorkflowStateSnapshot;
   input: UpdateTenderWorkflowInput;

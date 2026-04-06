@@ -71,7 +71,11 @@ import {
   buildTenderImportOwnedBlockWriteRecords,
   resolveTenderEditorSelectiveReimportSelection,
 } from '../lib/tender-import-ownership-registry';
-import { buildTenderWorkflowMetadataUpdate, syncTenderReviewTaskStatus } from '../lib/tender-review-workflow';
+import {
+  buildTenderWorkflowMetadataUpdate,
+  syncTenderDraftArtifactStatus,
+  syncTenderReviewTaskStatus,
+} from '../lib/tender-review-workflow';
 import { buildTenderReferenceMatches } from '../lib/tender-reference-matching';
 import {
   buildTenderDocumentStoragePath,
@@ -133,6 +137,7 @@ import {
   tenderDraftPackageRowSchema,
   tenderDraftPackageRowsSchema,
   tenderImportOwnedBlockRowsSchema,
+  tenderDraftArtifactRowSchema,
   tenderDraftArtifactRowsSchema,
   tenderGoNoGoAssessmentRowSchema,
   tenderGoNoGoAssessmentRowsSchema,
@@ -295,6 +300,7 @@ async function fetchPackageResultRowById<Row>(options: {
     | 'tender_missing_items'
     | 'tender_risk_flags'
     | 'tender_reference_suggestions'
+    | 'tender_draft_artifacts'
     | 'tender_review_tasks';
   rowId: string;
   schema: { parse(data: unknown): Row };
@@ -1042,8 +1048,9 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     resolved_by_user_id: string | null;
     resolved_at: string | null;
     assigned_to_user_id?: string | null;
+    status?: string;
   }, DomainEntity>(options: {
-    tableName: 'tender_requirements' | 'tender_missing_items' | 'tender_risk_flags' | 'tender_reference_suggestions' | 'tender_review_tasks';
+    tableName: 'tender_requirements' | 'tender_missing_items' | 'tender_risk_flags' | 'tender_reference_suggestions' | 'tender_draft_artifacts' | 'tender_review_tasks';
     rowId: string;
     input: UpdateTenderWorkflowInput;
     schema: { parse(data: unknown): Row };
@@ -1051,6 +1058,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     notFoundMessage: string;
     fallbackMessage: string;
     syncLegacyReviewTaskStatus?: boolean;
+    syncDraftArtifactStatus?: boolean;
   }) {
     const existingRow = await fetchPackageResultRowById({
       tableName: options.tableName,
@@ -1086,6 +1094,13 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
 
     if (options.syncLegacyReviewTaskStatus && workflowUpdate.resolutionStatus) {
       patch.status = syncTenderReviewTaskStatus(workflowUpdate.resolutionStatus);
+    }
+
+    if (options.syncDraftArtifactStatus && (workflowUpdate.reviewStatus || workflowUpdate.resolutionStatus)) {
+      patch.status = syncTenderDraftArtifactStatus({
+        reviewStatus: workflowUpdate.reviewStatus ?? existingRow.review_status,
+        resolutionStatus: workflowUpdate.resolutionStatus ?? existingRow.resolution_status,
+      });
     }
 
     if (Object.keys(patch).length < 1) {
@@ -2711,6 +2726,19 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       mapRow: mapTenderReferenceSuggestionRowToDomain,
       notFoundMessage: 'Referenssiehdotusta ei löytynyt tai se on jo poistettu.',
       fallbackMessage: 'Referenssiehdotuksen katselmointia ei voitu päivittää.',
+    });
+  }
+
+  async updateDraftArtifactWorkflow(draftArtifactId: string, input: UpdateTenderWorkflowInput) {
+    return this.updateWorkflowRow({
+      tableName: 'tender_draft_artifacts',
+      rowId: draftArtifactId,
+      input,
+      schema: tenderDraftArtifactRowSchema,
+      mapRow: mapTenderDraftArtifactRowToDomain,
+      notFoundMessage: 'Luonnosartefaktia ei löytynyt tai se on jo poistettu.',
+      fallbackMessage: 'Luonnosartefaktin katselmointia ei voitu päivittää.',
+      syncDraftArtifactStatus: true,
     });
   }
 

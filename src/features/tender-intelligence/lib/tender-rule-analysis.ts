@@ -928,6 +928,116 @@ function buildGoNoGoSummary(context: RuleContext) {
   };
 }
 
+function buildArtifactEvidenceLinks(
+  items: Array<{ evidenceLinks: TenderResultEvidenceLinkSeed[] }>,
+  limit = 8,
+) {
+  const links: TenderResultEvidenceLinkSeed[] = [];
+
+  items.forEach((item) => {
+    item.evidenceLinks.forEach((link) => {
+      mergeEvidenceLinks(links, link);
+    });
+  });
+
+  return links.slice(0, limit);
+}
+
+function buildMarkdownBulletSection(title: string, items: string[]) {
+  if (items.length < 1) {
+    return null;
+  }
+
+  return [`## ${title}`, ...items.map((item) => `- ${item}`)].join('\n');
+}
+
+function buildDraftArtifacts(input: {
+  packageTitle: string;
+  context: RuleContext;
+}): TenderDraftArtifactSeed[] {
+  const requirementLines = input.context.requirements.map((requirement) => {
+    const detail = requirement.description ? `: ${requirement.description}` : '';
+    return `${requirement.title}${detail}`;
+  });
+  const missingItemLines = input.context.missingItems.map((item) => {
+    const detail = item.description ? `: ${item.description}` : '';
+    return `${item.title}${detail}`;
+  });
+  const riskLines = input.context.riskFlags.map((risk) => {
+    const detail = risk.description ? `: ${risk.description}` : '';
+    return `${risk.title}${detail}`;
+  });
+  const reviewTaskLines = input.context.reviewTasks.map((task) => {
+    const detail = task.description ? `: ${task.description}` : '';
+    return `${task.title}${detail}`;
+  });
+
+  const outlineSections = [
+    `# Tarjousrunko\nPaketti: ${input.packageTitle}`,
+    buildMarkdownBulletSection('Tunnistetut vaatimukset', requirementLines),
+    buildMarkdownBulletSection('Tarkistettavat liitteet ja puutteet', missingItemLines),
+    buildMarkdownBulletSection('Riskit ja varmistukset', [...riskLines, ...reviewTaskLines]),
+  ].filter((section): section is string => Boolean(section));
+
+  const summarySections = [
+    `# Vastausyhteenveto\nDeterministinen analyysi tunnisti ${formatCountLabel(input.context.requirements.length, 'vaatimuksen', 'vaatimusta')}, ${formatCountLabel(input.context.missingItems.length, 'puutteen', 'puutetta')} ja ${formatCountLabel(input.context.riskFlags.length, 'riskin', 'riskiä')}.`,
+    buildMarkdownBulletSection('Keskeiset löydökset', [...requirementLines.slice(0, 5), ...riskLines.slice(0, 3)]),
+  ].filter((section): section is string => Boolean(section));
+
+  const clarificationSections = [
+    '# Tarkennuslista\nKohdat, jotka vaativat vielä ihmisen päätöksen ennen editorivientiä.',
+    buildMarkdownBulletSection('Avoimet puutteet', missingItemLines),
+    buildMarkdownBulletSection('Avoimet riskit', riskLines),
+    buildMarkdownBulletSection('Käsiteltävät tarkistustehtävät', reviewTaskLines),
+  ].filter((section): section is string => Boolean(section));
+
+  const artifacts: TenderDraftArtifactSeed[] = [];
+
+  if (outlineSections.length > 1) {
+    artifacts.push({
+      artifactType: 'quote-outline',
+      title: 'Deterministinen tarjousrunko',
+      contentMd: outlineSections.join('\n\n'),
+      status: 'ready-for-review',
+      evidenceLinks: buildArtifactEvidenceLinks([
+        ...input.context.requirements,
+        ...input.context.missingItems,
+        ...input.context.riskFlags,
+        ...input.context.reviewTasks,
+      ]),
+    });
+  }
+
+  if (summarySections.length > 1) {
+    artifacts.push({
+      artifactType: 'response-summary',
+      title: 'Deterministinen vastausyhteenveto',
+      contentMd: summarySections.join('\n\n'),
+      status: 'ready-for-review',
+      evidenceLinks: buildArtifactEvidenceLinks([
+        ...input.context.requirements,
+        ...input.context.riskFlags,
+      ]),
+    });
+  }
+
+  if (clarificationSections.length > 1) {
+    artifacts.push({
+      artifactType: 'clarification-list',
+      title: 'Avoimet tarkennukset ja riskit',
+      contentMd: clarificationSections.join('\n\n'),
+      status: 'ready-for-review',
+      evidenceLinks: buildArtifactEvidenceLinks([
+        ...input.context.missingItems,
+        ...input.context.riskFlags,
+        ...input.context.reviewTasks,
+      ]),
+    });
+  }
+
+  return artifacts;
+}
+
 export function buildTenderDeterministicAnalysisPlan(input: {
   packageTitle: string;
   documentRows: TenderRuleAnalysisDocumentInput[];
@@ -977,6 +1087,10 @@ export function buildTenderDeterministicAnalysisPlan(input: {
 
   addSummaryReviewTaskIfNeeded(context);
   addFallbackReviewTaskIfNeeded(context);
+  const draftArtifacts = buildDraftArtifacts({
+    packageTitle: input.packageTitle,
+    context,
+  });
 
   const requirementOrder = context.requirements.map((item) => item.dedupeKey);
   const requirementIndexByKey = new Map(requirementOrder.map((key, index) => [key, index]));
@@ -1001,7 +1115,7 @@ export function buildTenderDeterministicAnalysisPlan(input: {
       return riskFlag;
     }),
     referenceSuggestions: [],
-    draftArtifacts: [],
+    draftArtifacts,
     reviewTasks: context.reviewTasks.map(({ dedupeKey, ...reviewTask }) => {
       void dedupeKey;
       return reviewTask;

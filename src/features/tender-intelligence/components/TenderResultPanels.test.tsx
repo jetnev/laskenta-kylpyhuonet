@@ -193,7 +193,26 @@ function createPackageWithEvidence(): TenderPackageDetails {
           resolvedAt: null,
         },
       ],
-      draftArtifacts: [],
+      draftArtifacts: [
+        {
+          id: 'artifact-1',
+          packageId: '11111111-1111-4111-8111-111111111111',
+          title: 'Deterministinen tarjousrunko',
+          artifactType: 'quote-outline',
+          contentMd: '# Tarjousrunko\n\n- Kuvaa toimituslaajuus',
+          status: 'ready-for-review',
+          createdAt: '2026-04-05T08:07:00.000Z',
+          updatedAt: '2026-04-05T08:07:00.000Z',
+          reviewStatus: 'needs_attention',
+          reviewNote: null,
+          reviewedByUserId: null,
+          reviewedAt: null,
+          resolutionStatus: 'open',
+          resolutionNote: null,
+          resolvedByUserId: null,
+          resolvedAt: null,
+        },
+      ],
       reviewTasks: [],
     },
   };
@@ -211,6 +230,7 @@ describe('TenderResultPanels', () => {
         onUpdateMissingItem={async () => undefined}
         onUpdateRiskFlag={async () => undefined}
         onUpdateReferenceSuggestion={async () => undefined}
+        onUpdateDraftArtifact={async () => undefined}
         onUpdateReviewTask={async () => undefined}
         onRecomputeReferenceSuggestions={async () => undefined}
       />,
@@ -231,5 +251,7 @@ describe('TenderResultPanels', () => {
     expect(markup).toContain('Ratkaise suodatetut');
     expect(markup).toContain('Kuittaa suodatetut ratkaistuksi');
     expect(markup).toContain('1 lähde');
+    expect(markup).toContain('Deterministinen tarjousrunko');
+    expect(markup).toContain('Hyväksy artefakti');
   });
 });

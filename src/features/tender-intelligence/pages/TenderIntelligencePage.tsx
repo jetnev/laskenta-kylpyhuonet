@@ -172,6 +172,7 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
     updateMissingItemWorkflow,
     updateRiskFlagWorkflow,
     updateReferenceSuggestionWorkflow,
+    updateDraftArtifactWorkflow,
     updateReviewTaskWorkflow,
   } = useTenderIntelligence();
 
@@ -503,6 +504,7 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
           onUpdateRequirement={updateRequirementWorkflow}
           onUpdateMissingItem={updateMissingItemWorkflow}
           onUpdateRiskFlag={updateRiskFlagWorkflow}
+          onUpdateDraftArtifact={updateDraftArtifactWorkflow}
           onUpdateReviewTask={updateReviewTaskWorkflow}
           editorHandoff={editorHandoff}
         />

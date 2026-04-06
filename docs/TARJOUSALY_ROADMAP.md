@@ -314,6 +314,12 @@ Tavoite:
 - vain vahvan evidenssi- ja review-pohjan päälle
 - ei ennen kuin nykyinen sääntöpohjainen pipeline ja import-polku ovat vakaita
 
+Ensimmäinen inkrementti valmis:
+
+- deterministinen baseline-analyysi muodostaa nyt ensimmäiset draft artefaktit suoraan evidence-sidotuista löydöksistä ilman LLM:ää: tarjousrunko, vastausyhteenveto ja tarkennuslista syntyvät vaatimuksista, puutteista, riskeistä ja review taskeista
+- artefaktit tallentuvat samaan result-domainiin kuin muutkin analyysilöydökset, jolloin provenance pysyy chunk-tasolla ja draft package voi käyttää niitä ilman erillistä generointiputkea
+- luonnosartefakteille on nyt oma review-polku: hyväksyntä synkkaa sekä workflow-metadatan että artefaktin status-kentän, joten hyväksytty artefakti voi siirtyä hallitusti mukaan luonnospakettiin
+
 ## Toteutusperiaatteet jatkovaiheille
 
 - jokainen vaihe pidetään mahdollisimman additiivisena

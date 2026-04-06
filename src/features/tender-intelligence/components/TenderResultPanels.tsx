@@ -47,6 +47,7 @@ interface TenderResultPanelsProps {
   onUpdateMissingItem?: (missingItemId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
   onUpdateRiskFlag?: (riskFlagId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
   onUpdateReferenceSuggestion?: (referenceSuggestionId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
+  onUpdateDraftArtifact?: (draftArtifactId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
   onUpdateReviewTask?: (reviewTaskId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
   onRecomputeReferenceSuggestions?: () => Promise<unknown>;
 }
@@ -283,6 +284,7 @@ export default function TenderResultPanels({
   onUpdateMissingItem,
   onUpdateRiskFlag,
   onUpdateReferenceSuggestion,
+  onUpdateDraftArtifact,
   onUpdateReviewTask,
   onRecomputeReferenceSuggestions,
 }: TenderResultPanelsProps) {
@@ -821,9 +823,9 @@ export default function TenderResultPanels({
         <ResultCard
           icon={FileText}
           title="Luonnosartefaktit"
-          description="Luonnosartefaktit säilyvät omassa result-domainissaan, mutta Phase 9 lisää niille workflow-metadatan eikä vielä siirry generointiin tai tarjouseditori-integraatioon."
+          description="Deterministinen analyysi muodostaa nyt tarjousrunko-, vastausyhteenveto- ja tarkennuslista-artefakteja suoraan evidence-sidotuista löydöksistä. Artefaktit tarkistetaan tässä ennen luonnospaketin muodostamista."
           countLabel={formatWorkflowCountLabel(selectedPackage.results.draftArtifacts.length, filteredDraftArtifacts.length, 'artefakti')}
-          emptyMessage={filter === 'all' ? 'Luonnosartefaktit jätetään tarkoituksella myöhempään vaiheeseen, jotta baseline pysyy deterministisenä analyysina eikä siirry vielä generointiin.' : filteredEmptyMessage}
+          emptyMessage={filter === 'all' ? 'Deterministinen analyysi ei tuottanut vielä luonnosartefakteja tälle paketille. Tarkista, että paketissa on löydöksiä, joista tarjousrunko tai tarkennuslista voidaan rakentaa.' : filteredEmptyMessage}
           hasItems={filteredDraftArtifacts.length > 0}
         >
           {filteredDraftArtifacts.map((artifact) => {
@@ -854,6 +856,41 @@ export default function TenderResultPanels({
                   currentUserId={currentUserId}
                   actorNameById={actorNameById}
                   updatingTargetIds={updatingTargetIds}
+                  actions={onUpdateDraftArtifact ? [
+                    {
+                      id: 'accept-artifact',
+                      label: 'Hyväksy artefakti',
+                      variant: 'default',
+                      onClick: (note) => onUpdateDraftArtifact(artifact.id, {
+                        reviewStatus: 'accepted',
+                        reviewNote: note || null,
+                        resolutionStatus: 'resolved',
+                        resolutionNote: note || null,
+                      }),
+                    },
+                    {
+                      id: 'artifact-needs-attention',
+                      label: 'Palauta tarkistukseen',
+                      variant: 'secondary',
+                      onClick: (note) => onUpdateDraftArtifact(artifact.id, {
+                        reviewStatus: 'needs_attention',
+                        reviewNote: note || null,
+                        resolutionStatus: 'in_progress',
+                        resolutionNote: note || null,
+                      }),
+                    },
+                    {
+                      id: 'dismiss-artifact',
+                      label: 'Ohita artefakti',
+                      variant: 'outline',
+                      onClick: (note) => onUpdateDraftArtifact(artifact.id, {
+                        reviewStatus: 'dismissed',
+                        reviewNote: note || null,
+                        resolutionStatus: 'wont_fix',
+                        resolutionNote: note || null,
+                      }),
+                    },
+                  ] : []}
                 />
                 <ResultEvidencePreview evidence={getTargetEvidence('draft_artifact', artifact.id)} documentNameById={documentNameById} />
               </div>

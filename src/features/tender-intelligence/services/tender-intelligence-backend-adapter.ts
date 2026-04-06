@@ -84,6 +84,7 @@ export interface TenderIntelligenceBackendAdapter {
   updateMissingItemWorkflow(missingItemId: string, input: UpdateTenderWorkflowInput): Promise<TenderMissingItem>;
   updateRiskFlagWorkflow(riskFlagId: string, input: UpdateTenderWorkflowInput): Promise<TenderRiskFlag>;
   updateReferenceSuggestionWorkflow(referenceSuggestionId: string, input: UpdateTenderWorkflowInput): Promise<TenderReferenceSuggestion>;
+  updateDraftArtifactWorkflow(draftArtifactId: string, input: UpdateTenderWorkflowInput): Promise<TenderDraftArtifact>;
   updateReviewTaskWorkflow(reviewTaskId: string, input: UpdateTenderWorkflowInput): Promise<TenderReviewTask>;
   recomputeReferenceSuggestionsForPackage(packageId: string): Promise<TenderReferenceSuggestion[]>;
   clearAnalysisResultsForPackage(packageId: string): Promise<void>;

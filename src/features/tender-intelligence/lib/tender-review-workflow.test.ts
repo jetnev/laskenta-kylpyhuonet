@@ -5,6 +5,7 @@ import {
   buildTenderWorkflowSummary,
   getLatestTenderWorkflowNote,
   matchesTenderWorkflowFilter,
+  syncTenderDraftArtifactStatus,
   syncTenderReviewTaskStatus,
 } from './tender-review-workflow';
 import type { TenderPackageResults } from '../types/tender-intelligence';
@@ -165,5 +166,7 @@ describe('tender-review-workflow helpers', () => {
     expect(syncTenderReviewTaskStatus('open')).toBe('todo');
     expect(syncTenderReviewTaskStatus('in_progress')).toBe('in-review');
     expect(syncTenderReviewTaskStatus('wont_fix')).toBe('done');
+    expect(syncTenderDraftArtifactStatus({ reviewStatus: 'accepted', resolutionStatus: 'resolved' })).toBe('accepted');
+    expect(syncTenderDraftArtifactStatus({ reviewStatus: 'needs_attention', resolutionStatus: 'open' })).toBe('ready-for-review');
   });
 });

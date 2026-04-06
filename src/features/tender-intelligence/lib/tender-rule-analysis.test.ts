@@ -53,6 +53,17 @@ describe('buildTenderDeterministicAnalysisPlan', () => {
       chunkId: 'chunk-1',
       documentFileName: 'tarjouspyynto.txt',
     });
+    expect(plan.draftArtifacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          artifactType: 'quote-outline',
+          status: 'ready-for-review',
+        }),
+        expect.objectContaining({
+          artifactType: 'response-summary',
+        }),
+      ]),
+    );
   });
 
   it('creates a missing-item baseline when a required attachment is mentioned but no matching document exists', () => {
@@ -118,6 +129,7 @@ describe('buildTenderDeterministicAnalysisPlan', () => {
       'requirement',
       'review_task',
     ]);
+    expect(plan.draftArtifacts.find((artifact) => artifact.artifactType === 'clarification-list')?.contentMd).toContain('Arvioi referenssivaatimuksen täyttyminen');
   });
 
   it('falls back to a single review task when no supported baseline rules match', () => {
@@ -134,6 +146,18 @@ describe('buildTenderDeterministicAnalysisPlan', () => {
       title: 'Tarkista tarjouspyynnön ydinkohdat manuaalisesti',
       taskType: 'documents',
     });
+    expect(plan.draftArtifacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          artifactType: 'quote-outline',
+          title: 'Deterministinen tarjousrunko',
+        }),
+        expect.objectContaining({
+          artifactType: 'clarification-list',
+          title: 'Avoimet tarkennukset ja riskit',
+        }),
+      ]),
+    );
     expect(plan.ruleMatches[0]).toMatchObject({
       matchedRule: 'fallback.manual_review',
       category: 'fallback',

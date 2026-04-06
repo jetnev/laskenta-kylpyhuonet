@@ -153,6 +153,7 @@ interface TenderPackageWorkspaceProps {
   onUpdateRequirement: (requirementId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
   onUpdateMissingItem: (missingItemId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
   onUpdateRiskFlag: (riskFlagId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
+  onUpdateDraftArtifact: (draftArtifactId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
   onUpdateReviewTask: (reviewTaskId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
 }
 
@@ -222,6 +223,7 @@ export default function TenderPackageWorkspace({
   onUpdateRequirement,
   onUpdateMissingItem,
   onUpdateRiskFlag,
+  onUpdateDraftArtifact,
   onUpdateReviewTask,
 }: TenderPackageWorkspaceProps) {
   if (loading && !selectedPackage) {
@@ -498,6 +500,7 @@ export default function TenderPackageWorkspace({
         onUpdateMissingItem={onUpdateMissingItem}
         onUpdateRiskFlag={onUpdateRiskFlag}
         onUpdateReferenceSuggestion={onUpdateReferenceSuggestion}
+        onUpdateDraftArtifact={onUpdateDraftArtifact}
         onUpdateReviewTask={onUpdateReviewTask}
         onRecomputeReferenceSuggestions={() => onRecomputeReferenceSuggestions(selectedPackage.package.id)}
       />

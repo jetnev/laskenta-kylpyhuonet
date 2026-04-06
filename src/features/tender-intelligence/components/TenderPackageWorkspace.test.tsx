@@ -165,6 +165,7 @@ describe('TenderPackageWorkspace', () => {
         onUpdateRequirement={async () => undefined}
         onUpdateMissingItem={async () => undefined}
         onUpdateRiskFlag={async () => undefined}
+        onUpdateDraftArtifact={async () => undefined}
         onUpdateReviewTask={async () => undefined}
       />,
     );
@@ -208,6 +209,7 @@ describe('TenderPackageWorkspace', () => {
         onUpdateRequirement={async () => undefined}
         onUpdateMissingItem={async () => undefined}
         onUpdateRiskFlag={async () => undefined}
+        onUpdateDraftArtifact={async () => undefined}
         onUpdateReviewTask={async () => undefined}
       />,
     );

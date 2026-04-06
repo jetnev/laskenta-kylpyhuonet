@@ -58,7 +58,7 @@ export default function TenderAnalysisPanel({
               Analyysi
             </CardTitle>
             <CardDescription>
-              Analyysiajo käynnistyy server-side Edge Function -rajan kautta vasta kun vähintään yhdelle tuetulle dokumentille on tallennettu extracted chunk -dataa. Phase 8 käyttää nyt determinististä sääntökerrosta määräaika-, liite- ja referenssiosumien löytämiseen ilman LLM:ää tai muuta semanttista analyysiä.
+              Analyysiajo käynnistyy server-side Edge Function -rajan kautta vasta kun vähintään yhdelle tuetulle dokumentille on tallennettu extracted chunk -dataa. Deterministinen sääntökerros löytää määräaika-, liite- ja referenssiosumia ilman LLM:ää ja muodostaa nyt myös ensimmäiset draft artefaktit suoraan evidence-sidotuista löydöksistä.
             </CardDescription>
           </div>
 
@@ -69,7 +69,7 @@ export default function TenderAnalysisPanel({
             </Button>
             <p className="text-xs leading-5 text-muted-foreground">
               {startState.canStart
-                ? 'Analyysi käynnistetään palvelinpuolella. Sääntöpohjaiset baseline-löydökset kirjoitetaan pysyviin result-tauluihin ja niiden provenance tallennetaan extracted chunk -lähteisiin.'
+                ? 'Analyysi käynnistetään palvelinpuolella. Sääntöpohjaiset löydökset ja deterministiset draft artefaktit kirjoitetaan pysyviin result-tauluihin ja niiden provenance tallennetaan extracted chunk -lähteisiin.'
                 : startState.reason}
             </p>
           </div>
@@ -109,7 +109,7 @@ export default function TenderAnalysisPanel({
               {busy && (
                 <div className="mt-4 flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-700">
                   <SpinnerGap className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
-                  <span>Analyysiajo etenee server-sidellä tilojen pending → queued → running → completed läpi. Palvelin tallentaa sääntöpohjaiset baseline-löydökset result-domainiin ja liittää niihin evidence-rivit oikeista extracted chunkeista.</span>
+                  <span>Analyysiajo etenee server-sidellä tilojen pending → queued → running → completed läpi. Palvelin tallentaa sääntöpohjaiset löydökset sekä ensimmäiset draft artefaktit result-domainiin ja liittää niihin evidence-rivit oikeista extracted chunkeista.</span>
                 </div>
               )}
 
@@ -135,7 +135,7 @@ export default function TenderAnalysisPanel({
           )}
 
           <div className="rounded-2xl border border-dashed px-4 py-6 text-sm leading-6 text-muted-foreground">
-            Analyysi kulkee nyt palvelinrajan (Edge Function) kautta ja käyttää extracted chunk -dataa lähtöaineistona. Tämän vaiheen löydökset ovat tarkoituksella baseline-tasoa: deadline-, liite- ja referenssiosumat näkyvät evidenssin kanssa, mutta OCR, AI-providerit ja varsinainen tarjousluonnoksen generointi jätetään myöhempiin vaiheisiin.
+            Analyysi kulkee nyt palvelinrajan (Edge Function) kautta ja käyttää extracted chunk -dataa lähtöaineistona. Tämän vaiheen löydökset pysyvät deterministisinä: deadline-, liite- ja referenssiosumat näkyvät evidenssin kanssa, ja draft artefaktit muodostetaan samoista löydöksistä ilman OCR:ää, AI-provideria tai vapaata sisällöntuotantoa.
           </div>
         </div>
 
@@ -157,7 +157,7 @@ export default function TenderAnalysisPanel({
             <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{coverage.extractedChunks}</p>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               {coverage.extractedChunks > 0
-                ? 'Deterministinen baseline käyttää näitä chunk-rivejä provenance-lähteinä requirement-, missing item-, risk- ja review task -tuloksille.'
+                ? 'Deterministinen baseline käyttää näitä chunk-rivejä provenance-lähteinä requirement-, missing item-, risk-, draft artifact- ja review task -tuloksille.'
                 : 'Yhtään analyysiin kelpaavaa chunkia ei ole vielä tallennettu, joten evidence-pohjainen ajo pysyy estettynä.'}
             </p>
           </div>
@@ -165,7 +165,7 @@ export default function TenderAnalysisPanel({
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Jobit</p>
             <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{selectedPackage.analysisJobs.length}</p>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Kaikki ajot tallentuvat samaan Tarjousälyn job-historiaan. Runner hylkää nyt ajot, joilta puuttuu extraction-aware evidence-lähde, ja kirjoittaa vain chunk-osumiin sidottuja baseline-löydöksiä.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Kaikki ajot tallentuvat samaan Tarjousälyn job-historiaan. Runner hylkää nyt ajot, joilta puuttuu extraction-aware evidence-lähde, ja kirjoittaa vain chunk-osumiin sidottuja löydöksiä ja draft artefakteja.</p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
