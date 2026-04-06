@@ -11,13 +11,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { useProjects, useCustomers, useInvoices, useQuotes, useQuoteRows, useQuoteTerms, useSettings, useStarterWorkspaceTemplate } from '../../hooks/use-data';
 import { useAuth } from '../../hooks/use-auth';
 import { toast } from 'sonner';
-import { Project, Customer } from '../../lib/types';
+import { Project, Customer, Quote } from '../../lib/types';
 import { cn } from '../../lib/utils';
 import type { AppLocationState } from '../../lib/app-routing';
 import { getInvoiceStatusLabel, isInvoiceOverdue } from '../../lib/invoices';
 import { filterOwnedRecords, getResponsibleUserLabel } from '../../lib/ownership';
 import { shouldKeepPendingQuoteEditorOpen } from '../../lib/project-workspace';
 import { buildProjectWorkspaceContext, resolveWorkspaceTaskExecution, type WorkspaceTask } from '../../lib/workspace-flow';
+import {
+  isShortcutInputTarget,
+  sortQuotesForList,
+  type QuoteListSortDirection,
+  type QuoteListSortField,
+} from '../../lib/projects-quote-list';
 import QuoteEditor from '../QuoteEditor';
 import FieldHelpLabel from '../FieldHelpLabel';
 
@@ -49,7 +55,7 @@ const QUOTE_STATUS_META = {
   rejected: { label: 'Hylätty', variant: 'destructive' as const },
 };
 
-type QuoteListSortMode = 'updated_desc' | 'updated_asc' | 'title_asc' | 'status';
+type QuoteStatusFilter = Quote['status'];
 
 type ProjectWorkspaceStage = 'new' | 'drafting' | 'accepted';
 
@@ -81,7 +87,9 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   const [pendingCreatedQuoteId, setPendingCreatedQuoteId] = useState<string | null>(null);
   const [quoteListViewMode, setQuoteListViewMode] = useState<'cards' | 'table'>('cards');
   const [quoteListSearch, setQuoteListSearch] = useState('');
-  const [quoteListSortMode, setQuoteListSortMode] = useState<QuoteListSortMode>('updated_desc');
+  const [quoteStatusFilters, setQuoteStatusFilters] = useState<Set<QuoteStatusFilter>>(new Set());
+  const [quoteSortField, setQuoteSortField] = useState<QuoteListSortField>('updatedAt');
+  const [quoteSortDirection, setQuoteSortDirection] = useState<QuoteListSortDirection>('desc');
   const [searchProjects, setSearchProjects] = useState('');
   const [searchCustomers, setSearchCustomers] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('all');
@@ -195,15 +203,16 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   }, [getQuotesForProject, ownerFilter, selectedProjectId]);
   const visibleSelectedProjectQuotes = useMemo(() => {
     const searchValue = quoteListSearch.trim().toLowerCase();
-    const statusOrder = {
-      draft: 0,
-      sent: 1,
-      accepted: 2,
-      rejected: 3,
-    } as const;
 
-    const filtered = searchValue
-      ? selectedProjectQuotes.filter((quote) => {
+    const filtered = selectedProjectQuotes.filter((quote) => {
+      if (quoteStatusFilters.size > 0 && !quoteStatusFilters.has(quote.status)) {
+        return false;
+      }
+
+      if (!searchValue) {
+        return true;
+      }
+
           const customerOwner = selectedCustomer?.ownerUserId;
           const responsibleLabel = resolveResponsibleUserLabel(quote.ownerUserId || selectedProject?.ownerUserId || customerOwner).toLowerCase();
           const statusLabel = QUOTE_STATUS_META[quote.status].label.toLowerCase();
@@ -214,34 +223,13 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
             responsibleLabel.includes(searchValue) ||
             statusLabel.includes(searchValue)
           );
-        })
-      : selectedProjectQuotes;
-
-    const sorted = [...filtered];
-
-    sorted.sort((left, right) => {
-      if (quoteListSortMode === 'updated_desc') {
-        return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-      }
-
-      if (quoteListSortMode === 'updated_asc') {
-        return new Date(left.updatedAt).getTime() - new Date(right.updatedAt).getTime();
-      }
-
-      if (quoteListSortMode === 'title_asc') {
-        return left.title.localeCompare(right.title, 'fi');
-      }
-
-      const statusDiff = statusOrder[left.status] - statusOrder[right.status];
-      if (statusDiff !== 0) {
-        return statusDiff;
-      }
-
-      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
     });
 
-    return sorted;
-  }, [quoteListSearch, quoteListSortMode, resolveResponsibleUserLabel, selectedCustomer?.ownerUserId, selectedProject?.ownerUserId, selectedProjectQuotes]);
+    return sortQuotesForList(filtered, quoteSortField, quoteSortDirection);
+  }, [quoteListSearch, quoteSortDirection, quoteSortField, quoteStatusFilters, resolveResponsibleUserLabel, selectedCustomer?.ownerUserId, selectedProject?.ownerUserId, selectedProjectQuotes]);
+  const visibleSelectedQuoteIds = useMemo(() => visibleSelectedProjectQuotes.map((quote) => quote.id), [visibleSelectedProjectQuotes]);
+  const allVisibleQuotesSelected =
+    visibleSelectedQuoteIds.length > 0 && visibleSelectedQuoteIds.every((quoteId) => selectedQuotes.has(quoteId));
   const projectContext = useMemo(
     () =>
       selectedProject
@@ -313,6 +301,13 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
       navigateToProjects({}, { replace: true });
     }
   }, [navigateToProjects, ownerScopedProjects, selectedProjectId]);
+
+  useEffect(() => {
+    setQuoteStatusFilters(new Set());
+    setQuoteListSearch('');
+    setQuoteSortField('updatedAt');
+    setQuoteSortDirection('desc');
+  }, [selectedProjectId]);
 
   useEffect(() => {
     if (!selectedQuoteId) {
@@ -571,12 +566,111 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
     });
   };
 
+  const toggleQuoteStatusFilter = (status: QuoteStatusFilter) => {
+    setQuoteStatusFilters((current) => {
+      const next = new Set(current);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
+    });
+  };
+
+  const handleQuoteSortHeaderClick = (field: QuoteListSortField) => {
+    if (field === quoteSortField) {
+      setQuoteSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+
+    setQuoteSortField(field);
+    setQuoteSortDirection(field === 'updatedAt' ? 'desc' : 'asc');
+  };
+
+  const getQuoteSortIndicator = (field: QuoteListSortField) => {
+    if (quoteSortField !== field) {
+      return '';
+    }
+
+    return quoteSortDirection === 'asc' ? 'asc' : 'desc';
+  };
+
+  const toggleSelectAllVisibleQuotes = useCallback(() => {
+    setSelectedQuotes((current) => {
+      const next = new Set(current);
+
+      if (allVisibleQuotesSelected) {
+        visibleSelectedQuoteIds.forEach((quoteId) => next.delete(quoteId));
+      } else {
+        visibleSelectedQuoteIds.forEach((quoteId) => next.add(quoteId));
+      }
+
+      return next;
+    });
+  }, [allVisibleQuotesSelected, visibleSelectedQuoteIds]);
+
   const handleSelectProject = (projectId: string) => {
     if (selectedProjectId !== projectId) {
       setSelectedQuotes(new Set());
     }
     navigateToProjects({ projectId });
   };
+
+  useEffect(() => {
+    if (!selectedProject || showQuoteEditor) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isShortcutInputTarget(event.target)) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      const hasModifier = event.ctrlKey || event.metaKey;
+
+      if (hasModifier && key === 'a') {
+        event.preventDefault();
+        toggleSelectAllVisibleQuotes();
+        return;
+      }
+
+      if (!hasModifier && !event.altKey && key === 'v') {
+        event.preventDefault();
+        setQuoteListViewMode((current) => (current === 'cards' ? 'table' : 'cards'));
+        return;
+      }
+
+      if (key === 'escape') {
+        if (selectedQuotes.size > 0) {
+          event.preventDefault();
+          setSelectedQuotes(new Set());
+        }
+        return;
+      }
+
+      if ((key === 'delete' || key === 'backspace') && selectedQuotes.size > 0) {
+        event.preventDefault();
+
+        if (confirm(`Haluatko varmasti poistaa ${selectedQuotes.size} tarjousta?`)) {
+          [...selectedQuotes].forEach((quoteId) => {
+            rows
+              .filter((row) => row.quoteId === quoteId)
+              .forEach((row) => deleteRow(row.id));
+            deleteQuote(quoteId);
+          });
+          setSelectedQuotes(new Set());
+          toast.success(`${selectedQuotes.size} tarjousta poistettu`);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [deleteQuote, deleteRow, rows, selectedProject, selectedQuotes, showQuoteEditor, toggleSelectAllVisibleQuotes]);
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
@@ -1115,16 +1209,44 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
                       placeholder="Hae tarjousta, numeroa, tilaa tai vastuuhenkilöä..."
                       className="w-full lg:w-80"
                     />
-                    <select
-                      className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      value={quoteListSortMode}
-                      onChange={(event) => setQuoteListSortMode(event.target.value as QuoteListSortMode)}
+                    {quoteListViewMode === 'cards' && (
+                      <select
+                        className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={`${quoteSortField}_${quoteSortDirection}`}
+                        onChange={(event) => {
+                          const [field, direction] = event.target.value.split('_') as [QuoteListSortField, QuoteListSortDirection];
+                          setQuoteSortField(field);
+                          setQuoteSortDirection(direction);
+                        }}
+                      >
+                        <option value="updatedAt_desc">Uusin ensin</option>
+                        <option value="updatedAt_asc">Vanhin ensin</option>
+                        <option value="title_asc">Nimi A-Z</option>
+                        <option value="title_desc">Nimi Z-A</option>
+                        <option value="status_asc">Tila A-Z</option>
+                        <option value="status_desc">Tila Z-A</option>
+                      </select>
+                    )}
+                  </div>
+
+                  <div className="flex w-full flex-wrap gap-2 lg:w-auto">
+                    <Button
+                      size="sm"
+                      variant={quoteStatusFilters.size === 0 ? 'default' : 'outline'}
+                      onClick={() => setQuoteStatusFilters(new Set())}
                     >
-                      <option value="updated_desc">Uusin ensin</option>
-                      <option value="updated_asc">Vanhin ensin</option>
-                      <option value="title_asc">Nimi A-Z</option>
-                      <option value="status">Tila</option>
-                    </select>
+                      Kaikki
+                    </Button>
+                    {(Object.entries(QUOTE_STATUS_META) as Array<[QuoteStatusFilter, (typeof QUOTE_STATUS_META)[QuoteStatusFilter]]>).map(([status, meta]) => (
+                      <Button
+                        key={status}
+                        size="sm"
+                        variant={quoteStatusFilters.has(status) ? 'default' : 'outline'}
+                        onClick={() => toggleQuoteStatusFilter(status)}
+                      >
+                        {meta.label}
+                      </Button>
+                    ))}
                   </div>
 
                   {selectedQuotes.size > 0 ? (
@@ -1175,10 +1297,28 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[56px]">Valitse</TableHead>
-                          <TableHead>Tarjous</TableHead>
-                          <TableHead>Tila</TableHead>
-                          <TableHead>Päivitetty</TableHead>
+                          <TableHead className="w-[56px]">
+                            <Checkbox
+                              checked={allVisibleQuotesSelected}
+                              onCheckedChange={toggleSelectAllVisibleQuotes}
+                              aria-label="Valitse kaikki näkyvät tarjoukset"
+                            />
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="font-medium" onClick={() => handleQuoteSortHeaderClick('title')}>
+                              Tarjous {getQuoteSortIndicator('title')}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="font-medium" onClick={() => handleQuoteSortHeaderClick('status')}>
+                              Tila {getQuoteSortIndicator('status')}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="font-medium" onClick={() => handleQuoteSortHeaderClick('updatedAt')}>
+                              Päivitetty {getQuoteSortIndicator('updatedAt')}
+                            </button>
+                          </TableHead>
                           <TableHead>Vastuuhenkilö</TableHead>
                           <TableHead className="w-[64px]">Toimet</TableHead>
                         </TableRow>
