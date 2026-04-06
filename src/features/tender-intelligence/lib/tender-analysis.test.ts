@@ -156,7 +156,7 @@ describe('buildTenderAnalysisReadiness', () => {
     expect(readiness.coverage.extractedChunks).toBe(2);
   });
 
-  it('blocks analysis when only unsupported documents are available', () => {
+  it('treats pdf documents as extraction-capable and blocks until extraction is run', () => {
     const readiness = buildTenderAnalysisReadiness({
       documents: [createTenderDocument({ fileName: 'tarjouspyynto.pdf', mimeType: 'application/pdf', storagePath: 'org/package/tarjouspyynto.pdf' })],
       documentExtractions: [],
@@ -165,7 +165,11 @@ describe('buildTenderAnalysisReadiness', () => {
 
     expect(readiness).toMatchObject({
       canStart: false,
-      blockedReason: 'Analyysi tarvitsee vähintään yhden tuetun TXT-, Markdown-, CSV- tai XLSX-dokumentin, jolle extraction voidaan suorittaa.',
+      blockedReason: 'Käynnistä extraction vähintään yhdelle tuetulle dokumentille ennen analyysin käynnistämistä.',
+      coverage: {
+        supportedDocuments: 1,
+        unsupportedDocuments: 0,
+      },
     });
   });
 

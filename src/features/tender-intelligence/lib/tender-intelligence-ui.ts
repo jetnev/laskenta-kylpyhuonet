@@ -303,7 +303,7 @@ export const TENDER_DOCUMENT_EXTRACTOR_TYPE_META: Record<
   TenderDocumentExtractorType,
   { label: string; variant: TenderBadgeVariant }
 > = {
-  none: { label: 'Ei extractor-mallia', variant: 'secondary' },
+  none: { label: 'Server extractor', variant: 'outline' },
   plain_text: { label: 'Teksti', variant: 'outline' },
   markdown: { label: 'Markdown', variant: 'outline' },
   csv: { label: 'CSV', variant: 'outline' },

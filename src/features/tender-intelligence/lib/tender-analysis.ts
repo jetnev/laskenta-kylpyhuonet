@@ -106,7 +106,7 @@ export function buildTenderAnalysisReadiness(input: {
   if (coverage.supportedDocuments < 1) {
     return {
       canStart: false,
-      blockedReason: 'Analyysi tarvitsee vähintään yhden tuetun TXT-, Markdown-, CSV- tai XLSX-dokumentin, jolle extraction voidaan suorittaa.',
+      blockedReason: 'Analyysi tarvitsee vähintään yhden tuetun TXT-, Markdown-, CSV-, PDF-, DOCX- tai XLSX-dokumentin, jolle extraction voidaan suorittaa.',
       coverage,
     };
   }

@@ -24,8 +24,11 @@ export const TENDER_DOCUMENT_EXTRACTION_SUPPORTED_MIME_MAP = {
   'text/markdown': 'markdown',
   'text/x-markdown': 'markdown',
   'text/csv': 'csv',
+  'application/pdf': 'none',
+  'application/x-pdf': 'none',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'none',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
-} as const satisfies Record<string, Exclude<TenderDocumentExtractorTypeValue, 'none' | 'unsupported'>>;
+} as const satisfies Record<string, Exclude<TenderDocumentExtractorTypeValue, 'unsupported'>>;
 
 export const TENDER_DOCUMENT_EXTRACTION_DEFAULT_CHUNK_SIZE = 1200;
 const TENDER_DOCUMENT_EXTRACTION_MIN_BREAK_SEARCH = 0.4;

@@ -198,6 +198,14 @@ Ensimmäinen inkrementti valmis:
 - sivu näyttää environment-readiness-kortin, joka erottaa tietokannan, storage-bucketin, extraction-runnerin, analysis-runnerin ja rollout-järjestyksen omiksi tarkistuskohdikseen
 - virhepolku ohjaa nyt suoraan oikeaan korjausjärjestykseen sen sijaan, että käyttäjälle jäisi vain yksi raakavirhe ilman rollout-ohjetta
 
+### Työpaketti 4 — vahvempi PDF/DOCX-extraction
+
+Ensimmäinen inkrementti valmis:
+
+- PDF- ja DOCX-dokumentit luokitellaan nyt extraction-kelpoisiksi server-side-runner-polussa, eivät enää automaattisesti ei-tuetuiksi ennen extraction-yritystä
+- analyysin readiness ei enää hylkää PDF-pakettia heti formaatin perusteella, vaan ohjaa ensin extractionin käynnistykseen
+- dokumenttipaneelin viestit päivitettiin vastaamaan uutta mallia: TXT/Markdown/CSV/XLSX ovat varma baseline, PDF/DOCX riippuvat ympäristön extractor-version tuesta
+
 ## Seuraava tavoitesuunta
 
 Tarjousälyn seuraavien syventävien vaiheiden tulee jatkua tästä järjestyksestä tuotannollistavien työpakettien rinnalla, ellei erikseen päätetä muuta:
