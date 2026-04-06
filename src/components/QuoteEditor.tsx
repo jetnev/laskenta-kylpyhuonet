@@ -1296,6 +1296,86 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     completeRemoval();
   };
 
+  const moveSelectedRows = (direction: -1 | 1) => {
+    if (selectedRowIds.length === 0) {
+      return;
+    }
+
+    const executeMove = () => {
+      const selectedSet = new Set(selectedRowIds);
+      const nextRows = [...quoteRows];
+
+      if (direction === -1) {
+        for (let index = 1; index < nextRows.length; index += 1) {
+          if (selectedSet.has(nextRows[index].id) && !selectedSet.has(nextRows[index - 1].id)) {
+            const current = nextRows[index];
+            nextRows[index] = nextRows[index - 1];
+            nextRows[index - 1] = current;
+          }
+        }
+      } else {
+        for (let index = nextRows.length - 2; index >= 0; index -= 1) {
+          if (selectedSet.has(nextRows[index].id) && !selectedSet.has(nextRows[index + 1].id)) {
+            const current = nextRows[index];
+            nextRows[index] = nextRows[index + 1];
+            nextRows[index + 1] = current;
+          }
+        }
+      }
+
+      let changed = false;
+      nextRows.forEach((row, index) => {
+        if (row.sortOrder !== index) {
+          changed = true;
+          updateRow(row.id, { sortOrder: index });
+        }
+      });
+
+      if (changed) {
+        touchQuote();
+        toast.success(direction === -1 ? 'Valitut rivit siirrettiin ylöspäin.' : 'Valitut rivit siirrettiin alaspäin.');
+      }
+    };
+
+    const managedSelectionTarget = resolveManagedSelectionEditTarget();
+    if (managedSelectionTarget) {
+      attemptManagedEdit(managedSelectionTarget, executeMove);
+      return;
+    }
+
+    executeMove();
+  };
+
+  const canMoveSelectedUp = (() => {
+    if (selectedRowIds.length === 0 || quoteRows.length === 0) {
+      return false;
+    }
+
+    const selectedSet = new Set(selectedRowIds);
+    for (let index = 1; index < quoteRows.length; index += 1) {
+      if (selectedSet.has(quoteRows[index].id) && !selectedSet.has(quoteRows[index - 1].id)) {
+        return true;
+      }
+    }
+
+    return false;
+  })();
+
+  const canMoveSelectedDown = (() => {
+    if (selectedRowIds.length === 0 || quoteRows.length === 0) {
+      return false;
+    }
+
+    const selectedSet = new Set(selectedRowIds);
+    for (let index = 0; index < quoteRows.length - 1; index += 1) {
+      if (selectedSet.has(quoteRows[index].id) && !selectedSet.has(quoteRows[index + 1].id)) {
+        return true;
+      }
+    }
+
+    return false;
+  })();
+
   const applyQuoteMargin = (marginPercent: number) => {
     updateQuote(quote.id, { selectedMarginPercent: marginPercent });
     if (quote.pricingMode === 'margin') {
@@ -1702,7 +1782,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
                     <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Valitut rivit</div>
                     <div className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{selectedRowIds.length}</div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">Massapoisto helpottaa suurten tarjousten siistimistä ilman, että rivejä tarvitsee poistaa yksitellen.</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">Massatoiminnot mahdollistavat valittujen rivien siirron ja poiston ilman yksittäistä rivieditointia.</p>
                   </div>
                 </div>
 
@@ -1753,6 +1833,14 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                     <Badge variant="outline">{quoteRows.length} riviä</Badge>
                     <Button size="sm" variant="outline" onClick={toggleAllRowSelections} disabled={!isEditable || quoteRows.length === 0}>
                       {allRowsSelected ? 'Poista valinta' : 'Valitse kaikki'}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => moveSelectedRows(-1)} disabled={!isEditable || !canMoveSelectedUp}>
+                      <ArrowUp className="h-4 w-4" />
+                      Siirrä valitut ylös
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => moveSelectedRows(1)} disabled={!isEditable || !canMoveSelectedDown}>
+                      <ArrowDown className="h-4 w-4" />
+                      Siirrä valitut alas
                     </Button>
                     <Button size="sm" variant="outline" onClick={removeSelectedRows} disabled={!isEditable || selectedRowIds.length === 0}>
                       <Trash className="h-4 w-4" />
