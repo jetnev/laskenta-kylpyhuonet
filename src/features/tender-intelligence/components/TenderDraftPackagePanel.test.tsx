@@ -13,14 +13,14 @@ import type { TenderDraftPackage, TenderPackageDetails } from '../types/tender-i
 const PROVIDER_AWARE_ARTIFACT_CONTENT_MD = [
   '## Sisältö',
   '',
-  '## Tarjoajaprofiili',
+  '## Tarjoajaprofiilin lähtötiedot',
   '- Yritys: Example Oy',
   '- Toimialue: Uusimaa',
   '',
-  '## Vastauspohjat',
+  '## Hyödynnettävät vastauspohjat',
   '- Tekninen lähestymistapa: Korostetaan märkätilojen referenssejä.',
   '',
-  '## Tarjoajan reunaehdot',
+  '## Tarjoajaprofiilin kovat rajaukset',
   '- Hard: Ei aliurakointia ilman tilaajan hyväksyntää.',
 ].join('\n');
 

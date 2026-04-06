@@ -18,6 +18,7 @@ import {
   buildTenderEditorManagedSurface,
   TENDER_EDITOR_MANAGED_BLOCK_META,
 } from './tender-editor-managed-surface';
+import { hasTenderProviderContext } from './tender-provider-context';
 
 function normalizeContent(value: string | null | undefined) {
   const nextValue = value?.trim();
@@ -25,6 +26,10 @@ function normalizeContent(value: string | null | undefined) {
 }
 
 function resolveImportGroup(item: TenderDraftPackageItem): TenderEditorImportGroup {
+  if (item.itemType === 'draft_artifact' && hasTenderProviderContext(item.contentMd)) {
+    return 'provider_profile_context';
+  }
+
   switch (item.itemType) {
     case 'accepted_requirement':
       return 'requirements_and_quote_notes';

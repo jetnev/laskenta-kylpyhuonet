@@ -15,6 +15,7 @@ import {
   type TenderImportResumeActionKind,
   type TenderImportResumeSupportStatus,
 } from '../lib/tender-import-resume';
+import { listTenderProviderContextLabels } from '../lib/tender-provider-context';
 import {
   formatTenderTimestamp,
   getTenderTextPreview,
@@ -167,6 +168,10 @@ const TENDER_EDITOR_MANAGED_BLOCK_META: Record<TenderEditorManagedBlockId, { tit
   },
   resolved_missing_items_and_attachment_notes: {
     title: 'Liitehuomiot ja ratkaistut puutteet',
+    targetLabel: 'Tarjouksen internalNotes-kenttä',
+  },
+  provider_profile_context: {
+    title: 'Tarjoajaprofiilin konteksti',
     targetLabel: 'Tarjouksen internalNotes-kenttä',
   },
   notes_for_editor: {
@@ -555,32 +560,8 @@ function getExcludedMessage(sourceEntity: ReturnType<typeof resolveSourceEntity>
 
   return 'Rivi on jätetty pois tämän draft package -version payloadista.';
 }
-
-const PROVIDER_CONTEXT_SECTION_META = [
-  {
-    marker: '## Tarjoajaprofiili',
-    label: 'Tarjoajaprofiili',
-  },
-  {
-    marker: '## Vastauspohjat',
-    label: 'Vastauspohjat',
-  },
-  {
-    marker: '## Tarjoajan reunaehdot',
-    label: 'Tarjoajan reunaehdot',
-  },
-] as const;
-
 function resolveProviderContextLabels(contentMd?: string | null) {
-  const normalizedContent = contentMd?.trim();
-
-  if (!normalizedContent) {
-    return [];
-  }
-
-  return PROVIDER_CONTEXT_SECTION_META
-    .filter((section) => normalizedContent.includes(section.marker))
-    .map((section) => section.label);
+  return listTenderProviderContextLabels(contentMd);
 }
 
 function ProviderContextBadges({

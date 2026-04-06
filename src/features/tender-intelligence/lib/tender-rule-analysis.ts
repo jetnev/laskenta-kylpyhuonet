@@ -1,3 +1,5 @@
+import { TENDER_PROVIDER_CONTEXT_ARTIFACT_SECTION_TITLES } from './tender-provider-context';
+
 export type TenderRuleAnalysisTargetEntityType = 'requirement' | 'missing_item' | 'review_task' | 'risk_flag';
 export type TenderRuleAnalysisCategory = 'deadline' | 'mandatory_attachment' | 'reference_requirement' | 'review' | 'fallback';
 export type TenderRequirementType = 'administrative' | 'commercial' | 'technical' | 'schedule' | 'legal' | 'other';
@@ -1325,8 +1327,8 @@ function buildDraftArtifacts(input: {
 
   const outlineSections = [
     `# Tarjousrunko\nPaketti: ${input.packageTitle}`,
-    buildMarkdownBulletSection('Tarjoajaprofiilin lähtötiedot', providerOverviewLines),
-    buildMarkdownBulletSection('Hyödynnettävät vastauspohjat', providerTemplateLines),
+    buildMarkdownBulletSection(TENDER_PROVIDER_CONTEXT_ARTIFACT_SECTION_TITLES.outlineOverview, providerOverviewLines),
+    buildMarkdownBulletSection(TENDER_PROVIDER_CONTEXT_ARTIFACT_SECTION_TITLES.outlineTemplates, providerTemplateLines),
     buildMarkdownBulletSection('Tunnistetut vaatimukset', requirementLines),
     buildMarkdownBulletSection('Tarkistettavat liitteet ja puutteet', missingItemLines),
     buildMarkdownBulletSection('Riskit ja varmistukset', [...riskLines, ...reviewTaskLines]),
@@ -1334,13 +1336,13 @@ function buildDraftArtifacts(input: {
 
   const summarySections = [
     `# Vastausyhteenveto\nDeterministinen analyysi tunnisti ${formatCountLabel(input.context.requirements.length, 'vaatimuksen', 'vaatimusta')}, ${formatCountLabel(input.context.missingItems.length, 'puutteen', 'puutetta')} ja ${formatCountLabel(input.context.riskFlags.length, 'riskin', 'riskiä')}.`,
-    buildMarkdownBulletSection('Tarjoajaprofiilin ydinviesti', providerOverviewLines.slice(0, 3)),
+    buildMarkdownBulletSection(TENDER_PROVIDER_CONTEXT_ARTIFACT_SECTION_TITLES.summaryOverview, providerOverviewLines.slice(0, 3)),
     buildMarkdownBulletSection('Keskeiset löydökset', [...requirementLines.slice(0, 5), ...riskLines.slice(0, 3)]),
   ].filter((section): section is string => Boolean(section));
 
   const clarificationSections = [
     '# Tarkennuslista\nKohdat, jotka vaativat vielä ihmisen päätöksen ennen editorivientiä.',
-    buildMarkdownBulletSection('Tarjoajaprofiilin kovat rajaukset', providerConstraintLines),
+    buildMarkdownBulletSection(TENDER_PROVIDER_CONTEXT_ARTIFACT_SECTION_TITLES.clarificationConstraints, providerConstraintLines),
     buildMarkdownBulletSection('Avoimet puutteet', missingItemLines),
     buildMarkdownBulletSection('Avoimet riskit', riskLines),
     buildMarkdownBulletSection('Käsiteltävät tarkistustehtävät', reviewTaskLines),

@@ -142,6 +142,7 @@ const tenderImportOwnedBlockIdRowSchema = z.enum([
   'requirements_and_quote_notes',
   'selected_references',
   'resolved_missing_items_and_attachment_notes',
+  'provider_profile_context',
   'notes_for_editor',
 ]);
 const tenderImportOwnedBlockTargetFieldRowSchema = z.enum(['quote_notes_section', 'quote_internal_notes_section']);

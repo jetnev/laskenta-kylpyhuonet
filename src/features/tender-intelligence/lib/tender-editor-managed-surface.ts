@@ -30,6 +30,11 @@ export const TENDER_EDITOR_MANAGED_BLOCK_META: Record<
     targetKind: 'quote_internal_notes_section',
     targetLabel: 'Tarjouksen internalNotes-kenttä',
   },
+  provider_profile_context: {
+    title: 'Tarjoajaprofiilin konteksti',
+    targetKind: 'quote_internal_notes_section',
+    targetLabel: 'Tarjouksen internalNotes-kenttä',
+  },
   notes_for_editor: {
     title: 'Sisäiset editorihuomiot',
     targetKind: 'quote_internal_notes_section',

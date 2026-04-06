@@ -3,6 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { buildTenderEditorImportPreview, validateTenderEditorImport } from './tender-editor-import';
 import type { TenderDraftPackage } from '../types/tender-intelligence';
 
+const PROVIDER_AWARE_ARTIFACT_CONTENT_MD = [
+  '## Tarjoajaprofiilin lähtötiedot',
+  '- Yritys: Copilot Oy',
+  '',
+  '## Hyödynnettävät vastauspohjat',
+  '- Tekninen lähestymistapa: Korostetaan märkätilaremonttien referenssejä.',
+  '',
+  '## Tarjoajaprofiilin kovat rajaukset',
+  '- Ei aliurakointia ilman tilaajan hyväksyntää.',
+].join('\n');
+
 function createDraftPackage(overrides: Partial<TenderDraftPackage> = {}): TenderDraftPackage {
   return {
     id: '66666666-6666-4666-8666-666666666666',
@@ -164,5 +175,68 @@ describe('tender-editor-import', () => {
     expect(validation.can_import).toBe(true);
     expect(validation.warning_count).toBe(1);
     expect(validation.issues[0]).toMatchObject({ code: 'missing_content', severity: 'warning' });
+  });
+
+  it('routes provider-aware draft artifacts into a dedicated managed import block', () => {
+    const preview = buildTenderEditorImportPreview({
+      draftPackage: createDraftPackage({
+        items: [
+          {
+            id: '77777777-7777-4777-8777-777777777777',
+            draftPackageId: '66666666-6666-4666-8666-666666666666',
+            itemType: 'draft_artifact',
+            sourceEntityType: 'draft_artifact',
+            sourceEntityId: '44444444-4444-4444-8444-444444444444',
+            title: 'Deterministinen vastausyhteenveto',
+            contentMd: PROVIDER_AWARE_ARTIFACT_CONTENT_MD,
+            sortOrder: 0,
+            isIncluded: true,
+            createdAt: '2026-04-05T14:00:00.000Z',
+            updatedAt: '2026-04-05T14:00:00.000Z',
+          },
+          {
+            id: '88888888-8888-4888-8888-888888888888',
+            draftPackageId: '66666666-6666-4666-8666-666666666666',
+            itemType: 'review_note',
+            sourceEntityType: 'review_task',
+            sourceEntityId: '55555555-5555-4555-8555-555555555555',
+            title: 'Pidä rajaus näkyvillä',
+            contentMd: 'Tämä pysyy sisäisissä editorihuomioissa.',
+            sortOrder: 1,
+            isIncluded: true,
+            createdAt: '2026-04-05T14:00:00.000Z',
+            updatedAt: '2026-04-05T14:00:00.000Z',
+          },
+        ],
+      }),
+      packageName: 'Tarjouspaketti',
+      targetCustomerId: null,
+      targetProjectId: null,
+      willCreatePlaceholderTarget: true,
+      generatedAt: '2026-04-05T14:25:00.000Z',
+    });
+
+    expect(preview.payload.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: 'Deterministinen vastausyhteenveto',
+          import_group: 'provider_profile_context',
+          target_kind: 'quote_internal_notes_section',
+        }),
+        expect.objectContaining({
+          title: 'Pidä rajaus näkyvillä',
+          import_group: 'notes_for_editor',
+        }),
+      ]),
+    );
+    expect(preview.payload.managed_surface?.blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          block_id: 'provider_profile_context',
+          title: 'Tarjoajaprofiilin konteksti',
+        }),
+      ]),
+    );
+    expect(preview.payload.sections.quote_internal_notes_md).toContain('Tarjoajaprofiilin konteksti');
   });
 });
