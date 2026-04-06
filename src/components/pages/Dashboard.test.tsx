@@ -19,10 +19,6 @@ vi.mock('../../hooks/use-data', () => ({
   useQuotes: dataHooks.useQuotes,
 }));
 
-vi.mock('../DeadlineNotifications', () => ({
-  default: ({ compact = false }: { compact?: boolean }) => <div data-testid={compact ? 'deadline-compact' : 'deadline-full'} />,
-}));
-
 import Dashboard from './Dashboard';
 
 function createDashboardState() {
@@ -155,9 +151,10 @@ describe('Dashboard', () => {
   it('renders the onboarding empty state when workspace data is missing', () => {
     const markup = renderDashboard();
 
-    expect(markup).toContain('Etusivu ohjaa työn käyntiin yhdestä paikasta');
-    expect(markup).toContain('Projektit-sivu on varsinainen työtila');
-    expect(markup).toContain('data-testid="deadline-compact"');
+    expect(markup).toContain('Työtila tänään');
+    expect(markup).toContain('Aloita ensimmäisestä tarjouksesta');
+    expect(markup).toContain('Aloita tästä');
+    expect(markup).toContain('Hae projekti, tarjous tai asiakas');
   });
 
   it('renders prioritized work guidance when workspace data exists', () => {
@@ -171,9 +168,13 @@ describe('Dashboard', () => {
 
     const markup = renderDashboard();
 
-    expect(markup).toContain('Työn ohjaus');
+    expect(markup).toContain('Työtila tänään');
     expect(markup).toContain('Seuraava tärkein työ');
-    expect(markup).toContain('Kylpyhuoneen tarjous');
+    expect(markup).toContain('Tarjous: Kylpyhuoneremontti');
+    expect(markup).toContain('Avoimet');
+    expect(markup).toContain('Päivän tehtävät');
+    expect(markup).toContain('Projektien tilanne');
+    expect(markup).toContain('Määräajat ja esteet');
     expect(markup).toContain('Viimeistele tarjous');
     expect(markup).toContain('Jatka työskentelyä');
     expect(markup).toContain('Avaa tarjous');

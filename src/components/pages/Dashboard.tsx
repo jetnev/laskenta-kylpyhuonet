@@ -1,299 +1,354 @@
 import {
-	ArrowRight,
-	FolderOpen,
-	Package,
-	Plus,
-	TrendUp,
-	WarningCircle,
+  ArrowRight,
+  FolderOpen,
+  MagnifyingGlass,
+  Package,
+  PaperPlaneTilt,
+  Receipt,
+  WarningCircle,
 } from '@phosphor-icons/react';
-import { useMemo } from 'react';
+import { type ReactElement, useDeferredValue, useMemo, useState } from 'react';
 
-import DeadlineNotifications from '../DeadlineNotifications';
-import { AppPageLayout } from '../layout/AppPageLayout';
-import { Badge } from '../ui/badge';
+import ActionCard from '../dashboard/ActionCard';
+import DashboardCard from '../dashboard/DashboardCard';
+import KPIBox from '../dashboard/KPIBox';
+import RightPanelCard from '../dashboard/RightPanelCard';
+import StatusBadge from '../dashboard/StatusBadge';
+import TaskList from '../dashboard/TaskList';
+import { AppPageHeader, AppPageLayout } from '../layout/AppPageLayout';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { useCustomers, useInvoices, useProducts, useProjects, useQuoteRows, useQuotes } from '../../hooks/use-data';
+import { Input } from '../ui/input';
+import { useDashboardData } from '../../hooks/use-dashboard-data';
+import type {
+  DashboardAlert,
+  DashboardKpi,
+  DashboardNextAction,
+  DashboardProjectStat,
+  DashboardRecentItem,
+} from '../../lib/dashboard-data';
 import type { AppLocationState } from '../../lib/app-routing';
-import { buildWorkspaceActionCenter } from '../../lib/workspace-flow';
+import { cn } from '../../lib/utils';
 
 interface DashboardProps {
 	onNavigate?: (location: AppLocationState) => void;
 }
 
-const TASK_TONE_STYLES = {
-	critical: 'border-red-200 bg-red-50/80 text-red-900',
-	attention: 'border-amber-200 bg-amber-50/80 text-amber-900',
-	'follow-up': 'border-sky-200 bg-sky-50/80 text-sky-900',
-	info: 'border-slate-200 bg-slate-50 text-slate-900',
-} as const;
+const KPI_ICON_MAP: Record<DashboardKpi['id'], ReactElement> = {
+	open: <FolderOpen className="h-5 w-5" weight="duotone" />,
+	sendable: <PaperPlaneTilt className="h-5 w-5" weight="duotone" />,
+	'invoice-ready': <Receipt className="h-5 w-5" weight="duotone" />,
+	issues: <WarningCircle className="h-5 w-5" weight="duotone" />,
+};
 
-export default function Dashboard({ onNavigate }: DashboardProps) {
-	const { customers } = useCustomers();
-	const { invoices } = useInvoices();
-	const { products } = useProducts();
-	const { projects } = useProjects();
-	const { rows } = useQuoteRows();
-	const { quotes } = useQuotes();
+function normalizeDashboardQuery(value: string) {
+	return value.trim().toLowerCase();
+}
 
-	const actionCenter = useMemo(
-		() =>
-			buildWorkspaceActionCenter({
-				customers,
-				invoices,
-				products,
-				projects,
-				quoteRows: rows,
-				quotes,
-			}),
-		[customers, invoices, products, projects, quotes, rows]
-	);
-
-	const nextAction = actionCenter.nextAction;
-	const actionQueue = actionCenter.tasks.slice(0, 5);
-	const resumeItems = actionCenter.resumeItems;
-	const summaryCards = [
-		{ label: 'Luonnokset', value: actionCenter.summary.blockedDrafts },
-		{ label: 'Laskutus', value: actionCenter.summary.invoiceActions },
-		{ label: 'Seuranta', value: actionCenter.summary.followUps },
-		{ label: 'Määräajat', value: actionCenter.summary.deadlines },
-		{ label: 'Esteet', value: actionCenter.summary.blockers },
-	];
-
-	if (!actionCenter.hasWorkspace) {
-		return (
-			<AppPageLayout pageType="dashboard">
-				<div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_340px]">
-					<Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
-						<div className="flex h-full flex-col gap-6 p-6 sm:p-8">
-							<Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Työn aloitus</Badge>
-							<div className="space-y-3">
-								<h1 className="text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">Etusivu ohjaa työn käyntiin yhdestä paikasta</h1>
-								<p className="max-w-2xl text-sm leading-7 text-slate-200 sm:text-base">
-									Aloita projektityötilasta. Kun asiakas, projekti ja ensimmäinen tarjous ovat olemassa, Etusivu alkaa ohjata seuraavat työvaiheet automaattisesti oikeaan paikkaan.
-								</p>
-							</div>
-
-							<div className="flex flex-col gap-3 sm:flex-row">
-								<Button className="justify-center gap-2 bg-white text-slate-950 hover:bg-slate-100" onClick={() => onNavigate?.({ page: 'projects' })}>
-									<Plus className="h-4 w-4" />
-									Avaa projektityötila
-								</Button>
-								<Button
-									variant="outline"
-									className="justify-center gap-2 border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
-									onClick={() => onNavigate?.({ page: 'products' })}
-								>
-									<Package className="h-4 w-4" />
-									Lisää ensimmäinen tuote
-								</Button>
-							</div>
-
-							<div className="grid gap-3 md:grid-cols-3">
-								{[
-									{
-										title: '1. Luo asiakas ja projekti',
-										description: 'Projektityötila muodostaa asiakkaan, tarjouksen ja laskutuksen saman työnkulun alle.',
-									},
-									{
-										title: '2. Rakenna tarjous',
-										description: 'Tarjouseditori avautuu suoraan projektin sisään, joten työ ei hajoa sivulta toiselle.',
-									},
-									{
-										title: '3. Palaa Etusivulle',
-										description: 'Kun dataa on, Etusivu nostaa seuraavan tärkeimmän työn ja kiireelliset tehtävät näkyviin.',
-									},
-								].map((item) => (
-									<div key={item.title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-										<p className="text-base font-medium text-white">{item.title}</p>
-										<p className="mt-2 text-sm leading-6 text-slate-300">{item.description}</p>
-									</div>
-								))}
-							</div>
-						</div>
-					</Card>
-
-					<div className="space-y-6">
-						<Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
-							<CardHeader>
-								<CardTitle>Ensimmäinen askel</CardTitle>
-								<CardDescription>Projektit-sivu on varsinainen työtila. Etusivu alkaa ohjata työtä vasta, kun siellä on mitä ohjata.</CardDescription>
-							</CardHeader>
-							<CardContent className="space-y-3">
-								<Button className="w-full justify-between" onClick={() => onNavigate?.({ page: 'projects' })}>
-									Luo ensimmäinen projekti
-									<ArrowRight className="h-4 w-4" />
-								</Button>
-								{actionCenter.hasProductGap && (
-									<Button variant="outline" className="w-full justify-between" onClick={() => onNavigate?.({ page: 'products' })}>
-										Lisää tuotteet ennen ensimmäistä tarjousta
-										<ArrowRight className="h-4 w-4" />
-									</Button>
-								)}
-							</CardContent>
-						</Card>
-
-						<DeadlineNotifications compact />
-					</div>
-				</div>
-			</AppPageLayout>
-		);
+function matchesDashboardQuery(query: string, item: { searchText: string }) {
+	if (!query) {
+		return true;
 	}
 
+	return item.searchText.includes(query);
+}
+
+function DashboardEmptyBlock({
+	title,
+	description,
+	actionLabel,
+	onAction,
+}: {
+	title: string;
+	description: string;
+	actionLabel?: string;
+	onAction?: () => void;
+}) {
 	return (
-		<AppPageLayout pageType="dashboard">
-			<div className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_340px]">
-				<div className="space-y-6">
-					<Card className="overflow-hidden border-slate-900 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.75)]">
-						<div className="flex h-full flex-col gap-6 p-6 sm:p-8">
-							<div className="space-y-4">
-								<Badge className="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/10">Työn ohjaus</Badge>
-								<div className="space-y-3">
-									<h1 className="text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">Etusivu näyttää mitä pitää tehdä nyt</h1>
-									<p className="max-w-2xl text-sm leading-7 text-slate-200 sm:text-base">
-										Päivän tilanne priorisoi kiireellisimmän työn, nostaa estävät puutteet näkyviin ja ohjaa suoraan oikeaan projektityötilaan tai laskuun.
-									</p>
-								</div>
-							</div>
+		<div className="rounded-[22px] border border-dashed border-border/80 bg-muted/20 px-5 py-8 text-center">
+			<h3 className="text-base font-semibold tracking-[-0.02em] text-foreground">{title}</h3>
+			<p className="mx-auto mt-2 max-w-lg text-sm leading-7 text-muted-foreground">{description}</p>
+			{actionLabel && onAction ? (
+				<Button variant="outline" className="mt-5 justify-between" onClick={onAction}>
+					{actionLabel}
+					<ArrowRight className="h-4 w-4" />
+				</Button>
+			) : null}
+		</div>
+	);
+}
 
-							<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-								{summaryCards.map((item) => (
-									<div key={item.label} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-										<p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-200">{item.label}</p>
-										<p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-white">{item.value}</p>
-									</div>
-								))}
-							</div>
+function buildOnboardingAction(): DashboardNextAction {
+	return {
+		title: 'Aloita ensimmäisestä tarjouksesta',
+		customerName: 'Etusivu alkaa ohjata työtä heti, kun ensimmäinen projekti ja tarjous ovat olemassa.',
+		projectName: 'Projektityötila',
+		statusLabel: 'Alku',
+		statusTone: 'info',
+		summary: 'Luo asiakas, projekti ja ensimmäinen tarjous. Sen jälkeen Etusivu nostaa seuraavat toimet automaattisesti näkyviin.',
+		description: 'Tämä näkymä on rakennettu työn ohjaamiseen. Kun perustat ensimmäisen työn, KPI:t, tehtävät ja oikean reunan jatkolistat alkavat täyttyä oikeasta datasta.',
+		actions: [
+			{
+				label: 'Viimeistele tarjous',
+				target: { page: 'projects' },
+			},
+			{
+				label: 'Avaa projektityötila',
+				target: { page: 'projects' },
+				variant: 'secondary',
+			},
+			{
+				label: 'Luo lasku',
+				target: { page: 'invoices' },
+				variant: 'outline',
+			},
+		],
+		searchText: 'aloita projekti tarjous lasku',
+	};
+}
 
-							<div className="rounded-[28px] border border-white/10 bg-white/6 p-5 sm:p-6">
-								<div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-									<div className="space-y-3">
-										<div className="flex items-center gap-2 text-sky-200">
-											<TrendUp className="h-4 w-4" weight="bold" />
-											<span className="text-xs font-semibold uppercase tracking-[0.16em]">Seuraava tärkein työ</span>
-										</div>
-										<div>
-											<h2 className="text-2xl font-semibold tracking-[-0.03em] text-white">
-												{nextAction ? nextAction.title : 'Tänään ei ole kiireellisiä tehtäviä'}
-											</h2>
-											<p className="mt-2 max-w-2xl text-sm leading-7 text-slate-200">
-												{nextAction
-													? nextAction.reason
-													: 'Työjono näyttää hallitulta. Avaa projektityötila, kun haluat jatkaa keskeneräisiä projekteja tai luoda uutta.'}
-											</p>
-											{nextAction && <p className="mt-3 text-sm text-slate-300">{nextAction.locationLabel}</p>}
-										</div>
-									</div>
+function RecentItemsList({ items, onNavigate }: { items: DashboardRecentItem[]; onNavigate: (target: AppLocationState) => void }) {
+	return (
+		<div className="space-y-3">
+			{items.map((item) => (
+				<div key={item.id} className="rounded-[18px] border border-border/70 bg-background px-4 py-4 shadow-[0_14px_30px_-30px_rgba(15,23,42,0.35)]">
+					<div className="flex flex-wrap items-center gap-2">
+						<StatusBadge tone={item.tone}>{item.typeLabel}</StatusBadge>
+						<p className="text-sm font-semibold text-foreground">{item.title}</p>
+					</div>
+					<p className="mt-2 text-sm text-muted-foreground">{item.description}</p>
+					<p className="mt-1 text-sm leading-6 text-muted-foreground">{item.detail}</p>
+					<Button className="mt-4 w-full justify-between" variant="outline" onClick={() => onNavigate(item.target)}>
+						{item.ctaLabel}
+						<ArrowRight className="h-4 w-4" />
+					</Button>
+				</div>
+			))}
+		</div>
+	);
+}
 
-									<div className="flex flex-col gap-3 sm:min-w-52">
-										<Button className="justify-between bg-white text-slate-950 hover:bg-slate-100" onClick={() => nextAction ? onNavigate?.(nextAction.target) : onNavigate?.({ page: 'projects' })}>
-											{nextAction ? nextAction.ctaLabel : 'Avaa projektityötila'}
-											<ArrowRight className="h-4 w-4" />
-										</Button>
-										<Button
-											variant="outline"
-											className="justify-between border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
-											onClick={() => onNavigate?.({ page: 'projects' })}
-										>
-											Jatka projektityötilaan
-											<FolderOpen className="h-4 w-4" />
-										</Button>
-									</div>
-								</div>
-							</div>
+function ProjectStatsList({
+	stats,
+	onNavigate,
+}: {
+	stats: DashboardProjectStat[];
+	onNavigate: (target: AppLocationState) => void;
+}) {
+	return (
+		<div className="space-y-3">
+			{stats.map((item) => (
+				<button
+					key={item.id}
+					type="button"
+					onClick={() => onNavigate(item.target)}
+					className={cn(
+						'flex w-full items-center justify-between rounded-[18px] border border-border/70 bg-muted/10 px-4 py-4 text-left transition-all duration-150',
+						'hover:border-primary/30 hover:bg-muted/20 hover:shadow-[0_18px_36px_-34px_rgba(15,23,42,0.35)]',
+					)}
+				>
+					<div>
+						<p className="text-sm font-medium text-foreground">{item.label}</p>
+						<p className="mt-1 text-xs leading-5 text-muted-foreground">{item.description}</p>
+					</div>
+					<div className="flex items-center gap-3">
+						<span className="text-4xl font-semibold tracking-[-0.04em] text-slate-900">{item.value}</span>
+						<ArrowRight className="h-4 w-4 text-muted-foreground" />
+					</div>
+				</button>
+			))}
+		</div>
+	);
+}
+
+function AlertsList({ alerts, onNavigate }: { alerts: DashboardAlert[]; onNavigate: (target: AppLocationState) => void }) {
+	return (
+		<div className="space-y-3">
+			{alerts.map((alert) => (
+				<div key={alert.id} className="rounded-[18px] border border-border/70 bg-background px-4 py-4 shadow-[0_14px_30px_-30px_rgba(15,23,42,0.35)]">
+					<div className="flex flex-wrap items-center gap-2">
+						<StatusBadge tone={alert.tone}>{alert.label}</StatusBadge>
+						<p className="text-sm font-semibold text-foreground">{alert.title}</p>
+					</div>
+					<p className="mt-2 text-sm leading-6 text-muted-foreground">{alert.description}</p>
+					<Button className="mt-4 w-full justify-between" variant="outline" onClick={() => onNavigate(alert.target)}>
+						{alert.ctaLabel}
+						<ArrowRight className="h-4 w-4" />
+					</Button>
+				</div>
+			))}
+		</div>
+	);
+}
+
+export default function Dashboard({ onNavigate }: DashboardProps) {
+	const dashboardData = useDashboardData();
+	const [searchQuery, setSearchQuery] = useState('');
+	const deferredSearchQuery = useDeferredValue(searchQuery);
+	const normalizedSearchQuery = normalizeDashboardQuery(deferredSearchQuery);
+
+	const heroAction = dashboardData.nextAction ?? buildOnboardingAction();
+	const filteredTasks = useMemo(
+		() => dashboardData.tasks.filter((item) => matchesDashboardQuery(normalizedSearchQuery, item)),
+		[dashboardData.tasks, normalizedSearchQuery]
+	);
+	const filteredRecentItems = useMemo(
+		() => dashboardData.recentItems.filter((item) => matchesDashboardQuery(normalizedSearchQuery, item)),
+		[dashboardData.recentItems, normalizedSearchQuery]
+	);
+	const filteredProjectStats = useMemo(
+		() => dashboardData.projectStats.filter((item) => matchesDashboardQuery(normalizedSearchQuery, item)),
+		[dashboardData.projectStats, normalizedSearchQuery]
+	);
+	const filteredAlerts = useMemo(
+		() => dashboardData.alerts.filter((item) => matchesDashboardQuery(normalizedSearchQuery, item)),
+		[dashboardData.alerts, normalizedSearchQuery]
+	);
+	const totalSearchMatches = filteredTasks.length + filteredRecentItems.length + filteredProjectStats.length + filteredAlerts.length;
+
+	const handleNavigate = (target: AppLocationState) => {
+		onNavigate?.(target);
+	};
+
+	return (
+		<AppPageLayout pageType="dashboard" className="max-w-[1400px] space-y-6">
+			<AppPageHeader
+				title="Työtila tänään"
+				description="Etusivu näyttää seuraavat toimenpiteet, projektien tilanteen ja poikkeamat yhdestä näkymästä."
+				actions={
+					<div className="w-full max-w-md space-y-2">
+						<div className="relative">
+							<MagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+							<Input
+								value={searchQuery}
+								onChange={(event) => setSearchQuery(event.target.value)}
+								className="h-11 rounded-2xl border-border/70 pl-10 shadow-sm"
+								placeholder="Hae projekti, tarjous tai asiakas"
+							/>
 						</div>
-					</Card>
+						{normalizedSearchQuery ? (
+							<p className="text-xs text-muted-foreground">{totalSearchMatches} osumaa nykyisestä työjonosta</p>
+						) : null}
+					</div>
+				}
+			/>
 
-					<Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
-						<CardHeader>
-							<CardTitle>Päivän tilanne</CardTitle>
-							<CardDescription>
-								Lista näyttää vain tehtävät, jotka johtavat suoraan seuraavaan toimenpiteeseen. Mitä ylempänä rivi on, sitä kiireellisempänä työ kannattaa hoitaa.
-							</CardDescription>
-						</CardHeader>
-						<CardContent>
-							{actionQueue.length === 0 ? (
-								<div className="rounded-3xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
-									Tänään ei ole kiireellisiä tehtäviä. Avaa projektityötila, kun haluat jatkaa tarjouksia tai tarkistaa asiakaskontekstin.
-								</div>
+			<div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
+				<div className="space-y-6">
+					<div className="rounded-[28px] border border-slate-900/95 bg-[linear-gradient(145deg,rgba(18,31,53,0.98),rgba(33,51,80,0.95))] p-4 shadow-[0_28px_72px_-42px_rgba(15,23,42,0.7)] sm:p-5">
+						<div className="grid gap-3 lg:grid-cols-4">
+							{dashboardData.kpis.map((item) => (
+								<KPIBox
+									key={item.id}
+									label={item.label}
+									value={item.value}
+									detail={item.detail}
+									tone={item.tone}
+									icon={KPI_ICON_MAP[item.id]}
+									onClick={() => handleNavigate(item.target)}
+								/>
+							))}
+						</div>
+
+						<div className="mt-4">
+							<ActionCard action={heroAction} onNavigate={handleNavigate} />
+						</div>
+					</div>
+
+					<div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_360px]">
+						<DashboardCard
+							title="Päivän tehtävät"
+							description="Tässä listassa näkyvät vain ne asiat, joihin kannattaa tarttua ennen muuta. Jokainen rivi vie suoraan oikeaan työtilaan."
+						>
+							{filteredTasks.length > 0 ? (
+								<TaskList tasks={filteredTasks} onNavigate={handleNavigate} />
+							) : normalizedSearchQuery ? (
+								<DashboardEmptyBlock
+									title="Hakuehdolla ei löytynyt tehtäviä"
+									description="Muuta hakua tai tyhjennä rajaus, niin näet taas päivän tehtävät tässä kortissa."
+									actionLabel="Tyhjennä haku"
+									onAction={() => setSearchQuery('')}
+								/>
 							) : (
-								<div className="space-y-3">
-									{actionQueue.map((task, index) => (
-										<div key={task.id} className={`rounded-2xl border px-4 py-4 ${TASK_TONE_STYLES[task.tone]}`}>
-											<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-												<div className="min-w-0">
-													<div className="flex flex-wrap items-center gap-2">
-														<Badge variant="outline" className="bg-white/70">#{index + 1}</Badge>
-														<p className="font-medium">{task.title}</p>
-													</div>
-													<p className="mt-2 text-sm leading-6 text-current/80">{task.reason}</p>
-													<p className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-current/60">{task.locationLabel}</p>
-												</div>
-												<Button variant="outline" className="border-current/20 bg-white/80 text-current hover:bg-white" onClick={() => onNavigate?.(task.target)}>
-													{task.ctaLabel}
-												</Button>
-											</div>
-										</div>
-									))}
-								</div>
+								<DashboardEmptyBlock
+									title="Työjono näyttää hallitulta"
+									description="Etusivu ei nosta nyt kiireellisiä tehtäviä. Avaa projektityötila jatkaaksesi tarjouksia tai laskutusta."
+									actionLabel="Avaa projektit"
+									onAction={() => handleNavigate({ page: 'projects' })}
+								/>
 							)}
-						</CardContent>
-					</Card>
+						</DashboardCard>
+
+						<DashboardCard
+							title="Projektien tilanne"
+							description="Yhdellä silmäyksellä näet montako projektia on työn eri vaiheissa juuri nyt."
+						>
+							{filteredProjectStats.length > 0 || !normalizedSearchQuery ? (
+								<ProjectStatsList
+									stats={filteredProjectStats.length > 0 ? filteredProjectStats : dashboardData.projectStats}
+									onNavigate={handleNavigate}
+								/>
+							) : (
+								<DashboardEmptyBlock
+									title="Hakuehdolla ei löytynyt vaiheita"
+									description="Projektitilastot näyttävät vain ne rivit, joiden otsikko tai kuvaus vastaa nykyistä hakua."
+									actionLabel="Tyhjennä haku"
+									onAction={() => setSearchQuery('')}
+								/>
+							)}
+						</DashboardCard>
+					</div>
 				</div>
 
-				<div className="space-y-6">
-					<Card className="border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
-						<CardHeader>
-							<CardTitle>Jatka työskentelyä</CardTitle>
-							<CardDescription>Etusivulta pääsee suoraan takaisin viimeisimpään tarjoukseen, projektiin tai avoimeen laskuun.</CardDescription>
-						</CardHeader>
-						<CardContent>
-							{resumeItems.length === 0 ? (
-								<div className="rounded-2xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-									Ei jatkettavia kohteita juuri nyt.
-								</div>
-							) : (
-								<div className="space-y-3">
-									{resumeItems.map((item) => (
-										<div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_30px_-32px_rgba(15,23,42,0.35)]">
-											<div className="flex flex-wrap items-center gap-2">
-												<Badge variant="outline">{item.badgeLabel}</Badge>
-												<p className="font-medium text-slate-950">{item.title}</p>
-											</div>
-											<p className="mt-2 text-sm leading-6 text-slate-600">{item.detail}</p>
-											<p className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{item.meta}</p>
-											<Button className="mt-4 w-full justify-between" variant="outline" onClick={() => onNavigate?.(item.target)}>
-												{item.ctaLabel}
-												<ArrowRight className="h-4 w-4" />
-											</Button>
-										</div>
-									))}
-								</div>
-							)}
-						</CardContent>
-					</Card>
+				<div className="space-y-6 xl:sticky xl:top-8 xl:self-start">
+					<RightPanelCard title="Jatka työskentelyä" description="Viimeisin tarjousluonnos, projekti ja lasku ovat aina käden ulottuvilla tästä railista.">
+						{filteredRecentItems.length > 0 ? (
+							<RecentItemsList items={filteredRecentItems} onNavigate={handleNavigate} />
+						) : normalizedSearchQuery ? (
+							<DashboardEmptyBlock
+								title="Ei jatkettavia kohteita tällä haulla"
+								description="Poista hakurajaus, niin näet taas viimeisimmän tarjouksen, projektin ja laskun."
+								actionLabel="Tyhjennä haku"
+								onAction={() => setSearchQuery('')}
+							/>
+						) : (
+							<RecentItemsList items={dashboardData.recentItems} onNavigate={handleNavigate} />
+						)}
+					</RightPanelCard>
 
-					{actionCenter.hasProductGap && (
-						<Card className="border-amber-200 bg-amber-50/70 shadow-[0_20px_50px_-44px_rgba(120,53,15,0.25)]">
-							<CardHeader>
-								<CardTitle className="flex items-center gap-2 text-amber-950">
-									<WarningCircle className="h-5 w-5" weight="fill" />
-									Tuoterekisteri puuttuu vielä
-								</CardTitle>
-								<CardDescription className="text-amber-900/80">
-									Tarjousluonnokset pysyvät kevyinä ilman tuotteita, mutta ensimmäinen oikea laskenta kannattaa tehdä vasta tuoterekisterin jälkeen.
-								</CardDescription>
-							</CardHeader>
-							<CardContent>
-								<Button className="w-full justify-between" variant="outline" onClick={() => onNavigate?.({ page: 'products' })}>
-									Lisää ensimmäinen tuote
+					<RightPanelCard title="Määräajat ja esteet" description="Tässä näkyvät vain poikkeamat: erääntyvät laskut, puutteet ja vastuuhenkilöiden puuttuminen.">
+						{filteredAlerts.length > 0 ? (
+							<AlertsList alerts={filteredAlerts} onNavigate={handleNavigate} />
+						) : normalizedSearchQuery ? (
+							<DashboardEmptyBlock
+								title="Hakuehto ei osunut poikkeamiin"
+								description="Poista hakurajaus, jos haluat nähdä kaikki määräajat ja estävät puutteet tässä kortissa."
+								actionLabel="Tyhjennä haku"
+								onAction={() => setSearchQuery('')}
+							/>
+						) : dashboardData.alerts.length > 0 ? (
+							<AlertsList alerts={dashboardData.alerts} onNavigate={handleNavigate} />
+						) : (
+							<DashboardEmptyBlock
+								title="Ei poikkeamia juuri nyt"
+								description="Erääntyviä laskuja, puuttuvia tietoja tai nimeämättömiä vastuita ei ole tällä hetkellä näkyvissä."
+							/>
+						)}
+					</RightPanelCard>
+
+					{!dashboardData.hasWorkspace ? (
+						<RightPanelCard title="Aloita tästä" description="Kun ensimmäinen projekti ja tarjous ovat olemassa, tämä raili vaihtuu automaattisesti ajantasaisiin työjonoihin.">
+							<div className="space-y-3">
+								<Button className="w-full justify-between" onClick={() => handleNavigate({ page: 'projects' })}>
+									Avaa projektityötila
+									<FolderOpen className="h-4 w-4" />
+								</Button>
+								<Button variant="outline" className="w-full justify-between" onClick={() => handleNavigate({ page: 'products' })}>
+									Lisää tuotteet
 									<Package className="h-4 w-4" />
 								</Button>
-							</CardContent>
-						</Card>
-					)}
-
-					<DeadlineNotifications compact />
+							</div>
+						</RightPanelCard>
+					) : null}
 				</div>
 			</div>
 		</AppPageLayout>
