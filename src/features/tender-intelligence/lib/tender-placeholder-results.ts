@@ -62,6 +62,7 @@ function mapTenderProviderProfileDetailsToAnalysisInput(
     responseTemplates: providerProfile.responseTemplates.map((template) => ({
       title: template.title,
       templateType: template.templateType,
+      contentMd: template.contentMd ?? null,
     })),
   };
 }

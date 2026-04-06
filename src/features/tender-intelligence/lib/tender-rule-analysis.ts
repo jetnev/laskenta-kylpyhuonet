@@ -73,6 +73,7 @@ export interface TenderRuleAnalysisProviderDocumentInput {
 export interface TenderRuleAnalysisProviderResponseTemplateInput {
   title: string;
   templateType: TenderRuleAnalysisProviderResponseTemplateType;
+  contentMd: string | null;
 }
 
 export interface TenderRuleAnalysisProviderProfileDetailsInput {
@@ -1228,6 +1229,76 @@ function buildMarkdownBulletSection(title: string, items: string[]) {
   return [`## ${title}`, ...items.map((item) => `- ${item}`)].join('\n');
 }
 
+function getProviderTemplateExcerpt(contentMd: string | null) {
+  const normalized = compactWhitespace((contentMd ?? '').replace(/^#+\s+/gm, ''));
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.length <= 140) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, 137).trimEnd()}...`;
+}
+
+function buildProviderProfileOverviewLines(context: RuleContext) {
+  const providerProfile = context.providerProfile;
+
+  if (!providerProfile) {
+    return [];
+  }
+
+  const lines: string[] = [`Yritys: ${providerProfile.profile.companyName}`];
+
+  if (providerProfile.profile.summary?.trim()) {
+    lines.push(`Ydinviesti: ${providerProfile.profile.summary.trim()}`);
+  }
+
+  if (providerProfile.profile.serviceArea?.trim()) {
+    lines.push(`Palvelualue: ${providerProfile.profile.serviceArea.trim()}`);
+  }
+
+  lines.push(`Toimituslaajuus: ${providerProfile.profile.deliveryScope}`);
+
+  if (providerProfile.profile.maxTravelKm != null) {
+    lines.push(`Maksimimatka: ${providerProfile.profile.maxTravelKm} km`);
+  }
+
+  return lines;
+}
+
+function buildProviderTemplateLines(context: RuleContext) {
+  const providerProfile = context.providerProfile;
+
+  if (!providerProfile) {
+    return [];
+  }
+
+  return providerProfile.responseTemplates.slice(0, 4).map((template) => {
+    const excerpt = getProviderTemplateExcerpt(template.contentMd);
+    return excerpt
+      ? `${template.title} (${template.templateType}): ${excerpt}`
+      : `${template.title} (${template.templateType})`;
+  });
+}
+
+function buildProviderConstraintLines(context: RuleContext) {
+  const providerProfile = context.providerProfile;
+
+  if (!providerProfile) {
+    return [];
+  }
+
+  return providerProfile.constraints
+    .filter((constraint) => constraint.severity === 'hard')
+    .map((constraint) => {
+      const mitigation = constraint.mitigationNote?.trim() ? ` Ratkaisu: ${constraint.mitigationNote.trim()}` : '';
+      return `${constraint.title}: ${constraint.ruleText}${mitigation}`;
+    });
+}
+
 function buildDraftArtifacts(input: {
   packageTitle: string;
   context: RuleContext;
@@ -1248,9 +1319,14 @@ function buildDraftArtifacts(input: {
     const detail = task.description ? `: ${task.description}` : '';
     return `${task.title}${detail}`;
   });
+  const providerOverviewLines = buildProviderProfileOverviewLines(input.context);
+  const providerTemplateLines = buildProviderTemplateLines(input.context);
+  const providerConstraintLines = buildProviderConstraintLines(input.context);
 
   const outlineSections = [
     `# Tarjousrunko\nPaketti: ${input.packageTitle}`,
+    buildMarkdownBulletSection('Tarjoajaprofiilin lähtötiedot', providerOverviewLines),
+    buildMarkdownBulletSection('Hyödynnettävät vastauspohjat', providerTemplateLines),
     buildMarkdownBulletSection('Tunnistetut vaatimukset', requirementLines),
     buildMarkdownBulletSection('Tarkistettavat liitteet ja puutteet', missingItemLines),
     buildMarkdownBulletSection('Riskit ja varmistukset', [...riskLines, ...reviewTaskLines]),
@@ -1258,11 +1334,13 @@ function buildDraftArtifacts(input: {
 
   const summarySections = [
     `# Vastausyhteenveto\nDeterministinen analyysi tunnisti ${formatCountLabel(input.context.requirements.length, 'vaatimuksen', 'vaatimusta')}, ${formatCountLabel(input.context.missingItems.length, 'puutteen', 'puutetta')} ja ${formatCountLabel(input.context.riskFlags.length, 'riskin', 'riskiä')}.`,
+    buildMarkdownBulletSection('Tarjoajaprofiilin ydinviesti', providerOverviewLines.slice(0, 3)),
     buildMarkdownBulletSection('Keskeiset löydökset', [...requirementLines.slice(0, 5), ...riskLines.slice(0, 3)]),
   ].filter((section): section is string => Boolean(section));
 
   const clarificationSections = [
     '# Tarkennuslista\nKohdat, jotka vaativat vielä ihmisen päätöksen ennen editorivientiä.',
+    buildMarkdownBulletSection('Tarjoajaprofiilin kovat rajaukset', providerConstraintLines),
     buildMarkdownBulletSection('Avoimet puutteet', missingItemLines),
     buildMarkdownBulletSection('Avoimet riskit', riskLines),
     buildMarkdownBulletSection('Käsiteltävät tarkistustehtävät', reviewTaskLines),

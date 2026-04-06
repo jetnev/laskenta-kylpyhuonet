@@ -26,6 +26,7 @@ function createProviderProfile(overrides: Partial<{
   responseTemplates: Array<{
     title: string;
     templateType: 'company-overview' | 'technical-approach' | 'delivery-plan' | 'pricing-note' | 'quality' | 'other';
+    contentMd: string | null;
   }>;
 }> = {}) {
   return {
@@ -247,6 +248,43 @@ describe('buildTenderDeterministicAnalysisPlan', () => {
     );
     expect(plan.goNoGoAssessment.recommendation).toBe('conditional-go');
     expect(plan.goNoGoAssessment.summary).toContain('kovaa rajausta');
+  });
+
+  it('injects provider profile overview and response templates into draft artifacts', () => {
+    const plan = buildTenderDeterministicAnalysisPlan({
+      packageTitle: 'Päiväkoti / tarjouspyyntö',
+      documentRows: [createDocument('doc-1', 'tarjouspyynto.txt')],
+      chunkRows: [createChunk()],
+      providerProfile: createProviderProfile({
+        constraints: [
+          {
+            title: 'Ei yli 300 km toimituksia',
+            severity: 'hard',
+            ruleText: 'Tarjouksia ei jätetä yli 300 km toimitusalueelle.',
+            mitigationNote: 'Nosta asia heti go / no-go -katselmointiin.',
+          },
+        ],
+        responseTemplates: [
+          {
+            title: 'Yritysesittely',
+            templateType: 'company-overview',
+            contentMd: 'Copilot Oy toimittaa kylpyhuoneremontit avaimet käteen -mallilla Uudenmaan alueella.',
+          },
+        ],
+      }),
+    });
+
+    const outlineArtifact = plan.draftArtifacts.find((artifact) => artifact.artifactType === 'quote-outline');
+    const summaryArtifact = plan.draftArtifacts.find((artifact) => artifact.artifactType === 'response-summary');
+    const clarificationArtifact = plan.draftArtifacts.find((artifact) => artifact.artifactType === 'clarification-list');
+
+    expect(outlineArtifact?.contentMd).toContain('Tarjoajaprofiilin lähtötiedot');
+    expect(outlineArtifact?.contentMd).toContain('Yritys: Copilot Oy');
+    expect(outlineArtifact?.contentMd).toContain('Hyödynnettävät vastauspohjat');
+    expect(outlineArtifact?.contentMd).toContain('Yritysesittely (company-overview)');
+    expect(summaryArtifact?.contentMd).toContain('Tarjoajaprofiilin ydinviesti');
+    expect(clarificationArtifact?.contentMd).toContain('Tarjoajaprofiilin kovat rajaukset');
+    expect(clarificationArtifact?.contentMd).toContain('Ei yli 300 km toimituksia');
   });
 
   it('falls back to a single review task when no supported baseline rules match', () => {

@@ -94,7 +94,7 @@ async function fetchTenderProviderProfileDetails(
       .order('updated_at', { ascending: false }),
     client
       .from('tender_provider_response_templates')
-      .select('title, template_type')
+      .select('title, template_type, content_md')
       .eq('tender_provider_profile_id', profileRow.id)
       .order('updated_at', { ascending: false }),
   ]);
@@ -146,6 +146,7 @@ async function fetchTenderProviderProfileDetails(
     responseTemplates: (responseTemplateResult.data ?? []).map((row) => ({
       title: row.title,
       templateType: row.template_type,
+      contentMd: row.content_md,
     })),
   };
 }
