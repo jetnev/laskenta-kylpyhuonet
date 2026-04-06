@@ -286,6 +286,7 @@ export default function TenderResultPanels({
   onUpdateReviewTask,
   onRecomputeReferenceSuggestions,
 }: TenderResultPanelsProps) {
+  const [bulkWorkflowUpdateKey, setBulkWorkflowUpdateKey] = useState<string | null>(null);
   const documentNameById = new Map(selectedPackage.documents.map((document) => [document.id, document.fileName]));
   const requirementById = new Map(selectedPackage.results.requirements.map((requirement) => [requirement.id, requirement]));
   const evidenceByTarget = new Map<string, TenderPackageDetails['resultEvidence']>();
@@ -318,6 +319,29 @@ export default function TenderResultPanels({
   const filteredDraftArtifacts = filterItems(selectedPackage.results.draftArtifacts);
   const filteredReviewTasks = filterItems(selectedPackage.results.reviewTasks);
   const filteredEmptyMessage = 'Valitulla workflow-suodatuksella ei löytynyt rivejä tästä osiosta.';
+
+  const executeBulkWorkflowUpdate = async (
+    key: string,
+    targetIds: string[],
+    update: (targetId: string) => Promise<unknown>,
+  ) => {
+    if (targetIds.length < 1 || bulkWorkflowUpdateKey) {
+      return;
+    }
+
+    setBulkWorkflowUpdateKey(key);
+
+    try {
+      await Promise.allSettled(targetIds.map((targetId) => update(targetId)));
+    } finally {
+      setBulkWorkflowUpdateKey(null);
+    }
+  };
+
+  const filteredMissingItemWorkflowKeys = filteredMissingItems.map((item) => `missing_item:${item.id}`);
+  const filteredRiskFlagWorkflowKeys = filteredRiskFlags.map((riskFlag) => `risk_flag:${riskFlag.id}`);
+  const missingBulkPending = Boolean(bulkWorkflowUpdateKey) || filteredMissingItemWorkflowKeys.some((key) => updatingTargetIds.includes(key));
+  const riskBulkPending = Boolean(bulkWorkflowUpdateKey) || filteredRiskFlagWorkflowKeys.some((key) => updatingTargetIds.includes(key));
 
   return (
     <div className="space-y-4">
@@ -465,6 +489,50 @@ export default function TenderResultPanels({
           countLabel={formatWorkflowCountLabel(selectedPackage.results.missingItems.length, filteredMissingItems.length, 'puute')}
           emptyMessage={filter === 'all' ? 'Puutteet syntyvät baseline-ajon mukana vasta kun analyysi on viety completed-tilaan.' : filteredEmptyMessage}
           hasItems={filteredMissingItems.length > 0}
+          headerAction={onUpdateMissingItem ? (
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={missingBulkPending || filteredMissingItems.length < 1}
+                onClick={() => {
+                  void executeBulkWorkflowUpdate(
+                    'missing-open',
+                    filteredMissingItems.map((item) => item.id),
+                    (missingItemId) => onUpdateMissingItem(missingItemId, {
+                      reviewStatus: 'needs_attention',
+                      reviewNote: null,
+                      resolutionStatus: 'open',
+                      resolutionNote: null,
+                    }),
+                  );
+                }}
+              >
+                {missingBulkPending ? 'Käsitellään...' : 'Pidä suodatetut avoimina'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                disabled={missingBulkPending || filteredMissingItems.length < 1}
+                onClick={() => {
+                  void executeBulkWorkflowUpdate(
+                    'missing-resolved',
+                    filteredMissingItems.map((item) => item.id),
+                    (missingItemId) => onUpdateMissingItem(missingItemId, {
+                      reviewStatus: 'accepted',
+                      reviewNote: null,
+                      resolutionStatus: 'resolved',
+                      resolutionNote: null,
+                    }),
+                  );
+                }}
+              >
+                {missingBulkPending ? 'Käsitellään...' : 'Ratkaise suodatetut'}
+              </Button>
+            </div>
+          ) : undefined}
         >
           {filteredMissingItems.map((item) => {
             const typeMeta = TENDER_MISSING_ITEM_TYPE_META[item.itemType];
@@ -534,6 +602,50 @@ export default function TenderResultPanels({
           countLabel={formatWorkflowCountLabel(selectedPackage.results.riskFlags.length, filteredRiskFlags.length, 'riski')}
           emptyMessage={filter === 'all' ? 'Riskit näkyvät tässä, jos baseline-analyysi löytää oikeasti selkeän riskiehdon extracted tekstistä.' : filteredEmptyMessage}
           hasItems={filteredRiskFlags.length > 0}
+          headerAction={onUpdateRiskFlag ? (
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={riskBulkPending || filteredRiskFlags.length < 1}
+                onClick={() => {
+                  void executeBulkWorkflowUpdate(
+                    'risk-needs-attention',
+                    filteredRiskFlags.map((riskFlag) => riskFlag.id),
+                    (riskFlagId) => onUpdateRiskFlag(riskFlagId, {
+                      reviewStatus: 'needs_attention',
+                      reviewNote: null,
+                      resolutionStatus: 'open',
+                      resolutionNote: null,
+                    }),
+                  );
+                }}
+              >
+                {riskBulkPending ? 'Käsitellään...' : 'Nosta suodatetut käsittelyyn'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                disabled={riskBulkPending || filteredRiskFlags.length < 1}
+                onClick={() => {
+                  void executeBulkWorkflowUpdate(
+                    'risk-resolved',
+                    filteredRiskFlags.map((riskFlag) => riskFlag.id),
+                    (riskFlagId) => onUpdateRiskFlag(riskFlagId, {
+                      reviewStatus: 'accepted',
+                      reviewNote: null,
+                      resolutionStatus: 'resolved',
+                      resolutionNote: null,
+                    }),
+                  );
+                }}
+              >
+                {riskBulkPending ? 'Käsitellään...' : 'Kuittaa suodatetut ratkaistuksi'}
+              </Button>
+            </div>
+          ) : undefined}
         >
           {filteredRiskFlags.map((riskFlag) => {
             const typeMeta = TENDER_RISK_TYPE_META[riskFlag.riskType];

@@ -214,6 +214,14 @@ Ensimmäinen inkrementti valmis:
 - luokittelu kytkettiin domain-mappaukseen, joten myös aiemmin tallennetut dokumentit saavat näkyvän luokan ilman tietokantamigraatiota
 - dokumenttipaneeli näyttää nyt erikseen tiedostotyypin (esim. PDF) ja intake-luokan (esim. Tarjouspyyntö), mikä nopeuttaa paketin sisältöjen läpikäyntiä
 
+### Työpaketti 6 — review-workflown bulk-toiminnot
+
+Ensimmäinen inkrementti valmis:
+
+- puute- ja riskipaneeleihin lisättiin suodatettuun näkymään bulk-toiminnot, joilla rivit voi merkitä kerralla avoimiksi, käsittelyyn nostetuiksi tai ratkaistuiksi
+- bulk-ajot hyödyntävät olemassa olevia workflow-update-rajapintoja, joten audit- ja käyttöoikeuspolku pysyy yhtenäisenä yksittäisrivien päivitysten kanssa
+- workflow-suodatin toimii nyt samalla myös operatiivisena työjonon rajauksena bulk-käsittelylle
+
 ## Seuraava tavoitesuunta
 
 Tarjousälyn seuraavien syventävien vaiheiden tulee jatkua tästä järjestyksestä tuotannollistavien työpakettien rinnalla, ellei erikseen päätetä muuta:

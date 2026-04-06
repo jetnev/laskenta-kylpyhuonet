@@ -131,8 +131,47 @@ function createPackageWithEvidence(): TenderPackageDetails {
           assignedToUserId: null,
         },
       ],
-      missingItems: [],
-      riskFlags: [],
+      missingItems: [
+        {
+          id: '99999999-9999-4999-8999-999999999999',
+          packageId: '11111111-1111-4111-8111-111111111111',
+          relatedRequirementId: '77777777-7777-4777-8777-777777777777',
+          itemType: 'clarification',
+          title: 'Varmista toteutuksen aloitusikkuna',
+          description: 'Aloitusikkuna puuttuu tarjouspyynnön liitteistä.',
+          severity: 'medium',
+          status: 'open',
+          reviewStatus: 'needs_attention',
+          reviewNote: null,
+          reviewedByUserId: null,
+          reviewedAt: null,
+          resolutionStatus: 'open',
+          resolutionNote: null,
+          resolvedByUserId: null,
+          resolvedAt: null,
+          assignedToUserId: null,
+        },
+      ],
+      riskFlags: [
+        {
+          id: '10101010-1010-4010-8010-101010101010',
+          packageId: '11111111-1111-4111-8111-111111111111',
+          riskType: 'delivery',
+          title: 'Aikatauluriippuvuus voi viivastyttaa toteutusta',
+          description: 'Kohteessa on toimitusriippuvuus erillisesta aliurakasta.',
+          severity: 'high',
+          status: 'open',
+          reviewStatus: 'needs_attention',
+          reviewNote: null,
+          reviewedByUserId: null,
+          reviewedAt: null,
+          resolutionStatus: 'open',
+          resolutionNote: null,
+          resolvedByUserId: null,
+          resolvedAt: null,
+          assignedToUserId: null,
+        },
+      ],
       goNoGoAssessment: null,
       referenceSuggestions: [
         {
@@ -189,6 +228,8 @@ describe('TenderResultPanels', () => {
     expect(markup).toContain('Referenssikorpus');
     expect(markup).toContain('Liittyy vaatimukseen');
     expect(markup).toContain('Päivitä corpuksesta');
+    expect(markup).toContain('Ratkaise suodatetut');
+    expect(markup).toContain('Kuittaa suodatetut ratkaistuksi');
     expect(markup).toContain('1 lähde');
   });
 });
