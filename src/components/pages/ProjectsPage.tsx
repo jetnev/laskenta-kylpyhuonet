@@ -49,6 +49,8 @@ const QUOTE_STATUS_META = {
   rejected: { label: 'Hylätty', variant: 'destructive' as const },
 };
 
+type QuoteListSortMode = 'updated_desc' | 'updated_asc' | 'title_asc' | 'status';
+
 type ProjectWorkspaceStage = 'new' | 'drafting' | 'accepted';
 
 function sortByUpdatedAtDesc<T extends { updatedAt: string }>(items: T[]) {
@@ -78,6 +80,8 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   const [selectedQuotes, setSelectedQuotes] = useState<Set<string>>(new Set());
   const [pendingCreatedQuoteId, setPendingCreatedQuoteId] = useState<string | null>(null);
   const [quoteListViewMode, setQuoteListViewMode] = useState<'cards' | 'table'>('cards');
+  const [quoteListSearch, setQuoteListSearch] = useState('');
+  const [quoteListSortMode, setQuoteListSortMode] = useState<QuoteListSortMode>('updated_desc');
   const [searchProjects, setSearchProjects] = useState('');
   const [searchCustomers, setSearchCustomers] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('all');
@@ -104,8 +108,10 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
     return user?.id || '';
   };
 
-  const resolveResponsibleUserLabel = (ownerUserId?: string | null) =>
-    getResponsibleUserLabel(ownerUserId, responsibleUsers);
+  const resolveResponsibleUserLabel = useCallback(
+    (ownerUserId?: string | null) => getResponsibleUserLabel(ownerUserId, responsibleUsers),
+    [responsibleUsers]
+  );
 
   const [projectForm, setProjectForm] = useState({
     customerId: '',
@@ -187,6 +193,55 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
 
     return sortByUpdatedAtDesc(filterOwnedRecords(getQuotesForProject(selectedProjectId), ownerFilter));
   }, [getQuotesForProject, ownerFilter, selectedProjectId]);
+  const visibleSelectedProjectQuotes = useMemo(() => {
+    const searchValue = quoteListSearch.trim().toLowerCase();
+    const statusOrder = {
+      draft: 0,
+      sent: 1,
+      accepted: 2,
+      rejected: 3,
+    } as const;
+
+    const filtered = searchValue
+      ? selectedProjectQuotes.filter((quote) => {
+          const customerOwner = selectedCustomer?.ownerUserId;
+          const responsibleLabel = resolveResponsibleUserLabel(quote.ownerUserId || selectedProject?.ownerUserId || customerOwner).toLowerCase();
+          const statusLabel = QUOTE_STATUS_META[quote.status].label.toLowerCase();
+
+          return (
+            quote.title.toLowerCase().includes(searchValue) ||
+            (quote.quoteNumber || '').toLowerCase().includes(searchValue) ||
+            responsibleLabel.includes(searchValue) ||
+            statusLabel.includes(searchValue)
+          );
+        })
+      : selectedProjectQuotes;
+
+    const sorted = [...filtered];
+
+    sorted.sort((left, right) => {
+      if (quoteListSortMode === 'updated_desc') {
+        return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+      }
+
+      if (quoteListSortMode === 'updated_asc') {
+        return new Date(left.updatedAt).getTime() - new Date(right.updatedAt).getTime();
+      }
+
+      if (quoteListSortMode === 'title_asc') {
+        return left.title.localeCompare(right.title, 'fi');
+      }
+
+      const statusDiff = statusOrder[left.status] - statusOrder[right.status];
+      if (statusDiff !== 0) {
+        return statusDiff;
+      }
+
+      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+    });
+
+    return sorted;
+  }, [quoteListSearch, quoteListSortMode, resolveResponsibleUserLabel, selectedCustomer?.ownerUserId, selectedProject?.ownerUserId, selectedProjectQuotes]);
   const projectContext = useMemo(
     () =>
       selectedProject
@@ -1053,6 +1108,25 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
                     <p className="text-sm text-muted-foreground">Projektin aktiiviset ja aiemmat tarjoukset samassa listassa.</p>
                   </div>
 
+                  <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center">
+                    <Input
+                      value={quoteListSearch}
+                      onChange={(event) => setQuoteListSearch(event.target.value)}
+                      placeholder="Hae tarjousta, numeroa, tilaa tai vastuuhenkilöä..."
+                      className="w-full lg:w-80"
+                    />
+                    <select
+                      className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={quoteListSortMode}
+                      onChange={(event) => setQuoteListSortMode(event.target.value as QuoteListSortMode)}
+                    >
+                      <option value="updated_desc">Uusin ensin</option>
+                      <option value="updated_asc">Vanhin ensin</option>
+                      <option value="title_asc">Nimi A-Z</option>
+                      <option value="status">Tila</option>
+                    </select>
+                  </div>
+
                   {selectedQuotes.size > 0 ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="secondary">{selectedQuotes.size} valittu</Badge>
@@ -1092,6 +1166,10 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
                   <div className="rounded-2xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
                     Tälle projektille ei ole vielä tarjouksia. Luo ensimmäinen tarjous työtilan päätoiminnolla.
                   </div>
+                ) : visibleSelectedProjectQuotes.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
+                    Hakuehdoilla ei löytynyt tarjouksia. Kokeile toista hakua tai poista suodatus.
+                  </div>
                 ) : quoteListViewMode === 'table' ? (
                   <div className="rounded-2xl border border-slate-200 overflow-hidden">
                     <Table>
@@ -1106,7 +1184,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {selectedProjectQuotes.map((quote) => {
+                        {visibleSelectedProjectQuotes.map((quote) => {
                           const statusMeta = QUOTE_STATUS_META[quote.status];
                           return (
                             <TableRow key={quote.id} className="cursor-pointer" onClick={() => handleEditQuote(selectedProject.id, quote.id)}>
@@ -1142,7 +1220,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {selectedProjectQuotes.map((quote) => {
+                    {visibleSelectedProjectQuotes.map((quote) => {
                       const statusMeta = QUOTE_STATUS_META[quote.status];
                       return (
                         <div key={quote.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_30px_-32px_rgba(15,23,42,0.45)]">
