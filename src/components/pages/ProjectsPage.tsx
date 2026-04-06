@@ -48,6 +48,8 @@ const QUOTE_STATUS_META = {
   rejected: { label: 'Hylätty', variant: 'destructive' as const },
 };
 
+type ProjectWorkspaceStage = 'new' | 'drafting' | 'accepted';
+
 function sortByUpdatedAtDesc<T extends { updatedAt: string }>(items: T[]) {
   return [...items].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
 }
@@ -207,6 +209,17 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   const draftQuotes = visibleQuotes.filter((quote) => quote.status === 'draft');
   const nextProjectAction = projectContext?.nextAction ?? null;
   const latestProjectInvoice = projectContext?.latestInvoice ?? null;
+  const projectWorkspaceStage: ProjectWorkspaceStage = useMemo(() => {
+    if (!selectedProject || selectedProjectQuotes.length === 0) {
+      return 'new';
+    }
+
+    if (projectQuoteStats.accepted > 0) {
+      return 'accepted';
+    }
+
+    return 'drafting';
+  }, [projectQuoteStats.accepted, selectedProject, selectedProjectQuotes.length]);
 
   useEffect(() => {
     if (!starterWorkspace) {
@@ -915,25 +928,46 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
                 </div>
 
                 <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                  {latestSelectedQuote ? (
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-slate-950">Viimeisin tarjous</p>
-                        <p className="mt-1 text-sm text-muted-foreground">{latestSelectedQuote.title} • {new Date(latestSelectedQuote.updatedAt).toLocaleDateString('fi-FI')}</p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-slate-950">Projektin vaihe</p>
+                        {projectWorkspaceStage === 'new' && <Badge variant="secondary">Uusi projekti</Badge>}
+                        {projectWorkspaceStage === 'drafting' && <Badge variant="outline">Tarjousvaihe käynnissä</Badge>}
+                        {projectWorkspaceStage === 'accepted' && <Badge variant="default">Hyväksytty vaihe</Badge>}
                       </div>
-                      <Badge variant={QUOTE_STATUS_META[latestSelectedQuote.status].variant}>{QUOTE_STATUS_META[latestSelectedQuote.status].label}</Badge>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {projectWorkspaceStage === 'new' && 'Aloita luomalla ensimmäinen tarjous tähän projektiin.'}
+                        {projectWorkspaceStage === 'drafting' && 'Tarjoukset ovat työn alla. Jatka viimeisintä tarjousta tai luo uusi versio.'}
+                        {projectWorkspaceStage === 'accepted' && 'Projektilla on hyväksyttyjä tarjouksia. Seuraava luonteva vaihe on laskutus.'}
+                      </p>
+                      {latestSelectedQuote && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Viimeisin tarjous: {latestSelectedQuote.title} • {new Date(latestSelectedQuote.updatedAt).toLocaleDateString('fi-FI')}
+                        </p>
+                      )}
                     </div>
-                  ) : (
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-2xl bg-white p-2 shadow-sm">
-                        <FolderOpen className="h-4 w-4 text-slate-700" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-950">Projekti on valmis ensimmäiselle tarjoukselle</p>
-                        <p className="mt-1 text-sm text-muted-foreground">Luo tarjous tästä projektista, niin se ilmestyy heti työtilaan ja raportointiin.</p>
-                      </div>
+                    <div className="flex flex-wrap gap-2">
+                      {projectWorkspaceStage === 'new' && (
+                        <Button variant="outline" onClick={() => handleCreateQuote(selectedProject.id)}>
+                          <FileText className="h-4 w-4" />
+                          Luo ensimmäinen tarjous
+                        </Button>
+                      )}
+                      {projectWorkspaceStage === 'drafting' && latestSelectedQuote && (
+                        <Button variant="outline" onClick={() => handleEditQuote(selectedProject.id, latestSelectedQuote.id)}>
+                          <FileText className="h-4 w-4" />
+                          Jatka viimeisintä tarjousta
+                        </Button>
+                      )}
+                      {projectWorkspaceStage === 'accepted' && (
+                        <Button variant="outline" onClick={() => onNavigate?.({ page: 'invoices' })}>
+                          <FileText className="h-4 w-4" />
+                          Siirry laskutukseen
+                        </Button>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 <div className="mt-6 grid gap-3 xl:grid-cols-3">
@@ -976,9 +1010,13 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
 
                   <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Työtilan fokus</p>
-                    <p className="mt-3 font-medium text-slate-950">{projectContext?.tasks.length || 0} aktiivista toimenpidettä</p>
+                    <p className="mt-3 font-medium text-slate-950">
+                      {projectWorkspaceStage === 'new' && 'Aloitus ja ensimmäinen tarjous'}
+                      {projectWorkspaceStage === 'drafting' && `${projectContext?.tasks.length || 0} aktiivista toimenpidettä tarjousvaiheessa`}
+                      {projectWorkspaceStage === 'accepted' && 'Laskutus ja toteuman seuranta'}
+                    </p>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Tarjoukset, laskutus ja asiakaskonteksti pysyvät tässä projektissa samassa näkymässä. Sulkeminen ei enää nollaa projektivalintaa.
+                      Tarjoukset, laskutus ja asiakaskonteksti pysyvät tässä projektissa samassa näkymässä. Työvaiheen fokus vaihtuu automaattisesti projektin tilanteen mukaan.
                     </p>
                   </div>
                 </div>

@@ -1370,7 +1370,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     }
   };
 
-  const renderSectionFooter = (stepId: QuoteEditorStepId, nextLabel?: string, nextStepOverride?: QuoteEditorStepId) => {
+  const renderSectionFooter = (stepId: QuoteEditorStepId, nextStepOverride?: QuoteEditorStepId) => {
     const previousStepId = getPreviousStepId(stepId);
     const nextStepId = nextStepOverride ?? getNextStepId(stepId);
 
@@ -1378,14 +1378,14 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
       <>
         {previousStepId ? (
           <Button type="button" variant="outline" onClick={() => setActiveStep(previousStepId)}>
-            Edellinen vaihe
+            Edellinen
           </Button>
         ) : (
           <div className="text-sm text-slate-500">Vaiheittainen rakenne auttaa pitämään tarjousrivit editorin päätyönä.</div>
         )}
         {nextStepId ? (
           <Button type="button" onClick={() => setActiveStep(nextStepId)}>
-            {nextLabel || 'Seuraava vaihe'}
+            Tallenna ja jatka
           </Button>
         ) : (
           <div className="text-sm text-slate-500">Viimeinen vaihe. Tarkista lähetysvalmius ennen asiakkaalle vientiä.</div>
@@ -1555,7 +1555,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                     <VisibilityBadge tone="optional" label="Alennus on valinnainen" />
                   </>
                 )}
-                footer={renderSectionFooter('basics', 'Siirry tarjousriveihin')}
+                footer={renderSectionFooter('basics')}
               >
                 <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -1686,7 +1686,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                     <VisibilityBadge tone="derived" label="Kateohjauksessa asiakashinta voidaan johtaa automaattisesti" />
                   </>
                 )}
-                footer={renderSectionFooter('rows', 'Lisää tarvittaessa lisäkulut')}
+                footer={renderSectionFooter('rows')}
               >
                 <div className="grid gap-4 xl:grid-cols-3">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
@@ -2440,7 +2440,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                     <VisibilityBadge tone="customer" label="Näkyvät asiakkaalle erillisinä erinä" />
                   </>
                 )}
-                footer={renderSectionFooter('costs', 'Viimeistele ehdot ja huomiot')}
+                footer={renderSectionFooter('costs')}
               >
                 <AdditionalCostsSection
                   quote={quote}
@@ -2466,7 +2466,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                     <VisibilityBadge tone="internal" label="Sisäiset muistiot pysyvät erillään" />
                   </>
                 )}
-                footer={renderSectionFooter('finishing', 'Tarkista lähetysvalmius')}
+                footer={renderSectionFooter('finishing')}
               >
                 <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
                   <div className="rounded-[28px] border border-slate-200 bg-white p-5">
