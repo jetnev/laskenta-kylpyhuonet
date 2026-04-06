@@ -152,7 +152,7 @@ Tarjousälyssä on tällä hetkellä toteutettuna seuraavat kyvykkyydet:
 
 ## Mitä ei ole vielä tuotantovalmiina
 
-- vahva PDF/DOCX/OCR-purku
+- OCR ja skannattujen PDF-dokumenttien kuvatason purku
 - LLM-pohjainen tarjoussisällön tulkinta
 - automaattinen täydellinen quote-rivitys editoriin
 - täysi kaksisuuntainen synkronointi editorin koko sisältöön
@@ -205,6 +205,12 @@ Ensimmäinen inkrementti valmis:
 - PDF- ja DOCX-dokumentit luokitellaan nyt extraction-kelpoisiksi server-side-runner-polussa, eivät enää automaattisesti ei-tuetuiksi ennen extraction-yritystä
 - analyysin readiness ei enää hylkää PDF-pakettia heti formaatin perusteella, vaan ohjaa ensin extractionin käynnistykseen
 - dokumenttipaneelin viestit päivitettiin vastaamaan uutta mallia: TXT/Markdown/CSV/XLSX ovat varma baseline, PDF/DOCX riippuvat ympäristön extractor-version tuesta
+
+Toinen inkrementti valmis:
+
+- tender-document-extractor purkaa nyt tekstikerroksen sisältävät PDF-dokumentit sivu kerrallaan extraction-tekstiin ja chunk-riveihin sen sijaan, että ne päätyisivät oletuksena ei-tuetuiksi
+- DOCX-dokumenteista puretaan nyt Word XML -sisältöosat (runko, kommentit, note-osat sekä header/footer-tekstit) samaan extraction-domainiin ilman erillistä manuaalista välivaihetta
+- jos PDF:ssä ei ole tekstikerrosta, extraction epäonnistuu eksplisiittisellä OCR-rajausviestillä eikä väärällä ei-tuettu-statuspolulla
 
 ### Työpaketti 5 — dokumenttien intake-luokittelu
 
@@ -282,6 +288,12 @@ Tavoite:
 - oikea tuotantotason dokumenttipurku
 - nykyisen kevyen extractionin laajennus
 - OCR vain harkitusti, ei oletusarvoisesti
+
+Ensimmäinen inkrementti valmis:
+
+- server-side extraction-runnerissa on nyt oikea tekstikerroksen PDF-purku sekä DOCX-purku, joten nämä formaatit eivät enää jää pelkän eligibility-merkinnän varaan
+- extraction-domain, UI-metat ja tietokantatyypit tunnistavat nyt erikseen pdf- ja docx-extractorit, mikä helpottaa diagnostiikkaa ja rollout-seurantaa
+- OCR jätettiin edelleen tarkoituksella pois tästä inkrementistä, joten skannatut PDF:t epäonnistuvat hallitulla viestillä ja jäävät seuraavan laajennuksen piiriin
 
 ### Phase 20 — intelligent drafting beyond deterministic baseline
 

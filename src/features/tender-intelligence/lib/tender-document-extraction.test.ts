@@ -17,8 +17,8 @@ describe('tender-document-extraction helpers', () => {
     });
     expect(getTenderDocumentExtractionSupport('text/markdown').extractorType).toBe('markdown');
     expect(getTenderDocumentExtractionSupport('text/csv').extractorType).toBe('csv');
-    expect(getTenderDocumentExtractionSupport('application/pdf').extractorType).toBe('none');
-    expect(getTenderDocumentExtractionSupport('application/vnd.openxmlformats-officedocument.wordprocessingml.document').extractorType).toBe('none');
+    expect(getTenderDocumentExtractionSupport('application/pdf').extractorType).toBe('pdf');
+    expect(getTenderDocumentExtractionSupport('application/vnd.openxmlformats-officedocument.wordprocessingml.document').extractorType).toBe('docx');
     expect(getTenderDocumentExtractionSupport('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet').extractorType).toBe('xlsx');
     expect(isTenderDocumentExtractionSupported('application/pdf')).toBe(true);
   });

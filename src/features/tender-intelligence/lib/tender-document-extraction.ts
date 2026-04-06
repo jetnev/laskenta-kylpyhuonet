@@ -13,6 +13,8 @@ export const TENDER_DOCUMENT_EXTRACTOR_TYPES = [
   'markdown',
   'csv',
   'xlsx',
+  'pdf',
+  'docx',
   'unsupported',
 ] as const;
 
@@ -24,9 +26,9 @@ export const TENDER_DOCUMENT_EXTRACTION_SUPPORTED_MIME_MAP = {
   'text/markdown': 'markdown',
   'text/x-markdown': 'markdown',
   'text/csv': 'csv',
-  'application/pdf': 'none',
-  'application/x-pdf': 'none',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'none',
+  'application/pdf': 'pdf',
+  'application/x-pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
 } as const satisfies Record<string, Exclude<TenderDocumentExtractorTypeValue, 'unsupported'>>;
 

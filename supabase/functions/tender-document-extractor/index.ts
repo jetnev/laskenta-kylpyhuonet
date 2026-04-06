@@ -1,5 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
+import { strFromU8, unzipSync } from 'npm:fflate@0.8.2';
+import { getDocument } from 'npm:pdfjs-dist@5.4.296/legacy/build/pdf.mjs';
 import * as XLSX from 'npm:xlsx@0.18.5';
 
 import {
@@ -66,7 +68,7 @@ async function upsertExtraction(
   payload: {
     tender_document_id: string;
     extraction_status: 'not_started' | 'pending' | 'extracting' | 'extracted' | 'failed' | 'unsupported';
-    extractor_type: 'none' | 'plain_text' | 'markdown' | 'csv' | 'xlsx' | 'unsupported';
+    extractor_type: 'none' | 'plain_text' | 'markdown' | 'csv' | 'xlsx' | 'pdf' | 'docx' | 'unsupported';
     source_mime_type: string;
     character_count?: number | null;
     chunk_count?: number | null;
@@ -157,8 +159,246 @@ function extractTextFromWorkbook(bytes: Uint8Array) {
   return normalizeTenderExtractedText(parts.join('\n\n'));
 }
 
+function normalizePdfToken(value: string) {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function finalizePdfLine(tokens: string[]) {
+  return tokens.join(' ').replace(/\s+([,.;:!?])/g, '$1').trim();
+}
+
+function isPdfTextItem(value: unknown): value is {
+  str: string;
+  hasEOL?: boolean;
+  transform?: number[];
+} {
+  return Boolean(value)
+    && typeof value === 'object'
+    && 'str' in value
+    && typeof (value as { str?: unknown }).str === 'string';
+}
+
+async function extractTextFromPdf(bytes: Uint8Array) {
+  const loadingTask = getDocument({
+    data: bytes,
+    disableWorker: true,
+    isEvalSupported: false,
+    useWorkerFetch: false,
+    stopAtErrors: false,
+  });
+
+  try {
+    const pdfDocument = await loadingTask.promise;
+    const pageTexts: string[] = [];
+
+    for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
+      const page = await pdfDocument.getPage(pageNumber);
+      const textContent = await page.getTextContent();
+      const lines: string[] = [];
+      let currentLineTokens: string[] = [];
+      let lastY: number | null = null;
+
+      const flushLine = () => {
+        if (currentLineTokens.length === 0) {
+          return;
+        }
+
+        const line = finalizePdfLine(currentLineTokens);
+        currentLineTokens = [];
+
+        if (line) {
+          lines.push(line);
+        }
+      };
+
+      for (const item of textContent.items) {
+        if (!isPdfTextItem(item)) {
+          continue;
+        }
+
+        const token = normalizePdfToken(item.str);
+
+        if (!token) {
+          continue;
+        }
+
+        const nextY = Array.isArray(item.transform) && typeof item.transform[5] === 'number'
+          ? item.transform[5]
+          : null;
+
+        if (
+          currentLineTokens.length > 0
+          && nextY != null
+          && lastY != null
+          && Math.abs(nextY - lastY) > 2
+        ) {
+          flushLine();
+        }
+
+        currentLineTokens.push(token);
+        lastY = nextY ?? lastY;
+
+        if (item.hasEOL) {
+          flushLine();
+        }
+      }
+
+      flushLine();
+
+      const pageText = normalizeTenderExtractedText(lines.join('\n'));
+
+      if (pageText) {
+        pageTexts.push(pageText);
+      }
+
+      page.cleanup();
+    }
+
+    return normalizeTenderExtractedText(pageTexts.join('\n\n'));
+  } finally {
+    await loadingTask.destroy();
+  }
+}
+
+function getOpenXmlElementsByLocalName(root: Document | Element, localName: string) {
+  const namespaceMatches = Array.from(root.getElementsByTagNameNS('*', localName));
+
+  if (namespaceMatches.length > 0) {
+    return namespaceMatches;
+  }
+
+  return Array.from(root.getElementsByTagName(`w:${localName}`));
+}
+
+function collectOpenXmlNodeText(node: Node | null): string {
+  if (!node) {
+    return '';
+  }
+
+  let text = '';
+
+  for (const child of Array.from(node.childNodes)) {
+    if (child.nodeType !== 1) {
+      continue;
+    }
+
+    const element = child as Element;
+
+    switch (element.localName) {
+      case 't':
+        text += element.textContent ?? '';
+        break;
+      case 'tab':
+        text += '\t';
+        break;
+      case 'br':
+      case 'cr':
+        text += '\n';
+        break;
+      case 'instrText':
+        break;
+      default:
+        text += collectOpenXmlNodeText(element);
+        break;
+    }
+  }
+
+  return text;
+}
+
+function extractTextFromOpenXmlPart(xml: string) {
+  const parsed = new DOMParser().parseFromString(xml, 'application/xml');
+
+  if (!parsed?.documentElement || parsed.getElementsByTagName('parsererror').length > 0) {
+    return '';
+  }
+
+  const paragraphs = getOpenXmlElementsByLocalName(parsed, 'p');
+  const blocks = (paragraphs.length > 0 ? paragraphs : [parsed.documentElement])
+    .map((paragraph) => normalizeTenderExtractedText(collectOpenXmlNodeText(paragraph)))
+    .filter(Boolean);
+
+  return normalizeTenderExtractedText(blocks.join('\n\n'));
+}
+
+function getDocxTextPartPaths(entries: Record<string, Uint8Array>) {
+  return Object.keys(entries)
+    .filter((path) => (
+      path === 'word/document.xml'
+      || path === 'word/footnotes.xml'
+      || path === 'word/endnotes.xml'
+      || path === 'word/comments.xml'
+      || /^word\/header\d+\.xml$/i.test(path)
+      || /^word\/footer\d+\.xml$/i.test(path)
+    ))
+    .sort((left, right) => {
+      const rank = (value: string) => {
+        if (value === 'word/document.xml') {
+          return 0;
+        }
+
+        if (value === 'word/footnotes.xml') {
+          return 1;
+        }
+
+        if (value === 'word/endnotes.xml') {
+          return 2;
+        }
+
+        if (value === 'word/comments.xml') {
+          return 3;
+        }
+
+        if (/^word\/header\d+\.xml$/i.test(value)) {
+          return 4;
+        }
+
+        if (/^word\/footer\d+\.xml$/i.test(value)) {
+          return 5;
+        }
+
+        return 10;
+      };
+
+      const rankDifference = rank(left) - rank(right);
+
+      if (rankDifference !== 0) {
+        return rankDifference;
+      }
+
+      return left.localeCompare(right);
+    });
+}
+
+function extractTextFromDocx(bytes: Uint8Array) {
+  const archive = unzipSync(bytes);
+  const partPaths = getDocxTextPartPaths(archive);
+
+  if (partPaths.length === 0) {
+    throw new Error('DOCX-dokumentin tekstiosia ei löytynyt extractionia varten.');
+  }
+
+  const parts = partPaths
+    .map((path) => extractTextFromOpenXmlPart(strFromU8(archive[path])))
+    .filter(Boolean);
+
+  return normalizeTenderExtractedText(parts.join('\n\n'));
+}
+
 function buildUnsupportedMessage(mimeType: string) {
   return `Tiedostotyypin ${mimeType || 'tuntematon'} extractionia ei tueta vielä tässä vaiheessa.`;
+}
+
+function buildEmptyExtractionMessage(fileName: string, extractorType: string) {
+  if (extractorType === 'pdf') {
+    return `PDF-dokumentista “${fileName}” ei löytynyt tekstikerrosta. Skannattujen PDF-tiedostojen OCR ei kuulu vielä tähän vaiheeseen.`;
+  }
+
+  if (extractorType === 'docx') {
+    return `DOCX-dokumentista “${fileName}” ei löytynyt luettavaa tekstisisältöä.`;
+  }
+
+  return `Dokumentista “${fileName}” ei saatu talteen tekstiä.`;
 }
 
 Deno.serve(async (req: Request) => {
@@ -328,10 +568,14 @@ Deno.serve(async (req: Request) => {
 
       const extractedText = support.extractorType === 'xlsx'
         ? extractTextFromWorkbook(bytes)
-        : decodeText(bytes);
+        : support.extractorType === 'pdf'
+          ? await extractTextFromPdf(bytes)
+          : support.extractorType === 'docx'
+            ? extractTextFromDocx(bytes)
+            : decodeText(bytes);
 
       if (!extractedText) {
-        throw new Error(`Dokumentista “${documentRow.file_name}” ei saatu talteen tekstiä.`);
+        throw new Error(buildEmptyExtractionMessage(documentRow.file_name, support.extractorType));
       }
 
       const chunks = chunkTenderExtractedText(extractedText);

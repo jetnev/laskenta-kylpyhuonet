@@ -321,6 +321,8 @@ export const TENDER_DOCUMENT_EXTRACTOR_TYPE_META: Record<
   markdown: { label: 'Markdown', variant: 'outline' },
   csv: { label: 'CSV', variant: 'outline' },
   xlsx: { label: 'XLSX', variant: 'outline' },
+  pdf: { label: 'PDF', variant: 'outline' },
+  docx: { label: 'DOCX', variant: 'outline' },
   unsupported: { label: 'Ei tuettu', variant: 'secondary' },
 };
 

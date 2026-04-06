@@ -189,7 +189,7 @@ export default function TenderDocumentsPanel({
               Sallitut tiedostot: TXT, Markdown, CSV, PDF, DOCX, XLSX, ZIP. Maksimikoko {formatTenderDocumentFileSize(TENDER_DOCUMENT_MAX_FILE_SIZE_BYTES)} / tiedosto.
             </p>
             <p className="text-xs leading-5 text-muted-foreground">
-              Tässä vaiheessa extraction toimii varmasti TXT-, Markdown-, CSV- ja XLSX-tiedostoille. PDF- ja DOCX-dokumentit voidaan ohjata server-side extraction-runnerille, mutta jos ympäristön extractor-versio ei tue niitä vielä, ne merkitään ei-tuetuiksi. Analyysi ei käynnisty ilman vähintään yhtä purettua chunk-lähdettä.
+              Tässä vaiheessa extraction toimii TXT-, Markdown-, CSV- ja XLSX-tiedostoille sekä tekstikerroksen sisältäville PDF- ja DOCX-dokumenteille. Skannattujen PDF-tiedostojen OCR ei kuulu vielä tähän baselineen. Analyysi ei käynnisty ilman vähintään yhtä purettua chunk-lähdettä.
             </p>
           </div>
         </div>

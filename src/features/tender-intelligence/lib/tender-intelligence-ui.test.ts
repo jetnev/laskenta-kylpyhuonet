@@ -37,6 +37,8 @@ describe('Phase 6 Tender UI helpers', () => {
     expect(TENDER_DOCUMENT_EXTRACTION_STATUS_META.unsupported.label).toBe('Ei tuettu');
     expect(TENDER_DOCUMENT_KIND_META.rfp.label).toBe('Tarjouspyyntö');
     expect(TENDER_DOCUMENT_EXTRACTOR_TYPE_META.xlsx.label).toBe('XLSX');
+    expect(TENDER_DOCUMENT_EXTRACTOR_TYPE_META.pdf.label).toBe('PDF');
+    expect(TENDER_DOCUMENT_EXTRACTOR_TYPE_META.docx.label).toBe('DOCX');
     expect(TENDER_SEVERITY_META.high.label).toBe('Korkea');
     expect(TENDER_REFERENCE_SOURCE_META.organization_reference_profile.label).toBe('Referenssikorpus');
     expect(TENDER_REFERENCE_PROFILE_SOURCE_KIND_META.imported.label).toBe('Tuotu');
