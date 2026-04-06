@@ -587,6 +587,10 @@ function ProviderContextBadges({
   );
 }
 
+function hasProviderContext(contentMd?: string | null) {
+  return listTenderProviderContextLabels(contentMd).length > 0;
+}
+
 function DraftItemCard({
   item,
   selectedPackage,
@@ -704,6 +708,18 @@ export default function TenderDraftPackagePanel({
   const canOpenImportedQuote = Boolean(selectedDraftPackage?.importedQuoteId && selectedPackage.package.linkedProjectId);
   const repairPreviewActions = draftPackageImportRepairPreview?.actions ?? [];
   const repairPreviewBlocks = draftPackageImportRepairPreview?.blocks ?? [];
+  const providerManagedBlocks = useMemo(
+    () => managedBlocks.filter((block) => block.block_id === 'provider_profile_context'),
+    [managedBlocks],
+  );
+  const providerContextNotes = useMemo(
+    () => payload?.notes_for_editor.filter((item) => hasProviderContext(item.content_md)) ?? [],
+    [payload],
+  );
+  const genericEditorNotes = useMemo(
+    () => payload?.notes_for_editor.filter((item) => !hasProviderContext(item.content_md)) ?? [],
+    [payload],
+  );
   const repairActionKeys: TenderImportRegistryRepairAction[] = [
     'refresh_registry_metadata',
     'mark_orphaned_registry_entries',
@@ -1165,7 +1181,7 @@ export default function TenderDraftPackagePanel({
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                     <p className="text-sm font-medium text-slate-950">Payload-sektiot</p>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2 text-sm text-slate-700">
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5 text-sm text-slate-700">
                       <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                         <p className="font-medium">accepted_requirements</p>
                         <p className="mt-1">{payload.accepted_requirements.length}</p>
@@ -1179,14 +1195,18 @@ export default function TenderDraftPackagePanel({
                         <p className="mt-1">{payload.resolved_missing_items.length}</p>
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                        <p className="font-medium">provider_profile_context</p>
+                        <p className="mt-1">{providerContextNotes.length}</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                         <p className="font-medium">notes_for_editor</p>
-                        <p className="mt-1">{payload.notes_for_editor.length}</p>
+                        <p className="mt-1">{genericEditorNotes.length}</p>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="grid gap-4 xl:grid-cols-2">
+                <div className="grid gap-4 xl:grid-cols-3">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                     <p className="flex items-center gap-2 text-sm font-medium text-slate-950">
                       <ListChecks className="h-4 w-4 text-slate-500" />
@@ -1234,11 +1254,27 @@ export default function TenderDraftPackagePanel({
 
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                     <p className="flex items-center gap-2 text-sm font-medium text-slate-950">
+                      <Sparkle className="h-4 w-4 text-slate-500" />
+                      provider_profile_context
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {providerContextNotes.length > 0 ? providerContextNotes.map((item) => (
+                        <div key={`${item.source_entity_type}:${item.source_entity_id}`} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700">
+                          <p className="font-medium text-slate-950">{item.title}</p>
+                          <ProviderContextBadges contentMd={item.content_md} className="mt-2" />
+                          {item.content_md && <p className="mt-2 whitespace-pre-line">{getTenderTextPreview(item.content_md, 240)}</p>}
+                        </div>
+                      )) : <p className="text-sm text-muted-foreground">Ei tarjoajaprofiilista johdettua sisältöä.</p>}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                    <p className="flex items-center gap-2 text-sm font-medium text-slate-950">
                       <Note className="h-4 w-4 text-slate-500" />
                       notes_for_editor
                     </p>
                     <div className="mt-3 space-y-2">
-                      {payload.notes_for_editor.length > 0 ? payload.notes_for_editor.map((item) => (
+                      {genericEditorNotes.length > 0 ? genericEditorNotes.map((item) => (
                         <div key={`${item.source_entity_type}:${item.source_entity_id}`} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700">
                           <p className="font-medium text-slate-950">{item.title}</p>
                           <ProviderContextBadges contentMd={item.content_md} className="mt-2" />
@@ -1369,6 +1405,7 @@ export default function TenderDraftPackagePanel({
                           <p>Payload hash: {shortenHash(editorImportPreview.payload_hash)}</p>
                           {managedSurface && <p>Managed contract: {managedSurface.contract_version}</p>}
                           {managedSurface && <p>{managedSurface.ownership_notice}</p>}
+                          {providerManagedBlocks.length > 0 && <p>Provider-kontekstiblokkeja: {providerManagedBlocks.length}</p>}
                           {draftPackageImportState && <p>Owned blockeja registryssä: {draftPackageImportState.owned_block_count}</p>}
                           {draftPackageImportState && <p>Registry-status: {TENDER_IMPORT_OWNERSHIP_REGISTRY_STATUS_META[draftPackageImportState.ownership_registry_status].label}</p>}
                           {draftPackageImportState?.owned_block_last_synced_at && <p>Viimeisin registry-sync: {formatTenderTimestamp(draftPackageImportState.owned_block_last_synced_at)}</p>}
@@ -1558,6 +1595,20 @@ export default function TenderDraftPackagePanel({
                             ))}
                           </div>
                         </div>
+                      </div>
+
+                    )}
+
+                    {providerManagedBlocks.length > 0 && (
+                      <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4 text-sm text-sky-950">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">Provider-konteksti</Badge>
+                          <Badge variant="outline">{providerManagedBlocks.length} hallittu lohko</Badge>
+                        </div>
+                        <p className="mt-3 leading-6">
+                          Import tuo tarjoajaprofiilista johdetun sisällön editoriin omana hallittuna lohkona, jotta yritysprofiilin viestit,
+                          vastauspohjat ja kovat rajaukset eivät sekoitu yleisiin editorihuomioihin.
+                        </p>
                       </div>
                     )}
 

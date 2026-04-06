@@ -365,6 +365,146 @@ function createEditorImportPreview(): TenderEditorImportPreview {
         preview_md: null,
       },
       {
+        key: 'provider_profile_context',
+        title: 'Tarjoajaprofiilin konteksti',
+        target_kind: 'quote_internal_notes_section',
+        target_label: 'Tarjouksen internalNotes-kenttä',
+        item_count: 0,
+        preview_md: null,
+      },
+      {
+        key: 'notes_for_editor',
+        title: 'Sisäiset editorihuomiot',
+        target_kind: 'quote_internal_notes_section',
+        target_label: 'Tarjouksen internalNotes-kenttä',
+        item_count: 0,
+        preview_md: null,
+      },
+    ],
+  };
+}
+
+function createProviderAwareEditorImportPreview(): TenderEditorImportPreview {
+  return {
+    draft_item_count: 3,
+    importable_item_count: 2,
+    payload_hash: 'feedbabe',
+    payload: {
+      schema_version: 'tender-editor-import/v2',
+      generated_at: '2026-04-05T13:05:00.000Z',
+      source_draft_package_id: '66666666-6666-4666-8666-666666666666',
+      source_tender_package_id: '11111111-1111-4111-8111-111111111111',
+      source_analysis_job_id: null,
+      metadata: {
+        draft_package_title: 'Tarjouspaketti / draft package',
+        draft_package_status: 'draft',
+        import_status: 'imported',
+        reimport_status: 'stale',
+        target_quote_title: 'Tarjouspaketti / editor import',
+        target_quote_id: '61616161-6161-4616-8616-616161616161',
+        target_customer_id: '12121212-1212-4212-8212-121212121212',
+        target_project_id: '13131313-1313-4313-8313-131313131313',
+        imported_quote_id: '61616161-6161-4616-8616-616161616161',
+        will_create_placeholder_target: false,
+      },
+      managed_surface: {
+        contract_version: 'tender-editor-managed-surface/v1',
+        ownership_notice: 'Tarjousäly päivittää vain nämä hallitut lohkot. Muu editorin sisältö ei kuulu adapterin hallintaan.',
+        blocks: [
+          {
+            block_id: 'requirements_and_quote_notes',
+            marker_key: '66666666-6666-4666-8666-666666666666:requirements_and_quote_notes',
+            import_group: 'requirements_and_quote_notes',
+            target_kind: 'quote_notes_section',
+            target_label: 'Tarjouksen notes-kenttä',
+            title: 'Tarjoushuomiot',
+            content_md: '## Tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nTämä on hyväksytty.',
+            item_count: 1,
+            owned_by_adapter: true,
+          },
+          {
+            block_id: 'provider_profile_context',
+            marker_key: '66666666-6666-4666-8666-666666666666:provider_profile_context',
+            import_group: 'provider_profile_context',
+            target_kind: 'quote_internal_notes_section',
+            target_label: 'Tarjouksen internalNotes-kenttä',
+            title: 'Tarjoajaprofiilin konteksti',
+            content_md: `## Tarjoajaprofiilin konteksti\n\n### Deterministinen vastausyhteenveto\n\n${PROVIDER_AWARE_ARTIFACT_CONTENT_MD}`,
+            item_count: 1,
+            owned_by_adapter: true,
+          },
+        ],
+      },
+      sections: {
+        quote_notes_md: '## Tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nTämä on hyväksytty.',
+        quote_internal_notes_md: `## Tarjoajaprofiilin konteksti\n\n### Deterministinen vastausyhteenveto\n\n${PROVIDER_AWARE_ARTIFACT_CONTENT_MD}`,
+      },
+      items: [
+        {
+          draft_package_item_id: '77777777-7777-4777-8777-777777777777',
+          source_entity_type: 'requirement',
+          source_entity_id: '44444444-4444-4444-8444-444444444444',
+          item_type: 'accepted_requirement',
+          import_group: 'requirements_and_quote_notes',
+          target_kind: 'quote_notes_section',
+          target_label: 'Tarjouksen notes-kenttä',
+          title: 'Mukana oleva vaatimus',
+          content_md: 'Tämä on hyväksytty.',
+        },
+        {
+          draft_package_item_id: '99999999-9999-4999-8999-000000000001',
+          source_entity_type: 'draft_artifact',
+          source_entity_id: '99999999-9999-4999-8999-999999999999',
+          item_type: 'draft_artifact',
+          import_group: 'provider_profile_context',
+          target_kind: 'quote_internal_notes_section',
+          target_label: 'Tarjouksen internalNotes-kenttä',
+          title: 'Deterministinen vastausyhteenveto',
+          content_md: PROVIDER_AWARE_ARTIFACT_CONTENT_MD,
+        },
+      ],
+    },
+    validation: {
+      is_valid: true,
+      can_import: true,
+      warning_count: 0,
+      error_count: 0,
+      issues: [],
+    },
+    sections: [
+      {
+        key: 'requirements_and_quote_notes',
+        title: 'Tarjoushuomiot',
+        target_kind: 'quote_notes_section',
+        target_label: 'Tarjouksen notes-kenttä',
+        item_count: 1,
+        preview_md: '## Tarjoushuomiot\n\n### Mukana oleva vaatimus\n\nTämä on hyväksytty.',
+      },
+      {
+        key: 'selected_references',
+        title: 'Referenssiyhteenveto',
+        target_kind: 'quote_notes_section',
+        target_label: 'Tarjouksen notes-kenttä',
+        item_count: 0,
+        preview_md: null,
+      },
+      {
+        key: 'resolved_missing_items_and_attachment_notes',
+        title: 'Liitehuomiot ja ratkaistut puutteet',
+        target_kind: 'quote_internal_notes_section',
+        target_label: 'Tarjouksen internalNotes-kenttä',
+        item_count: 0,
+        preview_md: null,
+      },
+      {
+        key: 'provider_profile_context',
+        title: 'Tarjoajaprofiilin konteksti',
+        target_kind: 'quote_internal_notes_section',
+        target_label: 'Tarjouksen internalNotes-kenttä',
+        item_count: 1,
+        preview_md: `## Tarjoajaprofiilin konteksti\n\n### Deterministinen vastausyhteenveto\n\n${PROVIDER_AWARE_ARTIFACT_CONTENT_MD}`,
+      },
+      {
         key: 'notes_for_editor',
         title: 'Sisäiset editorihuomiot',
         target_kind: 'quote_internal_notes_section',
@@ -703,6 +843,8 @@ describe('TenderDraftPackagePanel', () => {
       <TenderDraftPackagePanel
         selectedPackage={createProviderAwarePackageDetails()}
         draftPackages={[createProviderAwareDraftPackage()]}
+        editorImportPreview={createProviderAwareEditorImportPreview()}
+        editorImportValidation={createProviderAwareEditorImportPreview().validation}
         selectedDraftPackageId="66666666-6666-4666-8666-666666666666"
         onSelectDraftPackage={() => undefined}
         onCreateDraftPackage={async () => undefined}
@@ -723,5 +865,8 @@ describe('TenderDraftPackagePanel', () => {
     expect(markup).toContain('Vastauspohjat');
     expect(markup).toContain('Tarjoajan reunaehdot');
     expect(markup).toContain('Deterministinen vastausyhteenveto');
+    expect(markup).toContain('provider_profile_context');
+    expect(markup).toContain('Provider-kontekstiblokkeja: 1');
+    expect(markup).toContain('Tarjoajaprofiilin konteksti');
   });
 });
