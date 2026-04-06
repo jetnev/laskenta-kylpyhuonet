@@ -65,7 +65,8 @@ Supabase Dashboardissa:
 6. Aseta `VITE_SITE_URL=https://projekta.fi` kaikille tuotantobuildeille, jotta canonical- ja some-metat osoittavat oikeaan domainiin.
 7. Aseta `VITE_SUPABASE_REDIRECT_URL=https://projekta.fi/auth/callback`, ellei authin paluulinkkiä tarvitse erikseen ohjata johonkin muuhun sallittuun callback-osoitteeseen.
 8. Callback-reitin on oltava julkinen, koska sekä sähköpostivahvistus että salasanan palautus palaavat siihen ennen kirjautumista.
-9. GitHub Actionsin `validate.yml` kannattaa pitää pakollisena laatutarkistuksena ennen `main`-mergeä. `deploy-cloudflare-pages.yml` ajaa validoinnin vielä uudelleen ennen varsinaista deployta.
+9. GitHub Actionsin `validate.yml` kannattaa pitää pakollisena laatutarkistuksena ennen `main`-mergeä.
+10. Käytä Cloudflare Pagesin natiivia Git-integraatiota ainoana automaattisena web-deploy-polkuina. GitHubin `deploy-cloudflare-pages.yml` kannattaa pitää korkeintaan manuaalisena fallbackina, jotta rinnakkaiset automaattideployt eivät aiheuta turhia fail-notifikaatioita.
 
 ## 5. Password reset
 
@@ -89,5 +90,5 @@ Kun repo on kytketty Pagesiin:
 3. push GitHubiin vasta kun tietokantamuutos ja frontend-muutos ovat linjassa
 4. Cloudflare buildaa uuden version automaattisesti
 5. Pages-osoite päivittyy uuteen versioon
+6. Jos natiivi Cloudflare-deploy ei jostain syystä etene, aja GitHubista manuaalinen `deploy-cloudflare-pages.yml` vain operatiivisena fallbackina, ei rinnakkaisena automaattisena deployna
 <!-- EOF -->
-

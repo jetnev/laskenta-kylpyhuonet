@@ -36,7 +36,7 @@ Auth callbackin on vastattava Supabase Dashboardin sallittuja redirect-osoitteit
 2. Tarkista linked Supabase -projektiin menevä rollout dry-runilla.
 3. Julkaise frontend vasta, kun tietokantamuutos on testattu tai dry-runattu oikeaa ympäristöä vasten.
 4. Merge tai push `main`-haaraan.
-5. GitHub Actions ajaa validoinnin ja sen jälkeen Cloudflare Pages -deploymentin.
+5. GitHub Actions ajaa validoinnin, ja Cloudflare Pagesin natiivi Git-integraatio julkaisee frontendin automaattisesti.
 6. Tee tuotannossa smoke test vähintään kirjautumiselle, juridisille julkisille sivuille, projektityötilalle ja Tarjousälyn pääpolulle.
 
 ## 4. GitHub Actions
@@ -44,10 +44,10 @@ Auth callbackin on vastattava Supabase Dashboardin sallittuja redirect-osoitteit
 Repossa on nyt kolme olennaista workflowta:
 
 - `validate.yml`: ajaa `npm run validate` pull requesteille ja `main`-pushille
-- `deploy-cloudflare-pages.yml`: ajaa validoinnin ja deployaa `dist`-hakemiston Cloudflare Pagesiin
+- `deploy-cloudflare-pages.yml`: manuaalinen fallback-workflow, jolla Cloudflare Pages -deployn voi ajaa GitHubista vain tarvittaessa
 - `publish-update-feed.yml`: ajaa validoinnin, paketoi desktop-version ja julkaisee update feedin `gh-pages`-haaraan
 
-Tämä tarkoittaa, että `npm run build` ei enää ole ainoa laatuportti tuotantojulkaisussa.
+Tämä tarkoittaa, että `npm run build` ei enää ole ainoa laatuportti tuotantojulkaisussa, mutta web-tuotannon automaattinen deploy-autoriteetti on vain yksi: Cloudflare Pagesin oma Git-integraatio.
 
 ## 5. Desktop-julkaisu
 
@@ -77,3 +77,4 @@ Tee vähintään nämä tarkistukset:
 - Operatiivinen julkaisun tarkistuslista: `docs/release-checklist.md`
 - Cloudflare + Supabase -asennus: `docs/cloudflare-pages-supabase.md`
 - Supabase-migraatiot ja turvallinen linked rollout: `supabase/README.md`
+- Jos Cloudflaren natiivi Git-deploy epäonnistuu tai sitä pitää ohittaa hallitusti, käytä vasta sitten manuaalista `deploy-cloudflare-pages.yml`-workflowta GitHub Actionsista.
