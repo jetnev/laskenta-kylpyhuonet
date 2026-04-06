@@ -71,6 +71,42 @@ function createDiagnostics(overrides: Partial<QuoteTenderManagedSurfaceDiagnosti
   };
 }
 
+function createProviderContextDiagnostics(): QuoteTenderManagedSurfaceDiagnostics {
+  return createDiagnostics({
+    managed_blocks_total: 3,
+    managed_notes_blocks_total: 2,
+    managed_block_ids: ['requirements_and_quote_notes', 'provider_profile_context', 'notes_for_editor'],
+    marker_keys: [
+      '66666666-6666-4666-8666-666666666666:requirements_and_quote_notes',
+      '66666666-6666-4666-8666-666666666666:provider_profile_context',
+      '66666666-6666-4666-8666-666666666666:notes_for_editor',
+    ],
+    blocks: [
+      ...createDiagnostics().blocks,
+      {
+        marker_key: '66666666-6666-4666-8666-666666666666:provider_profile_context',
+        draft_package_id: '66666666-6666-4666-8666-666666666666',
+        block_id: 'provider_profile_context',
+        known_block_id: 'provider_profile_context',
+        title: 'Tarjoajaprofiilin konteksti',
+        expected_target_kind: 'quote_internal_notes_section',
+        expected_text_field: 'internalNotes',
+        text_fields: ['internalNotes'],
+        text_marker_count: 1,
+        section_row_ids: ['row-3'],
+        section_row_titles: ['Tarjoajaprofiilin konteksti'],
+        section_row_count: 1,
+        has_text_marker: true,
+        has_section_row: true,
+        unknown_marker: false,
+        duplicate_marker: false,
+        probable_drift: true,
+        health_status: 'needs_attention',
+      },
+    ],
+  });
+}
+
 function createHandoffLink(intent: 'open-source-draft' | 'reimport-managed-import' | 'repair-managed-import') {
   return buildTenderIntelligenceQuoteEditorHandoff({
     tenderPackageId: '11111111-1111-4111-8111-111111111111',
@@ -130,6 +166,33 @@ describe('QuoteTenderImportInspector', () => {
     );
 
     expect(markup).toBe('');
+  });
+
+  it('renders a dedicated provider-context callout and focused CTA when provider-managed content exists', () => {
+    const markup = renderToStaticMarkup(
+      <QuoteTenderImportInspector
+        diagnostics={createProviderContextDiagnostics()}
+        source={{
+          draftPackageId: '66666666-6666-4666-8666-666666666666',
+          draftPackageTitle: 'Kylpyhuone / draft package',
+          tenderPackageId: '11111111-1111-4111-8111-111111111111',
+          tenderPackageTitle: 'Kylpyhuoneen tarjouspyyntö',
+        }}
+        tenderIntelligenceLink={createHandoffLink('reimport-managed-import')}
+        providerContextLink={buildTenderIntelligenceQuoteEditorHandoff({
+          tenderPackageId: '11111111-1111-4111-8111-111111111111',
+          draftPackageId: '66666666-6666-4666-8666-666666666666',
+          importedQuoteId: '77777777-7777-4777-8777-777777777777',
+          intent: 'reimport-managed-import',
+          blockIds: ['provider_profile_context'],
+        })}
+      />,
+    );
+
+    expect(markup).toContain('Provider-konteksti');
+    expect(markup).toContain('Tarjoajaprofiilin konteksti');
+    expect(markup).toContain('Quote sisältää tarjoajaprofiilista johdettua hallittua sisältöä');
+    expect(markup).toContain('provider_profile_context');
   });
 });
 

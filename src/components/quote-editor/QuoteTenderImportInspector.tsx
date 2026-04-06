@@ -22,6 +22,7 @@ interface QuoteTenderImportInspectorProps {
   diagnostics: QuoteTenderManagedSurfaceDiagnostics;
   source?: QuoteTenderImportSourceSummary | null;
   tenderIntelligenceLink?: TenderIntelligenceQuoteEditorHandoffLink | null;
+  providerContextLink?: TenderIntelligenceQuoteEditorHandoffLink | null;
 }
 
 function resolveHealthMeta(status: QuoteTenderManagedSurfaceHealthStatus) {
@@ -82,6 +83,7 @@ export default function QuoteTenderImportInspector({
   diagnostics,
   source = null,
   tenderIntelligenceLink = null,
+  providerContextLink = null,
 }: QuoteTenderImportInspectorProps) {
   if (!diagnostics.has_tarjousaly_managed_surface) {
     return null;
@@ -91,6 +93,8 @@ export default function QuoteTenderImportInspector({
   const cleanBlockCount = diagnostics.blocks.filter((block) => !block.unknown_marker && block.health_status === 'clean').length;
   const attentionBlockCount = diagnostics.blocks.filter((block) => block.health_status === 'needs_attention').length;
   const inconsistentBlockCount = diagnostics.blocks.filter((block) => block.health_status === 'inconsistent').length;
+  const providerContextBlocks = diagnostics.blocks.filter((block) => block.known_block_id === 'provider_profile_context');
+  const providerContextNeedsAttention = providerContextBlocks.some((block) => block.health_status !== 'clean');
 
   return (
     <Card className="border-sky-200 bg-sky-50/70 p-5">
@@ -182,6 +186,41 @@ export default function QuoteTenderImportInspector({
             </div>
           </div>
         </div>
+
+        {providerContextBlocks.length > 0 && (
+          <div className="rounded-2xl border border-sky-200 bg-white px-4 py-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">Provider-konteksti</Badge>
+                  <Badge variant={providerContextNeedsAttention ? 'outline' : 'secondary'}>
+                    {providerContextNeedsAttention ? 'Vaatii tarkistuksen' : 'Mukana importissa'}
+                  </Badge>
+                  <Badge variant="outline">{providerContextBlocks.length} lohko</Badge>
+                </div>
+                <p className="mt-3 text-sm font-medium text-slate-950">Quote sisältää tarjoajaprofiilista johdettua hallittua sisältöä</p>
+                <p className="mt-2 text-sm leading-6 text-slate-700">
+                  Tämä lohko koostuu Tarjousälyn provider-profiilista, vastauspohjista ja kovista rajauksista johdetusta sisällöstä.
+                  Muutokset kannattaa tehdä Tarjousälyssä, jotta re-import pysyy deterministisenä eikä editoriin synny käsin ylläpidettävää rinnakkaista versiota.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2 text-sm text-slate-700">
+                  {providerContextBlocks.map((block) => (
+                    <Badge key={block.marker_key} variant="outline">{block.title}</Badge>
+                  ))}
+                </div>
+              </div>
+
+              {providerContextLink && (
+                <Button asChild variant="outline" size="sm">
+                  <a href={providerContextLink.url}>
+                    <ArrowSquareOut className="h-4 w-4" />
+                    {providerContextLink.label}
+                  </a>
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
 
         {(diagnostics.duplicate_marker_blocks_total > 0 || diagnostics.unknown_marker_blocks_total > 0 || diagnostics.probable_drift_blocks_total > 0) && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950">

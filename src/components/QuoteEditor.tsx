@@ -398,6 +398,18 @@ function resolveInspectorHandoffIntent(
   return 'open-source-draft';
 }
 
+function resolveBlockScopedHandoffIntent(healthStatuses: QuoteTenderManagedSurfaceHealthStatus[]) {
+  if (healthStatuses.some((status) => status === 'inconsistent')) {
+    return 'repair-managed-import' as const;
+  }
+
+  if (healthStatuses.some((status) => status === 'needs_attention')) {
+    return 'reimport-managed-import' as const;
+  }
+
+  return 'open-source-draft' as const;
+}
+
 function buildManagedEditGuardRequest(
   target: QuoteTenderManagedEditTarget,
   tenderIntelligenceLink: TenderIntelligenceQuoteEditorHandoffLink | null,
@@ -571,6 +583,20 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const tenderIntelligenceInspectorLink = resolveTenderIntelligenceLink(
     resolveInspectorHandoffIntent(quoteTenderManagedDiagnostics.health_status),
     quoteTenderManagedDiagnostics.managed_block_ids,
+  );
+  const providerManagedBlockIds = useMemo(
+    () => quoteTenderManagedDiagnostics.blocks
+      .filter((block) => block.known_block_id === 'provider_profile_context')
+      .map((block) => block.block_id),
+    [quoteTenderManagedDiagnostics.blocks],
+  );
+  const tenderIntelligenceProviderLink = resolveTenderIntelligenceLink(
+    resolveBlockScopedHandoffIntent(
+      quoteTenderManagedDiagnostics.blocks
+        .filter((block) => block.known_block_id === 'provider_profile_context')
+        .map((block) => block.health_status),
+    ),
+    providerManagedBlockIds,
   );
   const managedEditUnlockKeySet = useMemo(() => new Set(managedEditUnlockKeys), [managedEditUnlockKeys]);
   const quoteTenderManagedFieldTargets = useMemo(() => ({
@@ -1605,6 +1631,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
               diagnostics={quoteTenderManagedDiagnostics}
               source={quoteTenderImportSource}
               tenderIntelligenceLink={tenderIntelligenceInspectorLink}
+                providerContextLink={providerManagedBlockIds.length > 0 ? tenderIntelligenceProviderLink : null}
             />
 
             <div className="grid gap-4 xl:grid-cols-3">
