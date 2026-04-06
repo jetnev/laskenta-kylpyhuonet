@@ -556,6 +556,56 @@ function getExcludedMessage(sourceEntity: ReturnType<typeof resolveSourceEntity>
   return 'Rivi on jätetty pois tämän draft package -version payloadista.';
 }
 
+const PROVIDER_CONTEXT_SECTION_META = [
+  {
+    marker: '## Tarjoajaprofiili',
+    label: 'Tarjoajaprofiili',
+  },
+  {
+    marker: '## Vastauspohjat',
+    label: 'Vastauspohjat',
+  },
+  {
+    marker: '## Tarjoajan reunaehdot',
+    label: 'Tarjoajan reunaehdot',
+  },
+] as const;
+
+function resolveProviderContextLabels(contentMd?: string | null) {
+  const normalizedContent = contentMd?.trim();
+
+  if (!normalizedContent) {
+    return [];
+  }
+
+  return PROVIDER_CONTEXT_SECTION_META
+    .filter((section) => normalizedContent.includes(section.marker))
+    .map((section) => section.label);
+}
+
+function ProviderContextBadges({
+  contentMd,
+  className = 'mt-3',
+}: {
+  contentMd?: string | null;
+  className?: string;
+}) {
+  const labels = resolveProviderContextLabels(contentMd);
+
+  if (labels.length < 1) {
+    return null;
+  }
+
+  return (
+    <div className={`${className} flex flex-wrap items-center gap-2`}>
+      <Badge variant="secondary">Provider-konteksti mukana</Badge>
+      {labels.map((label) => (
+        <Badge key={label} variant="outline">{label}</Badge>
+      ))}
+    </div>
+  );
+}
+
 function DraftItemCard({
   item,
   selectedPackage,
@@ -592,6 +642,7 @@ function DraftItemCard({
       </div>
 
       <p className="mt-3 text-sm font-medium text-slate-950">{item.title}</p>
+      <ProviderContextBadges contentMd={item.contentMd} />
       {item.contentMd && <p className="mt-2 text-sm leading-6 text-slate-700 whitespace-pre-line">{getTenderTextPreview(item.contentMd, 320)}</p>}
       {!item.isIncluded && <p className="mt-3 text-xs leading-5 text-muted-foreground">{getExcludedMessage(sourceEntity)}</p>}
     </div>
@@ -1209,6 +1260,7 @@ export default function TenderDraftPackagePanel({
                       {payload.notes_for_editor.length > 0 ? payload.notes_for_editor.map((item) => (
                         <div key={`${item.source_entity_type}:${item.source_entity_id}`} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700">
                           <p className="font-medium text-slate-950">{item.title}</p>
+                          <ProviderContextBadges contentMd={item.content_md} className="mt-2" />
                           {item.content_md && <p className="mt-2 whitespace-pre-line">{getTenderTextPreview(item.content_md, 240)}</p>}
                         </div>
                       )) : <p className="text-sm text-muted-foreground">Ei editor-noteseja.</p>}

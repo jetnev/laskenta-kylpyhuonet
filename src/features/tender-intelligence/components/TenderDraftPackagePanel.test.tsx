@@ -10,6 +10,20 @@ import type {
 } from '../types/tender-editor-import';
 import type { TenderDraftPackage, TenderPackageDetails } from '../types/tender-intelligence';
 
+const PROVIDER_AWARE_ARTIFACT_CONTENT_MD = [
+  '## Sisältö',
+  '',
+  '## Tarjoajaprofiili',
+  '- Yritys: Example Oy',
+  '- Toimialue: Uusimaa',
+  '',
+  '## Vastauspohjat',
+  '- Tekninen lähestymistapa: Korostetaan märkätilojen referenssejä.',
+  '',
+  '## Tarjoajan reunaehdot',
+  '- Hard: Ei aliurakointia ilman tilaajan hyväksyntää.',
+].join('\n');
+
 function createPackageDetails(): TenderPackageDetails {
   return {
     package: {
@@ -181,6 +195,82 @@ function createDraftPackage(): TenderDraftPackage {
     ],
     createdAt: '2026-04-05T13:02:00.000Z',
     updatedAt: '2026-04-05T13:08:00.000Z',
+  };
+}
+
+function createProviderAwarePackageDetails(): TenderPackageDetails {
+  const base = createPackageDetails();
+
+  return {
+    ...base,
+    results: {
+      ...base.results,
+      draftArtifacts: [
+        {
+          id: '99999999-9999-4999-8999-999999999999',
+          packageId: '11111111-1111-4111-8111-111111111111',
+          title: 'Deterministinen vastausyhteenveto',
+          artifactType: 'response-summary',
+          contentMd: PROVIDER_AWARE_ARTIFACT_CONTENT_MD,
+          status: 'accepted',
+          createdAt: '2026-04-05T13:02:00.000Z',
+          updatedAt: '2026-04-05T13:02:00.000Z',
+          reviewStatus: 'accepted',
+          reviewNote: null,
+          reviewedByUserId: null,
+          reviewedAt: null,
+          resolutionStatus: 'resolved',
+          resolutionNote: null,
+          resolvedByUserId: null,
+          resolvedAt: null,
+        },
+      ],
+    },
+  };
+}
+
+function createProviderAwareDraftPackage(): TenderDraftPackage {
+  const base = createDraftPackage();
+
+  return {
+    ...base,
+    summary: 'Luonnospaketti sisältää 1 hyväksyttyä vaatimusta, 1 editor-notea, 1 draft artefaktia.',
+    exportPayload: {
+      ...base.exportPayload,
+      metadata: {
+        ...base.exportPayload.metadata,
+        summary: 'Luonnospaketti sisältää 1 hyväksyttyä vaatimusta, 1 editor-notea, 1 draft artefaktia.',
+      },
+      notes_for_editor: [
+        ...base.exportPayload.notes_for_editor,
+        {
+          source_entity_type: 'draft_artifact',
+          source_entity_id: '99999999-9999-4999-8999-999999999999',
+          title: 'Deterministinen vastausyhteenveto',
+          content_md: PROVIDER_AWARE_ARTIFACT_CONTENT_MD,
+        },
+      ],
+    },
+    items: [
+      base.items[0],
+      {
+        id: '99999999-9999-4999-8999-000000000001',
+        draftPackageId: '66666666-6666-4666-8666-666666666666',
+        itemType: 'draft_artifact',
+        sourceEntityType: 'draft_artifact',
+        sourceEntityId: '99999999-9999-4999-8999-999999999999',
+        title: 'Deterministinen vastausyhteenveto',
+        contentMd: PROVIDER_AWARE_ARTIFACT_CONTENT_MD,
+        sortOrder: 1,
+        isIncluded: true,
+        createdAt: '2026-04-05T13:02:00.000Z',
+        updatedAt: '2026-04-05T13:02:00.000Z',
+      },
+      {
+        ...base.items[1],
+        sortOrder: 2,
+      },
+    ],
   };
 }
 
@@ -606,5 +696,32 @@ describe('TenderDraftPackagePanel', () => {
     expect(markup).toContain('Draft muuttunut importin jälkeen');
     expect(markup).toContain('Revision 2');
     expect(markup).toContain('Tarjouspaketti / editor import');
+  });
+
+  it('surfaces provider context badges for provider-aware draft artifacts', () => {
+    const markup = renderToStaticMarkup(
+      <TenderDraftPackagePanel
+        selectedPackage={createProviderAwarePackageDetails()}
+        draftPackages={[createProviderAwareDraftPackage()]}
+        selectedDraftPackageId="66666666-6666-4666-8666-666666666666"
+        onSelectDraftPackage={() => undefined}
+        onCreateDraftPackage={async () => undefined}
+        onImportDraftPackageToEditor={async () => undefined}
+        onReimportDraftPackageToEditor={async () => undefined}
+        onRefreshDraftPackageImportRegistryRepairPreview={async () => undefined}
+        onRefreshDraftPackageImportDiagnosticsFromQuote={async () => undefined}
+        onRepairDraftPackageImportRegistry={async () => undefined}
+        onOpenImportedQuote={() => undefined}
+        onUpdateDraftPackageItem={async () => undefined}
+        onMarkDraftPackageReviewed={async () => undefined}
+        onMarkDraftPackageExported={async () => undefined}
+      />,
+    );
+
+    expect(markup).toContain('Provider-konteksti mukana');
+    expect(markup).toContain('Tarjoajaprofiili');
+    expect(markup).toContain('Vastauspohjat');
+    expect(markup).toContain('Tarjoajan reunaehdot');
+    expect(markup).toContain('Deterministinen vastausyhteenveto');
   });
 });
