@@ -7,6 +7,7 @@ import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { useProjects, useCustomers, useInvoices, useQuotes, useQuoteRows, useQuoteTerms, useSettings, useStarterWorkspaceTemplate } from '../../hooks/use-data';
 import { useAuth } from '../../hooks/use-auth';
 import { toast } from 'sonner';
@@ -76,6 +77,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [selectedQuotes, setSelectedQuotes] = useState<Set<string>>(new Set());
   const [pendingCreatedQuoteId, setPendingCreatedQuoteId] = useState<string | null>(null);
+  const [quoteListViewMode, setQuoteListViewMode] = useState<'cards' | 'table'>('cards');
   const [searchProjects, setSearchProjects] = useState('');
   const [searchCustomers, setSearchCustomers] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('all');
@@ -1054,6 +1056,13 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
                   {selectedQuotes.size > 0 ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="secondary">{selectedQuotes.size} valittu</Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setQuoteListViewMode((current) => (current === 'cards' ? 'table' : 'cards'))}
+                      >
+                        {quoteListViewMode === 'cards' ? 'Taulukkotila' : 'Korttitila'}
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => setSelectedQuotes(new Set())}>
                         <X className="h-4 w-4" />
                         Tyhjennä
@@ -1064,7 +1073,16 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
                       </Button>
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">Avaa tarjous editoriin klikkaamalla riviä.</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm text-muted-foreground">Avaa tarjous editoriin klikkaamalla riviä.</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setQuoteListViewMode((current) => (current === 'cards' ? 'table' : 'cards'))}
+                      >
+                        {quoteListViewMode === 'cards' ? 'Taulukkotila' : 'Korttitila'}
+                      </Button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1073,6 +1091,54 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
                 {selectedProjectQuotes.length === 0 ? (
                   <div className="rounded-2xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
                     Tälle projektille ei ole vielä tarjouksia. Luo ensimmäinen tarjous työtilan päätoiminnolla.
+                  </div>
+                ) : quoteListViewMode === 'table' ? (
+                  <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[56px]">Valitse</TableHead>
+                          <TableHead>Tarjous</TableHead>
+                          <TableHead>Tila</TableHead>
+                          <TableHead>Päivitetty</TableHead>
+                          <TableHead>Vastuuhenkilö</TableHead>
+                          <TableHead className="w-[64px]">Toimet</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedProjectQuotes.map((quote) => {
+                          const statusMeta = QUOTE_STATUS_META[quote.status];
+                          return (
+                            <TableRow key={quote.id} className="cursor-pointer" onClick={() => handleEditQuote(selectedProject.id, quote.id)}>
+                              <TableCell onClick={(event) => event.stopPropagation()}>
+                                <Checkbox
+                                  checked={selectedQuotes.has(quote.id)}
+                                  onCheckedChange={() => toggleQuoteSelection(quote.id)}
+                                  aria-label={`Valitse tarjous ${quote.title}`}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <div className="font-medium text-slate-950">{quote.title}</div>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                  {quote.quoteNumber && <span className="rounded border px-1.5 py-0.5 font-mono">{quote.quoteNumber}</span>}
+                                  <span>v{quote.revisionNumber}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
+                              </TableCell>
+                              <TableCell>{new Date(quote.updatedAt).toLocaleString('fi-FI')}</TableCell>
+                              <TableCell>{resolveResponsibleUserLabel(quote.ownerUserId || selectedProject.ownerUserId || selectedCustomer?.ownerUserId)}</TableCell>
+                              <TableCell onClick={(event) => event.stopPropagation()}>
+                                <Button size="sm" variant="ghost" onClick={() => handleDeleteQuote(quote.id)} className="h-8 w-8 p-0">
+                                  <Trash className="h-3 w-3" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
                   </div>
                 ) : (
                   <div className="space-y-3">
