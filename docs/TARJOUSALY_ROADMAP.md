@@ -206,6 +206,14 @@ Ensimmäinen inkrementti valmis:
 - analyysin readiness ei enää hylkää PDF-pakettia heti formaatin perusteella, vaan ohjaa ensin extractionin käynnistykseen
 - dokumenttipaneelin viestit päivitettiin vastaamaan uutta mallia: TXT/Markdown/CSV/XLSX ovat varma baseline, PDF/DOCX riippuvat ympäristön extractor-version tuesta
 
+### Työpaketti 5 — dokumenttien intake-luokittelu
+
+Ensimmäinen inkrementti valmis:
+
+- Tarjousäly päättelee nyt dokumentin liiketoimintaluokan automaattisesti tiedostonimen ja MIME-tyypin perusteella (tarjouspyyntö, liite, hinnoittelu, tekninen, sopimus, muu)
+- luokittelu kytkettiin domain-mappaukseen, joten myös aiemmin tallennetut dokumentit saavat näkyvän luokan ilman tietokantamigraatiota
+- dokumenttipaneeli näyttää nyt erikseen tiedostotyypin (esim. PDF) ja intake-luokan (esim. Tarjouspyyntö), mikä nopeuttaa paketin sisältöjen läpikäyntiä
+
 ## Seuraava tavoitesuunta
 
 Tarjousälyn seuraavien syventävien vaiheiden tulee jatkua tästä järjestyksestä tuotannollistavien työpakettien rinnalla, ellei erikseen päätetä muuta:

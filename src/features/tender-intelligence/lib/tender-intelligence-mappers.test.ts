@@ -536,6 +536,10 @@ describe('buildTenderPackageDetails', () => {
       jobType: 'placeholder_analysis',
       status: 'queued',
     });
+    expect(details.documents[0]).toMatchObject({
+      fileName: 'tarjouspyynto.pdf',
+      kind: 'rfp',
+    });
     expect(details.documentExtractions[0]).toMatchObject({
       documentId: documentRows[0].id,
       extractionStatus: 'extracted',

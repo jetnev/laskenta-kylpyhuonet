@@ -14,6 +14,7 @@ import {
 } from '../lib/tender-document-upload';
 import { resolveTenderDocumentExtractionStatus } from '../lib/tender-document-extraction';
 import {
+  TENDER_DOCUMENT_KIND_META,
   TENDER_DOCUMENT_EXTRACTION_STATUS_META,
   TENDER_DOCUMENT_EXTRACTOR_TYPE_META,
   TENDER_DOCUMENT_PARSE_STATUS_META,
@@ -215,6 +216,7 @@ export default function TenderDocumentsPanel({
             const parseMeta = TENDER_DOCUMENT_PARSE_STATUS_META[document.parseStatus];
             const extractionMeta = TENDER_DOCUMENT_EXTRACTION_STATUS_META[extractionStatus];
             const extractorMeta = extraction ? TENDER_DOCUMENT_EXTRACTOR_TYPE_META[extraction.extractorType] : null;
+            const documentKindMeta = TENDER_DOCUMENT_KIND_META[document.kind];
             const deleting = deletingDocumentIds.includes(document.id);
             const extracting = extractingDocumentIds.includes(document.id);
             const canExtract = document.uploadState === 'uploaded' && Boolean(document.storagePath) && !deleting && !uploading && !extracting;
@@ -233,6 +235,7 @@ export default function TenderDocumentsPanel({
 
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline">{getTenderDocumentTypeLabel(document.fileName, document.mimeType)}</Badge>
+                      <Badge variant={documentKindMeta.variant}>{documentKindMeta.label}</Badge>
                       <Badge variant="outline">{formatTenderDocumentFileSize(document.fileSizeBytes)}</Badge>
                       <Badge variant={uploadMeta.variant}>{uploadMeta.label}</Badge>
                       <Badge variant={parseMeta.variant}>Parsinta: {parseMeta.label}</Badge>

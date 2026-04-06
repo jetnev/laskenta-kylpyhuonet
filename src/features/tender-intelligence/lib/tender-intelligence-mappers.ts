@@ -1,4 +1,5 @@
 import { buildTenderAnalysisReadiness } from './tender-analysis';
+import { inferTenderDocumentKind } from './tender-document-upload';
 import {
   createTenderReferenceProfileInputSchema,
   tenderDraftPackageReimportStatusSchema,
@@ -396,7 +397,7 @@ export function mapTenderDocumentRowToDomain(row: TenderDocumentRow): TenderDocu
     packageId: row.tender_package_id,
     fileName: row.file_name,
     mimeType: row.mime_type,
-    kind: 'other',
+    kind: inferTenderDocumentKind(row.file_name, row.mime_type),
     storageBucket: row.storage_bucket,
     storagePath: row.storage_path,
     fileSizeBytes: row.file_size_bytes,

@@ -10,6 +10,7 @@ import {
   TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META,
   TENDER_DRAFT_PACKAGE_ITEM_TYPE_META,
   TENDER_DRAFT_PACKAGE_STATUS_META,
+  TENDER_DOCUMENT_KIND_META,
   TENDER_DOCUMENT_EXTRACTION_STATUS_META,
   TENDER_DOCUMENT_EXTRACTOR_TYPE_META,
   TENDER_DRAFT_ARTIFACT_STATUS_META,
@@ -34,6 +35,7 @@ describe('Phase 6 Tender UI helpers', () => {
     expect(TENDER_REVIEW_TASK_STATUS_META.todo.label).toBe('Avoin');
     expect(TENDER_DRAFT_ARTIFACT_STATUS_META.placeholder.label).toBe('Placeholder');
     expect(TENDER_DOCUMENT_EXTRACTION_STATUS_META.unsupported.label).toBe('Ei tuettu');
+    expect(TENDER_DOCUMENT_KIND_META.rfp.label).toBe('Tarjouspyyntö');
     expect(TENDER_DOCUMENT_EXTRACTOR_TYPE_META.xlsx.label).toBe('XLSX');
     expect(TENDER_SEVERITY_META.high.label).toBe('Korkea');
     expect(TENDER_REFERENCE_SOURCE_META.organization_reference_profile.label).toBe('Referenssikorpus');

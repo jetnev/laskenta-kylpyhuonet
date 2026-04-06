@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   TENDER_DOCUMENT_MAX_FILE_SIZE_BYTES,
   buildTenderDocumentStoragePath,
+  inferTenderDocumentKind,
   sanitizeTenderDocumentFileName,
   validateTenderDocumentFile,
 } from './tender-document-upload';
@@ -95,5 +96,19 @@ describe('validateTenderDocumentFile', () => {
         type: 'application/pdf',
       })
     ).toThrow(/MIME-tyyppi ei vastaa sallittua DOCX-tiedostoa/i);
+  });
+});
+
+describe('inferTenderDocumentKind', () => {
+  it('classifies tarjouspyynto-like names as rfp', () => {
+    expect(inferTenderDocumentKind('Tarjouspyynto 2026.pdf', 'application/pdf')).toBe('rfp');
+  });
+
+  it('classifies pricing spreadsheets as pricing', () => {
+    expect(inferTenderDocumentKind('hinnasto-vertailu.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toBe('pricing');
+  });
+
+  it('falls back to other when no classifier hint exists', () => {
+    expect(inferTenderDocumentKind('muistio.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe('other');
   });
 });

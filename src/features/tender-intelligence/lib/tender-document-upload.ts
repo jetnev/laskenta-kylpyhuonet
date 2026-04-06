@@ -18,6 +18,8 @@ interface TenderDocumentTypeDefinition {
   acceptedMimeTypes: string[];
 }
 
+type TenderDocumentKindValue = 'rfp' | 'appendix' | 'pricing' | 'technical' | 'contract' | 'other';
+
 export interface ValidTenderDocumentFile {
   fileName: string;
   sanitizedFileName: string;
@@ -103,6 +105,55 @@ function sanitizeFileNameSegment(value: string) {
 
 function getTenderDocumentTypeByExtension(extension: string) {
   return TENDER_DOCUMENT_TYPE_DEFINITIONS.find((definition) => definition.extension === extension) ?? null;
+}
+
+function normalizeDocumentKindSource(value: string | null | undefined) {
+  return (value ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function includesAnyKeyword(source: string, keywords: readonly string[]) {
+  return keywords.some((keyword) => source.includes(keyword));
+}
+
+const RFP_KEYWORDS = ['tarjouspyynt', 'request for proposal', 'request-for-proposal', 'rfp', 'invitation to tender', 'itt'] as const;
+const APPENDIX_KEYWORDS = ['liite', 'appendix', 'attachment', 'annex'] as const;
+const PRICING_KEYWORDS = ['hinta', 'hinnoittelu', 'pricing', 'price', 'cost', 'boq', 'bill of quantities'] as const;
+const TECHNICAL_KEYWORDS = ['tekn', 'specification', 'spec', 'vaatimusmaarittely', 'piirustus', 'drawing'] as const;
+const CONTRACT_KEYWORDS = ['sopimus', 'agreement', 'contract', 'ehdot', 'terms and conditions', 'terms'] as const;
+
+export function inferTenderDocumentKind(fileName: string, mimeType: string | null | undefined): TenderDocumentKindValue {
+  const normalizedName = normalizeDocumentKindSource(fileName);
+  const normalizedMimeType = normalizeDocumentKindSource(mimeType);
+  const source = `${normalizedName} ${normalizedMimeType}`;
+
+  if (includesAnyKeyword(source, RFP_KEYWORDS)) {
+    return 'rfp';
+  }
+
+  if (includesAnyKeyword(source, PRICING_KEYWORDS)) {
+    return 'pricing';
+  }
+
+  if (includesAnyKeyword(source, TECHNICAL_KEYWORDS)) {
+    return 'technical';
+  }
+
+  if (includesAnyKeyword(source, CONTRACT_KEYWORDS)) {
+    return 'contract';
+  }
+
+  if (includesAnyKeyword(source, APPENDIX_KEYWORDS)) {
+    return 'appendix';
+  }
+
+  if (normalizedMimeType.includes('text/csv') || normalizedMimeType.includes('spreadsheetml.sheet')) {
+    return 'pricing';
+  }
+
+  return 'other';
 }
 
 export function sanitizeTenderDocumentFileName(fileName: string) {

@@ -10,6 +10,7 @@ import type {
   TenderDraftArtifactStatus,
   TenderDraftArtifactType,
   TenderDocumentParseStatus,
+  TenderDocumentKind,
   TenderDocumentUploadStatus,
   TenderGoNoGoRecommendation,
   TenderMissingItemStatus,
@@ -274,6 +275,18 @@ export const TENDER_DOCUMENT_UPLOAD_STATUS_META: Record<
   pending: { label: 'Ladataan', variant: 'outline' },
   uploaded: { label: 'Tallennettu', variant: 'default' },
   failed: { label: 'Virhe', variant: 'destructive' },
+};
+
+export const TENDER_DOCUMENT_KIND_META: Record<
+  TenderDocumentKind,
+  { label: string; variant: TenderBadgeVariant }
+> = {
+  rfp: { label: 'Tarjouspyyntö', variant: 'default' },
+  appendix: { label: 'Liite', variant: 'outline' },
+  pricing: { label: 'Hinnoittelu', variant: 'outline' },
+  technical: { label: 'Tekninen', variant: 'outline' },
+  contract: { label: 'Sopimus', variant: 'outline' },
+  other: { label: 'Muu dokumentti', variant: 'secondary' },
 };
 
 export const TENDER_DOCUMENT_PARSE_STATUS_META: Record<
