@@ -84,8 +84,9 @@ export function useTenderIntelligence() {
   const [updatingDraftPackageItemIds, setUpdatingDraftPackageItemIds] = useState<string[]>([]);
   const [reviewingDraftPackageId, setReviewingDraftPackageId] = useState<string | null>(null);
   const [exportingDraftPackageId, setExportingDraftPackageId] = useState<string | null>(null);
-  const [referenceProfileSubmittingId, setReferenceProfileSubmittingId] = useState<string | 'new' | null>(null);
+  const [referenceProfileSubmittingId, setReferenceProfileSubmittingId] = useState<string | 'new' | 'import' | null>(null);
   const [deletingReferenceProfileIds, setDeletingReferenceProfileIds] = useState<string[]>([]);
+  const [importingReferenceProfiles, setImportingReferenceProfiles] = useState(false);
   const [startingAnalysisPackageId, setStartingAnalysisPackageId] = useState<string | null>(null);
   const [extractingPackageId, setExtractingPackageId] = useState<string | null>(null);
   const [extractingDocumentIds, setExtractingDocumentIds] = useState<string[]>([]);
@@ -677,6 +678,29 @@ export function useTenderIntelligence() {
     [loadReferenceProfiles, refreshSelectedPackageReferenceSuggestions, repository],
   );
 
+  const importReferenceProfiles = useCallback(
+    async (inputs: CreateTenderReferenceProfileInput[]) => {
+      setImportingReferenceProfiles(true);
+      setReferenceProfileSubmittingId('import');
+
+      try {
+        const created = await repository.importReferenceProfiles(inputs);
+        await loadReferenceProfiles();
+        await refreshSelectedPackageReferenceSuggestions();
+        setError(null);
+        return created;
+      } catch (nextError) {
+        const message = getErrorMessage(nextError);
+        setError(message);
+        throw new Error(message);
+      } finally {
+        setImportingReferenceProfiles(false);
+        setReferenceProfileSubmittingId((current) => (current === 'import' ? null : current));
+      }
+    },
+    [loadReferenceProfiles, refreshSelectedPackageReferenceSuggestions, repository],
+  );
+
   const deleteReferenceProfile = useCallback(
     async (profileId: string) => {
       setDeletingReferenceProfileIds((current) => (current.includes(profileId) ? current : [...current, profileId]));
@@ -927,6 +951,7 @@ export function useTenderIntelligence() {
     exportingDraftPackageId,
     referenceProfileSubmittingId,
     deletingReferenceProfileIds,
+    importingReferenceProfiles,
     startingAnalysisPackageId,
     extractingPackageId,
     extractingDocumentIds,
@@ -957,6 +982,7 @@ export function useTenderIntelligence() {
     markDraftPackageReviewed,
     markDraftPackageExported,
     createReferenceProfile,
+    importReferenceProfiles,
     updateReferenceProfile,
     deleteReferenceProfile,
     recomputeReferenceSuggestions: refreshReferenceSuggestionsForPackage,

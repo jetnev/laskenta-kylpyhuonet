@@ -238,6 +238,14 @@ Ensimmäinen inkrementti valmis:
 - päätöstuki tuottaa operatiiviset seuraavat askeleet, jotta käyttäjä näkee heti, pysäyttääkö paketin analyysin puute, avoin high-risk-rivi vai keskeneräinen review
 - sama päätöstukilogiikka syötetään myös draft-paketin laatugateen, jolloin editorivienti huomioi koko päätössignaalin tilan eikä vain yksittäistä recommendation-kenttää
 
+### Työpaketti 9 — referenssikorpuksen tuonti ja deduplikointi
+
+Ensimmäinen inkrementti valmis:
+
+- referenssikorpuksen paneeli tukee nyt CSV-, TSV-, XLSX- ja JSON-tuontia saman import-dialogin kautta
+- ennen tallennusta Tarjousäly näyttää deduplikointiesikatselun, joka erottaa uudet profiilit, jo korpuksessa olevat profiilit, saman tuontierän duplikaatit sekä virheelliset rivit
+- hyväksytyt uudet profiilit viedään sisään yhtenä bulk-tuontina ja valitun paketin referenssiehdotukset lasketaan vasta lopuksi uudelleen, jotta recompute ei toistu jokaiselle riville erikseen
+
 ## Seuraava tavoitesuunta
 
 Tarjousälyn seuraavien syventävien vaiheiden tulee jatkua tästä järjestyksestä tuotannollistavien työpakettien rinnalla, ellei erikseen päätetä muuta:

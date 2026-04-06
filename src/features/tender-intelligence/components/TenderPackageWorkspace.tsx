@@ -120,8 +120,9 @@ interface TenderPackageWorkspaceProps {
   updatingDraftPackageItemIds?: string[];
   reviewingDraftPackageId?: string | null;
   exportingDraftPackageId?: string | null;
-  referenceProfileSubmittingId?: string | 'new' | null;
+  referenceProfileSubmittingId?: string | 'new' | 'import' | null;
   deletingReferenceProfileIds?: string[];
+  importingReferenceProfiles?: boolean;
   workflowUpdatingTargetIds?: string[];
   recomputingReferenceSuggestionPackageId?: string | null;
   error?: string | null;
@@ -144,6 +145,7 @@ interface TenderPackageWorkspaceProps {
   onMarkDraftPackageReviewed: (draftPackageId: string) => Promise<unknown>;
   onMarkDraftPackageExported: (draftPackageId: string) => Promise<unknown>;
   onCreateReferenceProfile: (input: CreateTenderReferenceProfileInput) => Promise<unknown>;
+  onImportReferenceProfiles: (inputs: CreateTenderReferenceProfileInput[]) => Promise<unknown>;
   onUpdateReferenceProfile: (profileId: string, input: UpdateTenderReferenceProfileInput) => Promise<unknown>;
   onDeleteReferenceProfile: (profileId: string) => Promise<void>;
   onUpdateReferenceSuggestion: (referenceSuggestionId: string, input: UpdateTenderWorkflowInput) => Promise<unknown>;
@@ -189,6 +191,7 @@ export default function TenderPackageWorkspace({
   exportingDraftPackageId = null,
   referenceProfileSubmittingId = null,
   deletingReferenceProfileIds = [],
+  importingReferenceProfiles = false,
   workflowUpdatingTargetIds = [],
   recomputingReferenceSuggestionPackageId = null,
   error = null,
@@ -211,6 +214,7 @@ export default function TenderPackageWorkspace({
   onMarkDraftPackageReviewed,
   onMarkDraftPackageExported,
   onCreateReferenceProfile,
+  onImportReferenceProfiles,
   onUpdateReferenceProfile,
   onDeleteReferenceProfile,
   onUpdateReferenceSuggestion,
@@ -616,8 +620,10 @@ export default function TenderPackageWorkspace({
         selectedPackageName={selectedPackage.package.name}
         submittingProfileId={referenceProfileSubmittingId}
         deletingProfileIds={deletingReferenceProfileIds}
+        importingProfiles={importingReferenceProfiles}
         recomputingPackageId={recomputingReferenceSuggestionPackageId}
         onCreateProfile={onCreateReferenceProfile}
+        onImportProfiles={onImportReferenceProfiles}
         onUpdateProfile={onUpdateReferenceProfile}
         onDeleteProfile={onDeleteReferenceProfile}
         onRecomputeSuggestions={onRecomputeReferenceSuggestions}

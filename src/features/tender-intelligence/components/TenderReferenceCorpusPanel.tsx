@@ -1,5 +1,5 @@
-import { Buildings, Database, PencilSimple, Plus, Trash, ArrowsClockwise } from '@phosphor-icons/react';
-import { useEffect, useState } from 'react';
+import { Buildings, Database, PencilSimple, Plus, Trash, ArrowsClockwise, UploadSimple, WarningCircle } from '@phosphor-icons/react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,13 @@ import {
   getTenderTextPreview,
   TENDER_REFERENCE_PROFILE_SOURCE_KIND_META,
 } from '../lib/tender-intelligence-ui';
+import {
+  buildTenderReferenceImportPreview,
+  parseTenderReferenceImportFile,
+  parseTenderReferenceImportText,
+  type TenderReferenceImportParsedRow,
+  type TenderReferenceImportPreview,
+} from '../lib/tender-reference-import';
 import type {
   CreateTenderReferenceProfileInput,
   TenderReferenceProfile,
@@ -28,10 +35,12 @@ interface TenderReferenceCorpusPanelProps {
   referenceProfiles: TenderReferenceProfile[];
   selectedPackageId?: string | null;
   selectedPackageName?: string | null;
-  submittingProfileId?: string | 'new' | null;
+  submittingProfileId?: string | 'new' | 'import' | null;
   deletingProfileIds?: string[];
+  importingProfiles?: boolean;
   recomputingPackageId?: string | null;
   onCreateProfile: (input: CreateTenderReferenceProfileInput) => Promise<unknown>;
+  onImportProfiles: (inputs: CreateTenderReferenceProfileInput[]) => Promise<unknown>;
   onUpdateProfile: (profileId: string, input: UpdateTenderReferenceProfileInput) => Promise<unknown>;
   onDeleteProfile: (profileId: string) => Promise<void>;
   onRecomputeSuggestions?: (packageId: string) => Promise<unknown>;
@@ -296,19 +305,269 @@ function ReferenceProfileDialog({
   );
 }
 
+function resolveImportRowVariant(status: TenderReferenceImportPreview['rows'][number]['status']) {
+  if (status === 'importable') {
+    return 'default' as const;
+  }
+
+  if (status === 'invalid') {
+    return 'destructive' as const;
+  }
+
+  return 'outline' as const;
+}
+
+function resolveImportRowLabel(status: TenderReferenceImportPreview['rows'][number]['status']) {
+  if (status === 'importable') {
+    return 'Tuodaan';
+  }
+
+  if (status === 'duplicate_existing') {
+    return 'Jo korpuksessa';
+  }
+
+  if (status === 'duplicate_batch') {
+    return 'Duplikaatti erässä';
+  }
+
+  return 'Virheellinen';
+}
+
+interface ReferenceProfileImportDialogProps {
+  open: boolean;
+  existingProfiles: TenderReferenceProfile[];
+  submitting?: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (inputs: CreateTenderReferenceProfileInput[]) => Promise<unknown>;
+}
+
+function ReferenceProfileImportDialog({
+  open,
+  existingProfiles,
+  submitting = false,
+  onOpenChange,
+  onSubmit,
+}: ReferenceProfileImportDialogProps) {
+  const [importText, setImportText] = useState('');
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [fileRows, setFileRows] = useState<TenderReferenceImportParsedRow[] | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setImportText('');
+      setFileName(null);
+      setFileRows(null);
+      setFileError(null);
+    }
+  }, [open]);
+
+  const previewState = useMemo(() => {
+    const emptyPreview = buildTenderReferenceImportPreview({
+      parsedRows: [],
+      existingProfiles,
+    });
+
+    if (fileRows) {
+      return {
+        preview: buildTenderReferenceImportPreview({
+          parsedRows: fileRows,
+          existingProfiles,
+        }),
+        parseError: fileError,
+      };
+    }
+
+    if (!importText.trim()) {
+      return {
+        preview: emptyPreview,
+        parseError: fileError,
+      };
+    }
+
+    try {
+      return {
+        preview: buildTenderReferenceImportPreview({
+          parsedRows: parseTenderReferenceImportText(importText),
+          existingProfiles,
+        }),
+        parseError: null,
+      };
+    } catch (error) {
+      return {
+        preview: emptyPreview,
+        parseError: error instanceof Error ? error.message : 'Tuontiaineiston lukeminen epäonnistui.',
+      };
+    }
+  }, [existingProfiles, fileError, fileRows, importText]);
+
+  const handleTextChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    setImportText(event.target.value);
+    setFileRows(null);
+    setFileName(null);
+    setFileError(null);
+  };
+
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const parsedRows = await parseTenderReferenceImportFile(file);
+      setFileName(file.name);
+      setFileRows(parsedRows);
+      setImportText('');
+      setFileError(null);
+    } catch (error) {
+      setFileName(file.name);
+      setFileRows(null);
+      setImportText('');
+      setFileError(error instanceof Error ? error.message : 'Tiedoston lukeminen epäonnistui.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleImport = async () => {
+    if (previewState.preview.importableProfiles.length < 1) {
+      return;
+    }
+
+    await onSubmit(previewState.preview.importableProfiles);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Tuo referenssiprofiileja</DialogTitle>
+          <DialogDescription>
+            Liitä CSV-, TSV- tai JSON-aineisto tai lataa tiedosto. Tarjousäly näyttää ensin deduplikointiesikatselun ja tuo vain uudet profiilit organisaation referenssikorpukseen.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="reference-import-file">Tuo tiedostosta</Label>
+              <Input
+                id="reference-import-file"
+                type="file"
+                accept=".csv,.tsv,.xlsx,.json"
+                onChange={(event) => {
+                  void handleFileChange(event);
+                }}
+              />
+              {fileName && <Badge variant="outline">Valittu tiedosto: {fileName}</Badge>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="reference-import-text">Tai liitä tuontiaineisto</Label>
+              <Textarea
+                id="reference-import-text"
+                rows={14}
+                value={importText}
+                onChange={handleTextChange}
+                placeholder={[
+                  'Otsikko\tAsiakas\tProjektityyppi\tSijainti\tValmistumisvuosi\tUrakka-arvo\tTagit\tLähdeviite',
+                  'Kylpyhuoneremontti / As Oy Aurinkopiha\tAs Oy Aurinkopiha\tkylpyhuoneremontti\tEspoo\t2024\t85000\tkylpyhuone; saneeraus\tCRM-101',
+                ].join('\n')}
+              />
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-700">
+              Tuetut sarakkeet: otsikko, asiakas, projektityyppi, kuvaus, sijainti, valmistumisvuosi, urakka-arvo, tagit, lähdetyyppi ja lähdeviite. JSON-tuonnissa avaimet voivat olla joko näillä nimillä tai yleisillä englanninkielisillä aliasnimillä.
+            </div>
+
+            {previewState.parseError && (
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm leading-6 text-red-700">
+                <div className="flex items-center gap-2 font-medium">
+                  <WarningCircle className="h-4 w-4" />
+                  Tuontiaineistoa ei voitu lukea
+                </div>
+                <p className="mt-1">{previewState.parseError}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <p className="text-sm font-medium text-slate-950">Deduplikointiesikatselu</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Badge variant="outline">{previewState.preview.summary.totalRows} riviä</Badge>
+                <Badge variant="default">{previewState.preview.summary.importableCount} uutta</Badge>
+                <Badge variant="outline">{previewState.preview.summary.duplicateExistingCount} jo korpuksessa</Badge>
+                <Badge variant="outline">{previewState.preview.summary.duplicateBatchCount} duplikaattia erässä</Badge>
+                <Badge variant={previewState.preview.summary.invalidCount > 0 ? 'destructive' : 'outline'}>{previewState.preview.summary.invalidCount} virheellistä</Badge>
+              </div>
+            </div>
+
+            <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
+              {previewState.preview.rows.length === 0 ? (
+                <div className="rounded-2xl border border-dashed px-4 py-8 text-sm leading-6 text-muted-foreground">
+                  Liitä tai lataa aineisto nähdäksesi tuonnin esikatselun.
+                </div>
+              ) : (
+                previewState.preview.rows.map((row) => (
+                  <div key={`reference-import-row-${row.rowNumber}`} className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-950">{row.rawLabel}</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-700">{row.reason}</p>
+                        {row.duplicateOfRowNumber != null && (
+                          <p className="mt-2 text-xs leading-5 text-muted-foreground">Duplikaatti suhteessa riviin {row.duplicateOfRowNumber}.</p>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <Badge variant={resolveImportRowVariant(row.status)}>{resolveImportRowLabel(row.status)}</Badge>
+                        <span className="text-xs text-muted-foreground">Rivi {row.rowNumber}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+            Peruuta
+          </Button>
+          <Button
+            onClick={() => {
+              void handleImport();
+            }}
+            disabled={submitting || previewState.preview.importableProfiles.length < 1 || Boolean(previewState.parseError)}
+          >
+            {submitting ? 'Tuodaan...' : `Tuo ${previewState.preview.importableProfiles.length} uutta referenssiä`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function TenderReferenceCorpusPanel({
   referenceProfiles,
   selectedPackageId = null,
   selectedPackageName = null,
   submittingProfileId = null,
   deletingProfileIds = [],
+  importingProfiles = false,
   recomputingPackageId = null,
   onCreateProfile,
+  onImportProfiles,
   onUpdateProfile,
   onDeleteProfile,
   onRecomputeSuggestions,
 }: TenderReferenceCorpusPanelProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<TenderReferenceProfile | null>(null);
   const recomputingCurrentPackage = Boolean(selectedPackageId && recomputingPackageId === selectedPackageId);
 
@@ -328,6 +587,17 @@ export default function TenderReferenceCorpusPanel({
             </div>
 
             <div className="flex flex-wrap gap-2 lg:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={importingProfiles}
+                onClick={() => {
+                  setImportDialogOpen(true);
+                }}
+              >
+                <UploadSimple className="mr-2 h-4 w-4" />
+                {importingProfiles ? 'Tuodaan referenssejä...' : 'Tuo referenssejä'}
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -459,6 +729,14 @@ export default function TenderReferenceCorpusPanel({
             ? onUpdateProfile(editingProfile.id, input as UpdateTenderReferenceProfileInput)
             : onCreateProfile(input as CreateTenderReferenceProfileInput)
         }
+      />
+
+      <ReferenceProfileImportDialog
+        open={importDialogOpen}
+        existingProfiles={referenceProfiles}
+        submitting={importingProfiles || submittingProfileId === 'import'}
+        onOpenChange={setImportDialogOpen}
+        onSubmit={onImportProfiles}
       />
     </>
   );

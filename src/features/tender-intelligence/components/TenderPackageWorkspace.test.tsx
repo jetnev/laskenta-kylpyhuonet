@@ -157,6 +157,7 @@ describe('TenderPackageWorkspace', () => {
         onMarkDraftPackageReviewed={async () => undefined}
         onMarkDraftPackageExported={async () => undefined}
         onCreateReferenceProfile={async () => undefined}
+        onImportReferenceProfiles={async () => undefined}
         onUpdateReferenceProfile={async () => undefined}
         onDeleteReferenceProfile={async () => undefined}
         onUpdateReferenceSuggestion={async () => undefined}
@@ -199,6 +200,7 @@ describe('TenderPackageWorkspace', () => {
         onMarkDraftPackageReviewed={async () => undefined}
         onMarkDraftPackageExported={async () => undefined}
         onCreateReferenceProfile={async () => undefined}
+        onImportReferenceProfiles={async () => undefined}
         onUpdateReferenceProfile={async () => undefined}
         onDeleteReferenceProfile={async () => undefined}
         onUpdateReferenceSuggestion={async () => undefined}
@@ -214,5 +216,6 @@ describe('TenderPackageWorkspace', () => {
     expect(markup).toContain('Tarjous voidaan jättää, jos avoin sopimusriski suljetaan ensin.');
     expect(markup).toContain('Korkean prioriteetin riskit');
     expect(markup).toContain('Seuraavat päätösaskelmat');
+    expect(markup).toContain('Tuo referenssejä');
   });
 });

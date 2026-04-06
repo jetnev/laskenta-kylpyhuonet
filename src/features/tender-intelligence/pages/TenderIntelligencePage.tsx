@@ -141,6 +141,7 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
     updatingDraftPackageItemIds,
     referenceProfileSubmittingId,
     deletingReferenceProfileIds,
+    importingReferenceProfiles,
     reviewingDraftPackageId,
     startingAnalysisPackageId,
     extractingPackageId,
@@ -163,6 +164,7 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
     markDraftPackageReviewed,
     markDraftPackageExported,
     createReferenceProfile,
+    importReferenceProfiles,
     updateReferenceProfile,
     deleteReferenceProfile,
     recomputeReferenceSuggestions,
@@ -449,6 +451,7 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
           exportingDraftPackageId={exportingDraftPackageId}
           referenceProfileSubmittingId={referenceProfileSubmittingId}
           deletingReferenceProfileIds={deletingReferenceProfileIds}
+          importingReferenceProfiles={importingReferenceProfiles}
           workflowUpdatingTargetIds={workflowUpdatingTargetIds}
           recomputingReferenceSuggestionPackageId={recomputingReferenceSuggestionPackageId}
           error={error}
@@ -492,6 +495,7 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
           onMarkDraftPackageReviewed={markDraftPackageReviewed}
           onMarkDraftPackageExported={markDraftPackageExported}
           onCreateReferenceProfile={createReferenceProfile}
+          onImportReferenceProfiles={importReferenceProfiles}
           onUpdateReferenceProfile={updateReferenceProfile}
           onDeleteReferenceProfile={deleteReferenceProfile}
           onUpdateReferenceSuggestion={updateReferenceSuggestionWorkflow}
@@ -511,8 +515,10 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
           selectedPackageName={null}
           submittingProfileId={referenceProfileSubmittingId}
           deletingProfileIds={deletingReferenceProfileIds}
+          importingProfiles={importingReferenceProfiles}
           recomputingPackageId={recomputingReferenceSuggestionPackageId}
           onCreateProfile={createReferenceProfile}
+          onImportProfiles={importReferenceProfiles}
           onUpdateProfile={updateReferenceProfile}
           onDeleteProfile={deleteReferenceProfile}
         />

@@ -1729,6 +1729,27 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     }
   }
 
+  async importReferenceProfiles(inputs: CreateTenderReferenceProfileInput[]) {
+    try {
+      if (inputs.length < 1) {
+        return [];
+      }
+
+      const client = requireConfiguredSupabase();
+      const payload = inputs.map(mapCreateTenderReferenceProfileInputToInsert);
+      const { data, error } = await client.from('tender_reference_profiles').insert(payload).select('*');
+
+      if (error) {
+        throw error;
+      }
+
+      this.emit();
+      return tenderReferenceProfileRowsSchema.parse(data ?? []).map(mapTenderReferenceProfileRowToDomain);
+    } catch (error) {
+      throw toRepositoryError(error, 'Referenssiprofiilien tuonti epäonnistui.');
+    }
+  }
+
   async updateReferenceProfile(profileId: string, input: UpdateTenderReferenceProfileInput) {
     try {
       const existingRow = await fetchReferenceProfileRowById(profileId);

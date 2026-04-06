@@ -56,6 +56,7 @@ export interface TenderIntelligenceBackendAdapter {
   listRiskFlagsForPackage(packageId: string): Promise<TenderRiskFlag[]>;
   listReferenceProfiles(): Promise<TenderReferenceProfile[]>;
   createReferenceProfile(input: CreateTenderReferenceProfileInput): Promise<TenderReferenceProfile>;
+  importReferenceProfiles(inputs: CreateTenderReferenceProfileInput[]): Promise<TenderReferenceProfile[]>;
   updateReferenceProfile(profileId: string, input: UpdateTenderReferenceProfileInput): Promise<TenderReferenceProfile>;
   deleteReferenceProfile(profileId: string): Promise<void>;
   listDraftPackagesForTenderPackage(packageId: string): Promise<TenderDraftPackage[]>;
