@@ -135,6 +135,24 @@ export default function AccountPage() {
           </div>
         </div>
 
+        <div className="rounded-xl border bg-muted/30 p-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Sinun oikeutesi</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="text-sm text-muted-foreground">
+              Työtilan käyttäjähallinta:
+              <span className="ml-1 font-medium text-foreground">{accessState.canManageUsers ? 'Kyllä' : 'Ei'}</span>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Yhteisten tietojen hallinta:
+              <span className="ml-1 font-medium text-foreground">{accessState.canManageSharedData ? 'Kyllä' : 'Ei'}</span>
+            </div>
+            <div className="text-sm text-muted-foreground sm:col-span-2">
+              Sopimusasioiden hallinta:
+              <span className="ml-1 font-medium text-foreground">{accessState.canManageLegalDocuments ? 'Kyllä (vain Projektan ylläpito)' : 'Ei'}</span>
+            </div>
+          </div>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl border bg-muted/30 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Jäsen alkaen</p>

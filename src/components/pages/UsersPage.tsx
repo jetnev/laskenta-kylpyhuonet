@@ -199,6 +199,20 @@ export default function UsersPage() {
         </AlertDescription>
       </Alert>
 
+      <Card className="p-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Roolimalli</p>
+        <div className="mt-3 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
+          <p>
+            Työtilarooli:
+            <span className="ml-1 font-medium text-foreground">Työntekijä / Yrityksen pääkäyttäjä</span>
+          </p>
+          <p>
+            Alustarooli:
+            <span className="ml-1 font-medium text-foreground">Käyttäjä / Projektan ylläpito</span>
+          </p>
+        </div>
+      </Card>
+
       {isPlatformAdmin ? (
         <Card className="p-6">
           <Table>

@@ -66,6 +66,16 @@ import {
 import { applyDocumentMetadata } from './lib/document-metadata';
 import { APP_NAME, buildDocumentTitle, getWorkspacePageDescription } from './lib/site-brand';
 
+type NavigationSection = 'Työ' | 'Masterdata' | 'Tuki' | 'Hallinta';
+
+type NavigationItem = {
+  id: AppPage;
+  name: string;
+  icon: typeof House;
+  visible: boolean;
+  section: NavigationSection;
+};
+
 function App() {
   const [currentPathname, setCurrentPathname] = useState(() => normalizePathname(window.location.pathname));
   const [currentSearch, setCurrentSearch] = useState(() => window.location.search || '');
@@ -218,24 +228,34 @@ function App() {
 
   const navigation = useMemo(
     () =>
-      [
-        { id: 'dashboard' as const, name: 'Etusivu', icon: House, visible: true },
-        { id: 'help' as const, name: 'UKK & ohjeet', icon: List, visible: true },
-        { id: 'projects' as const, name: 'Projektit', icon: Folder, visible: true },
-        { id: 'tender-intelligence' as const, name: 'Tarjousäly', icon: MagnifyingGlass, visible: true },
-        { id: 'invoices' as const, name: 'Laskut', icon: Receipt, visible: true },
-        { id: 'products' as const, name: 'Tuoterekisteri', icon: Package, visible: true },
-        { id: 'installation-groups' as const, name: 'Hintaryhmät', icon: Wrench, visible: true },
-        { id: 'substitutes' as const, name: 'Korvaavat tuotteet', icon: ArrowsLeftRight, visible: true },
-        { id: 'terms' as const, name: 'Tarjousehdot', icon: FileText, visible: true },
-        { id: 'reports' as const, name: 'Raportointi', icon: ChartBar, visible: true },
-        { id: 'users' as const, name: 'Käyttäjät', icon: User, visible: canManageUsers },
-        { id: 'settings' as const, name: 'Asetukset', icon: Gear, visible: canManageSharedData },
-        { id: 'legal' as const, name: 'Sopimusasiat', icon: Shield, visible: canManageLegalDocuments },
-        { id: 'account' as const, name: 'Oma tili', icon: User, visible: true },
-      ].filter((item) => item.visible),
+      ([
+        { id: 'dashboard', name: 'Etusivu', icon: House, visible: true, section: 'Työ' },
+        { id: 'projects', name: 'Projektit', icon: Folder, visible: true, section: 'Työ' },
+        { id: 'invoices', name: 'Laskut', icon: Receipt, visible: true, section: 'Työ' },
+        { id: 'reports', name: 'Raportointi', icon: ChartBar, visible: true, section: 'Työ' },
+        { id: 'tender-intelligence', name: 'Tarjousäly', icon: MagnifyingGlass, visible: true, section: 'Työ' },
+        { id: 'products', name: 'Tuoterekisteri', icon: Package, visible: true, section: 'Masterdata' },
+        { id: 'installation-groups', name: 'Hintaryhmät', icon: Wrench, visible: true, section: 'Masterdata' },
+        { id: 'substitutes', name: 'Korvaavat tuotteet', icon: ArrowsLeftRight, visible: true, section: 'Masterdata' },
+        { id: 'terms', name: 'Tarjousehdot', icon: FileText, visible: true, section: 'Masterdata' },
+        { id: 'help', name: 'UKK & ohjeet', icon: List, visible: true, section: 'Tuki' },
+        { id: 'users', name: 'Käyttäjät', icon: User, visible: canManageUsers, section: 'Hallinta' },
+        { id: 'settings', name: 'Asetukset', icon: Gear, visible: canManageSharedData, section: 'Hallinta' },
+        { id: 'legal', name: 'Sopimusasiat', icon: Shield, visible: canManageLegalDocuments, section: 'Hallinta' },
+        { id: 'account', name: 'Oma tili', icon: User, visible: true, section: 'Hallinta' },
+      ] satisfies NavigationItem[]).filter((item) => item.visible),
     [canManageLegalDocuments, canManageSharedData, canManageUsers]
   );
+
+  const navigationSections = useMemo(() => {
+    const sectionOrder: NavigationSection[] = ['Työ', 'Masterdata', 'Tuki', 'Hallinta'];
+    return sectionOrder
+      .map((section) => ({
+        section,
+        items: navigation.filter((item) => item.section === section),
+      }))
+      .filter((entry) => entry.items.length > 0);
+  }, [navigation]);
 
   useEffect(() => {
     const syncRoute = () => {
@@ -534,24 +554,31 @@ function App() {
           )}
         </div>
 
-        <nav className="space-y-1 p-4 flex-1 overflow-y-auto">
-          {navigation.map((item) => {
-            const Icon = item.icon;
-            const isActive = currentPage === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleNavigatePage(item.id)}
-                className={cn(
-                  'flex w-full items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
-                  isActive ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted'
-                )}
-              >
-                <Icon className="h-5 w-5 flex-shrink-0" weight={isActive ? 'fill' : 'regular'} />
-                <span className="truncate">{item.name}</span>
-              </button>
-            );
-          })}
+        <nav className="space-y-5 p-4 flex-1 overflow-y-auto">
+          {navigationSections.map((entry) => (
+            <div key={entry.section} className="space-y-1.5">
+              <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                {entry.section}
+              </p>
+              {entry.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = currentPage === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavigatePage(item.id)}
+                    className={cn(
+                      'flex w-full items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
+                      isActive ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted'
+                    )}
+                  >
+                    <Icon className="h-5 w-5 flex-shrink-0" weight={isActive ? 'fill' : 'regular'} />
+                    <span className="truncate">{item.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="border-t border-border p-4 space-y-3">
