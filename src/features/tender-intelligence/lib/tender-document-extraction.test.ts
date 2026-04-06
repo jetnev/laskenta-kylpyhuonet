@@ -23,6 +23,24 @@ describe('tender-document-extraction helpers', () => {
     expect(isTenderDocumentExtractionSupported('application/pdf')).toBe(true);
   });
 
+  it('falls back to filename extension for generic mime types', () => {
+    expect(
+      getTenderDocumentExtractionSupport('application/octet-stream', { fileName: 'Tarjous.PDF' }).extractorType,
+    ).toBe('pdf');
+    expect(
+      getTenderDocumentExtractionSupport('', { fileName: 'vastine.docx' }).extractorType,
+    ).toBe('docx');
+    expect(
+      getTenderDocumentExtractionSupport('application/octet-stream', { fileName: 'taulukko.xlsx' }).extractorType,
+    ).toBe('xlsx');
+    expect(
+      getTenderDocumentExtractionSupport('application/octet-stream', { fileName: 'paketti.zip' }).extractorType,
+    ).toBe('unsupported');
+    expect(
+      isTenderDocumentExtractionSupported('application/octet-stream', { fileName: 'liite.pdf' }),
+    ).toBe(true);
+  });
+
   it('normalizes extracted text deterministically', () => {
     expect(normalizeTenderExtractedText('  Rivi 1\r\n\r\nRivi 2\u00a0 ')).toBe('Rivi 1\n\nRivi 2');
   });

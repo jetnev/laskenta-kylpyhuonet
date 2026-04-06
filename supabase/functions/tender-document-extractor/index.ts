@@ -493,7 +493,9 @@ Deno.serve(async (req: Request) => {
       return rejected(409, 'Dokumentti ei ole vielä valmis extractioniin.');
     }
 
-    const support = getTenderDocumentExtractionSupport(documentRow.mime_type);
+    const support = getTenderDocumentExtractionSupport(documentRow.mime_type, {
+      fileName: documentRow.file_name,
+    });
 
     await upsertExtraction(client, {
       tender_document_id: tenderDocumentId,

@@ -21,6 +21,23 @@ export const TENDER_DOCUMENT_EXTRACTOR_TYPES = [
 export type TenderDocumentExtractionStatusValue = (typeof TENDER_DOCUMENT_EXTRACTION_STATUSES)[number];
 export type TenderDocumentExtractorTypeValue = (typeof TENDER_DOCUMENT_EXTRACTOR_TYPES)[number];
 
+const TENDER_DOCUMENT_EXTRACTION_EXTENSION_MAP = {
+  txt: 'plain_text',
+  md: 'markdown',
+  markdown: 'markdown',
+  csv: 'csv',
+  xlsx: 'xlsx',
+  pdf: 'pdf',
+  docx: 'docx',
+} as const satisfies Record<string, Exclude<TenderDocumentExtractorTypeValue, 'unsupported' | 'none'>>;
+
+const TENDER_DOCUMENT_EXTRACTION_GENERIC_MIME_TYPES = [
+  '',
+  'application/octet-stream',
+  'binary/octet-stream',
+  'application/binary',
+] as const;
+
 export const TENDER_DOCUMENT_EXTRACTION_SUPPORTED_MIME_MAP = {
   'text/plain': 'plain_text',
   'text/markdown': 'markdown',
@@ -46,9 +63,32 @@ export function normalizeTenderDocumentMimeType(value: string | null | undefined
   return (value ?? '').trim().toLowerCase();
 }
 
-export function getTenderDocumentExtractionSupport(mimeType: string | null | undefined) {
+function resolveTenderDocumentExtractorTypeByFileName(fileName: string | null | undefined) {
+  const normalizedName = (fileName ?? '').trim().toLowerCase();
+  const extensionSeparator = normalizedName.lastIndexOf('.');
+
+  if (extensionSeparator < 0 || extensionSeparator === normalizedName.length - 1) {
+    return null;
+  }
+
+  const extension = normalizedName.slice(extensionSeparator + 1);
+  return TENDER_DOCUMENT_EXTRACTION_EXTENSION_MAP[extension as keyof typeof TENDER_DOCUMENT_EXTRACTION_EXTENSION_MAP] ?? null;
+}
+
+function shouldUseFileNameFallback(mimeType: string) {
+  return (TENDER_DOCUMENT_EXTRACTION_GENERIC_MIME_TYPES as readonly string[]).includes(mimeType);
+}
+
+export function getTenderDocumentExtractionSupport(
+  mimeType: string | null | undefined,
+  options: { fileName?: string | null } = {},
+) {
   const normalizedMimeType = normalizeTenderDocumentMimeType(mimeType);
-  const extractorType = TENDER_DOCUMENT_EXTRACTION_SUPPORTED_MIME_MAP[normalizedMimeType as keyof typeof TENDER_DOCUMENT_EXTRACTION_SUPPORTED_MIME_MAP] ?? null;
+  const extractorTypeFromMime = TENDER_DOCUMENT_EXTRACTION_SUPPORTED_MIME_MAP[normalizedMimeType as keyof typeof TENDER_DOCUMENT_EXTRACTION_SUPPORTED_MIME_MAP] ?? null;
+  const extractorType = extractorTypeFromMime
+    ?? (shouldUseFileNameFallback(normalizedMimeType)
+      ? resolveTenderDocumentExtractorTypeByFileName(options.fileName)
+      : null);
 
   return {
     mimeType: normalizedMimeType,
@@ -57,8 +97,11 @@ export function getTenderDocumentExtractionSupport(mimeType: string | null | und
   } as const;
 }
 
-export function isTenderDocumentExtractionSupported(mimeType: string | null | undefined) {
-  return getTenderDocumentExtractionSupport(mimeType).supported;
+export function isTenderDocumentExtractionSupported(
+  mimeType: string | null | undefined,
+  options: { fileName?: string | null } = {},
+) {
+  return getTenderDocumentExtractionSupport(mimeType, options).supported;
 }
 
 export function resolveTenderDocumentExtractionStatus(value: string | null | undefined): TenderDocumentExtractionStatusValue {

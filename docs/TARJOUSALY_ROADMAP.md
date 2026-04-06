@@ -212,6 +212,12 @@ Toinen inkrementti valmis:
 - DOCX-dokumenteista puretaan nyt Word XML -sisältöosat (runko, kommentit, note-osat sekä header/footer-tekstit) samaan extraction-domainiin ilman erillistä manuaalista välivaihetta
 - jos PDF:ssä ei ole tekstikerrosta, extraction epäonnistuu eksplisiittisellä OCR-rajausviestillä eikä väärällä ei-tuettu-statuspolulla
 
+Kolmas inkrementti valmis:
+
+- extraction-tuen resolveri osaa nyt käyttää tiedostopäätettä fallbackina silloin, kun upload-polku antaa vain geneerisen MIME-tyypin (esim. application/octet-stream)
+- PDF-, DOCX- ja XLSX-dokumentit voidaan nyt ohjata oikealle parserille myös näissä geneerisissä MIME-tilanteissa, mikä vähentää turhia unsupported/failed-haaroja
+- fallback on tarkoituksella rajattu geneerisiin MIME-tyyppeihin, joten virheelliset mutta spesifit MIME-arvot eivät ohita ensisijaista server-side MIME-päätöstä
+
 ### Työpaketti 5 — dokumenttien intake-luokittelu
 
 Ensimmäinen inkrementti valmis:
@@ -294,6 +300,11 @@ Ensimmäinen inkrementti valmis:
 - server-side extraction-runnerissa on nyt oikea tekstikerroksen PDF-purku sekä DOCX-purku, joten nämä formaatit eivät enää jää pelkän eligibility-merkinnän varaan
 - extraction-domain, UI-metat ja tietokantatyypit tunnistavat nyt erikseen pdf- ja docx-extractorit, mikä helpottaa diagnostiikkaa ja rollout-seurantaa
 - OCR jätettiin edelleen tarkoituksella pois tästä inkrementistä, joten skannatut PDF:t epäonnistuvat hallitulla viestillä ja jäävät seuraavan laajennuksen piiriin
+
+Toinen inkrementti valmis:
+
+- extraction-support resolveri käyttää nyt tiedostopäätettä turvallisena fallbackina geneerisille MIME-tyypeille, mikä parantaa parserivalintaa eri selainten ja integraatioiden upload-eroissa
+- Edge Function hyödyntää fallbackia suoraan extraction-ajossa, joten `application/octet-stream`-tilanteet eivät enää estä PDF/DOCX/XLSX-purkuja
 
 ### Phase 20 — intelligent drafting beyond deterministic baseline
 
