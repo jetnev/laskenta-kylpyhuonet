@@ -500,6 +500,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   const [validationOpen, setValidationOpen] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+  const [rowListScope, setRowListScope] = useState<'all' | 'selected'>('all');
   const [activeStep, setActiveStep] = useState<QuoteEditorStepId>('basics');
   const [additionalCostsOpen, setAdditionalCostsOpen] = useState(false);
   const [quoteTenderImportSource, setQuoteTenderImportSource] = useState<QuoteTenderImportSourceSummary | null>(null);
@@ -511,6 +512,7 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
   useEffect(() => {
     setActiveQuoteId(quoteId);
     setSelectedRowIds([]);
+    setRowListScope('all');
     setActiveStep('basics');
     setAdditionalCostsOpen(false);
     setManagedGuardRequest(null);
@@ -704,7 +706,17 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
     return products.filter((product) => matchesProductSearch(product, query)).slice(0, 8);
   }, [productSearch, products]);
   const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
+  const visibleRows = useMemo(
+    () => (rowListScope === 'selected' ? quoteRows.filter((row) => selectedRowIdSet.has(row.id)) : quoteRows),
+    [quoteRows, rowListScope, selectedRowIdSet]
+  );
   const allRowsSelected = quoteRows.length > 0 && selectedRowIds.length === quoteRows.length;
+
+  useEffect(() => {
+    if (rowListScope === 'selected' && selectedRowIds.length === 0) {
+      setRowListScope('all');
+    }
+  }, [rowListScope, selectedRowIds.length]);
 
   useEffect(() => {
     let active = true;
@@ -1831,6 +1843,21 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
                   <div className="flex flex-wrap items-center gap-2">
                     {selectedRowIds.length > 0 && <Badge variant="secondary">{selectedRowIds.length} valittu</Badge>}
                     <Badge variant="outline">{quoteRows.length} riviä</Badge>
+                    <Button
+                      size="sm"
+                      variant={rowListScope === 'all' ? 'default' : 'outline'}
+                      onClick={() => setRowListScope('all')}
+                    >
+                      Kaikki rivit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={rowListScope === 'selected' ? 'default' : 'outline'}
+                      onClick={() => setRowListScope('selected')}
+                      disabled={selectedRowIds.length === 0}
+                    >
+                      Vain valitut
+                    </Button>
                     <Button size="sm" variant="outline" onClick={toggleAllRowSelections} disabled={!isEditable || quoteRows.length === 0}>
                       {allRowsSelected ? 'Poista valinta' : 'Valitse kaikki'}
                     </Button>
@@ -1851,9 +1878,12 @@ export default function QuoteEditor({ projectId, quoteId, onClose }: QuoteEditor
 
                 {quoteRows.length === 0 ? (
                   <Card className="border-dashed p-10 text-center text-muted-foreground">Tarjouksella ei ole vielä rivejä.</Card>
+                ) : visibleRows.length === 0 ? (
+                  <Card className="border-dashed p-10 text-center text-muted-foreground">Valitse rivejä nähdäksesi suodatetun näkymän.</Card>
                 ) : (
                   <div className="space-y-4">
-                    {quoteRows.map((row, index) => {
+                    {visibleRows.map((row) => {
+                      const index = quoteRows.findIndex((candidate) => candidate.id === row.id);
                       const rowCalculation = calculateQuoteRow(row);
                       const pricingDetails = getQuoteRowPricingDetails(row, quoteVatPercent);
                       const managedSectionState = quoteTenderSectionStateByRowId.get(row.id) ?? null;
