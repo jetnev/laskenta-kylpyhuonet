@@ -220,7 +220,7 @@ function App() {
     () =>
       [
         { id: 'dashboard' as const, name: 'Etusivu', icon: House, visible: true },
-        { id: 'help' as const, name: 'Ohjeet', icon: List, visible: true },
+        { id: 'help' as const, name: 'UKK & ohjeet', icon: List, visible: true },
         { id: 'projects' as const, name: 'Projektit', icon: Folder, visible: true },
         { id: 'tender-intelligence' as const, name: 'Tarjousäly', icon: MagnifyingGlass, visible: true },
         { id: 'invoices' as const, name: 'Laskut', icon: Receipt, visible: true },

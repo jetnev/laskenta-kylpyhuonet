@@ -21,7 +21,7 @@ export const APP_AUTH_CALLBACK_META_DESCRIPTION =
 
 const WORKSPACE_PAGE_DESCRIPTIONS: Record<AppPage, string> = {
   dashboard: 'Seuraa tarjousten, projektien ja avainlukujen tilannetta yhdesta Projekta-nakymasta.',
-  help: 'Projektan kaytto-ohjeet, aloituspolku ja arjen tukisisallot yhdessa paikassa.',
+  help: 'FAQ ja kaytto-ohjeet: aloita nopeasti, ratkaise yleisimmat tilanteet ja etene ilman erillista opastusta.',
   projects: 'Hallitse asiakkaita, projekteja, tarjouksia ja etenemista Projekta-tyotilassa.',
   'tender-intelligence': 'Rakenna tarjouspyyntopaketeille oma analyysi- ja katselmointivalmis foundation Projektassa.',
   invoices: 'Seuraa laskuja, laskutustilanteita ja projektikohtaista toteumaa Projekta-tyotilassa.',
