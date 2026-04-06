@@ -11,6 +11,11 @@ import { buildTenderDraftPackageReadiness } from '../lib/tender-draft-package';
 import { buildTenderDraftQualityGate } from '../lib/tender-draft-quality-gate';
 import { buildTenderEditorManagedSurfaceFromPayload } from '../lib/tender-editor-managed-surface';
 import {
+  buildTenderImportResumeSupport,
+  type TenderImportResumeActionKind,
+  type TenderImportResumeSupportStatus,
+} from '../lib/tender-import-resume';
+import {
   formatTenderTimestamp,
   getTenderTextPreview,
   TENDER_DRAFT_PACKAGE_IMPORT_STATUS_META,
@@ -471,6 +476,49 @@ function resolveGateLabel(state: 'ready' | 'warning' | 'blocked') {
   return 'Valmis editorivientiin';
 }
 
+function resolveResumeSupportVariant(status: TenderImportResumeSupportStatus) {
+  switch (status) {
+    case 'resume_available':
+      return 'default' as const;
+    case 'already_applied':
+      return 'secondary' as const;
+    case 'blocked':
+      return 'destructive' as const;
+    case 'stale_context':
+      return 'outline' as const;
+    default:
+      return 'outline' as const;
+  }
+}
+
+function resolveResumeSupportLabel(status: TenderImportResumeSupportStatus) {
+  switch (status) {
+    case 'resume_available':
+      return 'Jatko valmis';
+    case 'already_applied':
+      return 'Jo synkassa';
+    case 'blocked':
+      return 'Vaatii uutta arviointia';
+    case 'stale_context':
+      return 'Vanha konteksti';
+    default:
+      return 'Ei jatkoa';
+  }
+}
+
+function resolveResumePendingLabel(actionKind: TenderImportResumeActionKind) {
+  switch (actionKind) {
+    case 'reimport':
+      return 'Jatketaan re-importia...';
+    case 'registry_repair':
+      return 'Jatketaan repairia...';
+    case 'diagnostics_refresh':
+      return 'Paivitetaan live-tilaa...';
+    default:
+      return 'Suoritetaan...';
+  }
+}
+
 function resolveSourceEntity(selectedPackage: TenderPackageDetails, item: TenderDraftPackageItem) {
   switch (item.sourceEntityType) {
     case 'requirement':
@@ -659,6 +707,16 @@ export default function TenderDraftPackagePanel({
     ),
     [sortedImportRuns],
   );
+  const importResumeSupport = useMemo(
+    () => buildTenderImportResumeSupport({
+      importRuns: sortedImportRuns,
+      preview: editorImportPreview,
+      importState: draftPackageImportState,
+      reimportPreview: draftPackageReimportPreview,
+      repairPreview: draftPackageImportRepairPreview,
+    }),
+    [draftPackageImportRepairPreview, draftPackageImportState, draftPackageReimportPreview, editorImportPreview, sortedImportRuns],
+  );
   const visibleImportRuns = showAllImportRuns ? sortedImportRuns : sortedImportRuns.slice(0, 4);
   const selectedSelectiveBlockCount = selectedUpdateBlockIds.length + selectedRemoveBlockIds.length;
   const canExecuteSelectiveReimport = Boolean(
@@ -676,6 +734,27 @@ export default function TenderDraftPackagePanel({
       conflict_policy: selectedOverrideConflictBlockIds.length > 0 ? 'override_selected_conflicts' : 'protect_conflicts',
     }),
     [selectedOverrideConflictBlockIds, selectedRemoveBlockIds, selectedUpdateBlockIds],
+  );
+  const isResumeActionPending = Boolean(
+    selectedDraftPackage
+    && (
+      (importResumeSupport.action_kind === 'reimport' && importingDraftPackageId === selectedDraftPackage.id)
+      || (importResumeSupport.action_kind === 'registry_repair' && isRepairRunning)
+      || (importResumeSupport.action_kind === 'diagnostics_refresh' && isRefreshingDiagnostics)
+    ),
+  );
+  const canResumeFailedRun = Boolean(
+    selectedDraftPackage
+    && importResumeSupport.can_resume
+    && importResumeSupport.action_kind
+    && (
+      importResumeSupport.action_kind !== 'reimport'
+      || (qualityGate.canExportToEditor && importValidation?.can_import)
+    )
+    && !previewingEditorImportDraftPackageId
+    && !importingDraftPackageId
+    && !isRefreshingDiagnostics
+    && !isRepairRunning,
   );
 
   const updateSelectedBlockIds = (
@@ -1141,6 +1220,92 @@ export default function TenderDraftPackagePanel({
               <TabsContent value="import" className="space-y-4" forceMount>
                 {editorImportPreview ? (
                   <>
+                    {importResumeSupport.status !== 'not_available' && importResumeSupport.latest_failed_run && (
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-950">
+                              <ArrowsClockwise className="h-4 w-4 text-slate-500" />
+                              Ajon jatkaminen ja idempotenssi
+                              <Badge variant={resolveResumeSupportVariant(importResumeSupport.status)}>
+                                {resolveResumeSupportLabel(importResumeSupport.status)}
+                              </Badge>
+                              <Badge variant={TENDER_IMPORT_RUN_TYPE_META[importResumeSupport.latest_failed_run.run_type].variant}>
+                                {TENDER_IMPORT_RUN_TYPE_META[importResumeSupport.latest_failed_run.run_type].label}
+                              </Badge>
+                              <Badge variant={TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[importResumeSupport.latest_failed_run.result_status].variant}>
+                                {TENDER_EDITOR_IMPORT_RUN_RESULT_STATUS_META[importResumeSupport.latest_failed_run.result_status].label}
+                              </Badge>
+                            </div>
+                            <p className="mt-3 text-sm font-medium text-slate-950">{importResumeSupport.summary}</p>
+                            <p className="mt-2 text-sm leading-6 text-slate-700">
+                              Viimeisin epaonnistunut ajo {formatTenderTimestamp(importResumeSupport.latest_failed_run.created_at)}. {importResumeSupport.latest_failed_run.summary ?? 'Ei erillista yhteenvetoa.'}
+                            </p>
+                          </div>
+
+                          {importResumeSupport.action_label && (
+                            <Button
+                              type="button"
+                              disabled={!canResumeFailedRun}
+                              onClick={() => {
+                                if (!selectedDraftPackage) {
+                                  return;
+                                }
+
+                                if (importResumeSupport.action_kind === 'reimport' && importResumeSupport.selection) {
+                                  void onReimportDraftPackageToEditor(selectedDraftPackage.id, importResumeSupport.selection);
+                                  return;
+                                }
+
+                                if (importResumeSupport.action_kind === 'registry_repair' && importResumeSupport.repair_action) {
+                                  void onRepairDraftPackageImportRegistry(selectedDraftPackage.id, importResumeSupport.repair_action);
+                                  return;
+                                }
+
+                                if (importResumeSupport.action_kind === 'diagnostics_refresh') {
+                                  void onRefreshDraftPackageImportDiagnosticsFromQuote(selectedDraftPackage.id);
+                                }
+                              }}
+                            >
+                              {isResumeActionPending ? resolveResumePendingLabel(importResumeSupport.action_kind) : importResumeSupport.action_label}
+                            </Button>
+                          )}
+                        </div>
+
+                        {importResumeSupport.detail_lines.length > 0 && (
+                          <div className="mt-4 space-y-2">
+                            {importResumeSupport.detail_lines.map((detailLine, index) => (
+                              <div key={`resume-detail-${index}`} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-700">
+                                {detailLine}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {(importResumeSupport.pending_block_ids.length > 0
+                          || importResumeSupport.blocked_block_ids.length > 0
+                          || importResumeSupport.settled_block_ids.length > 0) && (
+                          <div className="mt-4 grid gap-3 xl:grid-cols-3">
+                            <ImportRunBlockList
+                              title="Jatkettavat blokit"
+                              blockIds={importResumeSupport.pending_block_ids}
+                              run={importResumeSupport.latest_failed_run}
+                            />
+                            <ImportRunBlockList
+                              title="Edelleen suojassa"
+                              blockIds={importResumeSupport.blocked_block_ids}
+                              run={importResumeSupport.latest_failed_run}
+                            />
+                            <ImportRunBlockList
+                              title="Ei enaa jatkettavaa"
+                              blockIds={importResumeSupport.settled_block_ids}
+                              run={importResumeSupport.latest_failed_run}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {editorHandoff?.isActive && editorHandoff.title && (
                       <div className={[
                         'rounded-2xl border px-4 py-4 text-sm leading-6',

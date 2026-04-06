@@ -580,6 +580,9 @@ describe('TenderDraftPackagePanel', () => {
   expect(markup).toContain('Managed import surface + run audit');
   expect(markup).toContain('Laatugate ennen editorivientiä');
   expect(markup).toContain('Merkitse draft package tarkistetuksi ennen editorivientiä.');
+    expect(markup).toContain('Ajon jatkaminen ja idempotenssi');
+    expect(markup).toContain('Jatka keskeytynytta registry repairia');
+    expect(markup).toContain('Viimeisin registry repair epaonnistui, mutta saman metadatakorjauksen voi ajaa turvallisesti uudelleen.');
     expect(markup).toContain('Päivitä samaan quoteen');
     expect(markup).toContain('Avaa importoitu quote');
     expect(markup).toContain('Import handoff');

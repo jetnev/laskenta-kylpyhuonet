@@ -258,6 +258,23 @@ Tavoite:
 - parempi käsittely keskeytyneille importeille
 - mahdollisuus jatkaa hallitusti ilman uutta epäselvää tilaa
 
+Ensimmäinen inkrementti valmis:
+
+- editor import -paneeli tunnistaa nyt viimeisimmän epäonnistuneen re-import-, diagnostics refresh- tai registry repair -ajon ja nostaa sen omaksi resume/idempotency-kortikseen
+- keskeytyneen re-importin jatko suodattaa alkuperäisen blokkivalinnan nykyisen reconciliation-näkymän läpi, jolloin jo synkatut blokit jätetään pois ja vain edelleen jatkettavat blokit yritetään uudelleen
+- jos payload tai kohdequote on vaihtunut epäonnistuneen re-importin jälkeen, vanhaa resume-valintaa ei tarjota vaan käyttäjä ohjataan jatkamaan tuoreesta reconciliation-tilasta
+
+Toinen inkrementti valmis:
+
+- repositoryn import-failure-polku säilyttää nyt jo luodun tai aiemmin linkitetyn quoten draft package -tilassa myös silloin, kun virhe tapahtuu vasta quote-kirjoituksen jälkeen
+- osittaisen epäonnistumisen failed import-run tallentaa nyt takaisin myös recovered target quoten ja adapterin execution-metadatan, jolloin Phase 18:n resume-logiikka voi jatkaa samasta kohteesta
+- uusi yritys ei enää palaa create-new-quote-polkuun pelkästään siksi, että virhe tapahtui myöhään import-prosessissa draft package -tilapäivityksen jälkeen
+
+Kolmas inkrementti valmis:
+
+- resume-helper tunnistaa nyt myös myöhään epäonnistuneen create-new-quote-ajon jatkettavaksi samaan jo luotuun quoteen, jos failure-recovery on ehtinyt säilyttää target-linkin draft packageen
+- jatko käyttää samaa reconciliation-suodatusta kuin protected re-import: jo synkassa olevat blokit jätetään pois ja vain edelleen pending-blokit valitaan uudelle ajolle
+
 ### Phase 19 — stronger extraction for PDF/DOCX
 
 Tavoite:

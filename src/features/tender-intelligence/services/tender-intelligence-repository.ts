@@ -22,6 +22,7 @@ import {
 } from '../lib/tender-editor-reconciliation';
 import { buildTenderDraftPackageImportDiagnostics } from '../lib/tender-import-diagnostics';
 import { buildTenderImportOwnedBlockDriftStates } from '../lib/tender-import-drift';
+import { buildTenderDraftPackageImportFailureRecovery } from '../lib/tender-import-failure-recovery';
 import {
   buildTenderImportRegistryDiagnosticsRefreshExecutionMetadata,
   buildTenderImportRegistryDiagnosticsRefreshRecords,
@@ -2172,6 +2173,8 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     runType: TenderImportRunType = 'import',
   ): Promise<TenderEditorImportResult> {
     let context: Awaited<ReturnType<SupabaseTenderIntelligenceRepository['buildDraftPackageImportContext']>> | null = null;
+    let adapterResult: TenderEditorImportResult | null = null;
+    let recoveredImportedAt: string | null = null;
 
     try {
       context = await this.buildDraftPackageImportContext(draftPackageId);
@@ -2197,7 +2200,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         ? buildTenderEditorManagedSurfaceFromPayload(context.latestSuccessfulRun.payload_snapshot).blocks
         : [];
 
-      const adapterResult = await importTenderDraftPackageToEditor({
+      adapterResult = await importTenderDraftPackageToEditor({
         client: context.client,
         packageDetails: context.packageDetails,
         preview: context.preview,
@@ -2212,10 +2215,17 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         overrideConflictBlockIds: resolvedSelection.overrideConflictBlockIds,
         conflictPolicy: resolvedSelection.conflictPolicy,
       });
+      if (!adapterResult) {
+        throw new Error('Luonnospaketin import ei palauttanut tulosta.');
+      }
+
+      const completedAdapterResult = adapterResult;
+
       const runTimestamp = new Date().toISOString();
+      recoveredImportedAt = runTimestamp;
       const shouldAdvanceRevision = context.importState.suggested_import_mode === 'create_new_quote'
-        || adapterResult.execution_metadata.summary_counts.updated_blocks > 0
-        || adapterResult.execution_metadata.summary_counts.removed_blocks > 0;
+        || completedAdapterResult.execution_metadata.summary_counts.updated_blocks > 0
+        || completedAdapterResult.execution_metadata.summary_counts.removed_blocks > 0;
       const persistedImportRevision = shouldAdvanceRevision
         ? context.draftPackage.importRevision + 1
         : Math.max(context.draftPackage.importRevision, context.draftPackage.importedQuoteId ? 1 : 0);
@@ -2225,7 +2235,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       const postImportTargetSnapshot = await readTenderEditorImportTargetSnapshot({
         client: context.client,
         actorUserId: context.actorUserId,
-        quoteId: adapterResult.imported_quote_id,
+        quoteId: completedAdapterResult.imported_quote_id,
       });
       const postImportDriftStates = buildTenderImportOwnedBlockDriftStates({
         draftPackageId: context.draftPackage.id,
@@ -2243,21 +2253,21 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       const registryWriteRecords = buildTenderImportOwnedBlockWriteRecords({
         organizationId: context.draftPackage.organizationId,
         draftPackageId: context.draftPackage.id,
-        targetQuoteId: adapterResult.imported_quote_id,
+        targetQuoteId: completedAdapterResult.imported_quote_id,
         currentBlocks: currentManagedBlocks,
         driftStates: postImportDriftStates,
-        executionMetadata: adapterResult.execution_metadata,
+        executionMetadata: completedAdapterResult.execution_metadata,
         syncedAt: runTimestamp,
         nextRevision: persistedImportRevision,
       });
       const fullSyncAchieved = context.importState.suggested_import_mode === 'create_new_quote'
         || context.reconciliation.blocks.every((block) => {
           if (block.can_select_for_update) {
-            return adapterResult.execution_metadata.updated_block_ids.includes(block.block_id);
+            return completedAdapterResult.execution_metadata.updated_block_ids.includes(block.block_id);
           }
 
           if (block.can_select_for_removal) {
-            return adapterResult.execution_metadata.removed_block_ids.includes(block.block_id);
+            return completedAdapterResult.execution_metadata.removed_block_ids.includes(block.block_id);
           }
 
           return block.drift_status === 'up_to_date';
@@ -2266,21 +2276,21 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       await updateTenderPackageEditorLinks({
         client: context.client,
         packageId: context.packageDetails.package.id,
-        linkedCustomerId: adapterResult.imported_customer_id ?? context.packageDetails.package.linkedCustomerId ?? context.target.customerId,
-        linkedProjectId: adapterResult.imported_project_id ?? context.packageDetails.package.linkedProjectId ?? context.target.projectId,
-        linkedQuoteId: adapterResult.imported_quote_id,
+        linkedCustomerId: completedAdapterResult.imported_customer_id ?? context.packageDetails.package.linkedCustomerId ?? context.target.customerId,
+        linkedProjectId: completedAdapterResult.imported_project_id ?? context.packageDetails.package.linkedProjectId ?? context.target.projectId,
+        linkedQuoteId: completedAdapterResult.imported_quote_id,
       });
       const importRun = await createTenderDraftPackageImportRun({
         client: context.client,
         draftPackage: context.draftPackage,
-        targetQuoteId: adapterResult.imported_quote_id,
+        targetQuoteId: completedAdapterResult.imported_quote_id,
         runType,
-        importMode: adapterResult.import_mode,
-        payloadHash: adapterResult.payload_hash,
+        importMode: completedAdapterResult.import_mode,
+        payloadHash: completedAdapterResult.payload_hash,
         payloadSnapshot: context.preview.payload,
         resultStatus: 'success',
-        summary: adapterResult.summary,
-        executionMetadata: adapterResult.execution_metadata,
+        summary: completedAdapterResult.summary,
+        executionMetadata: completedAdapterResult.execution_metadata,
         createdByUserId: context.actorUserId,
       });
       await upsertTenderImportOwnedBlocks({
@@ -2298,9 +2308,9 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
           reimport_status: fullSyncAchieved ? 'up_to_date' : 'stale',
           import_revision: persistedImportRevision,
           last_import_payload_hash: fullSyncAchieved
-            ? adapterResult.payload_hash
+            ? completedAdapterResult.payload_hash
             : context.draftPackage.lastImportPayloadHash ?? context.latestSuccessfulRun?.payload_hash ?? null,
-          imported_quote_id: adapterResult.imported_quote_id,
+          imported_quote_id: completedAdapterResult.imported_quote_id,
           imported_by_user_id: context.actorUserId,
           imported_at: importedAt,
         },
@@ -2308,35 +2318,35 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
 
       this.emit();
       return {
-        ...adapterResult,
+        ...completedAdapterResult,
         import_revision: persistedImportRevision,
       };
     } catch (error) {
       if (context) {
         try {
+          const failureRecovery = buildTenderDraftPackageImportFailureRecovery({
+            draftPackage: context.draftPackage,
+            actorUserId: context.actorUserId,
+            adapterResult,
+            fallbackImportedAt: recoveredImportedAt,
+          });
+
           await updateTenderDraftPackageImportState({
             client: context.client,
             draftPackageId,
-            patch: context.draftPackage.importedQuoteId
-              ? {
-                  import_status: 'imported',
-                  reimport_status: 'import_failed',
-                }
-              : {
-                  import_status: 'failed',
-                  reimport_status: 'import_failed',
-                },
+            patch: failureRecovery.importStatePatch,
           });
           await createTenderDraftPackageImportRun({
             client: context.client,
             draftPackage: context.draftPackage,
-            targetQuoteId: context.draftPackage.importedQuoteId ?? null,
+            targetQuoteId: failureRecovery.recoveredTargetQuoteId,
             runType,
-            importMode: context.importState.suggested_import_mode,
-            payloadHash: context.preview.payload_hash,
+            importMode: adapterResult?.import_mode ?? context.importState.suggested_import_mode,
+            payloadHash: adapterResult?.payload_hash ?? context.preview.payload_hash,
             payloadSnapshot: context.preview.payload,
             resultStatus: 'failed',
             summary: error instanceof Error ? error.message : 'Import epäonnistui.',
+            executionMetadata: failureRecovery.recoveredExecutionMetadata,
             createdByUserId: context.actorUserId,
           });
         } catch (markError) {
