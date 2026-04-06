@@ -27,6 +27,62 @@ export interface TenderRuleAnalysisChunkInput {
   textContent: string;
 }
 
+export type TenderRuleAnalysisProviderDeliveryScope = 'local' | 'regional' | 'national' | 'international';
+export type TenderRuleAnalysisProviderCredentialType = 'certificate' | 'qualification' | 'insurance' | 'license' | 'other';
+export type TenderRuleAnalysisProviderConstraintSeverity = 'hard' | 'soft' | 'info';
+export type TenderRuleAnalysisProviderDocumentType = 'case-study' | 'certificate' | 'insurance' | 'cv' | 'policy' | 'other';
+export type TenderRuleAnalysisProviderResponseTemplateType =
+  | 'company-overview'
+  | 'technical-approach'
+  | 'delivery-plan'
+  | 'pricing-note'
+  | 'quality'
+  | 'other';
+
+export interface TenderRuleAnalysisProviderProfileInput {
+  companyName: string;
+  summary: string | null;
+  serviceArea: string | null;
+  maxTravelKm: number | null;
+  deliveryScope: TenderRuleAnalysisProviderDeliveryScope;
+}
+
+export interface TenderRuleAnalysisProviderCredentialInput {
+  title: string;
+  issuer: string | null;
+  credentialType: TenderRuleAnalysisProviderCredentialType;
+  validUntil: string | null;
+  documentReference: string | null;
+  notes: string | null;
+}
+
+export interface TenderRuleAnalysisProviderConstraintInput {
+  title: string;
+  severity: TenderRuleAnalysisProviderConstraintSeverity;
+  ruleText: string;
+  mitigationNote: string | null;
+}
+
+export interface TenderRuleAnalysisProviderDocumentInput {
+  title: string;
+  documentType: TenderRuleAnalysisProviderDocumentType;
+  sourceReference: string | null;
+  notes: string | null;
+}
+
+export interface TenderRuleAnalysisProviderResponseTemplateInput {
+  title: string;
+  templateType: TenderRuleAnalysisProviderResponseTemplateType;
+}
+
+export interface TenderRuleAnalysisProviderProfileDetailsInput {
+  profile: TenderRuleAnalysisProviderProfileInput;
+  credentials: TenderRuleAnalysisProviderCredentialInput[];
+  constraints: TenderRuleAnalysisProviderConstraintInput[];
+  documents: TenderRuleAnalysisProviderDocumentInput[];
+  responseTemplates: TenderRuleAnalysisProviderResponseTemplateInput[];
+}
+
 export interface TenderResultEvidenceLinkSeed {
   sourceIndex: number;
   confidence: number | null;
@@ -139,12 +195,18 @@ interface AttachmentRuleDefinition {
   documentAliases: string[];
   requirementTitle: string;
   missingItemTitle: string;
+  providerProfileLabel: string;
+  providerDocumentTypes?: TenderRuleAnalysisProviderDocumentType[];
+  providerCredentialTypes?: TenderRuleAnalysisProviderCredentialType[];
 }
 
 interface RuleContext {
   evidenceSources: TenderEvidenceSourceSeed[];
   evidenceSourceIndexByChunkId: Map<string, number>;
   packageDocumentNames: string[];
+  providerProfile: TenderRuleAnalysisProviderProfileDetailsInput | null;
+  providerCoveredRequirementKeys: Set<string>;
+  providerMissingRequirementKeys: Set<string>;
   ruleMatches: TenderRuleAnalysisMatch[];
   requirements: RequirementAccumulator[];
   requirementIndexByKey: Map<string, number>;
@@ -197,6 +259,7 @@ const ATTACHMENT_RULES: AttachmentRuleDefinition[] = [
     documentAliases: ['tilaajavastuu', 'tilaajavastuuselvitys'],
     requirementTitle: 'Toimita tilaajavastuu-asiakirjat',
     missingItemTitle: 'Tilaajavastuu-asiakirjat puuttuvat paketista',
+    providerProfileLabel: 'tilaajavastuuta vastaavaa aineistoa',
   },
   {
     key: 'verovelkatodistus',
@@ -205,6 +268,7 @@ const ATTACHMENT_RULES: AttachmentRuleDefinition[] = [
     documentAliases: ['verovelka', 'verovelkatodistus'],
     requirementTitle: 'Toimita verovelkatodistus',
     missingItemTitle: 'Verovelkatodistus puuttuu paketista',
+    providerProfileLabel: 'verovelkatodistusta vastaavaa aineistoa',
   },
   {
     key: 'vastuuvakuutus',
@@ -213,6 +277,9 @@ const ATTACHMENT_RULES: AttachmentRuleDefinition[] = [
     documentAliases: ['vastuuvakuutus', 'vastuuvakuutustodistus', 'vakuutustodistus'],
     requirementTitle: 'Toimita vastuuvakuutustodistus',
     missingItemTitle: 'Vastuuvakuutustodistus puuttuu paketista',
+    providerProfileLabel: 'vastuuvakuutusta vastaavaa aineistoa',
+    providerDocumentTypes: ['insurance'],
+    providerCredentialTypes: ['insurance'],
   },
   {
     key: 'referenssiluettelo',
@@ -221,6 +288,8 @@ const ATTACHMENT_RULES: AttachmentRuleDefinition[] = [
     documentAliases: ['referenssiluettelo', 'referenssit'],
     requirementTitle: 'Toimita referenssiluettelo',
     missingItemTitle: 'Referenssiluettelo puuttuu paketista',
+    providerProfileLabel: 'referenssiaineistoa',
+    providerDocumentTypes: ['case-study'],
   },
   {
     key: 'cv',
@@ -229,6 +298,8 @@ const ATTACHMENT_RULES: AttachmentRuleDefinition[] = [
     documentAliases: ['cv', 'ansioluettelo'],
     requirementTitle: 'Toimita CV:t tai ansioluettelot',
     missingItemTitle: 'CV:t tai ansioluettelot puuttuvat paketista',
+    providerProfileLabel: 'cv-aineistoa tai ansioluetteloita',
+    providerDocumentTypes: ['cv'],
   },
 ];
 
@@ -606,6 +677,85 @@ function hasMatchingDocumentAlias(packageDocumentNames: string[], aliases: strin
   );
 }
 
+function matchesNormalizedAliases(candidateText: string, aliases: string[]) {
+  const normalizedCandidate = normalizeComparableText(candidateText);
+
+  if (!normalizedCandidate) {
+    return false;
+  }
+
+  return aliases.some((alias) => {
+    const normalizedAlias = normalizeComparableText(alias);
+    return Boolean(normalizedAlias) && normalizedCandidate.includes(normalizedAlias);
+  });
+}
+
+function isProviderCredentialActive(
+  credential: TenderRuleAnalysisProviderCredentialInput,
+  now: Date,
+) {
+  if (!credential.validUntil) {
+    return true;
+  }
+
+  const validUntil = new Date(credential.validUntil);
+
+  if (Number.isNaN(validUntil.getTime())) {
+    return true;
+  }
+
+  return validUntil.getTime() >= now.getTime();
+}
+
+function resolveProviderAttachmentSupport(
+  definition: AttachmentRuleDefinition,
+  providerProfile: TenderRuleAnalysisProviderProfileDetailsInput | null,
+  now: Date,
+) {
+  if (!providerProfile) {
+    return null;
+  }
+
+  const matchingCredential = providerProfile.credentials
+    .filter((credential) => isProviderCredentialActive(credential, now))
+    .find((credential) =>
+      matchesNormalizedAliases(
+        [credential.title, credential.issuer, credential.documentReference, credential.notes]
+          .filter(Boolean)
+          .join(' '),
+        definition.documentAliases,
+      )
+      || Boolean(definition.providerCredentialTypes?.includes(credential.credentialType)),
+    );
+
+  const matchingDocument = providerProfile.documents.find((document) =>
+    matchesNormalizedAliases(
+      [document.title, document.sourceReference, document.notes]
+        .filter(Boolean)
+        .join(' '),
+      definition.documentAliases,
+    )
+    || Boolean(definition.providerDocumentTypes?.includes(document.documentType)),
+  );
+
+  if (matchingCredential || matchingDocument) {
+    const matchedSources = [
+      matchingCredential ? `pätevyys "${matchingCredential.title}"` : null,
+      matchingDocument ? `dokumenttiviite "${matchingDocument.title}"` : null,
+    ].filter((value): value is string => Boolean(value));
+
+    return {
+      status: 'covered' as const,
+      detail: `Tarjoajaprofiilista löytyi ${matchedSources.join(' ja ')}, joka tukee vaaditun liitteen toimittamista.`,
+    };
+  }
+
+  return {
+    status: 'missing' as const,
+    detail: `Tarjoajaprofiilista ei löytynyt ${definition.providerProfileLabel} vastaavaa pätevyyttä tai dokumenttiviitettä.`,
+  };
+}
+
 function analyzeDeadlineChunk(context: RuleContext, chunkRow: TenderRuleAnalysisChunkInput, matchIndex: number, matchedRule: string) {
   const sourceIndex = context.evidenceSourceIndexByChunkId.get(chunkRow.chunkId);
 
@@ -659,6 +809,7 @@ function analyzeAttachmentChunk(
   context: RuleContext,
   chunkRow: TenderRuleAnalysisChunkInput,
   genericMatch: { ruleId: string; index: number } | null,
+  now: Date,
 ) {
   const sourceIndex = context.evidenceSourceIndexByChunkId.get(chunkRow.chunkId);
 
@@ -719,7 +870,19 @@ function analyzeAttachmentChunk(
   matchingDefinitions.forEach(({ definition, matchIndex }) => {
     const evidenceExcerpt = getExcerptAroundMatch(chunkRow.textContent, matchIndex);
     const hasDocumentMatch = hasMatchingDocumentAlias(context.packageDocumentNames, definition.documentAliases);
+    const providerSupport = resolveProviderAttachmentSupport(definition, context.providerProfile, now);
     const requirementKey = `attachment:${definition.key}`;
+    const requirementStatus = providerSupport?.status === 'covered'
+      ? 'covered'
+      : hasDocumentMatch
+        ? 'unreviewed'
+        : 'missing';
+
+    if (providerSupport?.status === 'covered') {
+      context.providerCoveredRequirementKeys.add(requirementKey);
+    } else if (context.providerProfile && !hasDocumentMatch) {
+      context.providerMissingRequirementKeys.add(requirementKey);
+    }
 
     upsertRequirement(context, {
       dedupeKey: requirementKey,
@@ -730,15 +893,19 @@ function analyzeAttachmentChunk(
       evidenceExcerpt,
       requirementType: 'administrative',
       title: definition.requirementTitle,
-      description: hasDocumentMatch
-        ? 'Pakettiin on jo liitetty nimellisesti vastaava dokumentti, mutta vaatimus tulee vielä tarkistaa manuaalisesti tarjouspyynnön sanamuotoa vasten.'
-        : 'Extracted chunk mainitsee pakolliseksi tulkittavan liitteen. Paketin nykyisistä dokumenteista ei löytynyt nimellistä osumaa tälle liitteelle.',
-      status: hasDocumentMatch ? 'unreviewed' : 'missing',
-      confidence: hasDocumentMatch ? 0.76 : 0.82,
+      description: providerSupport?.status === 'covered'
+        ? `${providerSupport.detail} Varmista silti, että aineisto liitetään tarjoukseen pyydetyssä muodossa.`
+        : hasDocumentMatch
+          ? 'Pakettiin on jo liitetty nimellisesti vastaava dokumentti, mutta vaatimus tulee vielä tarkistaa manuaalisesti tarjouspyynnön sanamuotoa vasten.'
+          : providerSupport
+            ? `${providerSupport.detail} Extracted chunk mainitsee pakolliseksi tulkittavan liitteen, joten puute kannattaa käsitellä ennen editorivientiä.`
+            : 'Extracted chunk mainitsee pakolliseksi tulkittavan liitteen. Paketin nykyisistä dokumenteista ei löytynyt nimellistä osumaa tälle liitteelle.',
+      status: requirementStatus,
+      confidence: providerSupport?.status === 'covered' ? 0.84 : hasDocumentMatch ? 0.76 : 0.82,
       normalizedValue: definition.key,
     });
 
-    if (!hasDocumentMatch) {
+    if (requirementStatus === 'missing') {
       upsertMissingItem(context, {
         dedupeKey: `missing-item:${definition.key}`,
         relatedRequirementKey: requirementKey,
@@ -748,7 +915,9 @@ function analyzeAttachmentChunk(
         evidenceExcerpt,
         itemType: 'document',
         title: definition.missingItemTitle,
-        description: 'Sääntöpohjainen baseline löysi vaaditun liitteen extracted tekstistä, mutta pakettiin liitetyistä dokumenteista ei löytynyt edes nimellistä vastinetta. Tarkista tarve manuaalisesti.',
+        description: providerSupport
+          ? `${providerSupport.detail} Sääntöpohjainen baseline löysi vaaditun liitteen extracted tekstistä, mutta tarjoajaprofiilista tai paketin dokumenttinimistä ei löytynyt selkeää vastinetta.`
+          : 'Sääntöpohjainen baseline löysi vaaditun liitteen extracted tekstistä, mutta pakettiin liitetyistä dokumenteista ei löytynyt edes nimellistä vastinetta. Tarkista tarve manuaalisesti.',
         severity: 'medium',
         status: 'open',
         confidence: 0.74,
@@ -835,6 +1004,72 @@ function maybeAddClearRiskFlag(context: RuleContext, chunkRow: TenderRuleAnalysi
   });
 }
 
+function hasSubstantiveFindings(context: RuleContext) {
+  return context.requirements.length > 0 || context.missingItems.length > 0 || context.riskFlags.length > 0;
+}
+
+function addProviderProfileReviewTaskIfNeeded(context: RuleContext) {
+  if (!hasSubstantiveFindings(context)) {
+    return;
+  }
+
+  const primarySource = context.evidenceSources[0];
+
+  if (!primarySource) {
+    return;
+  }
+
+  const sourceIndex = context.evidenceSourceIndexByChunkId.get(primarySource.chunkId);
+
+  if (sourceIndex == null) {
+    return;
+  }
+
+  if (!context.providerProfile) {
+    upsertReviewTask(context, {
+      dedupeKey: 'provider:profile-missing-review',
+      matchedRule: 'provider.profile_missing',
+      sourceIndex,
+      evidenceChunkId: primarySource.chunkId,
+      evidenceExcerpt: primarySource.excerptText,
+      taskType: 'decision',
+      title: 'Täydennä tarjoajaprofiili ennen lopullista go / no-go -päätöstä',
+      description: 'Tarjouspyynnöstä tunnistettiin baseline-löydöksiä, mutta organisaatiolta puuttuu tarjoajaprofiili. Lisää vähintään yrityksen ydintiedot, yhteyshenkilö ja käytettävissä oleva todentava aineisto ennen sitovaa päätöstä.',
+      status: 'todo',
+      confidence: 0.58,
+      normalizedValue: null,
+      category: 'review',
+    });
+
+    return;
+  }
+
+  const hardConstraints = context.providerProfile.constraints.filter((constraint) => constraint.severity === 'hard');
+
+  if (hardConstraints.length < 1) {
+    return;
+  }
+
+  const constraintPreview = hardConstraints.slice(0, 3).map((constraint) => `"${constraint.title}"`).join(', ');
+  const remainingCount = hardConstraints.length - Math.min(hardConstraints.length, 3);
+  const remainingSuffix = remainingCount > 0 ? ` ja ${remainingCount} muuta` : '';
+
+  upsertReviewTask(context, {
+    dedupeKey: 'provider:hard-constraints-review',
+    matchedRule: 'provider.hard_constraints',
+    sourceIndex,
+    evidenceChunkId: primarySource.chunkId,
+    evidenceExcerpt: primarySource.excerptText,
+    taskType: 'decision',
+    title: 'Vertaile tarjoajaprofiilin kovat rajaukset tarjouspyyntöön',
+    description: `Tarjoajaprofiilissa on ${hardConstraints.length} kovaa rajausta (${constraintPreview}${remainingSuffix}). Vertaile ne tarjouspyynnön ehtoihin ennen sitovaa go / no-go -päätöstä.`,
+    status: 'todo',
+    confidence: 0.61,
+    normalizedValue: null,
+    category: 'review',
+  });
+}
+
 function addSummaryReviewTaskIfNeeded(context: RuleContext) {
   if (context.reviewTasks.length > 0 || context.requirements.length === 0 && context.missingItems.length === 0 && context.riskFlags.length === 0) {
     return;
@@ -902,7 +1137,13 @@ function addFallbackReviewTaskIfNeeded(context: RuleContext) {
 }
 
 function buildGoNoGoSummary(context: RuleContext) {
-  if (context.requirements.length === 0 && context.missingItems.length === 0 && context.reviewTasks.length === 0 && context.riskFlags.length === 0) {
+  const providerProfileMissing = !context.providerProfile;
+  const providerMissingRequirementCount = context.providerMissingRequirementKeys.size;
+  const providerCoveredRequirementCount = context.providerCoveredRequirementKeys.size;
+  const providerHardConstraintCount = context.providerProfile?.constraints.filter((constraint) => constraint.severity === 'hard').length ?? 0;
+  const substantiveFindings = hasSubstantiveFindings(context);
+
+  if (!substantiveFindings) {
     return {
       recommendation: 'pending' as const,
       summary:
@@ -917,8 +1158,44 @@ function buildGoNoGoSummary(context: RuleContext) {
     formatCountLabel(context.reviewTasks.length, 'review task', 'review taskia'),
   ];
 
+  if (providerCoveredRequirementCount > 0) {
+    parts.push(
+      formatCountLabel(
+        providerCoveredRequirementCount,
+        'provider-profiilin tukema liitevaatimus',
+        'provider-profiilin tukemaa liitevaatimusta',
+      ),
+    );
+  }
+
   if (context.riskFlags.length > 0) {
     parts.push(formatCountLabel(context.riskFlags.length, 'riski', 'riskiä'));
+  }
+
+  if (providerProfileMissing) {
+    return {
+      recommendation: 'conditional-go' as const,
+      summary: `Deterministinen sääntöpohjainen baseline tunnisti ${parts.join(', ')}, mutta tarjoajaprofiili puuttuu. Provider-fit, pätevyydet ja toimitusvalmius pitää varmistaa ennen sitovaa päätöstä.`,
+      confidence: 0.58,
+    };
+  }
+
+  if (providerMissingRequirementCount > 0 || providerHardConstraintCount > 0) {
+    const providerParts: string[] = [];
+
+    if (providerMissingRequirementCount > 0) {
+      providerParts.push(`${providerMissingRequirementCount} liitevaatimukselle ei löytynyt vastaavaa tarjoajaprofiilin todistetta`);
+    }
+
+    if (providerHardConstraintCount > 0) {
+      providerParts.push(`profiilissa on ${providerHardConstraintCount} kovaa rajausta`);
+    }
+
+    return {
+      recommendation: 'conditional-go' as const,
+      summary: `Deterministinen sääntöpohjainen baseline tunnisti ${parts.join(', ')}. Lisäksi ${providerParts.join(' ja ')}, joten go / no-go jää ehdolliseksi ennen sitovaa päätöstä.`,
+      confidence: 0.66,
+    };
   }
 
   return {
@@ -1042,8 +1319,11 @@ export function buildTenderDeterministicAnalysisPlan(input: {
   packageTitle: string;
   documentRows: TenderRuleAnalysisDocumentInput[];
   chunkRows: TenderRuleAnalysisChunkInput[];
+  providerProfile?: TenderRuleAnalysisProviderProfileDetailsInput | null;
+  now?: Date;
 }): TenderDeterministicAnalysisPlan {
   const evidenceSources = buildEvidenceSources(input.documentRows, input.chunkRows);
+  const analysisNow = input.now ?? new Date();
 
   if (evidenceSources.length < 1) {
     throw new Error('Deterministinen baseline-analyysi vaatii vähintään yhden extracted chunkin evidence-datan muodostamiseen.');
@@ -1054,6 +1334,9 @@ export function buildTenderDeterministicAnalysisPlan(input: {
     evidenceSources,
     evidenceSourceIndexByChunkId,
     packageDocumentNames: input.documentRows.map((row) => normalizeComparableText(row.fileName)),
+    providerProfile: input.providerProfile ?? null,
+    providerCoveredRequirementKeys: new Set(),
+    providerMissingRequirementKeys: new Set(),
     ruleMatches: [],
     requirements: [],
     requirementIndexByKey: new Map(),
@@ -1075,7 +1358,7 @@ export function buildTenderDeterministicAnalysisPlan(input: {
     }
 
     if (genericAttachmentMatch || ATTACHMENT_RULES.some((definition) => definition.patterns.some((pattern) => pattern.test(chunkRow.textContent)))) {
-      analyzeAttachmentChunk(context, chunkRow, genericAttachmentMatch);
+      analyzeAttachmentChunk(context, chunkRow, genericAttachmentMatch, analysisNow);
     }
 
     if (referenceMatch) {
@@ -1085,6 +1368,7 @@ export function buildTenderDeterministicAnalysisPlan(input: {
     maybeAddClearRiskFlag(context, chunkRow);
   });
 
+  addProviderProfileReviewTaskIfNeeded(context);
   addSummaryReviewTaskIfNeeded(context);
   addFallbackReviewTaskIfNeeded(context);
   const draftArtifacts = buildDraftArtifacts({

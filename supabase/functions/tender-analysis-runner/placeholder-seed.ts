@@ -12,6 +12,7 @@ import {
   type TenderDraftArtifactSeed,
   type TenderEvidenceSourceSeed,
   type TenderMissingItemSeed,
+  type TenderRuleAnalysisProviderProfileDetailsInput,
   type TenderReferenceSuggestionSeed,
   type TenderRequirementSeed,
   type TenderResultEvidenceLinkSeed,
@@ -53,6 +54,7 @@ export function buildPlaceholderAnalysisSeedPlan(input: {
   packageRow: PackageRowSlice;
   documentRows: DocumentRowSlice[];
   chunkRows: ChunkRowSlice[];
+  providerProfile?: TenderRuleAnalysisProviderProfileDetailsInput | null;
 }): PlaceholderAnalysisSeedPlan {
   return buildTenderDeterministicAnalysisPlan({
     packageTitle: input.packageRow.title,
@@ -67,5 +69,6 @@ export function buildPlaceholderAnalysisSeedPlan(input: {
       chunkIndex: row.chunk_index,
       textContent: row.text_content,
     })),
+    providerProfile: input.providerProfile ?? null,
   });
 }

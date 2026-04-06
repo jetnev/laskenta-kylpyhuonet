@@ -58,6 +58,98 @@ function rejected(
   return jsonResponse({ accepted: false, analysisJobId: null, status: 'rejected', message }, status);
 }
 
+async function fetchTenderProviderProfileDetails(
+  client: SupabaseClient,
+  organizationId: string,
+) {
+  const { data: profileRow, error: profileError } = await client
+    .from('tender_provider_profiles')
+    .select('id, company_name, summary, service_area, max_travel_km, delivery_scope')
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+
+  if (profileError) {
+    throw profileError;
+  }
+
+  if (!profileRow) {
+    return null;
+  }
+
+  const [credentialResult, constraintResult, documentResult, responseTemplateResult] = await Promise.all([
+    client
+      .from('tender_provider_credentials')
+      .select('title, issuer, credential_type, valid_until, document_reference, notes')
+      .eq('tender_provider_profile_id', profileRow.id)
+      .order('updated_at', { ascending: false }),
+    client
+      .from('tender_provider_constraints')
+      .select('title, severity, rule_text, mitigation_note')
+      .eq('tender_provider_profile_id', profileRow.id)
+      .order('updated_at', { ascending: false }),
+    client
+      .from('tender_provider_documents')
+      .select('title, document_type, source_reference, notes')
+      .eq('tender_provider_profile_id', profileRow.id)
+      .order('updated_at', { ascending: false }),
+    client
+      .from('tender_provider_response_templates')
+      .select('title, template_type')
+      .eq('tender_provider_profile_id', profileRow.id)
+      .order('updated_at', { ascending: false }),
+  ]);
+
+  if (credentialResult.error) {
+    throw credentialResult.error;
+  }
+
+  if (constraintResult.error) {
+    throw constraintResult.error;
+  }
+
+  if (documentResult.error) {
+    throw documentResult.error;
+  }
+
+  if (responseTemplateResult.error) {
+    throw responseTemplateResult.error;
+  }
+
+  return {
+    profile: {
+      companyName: profileRow.company_name,
+      summary: profileRow.summary,
+      serviceArea: profileRow.service_area,
+      maxTravelKm: profileRow.max_travel_km,
+      deliveryScope: profileRow.delivery_scope,
+    },
+    credentials: (credentialResult.data ?? []).map((row) => ({
+      title: row.title,
+      issuer: row.issuer,
+      credentialType: row.credential_type,
+      validUntil: row.valid_until,
+      documentReference: row.document_reference,
+      notes: row.notes,
+    })),
+    constraints: (constraintResult.data ?? []).map((row) => ({
+      title: row.title,
+      severity: row.severity,
+      ruleText: row.rule_text,
+      mitigationNote: row.mitigation_note,
+    })),
+    documents: (documentResult.data ?? []).map((row) => ({
+      title: row.title,
+      documentType: row.document_type,
+      sourceReference: row.source_reference,
+      notes: row.notes,
+    })),
+    responseTemplates: (responseTemplateResult.data ?? []).map((row) => ({
+      title: row.title,
+      templateType: row.template_type,
+    })),
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /*  Baseline result writer                                             */
 /* ------------------------------------------------------------------ */
@@ -177,7 +269,13 @@ async function seedPlaceholderResults(
     text_content: string;
   }[],
 ) {
-  const plan = buildPlaceholderAnalysisSeedPlan({ packageRow, documentRows, chunkRows });
+  const providerProfile = await fetchTenderProviderProfileDetails(client, packageRow.organization_id);
+  const plan = buildPlaceholderAnalysisSeedPlan({
+    packageRow,
+    documentRows,
+    chunkRows,
+    providerProfile,
+  });
   const { data: referenceProfileRows, error: referenceProfileError } = await client
     .from('tender_reference_profiles')
     .select('id, title, client_name, project_type, description, location, completed_year, contract_value, tags')

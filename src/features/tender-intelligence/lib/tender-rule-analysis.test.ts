@@ -2,6 +2,47 @@ import { describe, expect, it } from 'vitest';
 
 import { buildTenderDeterministicAnalysisPlan } from './tender-rule-analysis';
 
+function createProviderProfile(overrides: Partial<{
+  credentials: Array<{
+    title: string;
+    issuer: string | null;
+    credentialType: 'certificate' | 'qualification' | 'insurance' | 'license' | 'other';
+    validUntil: string | null;
+    documentReference: string | null;
+    notes: string | null;
+  }>;
+  constraints: Array<{
+    title: string;
+    severity: 'hard' | 'soft' | 'info';
+    ruleText: string;
+    mitigationNote: string | null;
+  }>;
+  documents: Array<{
+    title: string;
+    documentType: 'case-study' | 'certificate' | 'insurance' | 'cv' | 'policy' | 'other';
+    sourceReference: string | null;
+    notes: string | null;
+  }>;
+  responseTemplates: Array<{
+    title: string;
+    templateType: 'company-overview' | 'technical-approach' | 'delivery-plan' | 'pricing-note' | 'quality' | 'other';
+  }>;
+}> = {}) {
+  return {
+    profile: {
+      companyName: 'Copilot Oy',
+      summary: 'Korjausrakentamisen tarjousosaaja.',
+      serviceArea: 'Uusimaa',
+      maxTravelKm: 250,
+      deliveryScope: 'regional' as const,
+    },
+    credentials: overrides.credentials ?? [],
+    constraints: overrides.constraints ?? [],
+    documents: overrides.documents ?? [],
+    responseTemplates: overrides.responseTemplates ?? [],
+  };
+}
+
 function createDocument(documentId: string, fileName: string) {
   return {
     documentId,
@@ -106,6 +147,34 @@ describe('buildTenderDeterministicAnalysisPlan', () => {
     expect(plan.missingItems).toHaveLength(0);
   });
 
+  it('marks attachment readiness as covered when provider profile contains supporting evidence', () => {
+    const plan = buildTenderDeterministicAnalysisPlan({
+      packageTitle: 'Koulu / tarjouspyyntö',
+      documentRows: [createDocument('doc-1', 'tarjouspyynto.txt')],
+      chunkRows: [createChunk({ textContent: 'Vastuuvakuutustodistus tulee liittää tarjoukseen.' })],
+      providerProfile: createProviderProfile({
+        credentials: [
+          {
+            title: 'Vastuuvakuutus 2026',
+            issuer: 'Vakuutusyhtiö',
+            credentialType: 'insurance',
+            validUntil: '2027-01-01T00:00:00.000Z',
+            documentReference: 'vakuutus-2026.pdf',
+            notes: null,
+          },
+        ],
+      }),
+    });
+
+    expect(plan.requirements[0]).toMatchObject({
+      title: 'Toimita vastuuvakuutustodistus',
+      status: 'covered',
+    });
+    expect(plan.requirements[0]?.description).toContain('Tarjoajaprofiilista löytyi');
+    expect(plan.missingItems).toHaveLength(0);
+    expect(plan.goNoGoAssessment.recommendation).toBe('pending');
+  });
+
   it('creates reference requirements and review tasks for findings that still need human judgement', () => {
     const plan = buildTenderDeterministicAnalysisPlan({
       packageTitle: 'Sairaala / tarjouspyyntö',
@@ -130,6 +199,54 @@ describe('buildTenderDeterministicAnalysisPlan', () => {
       'review_task',
     ]);
     expect(plan.draftArtifacts.find((artifact) => artifact.artifactType === 'clarification-list')?.contentMd).toContain('Arvioi referenssivaatimuksen täyttyminen');
+  });
+
+  it('adds a provider follow-up review task when baseline findings exist but provider profile is missing', () => {
+    const plan = buildTenderDeterministicAnalysisPlan({
+      packageTitle: 'Koulu / tarjouspyyntö',
+      documentRows: [createDocument('doc-1', 'tarjouspyynto.txt')],
+      chunkRows: [createChunk({ textContent: 'Pakollinen liite: verovelkatodistus on toimitettava tarjouksen mukana.' })],
+    });
+
+    expect(plan.reviewTasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          taskType: 'decision',
+          title: 'Täydennä tarjoajaprofiili ennen lopullista go / no-go -päätöstä',
+        }),
+      ]),
+    );
+    expect(plan.goNoGoAssessment.recommendation).toBe('conditional-go');
+    expect(plan.goNoGoAssessment.summary).toContain('tarjoajaprofiili puuttuu');
+  });
+
+  it('adds a hard-constraint review task when provider profile contains blocking-fit checks', () => {
+    const plan = buildTenderDeterministicAnalysisPlan({
+      packageTitle: 'Päiväkoti / tarjouspyyntö',
+      documentRows: [createDocument('doc-1', 'tarjouspyynto.txt')],
+      chunkRows: [createChunk()],
+      providerProfile: createProviderProfile({
+        constraints: [
+          {
+            title: 'Ei yli 300 km toimituksia',
+            severity: 'hard',
+            ruleText: 'Tarjouksia ei jätetä yli 300 km toimitusalueelle.',
+            mitigationNote: null,
+          },
+        ],
+      }),
+    });
+
+    expect(plan.reviewTasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          taskType: 'decision',
+          title: 'Vertaile tarjoajaprofiilin kovat rajaukset tarjouspyyntöön',
+        }),
+      ]),
+    );
+    expect(plan.goNoGoAssessment.recommendation).toBe('conditional-go');
+    expect(plan.goNoGoAssessment.summary).toContain('kovaa rajausta');
   });
 
   it('falls back to a single review task when no supported baseline rules match', () => {

@@ -1496,6 +1496,10 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
     const packageRow = await assertTenderPackageAccess(packageId);
     const documentRows = await fetchTenderDocumentRowsForPackage(packageId);
     const chunkRows = await fetchTenderDocumentChunkRowsForPackage(packageId);
+    const providerProfile = await fetchTenderProviderProfileDetailsForOrganization({
+      client,
+      organizationId: packageRow.organization_id,
+    });
     const referenceProfileRows = await fetchTenderReferenceProfileRowsForOrganization({
       client,
       organizationId: packageRow.organization_id,
@@ -1509,6 +1513,7 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       packageRow,
       documentRows,
       chunkRows,
+      providerProfile,
     });
 
     try {
