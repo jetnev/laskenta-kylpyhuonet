@@ -83,7 +83,13 @@ describe('buildPlaceholderAnalysisSeedPlan', () => {
     });
     expect(firstPlan.reviewTasks[0]?.title).toBe('Käy sääntöpohjaiset löydökset läpi');
     expect(firstPlan.referenceSuggestions).toHaveLength(0);
-    expect(firstPlan.draftArtifacts).toHaveLength(0);
+    expect(firstPlan.draftArtifacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ artifactType: 'quote-outline' }),
+        expect.objectContaining({ artifactType: 'response-summary' }),
+        expect.objectContaining({ artifactType: 'clarification-list' }),
+      ]),
+    );
     expect(firstPlan.evidenceSources[0]?.locatorText).toBe('tarjouspyynto / chunk 1');
     expect(firstPlan.requirements[0]?.evidenceLinks[0]?.matchedRule).toBe('deadline.tarjouksen_viimeinen_jattopaiva');
   });
