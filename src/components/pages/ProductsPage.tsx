@@ -43,6 +43,19 @@ type ProductFormState = {
   active: boolean;
 };
 
+type ActiveFilter = 'all' | 'active' | 'inactive' | 'incomplete';
+
+type SavedProductFilter = {
+  id: string;
+  label: string;
+  search: string;
+  categoryFilter: string;
+  brandFilter: string;
+  activeFilter: ActiveFilter;
+  sortBy: 'updatedAt' | 'name' | 'category' | 'brand' | 'defaultSalePrice';
+  sortDirection: 'asc' | 'desc';
+};
+
 const EMPTY_FORM: ProductFormState = {
   code: '',
   name: '',
@@ -135,6 +148,10 @@ function calculateSalePrice(purchasePrice: number, marginPercent: number, explic
   return Math.round((purchasePrice * (1 + marginPercent / 100) + Number.EPSILON) * 100) / 100;
 }
 
+function isProductIncomplete(product: Product) {
+  return !product.code?.trim() || !product.name?.trim() || !(product.category || '').trim() || !(product.unit || '').trim();
+}
+
 export default function ProductsPage() {
   const { canDelete, canEdit } = useAuth();
   const { groups } = useInstallationGroups();
@@ -143,11 +160,12 @@ export default function ProductsPage() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [brandFilter, setBrandFilter] = useState('all');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
   const [sortBy, setSortBy] = useState<'updatedAt' | 'name' | 'category' | 'brand' | 'defaultSalePrice'>(
     'updatedAt'
   );
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [savedFilters, setSavedFilters] = useState<SavedProductFilter[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -180,6 +198,7 @@ export default function ProductsPage() {
         const active = product.active ?? product.isActive ?? true;
         if (activeFilter === 'active' && !active) return false;
         if (activeFilter === 'inactive' && active) return false;
+        if (activeFilter === 'incomplete' && !isProductIncomplete(product)) return false;
         if (categoryFilter !== 'all' && (product.category || '') !== categoryFilter) return false;
         if (brandFilter !== 'all' && (product.brand || product.manufacturer || '') !== brandFilter) return false;
         if (!query.normalizedText) return true;
@@ -216,6 +235,31 @@ export default function ProductsPage() {
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const activeCount = products.filter((product) => product.active ?? product.isActive ?? true).length;
   const inactiveCount = products.length - activeCount;
+  const incompleteCount = products.filter((product) => isProductIncomplete(product)).length;
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('products.savedFilters.v1');
+      if (!stored) {
+        return;
+      }
+
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        setSavedFilters(parsed as SavedProductFilter[]);
+      }
+    } catch {
+      setSavedFilters([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('products.savedFilters.v1', JSON.stringify(savedFilters));
+    } catch {
+      // Ignore storage errors (private mode or quota).
+    }
+  }, [savedFilters]);
 
   useEffect(() => {
     setPage(1);
@@ -311,6 +355,46 @@ export default function ProductsPage() {
 
   const clearSelection = () => setSelectedIds([]);
 
+  const saveCurrentFilter = () => {
+    const name = window.prompt('Anna suodattimelle nimi', `Suodatin ${savedFilters.length + 1}`)?.trim();
+    if (!name) {
+      return;
+    }
+
+    const nextFilter: SavedProductFilter = {
+      id: `${Date.now()}`,
+      label: name,
+      search,
+      categoryFilter,
+      brandFilter,
+      activeFilter,
+      sortBy,
+      sortDirection,
+    };
+
+    setSavedFilters((current) => [nextFilter, ...current].slice(0, 10));
+    toast.success(`Suodatin "${name}" tallennettu.`);
+  };
+
+  const applySavedFilter = (filterId: string) => {
+    if (filterId === 'none') {
+      return;
+    }
+
+    const saved = savedFilters.find((item) => item.id === filterId);
+    if (!saved) {
+      return;
+    }
+
+    setSearch(saved.search);
+    setCategoryFilter(saved.categoryFilter);
+    setBrandFilter(saved.brandFilter);
+    setActiveFilter(saved.activeFilter);
+    setSortBy(saved.sortBy);
+    setSortDirection(saved.sortDirection);
+    toast.success(`Suodatin "${saved.label}" käytössä.`);
+  };
+
   const removeProduct = (product: Product) => {
     if (!canDelete) {
       toast.error('Sinulla ei ole oikeuksia poistaa tuotteita.');
@@ -405,7 +489,7 @@ export default function ProductsPage() {
 
       {!canEdit && <ReadOnlyAlert />}
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-5">
         <Card className="p-4">
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Omat tuotteet</div>
           <div className="mt-1 text-2xl font-semibold">{products.length}</div>
@@ -421,6 +505,10 @@ export default function ProductsPage() {
         <Card className="p-4">
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Kategorioita</div>
           <div className="mt-1 text-2xl font-semibold">{categories.length}</div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Puutteelliset</div>
+          <div className="mt-1 text-2xl font-semibold">{incompleteCount}</div>
         </Card>
       </div>
 
@@ -446,7 +534,7 @@ export default function ProductsPage() {
       )}
 
       <Card className="p-4 space-y-4">
-        <div className="grid gap-3 lg:grid-cols-[1.7fr_1fr_1fr_1fr]">
+        <div className="grid gap-3 lg:grid-cols-[1.7fr_1fr_1fr_1fr_auto_auto]">
           <div className="relative">
             <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -480,6 +568,17 @@ export default function ProductsPage() {
               <SelectItem value="all">Kaikki</SelectItem>
               <SelectItem value="active">Aktiiviset</SelectItem>
               <SelectItem value="inactive">Inaktiiviset</SelectItem>
+              <SelectItem value="incomplete">Puutteelliset</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" onClick={saveCurrentFilter}>Tallenna suodatin</Button>
+          <Select onValueChange={applySavedFilter}>
+            <SelectTrigger><SelectValue placeholder="Avaa tallennettu" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Valitse suodatin</SelectItem>
+              {savedFilters.map((savedFilter) => (
+                <SelectItem key={savedFilter.id} value={savedFilter.id}>{savedFilter.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

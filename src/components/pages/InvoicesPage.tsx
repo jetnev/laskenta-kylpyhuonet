@@ -386,11 +386,11 @@ export default function InvoicesPage({ routeState, onNavigate }: InvoicesPagePro
               <CardHeader className="gap-4 border-b border-border/60 pb-5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-1.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <CardTitle>Hyväksytyt tarjoukset ilman laskua</CardTitle>
+                    <CardTitle>Laskuta nyt: hyväksytyt tarjoukset</CardTitle>
                     <Badge variant="outline">{eligibleQuotes.length} valmista</Badge>
                   </div>
                   <CardDescription>
-                    Hyväksytyt tarjoukset, joista voi luoda laskun suoraan ilman erillistä tietojen kokoamista.
+                    Hyväksytyt tarjoukset ilman laskua, joista voi luoda laskun suoraan ilman erillistä tietojen kokoamista.
                   </CardDescription>
                 </div>
                 <Button variant="outline" className="w-full justify-between sm:w-auto" onClick={() => onNavigate?.({ page: 'projects' })}>

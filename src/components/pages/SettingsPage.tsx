@@ -3,6 +3,7 @@ import { Gear, Shield } from '@phosphor-icons/react';
 import { Card } from '../ui/card';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
 import { Alert, AlertDescription } from '../ui/alert';
 import { useSettings } from '../../hooks/use-data';
 import { useAuth } from '../../hooks/use-auth';
@@ -67,6 +68,10 @@ export default function SettingsPage() {
           <div>
             <h2 className="text-lg font-semibold">Yhteiset oletusyritystiedot</h2>
             <p className="text-sm text-muted-foreground">Nimi, osoite ja muut yhteiset perustiedot voivat toimia oletuksina, mutta jokaisen käyttäjän oma dokumenteissa näkyvä sähköposti kannattaa tallentaa Oma tili -sivulla.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Badge variant="outline">Vaikuttaa: tarjoukset</Badge>
+              <Badge variant="outline">Vaikuttaa: PDF-dokumentit</Badge>
+            </div>
           </div>
         </div>
 
@@ -94,6 +99,10 @@ export default function SettingsPage() {
         <div>
           <h2 className="text-lg font-semibold">Tarjouksen oletusarvot</h2>
           <p className="text-sm text-muted-foreground">Näitä arvoja käytetään uusien tarjousten luonnissa.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Badge variant="outline">Vaikuttaa: uudet tarjoukset</Badge>
+            <Badge variant="outline">Vaikuttaa: tarjouseditori</Badge>
+          </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-2">
@@ -122,6 +131,9 @@ export default function SettingsPage() {
             Sovellus tarkistaa päivitykset tästä osoitteesta. Osoitteen tulee olla suora generic-feed, jossa on
             `latest.yml` ja julkaisuartefaktit.
           </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Badge variant="outline">Vaikuttaa: desktop-päivitykset</Badge>
+          </div>
         </div>
         <div className="space-y-2">
           <FieldHelpLabel htmlFor="settings-update-feed-url" label="Päivitysfeedin URL" help={SETTINGS_FIELD_HELP.updateFeedUrl} />

@@ -304,6 +304,7 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
 
   const allActions = [...model.actions.sales, ...model.actions.margin, ...model.actions.customers, ...model.actions.projects, ...model.actions.data];
   const actionCount = allActions.length;
+  const defaultReportTab = actionCount > 0 ? 'actions' : 'overview';
 
   return (
     <AppPageLayout pageType="registry">
@@ -364,7 +365,7 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-6">
+      <Tabs defaultValue={defaultReportTab} className="space-y-6">
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="overview" className="gap-1.5"><Eye className="h-4 w-4" />Yleiskatsaus</TabsTrigger>
           <TabsTrigger value="actions" className="gap-1.5"><ListChecks className="h-4 w-4" />Toimenpiteet{actionCount > 0 && <Badge variant="destructive" className="ml-1 h-5 min-w-5 px-1 text-xs">{actionCount}</Badge>}</TabsTrigger>
