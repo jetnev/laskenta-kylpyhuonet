@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildCurrentStateLegalDocumentTemplate,
   buildSignupLegalAcceptanceBundle,
   evaluateLegalAcceptanceState,
+  findLegalDocumentPlaceholders,
   getRequiredLegalDocuments,
   resolveLegalDocumentTypeFromPath,
   suggestNextLegalVersionLabel,
@@ -54,6 +56,31 @@ describe('resolveLegalDocumentTypeFromPath', () => {
     expect(resolveLegalDocumentTypeFromPath('/tietosuoja/')).toBe('privacy');
     expect(resolveLegalDocumentTypeFromPath('/dpa')).toBe('dpa');
     expect(resolveLegalDocumentTypeFromPath('/tuntematon')).toBeNull();
+  });
+});
+
+describe('buildCurrentStateLegalDocumentTemplate', () => {
+  it('returns current-state legal content aligned to Projekta runtime facts', () => {
+    const terms = buildCurrentStateLegalDocumentTemplate('terms');
+    const privacy = buildCurrentStateLegalDocumentTemplate('privacy');
+    const dpa = buildCurrentStateLegalDocumentTemplate('dpa');
+    const cookies = buildCurrentStateLegalDocumentTemplate('cookies');
+
+    expect(terms.contentMd).toContain('Jetnev Oy');
+    expect(terms.contentMd).toContain('Tarjousäly');
+    expect(privacy.contentMd).toContain('Supabase');
+    expect(privacy.contentMd).toContain('Cloudflare');
+    expect(dpa.acceptanceRequirement).toBe('organization-owner');
+    expect(cookies.acceptanceRequirement).toBe('none');
+  });
+});
+
+describe('findLegalDocumentPlaceholders', () => {
+  it('returns unique placeholder markers from markdown content', () => {
+    expect(findLegalDocumentPlaceholders('A [PLACEHOLDER_ONE] and [PLACEHOLDER_ONE] plus [PLACEHOLDER_TWO].')).toEqual([
+      '[PLACEHOLDER_ONE]',
+      '[PLACEHOLDER_TWO]',
+    ]);
   });
 });
 

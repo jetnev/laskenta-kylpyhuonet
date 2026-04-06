@@ -13,6 +13,7 @@ import {
   type OrganizationRow,
   type ProfileRow,
 } from './supabase';
+import { APP_DOMAIN, APP_NAME, APP_OPERATOR_NAME, APP_SUPPORT_EMAIL } from './site-brand';
 
 export const LEGAL_DOCUMENT_ROUTE_BY_TYPE: Record<LegalDocumentType, string> = {
   terms: '/kayttoehdot',
@@ -83,6 +84,16 @@ export interface LegalAcceptanceAuditRow extends LegalDocumentAcceptanceRow {
   organization?: Pick<OrganizationRow, 'id' | 'name'> | null;
 }
 
+export interface LegalDocumentTemplate {
+  title: string;
+  versionLabel: string;
+  acceptanceRequirement: LegalDocumentAcceptanceRequirement;
+  requiresReacceptance: boolean;
+  changeSummary: string;
+  locale: string;
+  contentMd: string;
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -94,6 +105,264 @@ function escapeHtml(value: string) {
 
 function normalizeDocumentContent(value: string) {
   return value.replace(/\r\n/g, '\n').trim();
+}
+
+function buildCurrentStateTermsTemplate() {
+  return `# Käyttöehdot
+
+## 1. Sopijapuolet ja palvelu
+
+Nämä käyttöehdot koskevat ${APP_OPERATOR_NAME}:n tarjoamaa ${APP_NAME}-palvelua. ${APP_NAME} on rakennusalan yrityksille suunniteltu selain- ja työtilapalvelu, jolla hallitaan tarjouslaskentaa, tuote- ja hintatietoa, projektiseurantaa sekä tarjouspyyntöjen katselmointia.
+
+Palvelun operaattori on ${APP_OPERATOR_NAME}. Palvelua koskevissa kysymyksissä yhteydenottokanava on ${APP_SUPPORT_EMAIL}.
+
+## 2. Palvelun käyttötarkoitus
+
+${APP_NAME} on tarkoitettu yrityskäyttöön. Palvelun avulla voidaan ylläpitää tarjous- ja projektitietoa, hallita tuotteita ja hinnoittelua sekä käyttää Tarjousäly-ominaisuutta tarjouspyyntöpakettien deterministiseen analyysiin ja katselmointiin.
+
+Tarjousäly ei muodosta itsenäisiä päätöksiä käyttäjän puolesta eikä sitä kuvata näissä ehdoissa autonomisena tekoälynä. Ominaisuus toimii käyttäjän työkaluna tarjouspyynnön valmistelussa, analysoinnissa ja katselmoinnissa.
+
+## 3. Käyttäjätilit ja roolit
+
+Palvelua käytetään henkilökohtaisilla käyttäjätunnuksilla. Käyttäjä vastaa omien tunnustensa, salasanojensa ja muiden kirjautumistietojensa huolellisesta säilyttämisestä.
+
+Palvelussa voi olla esimerkiksi ylläpitäjiä, organisaation pääkäyttäjiä ja työntekijärooleja. Organisaation pääkäyttäjä vastaa organisaationsa käyttöoikeuksien hallinnasta sekä siitä, että organisaation puolesta tehtävät hyväksynnät tehdään asianmukaisella valtuutuksella.
+
+## 4. Asiakasdata ja vastuut
+
+Asiakas vastaa palveluun tallentamansa sisällön oikeellisuudesta, ajantasaisuudesta ja siitä, että asiakkaalla on oikeus käsitellä palveluun tallennettuja tietoja. Tämä koskee myös tarjouspyyntöaineistoa, dokumentteja, asiakas- ja projektitietoja sekä mahdollista henkilötietoa.
+
+${APP_OPERATOR_NAME} tarjoaa palvelun teknisen käyttöympäristön ja hallitun työtilan. Palvelussa olevat tiedot, niiden tulkinta ja niiden perusteella tehtävät liiketoimintapäätökset ovat asiakkaan vastuulla.
+
+## 5. Palvelun käytön rajat
+
+Palvelua ei saa käyttää lainvastaisesti, harhaanjohtavasti tai tavalla, joka vaarantaa muiden asiakkaiden, palvelun tai tietoturvan toiminnan. Käyttäjä ei saa yrittää kiertää käyttöoikeuksia, purkaa palvelun suojausmekanismeja tai käyttää palvelua toisten organisaatioiden tietojen luvattomaan käsittelyyn.
+
+## 6. Palvelun saatavuus ja muutokset
+
+${APP_OPERATOR_NAME} voi kehittää, ylläpitää ja päivittää palvelua jatkuvasti. Tähän voi sisältyä ominaisuuksien lisäämistä, muuttamista, poistamista tai käyttöliittymän ja taustapalveluiden kehittämistä.
+
+Palvelua voidaan päivittää myös selainversion lisäksi työpöytäversiona. Mahdolliset työpöytäversion päivitykset toimitetaan palvelun virallisen jakelukanavan kautta.
+
+## 7. Hinnat ja sopiminen
+
+Mahdollisista hinnoista, tilauskausista, laskutuksesta ja kaupallisista ehdoista sovitaan erikseen asiakkaan ja ${APP_OPERATOR_NAME}:n välillä. Ellei muuta ole kirjallisesti sovittu, nämä käyttöehdot koskevat palvelun yleisiä käyttöehtoja.
+
+## 8. Immateriaalioikeudet
+
+Kaikki palvelua, sen ohjelmistoa, käyttöliittymää ja dokumentaatiota koskevat oikeudet kuuluvat ${APP_OPERATOR_NAME}:lle tai sen lisenssinantajille. Asiakas säilyttää oikeudet omaan sisältöönsä ja palveluun tallentamaansa dataan soveltuvan lain ja sopimusten mukaisesti.
+
+## 9. Vastuunrajoitus
+
+Palvelu toimitetaan yrityskäyttöön tarkoitettuna SaaS-palveluna. ${APP_OPERATOR_NAME} ei vastaa välillisistä tai epäsuorista vahingoista, kuten saamatta jääneestä voitosta, menetetystä liiketoimintamahdollisuudesta tai datan tulkinnasta johtuvista seurannaisvahingoista, ellei pakottavasta laista muuta johdu.
+
+${APP_OPERATOR_NAME}:n vastuu rajoittuu enintään siihen määrään, jonka asiakas on maksanut palvelusta välittömästi vahinkoa edeltävän sopimuskauden aikana, ellei pakottavasta laista muuta johdu.
+
+## 10. Sovellettava laki ja yhteystiedot
+
+Näihin käyttöehtoihin sovelletaan Suomen lakia. Mahdolliset erimielisyydet pyritään ratkaisemaan ensisijaisesti neuvottelemalla.
+
+Palvelua koskevat yhteydenotot: ${APP_SUPPORT_EMAIL}
+
+---
+
+Voimassa oleva dokumenttiversio julkaistaan osoitteessa https://${APP_DOMAIN}/kayttoehdot.`;
+}
+
+function buildCurrentStatePrivacyTemplate() {
+  return `# Tietosuojaseloste
+
+## 1. Rekisterinpitäjä
+
+${APP_NAME}-palvelun rekisterinpitäjä on ${APP_OPERATOR_NAME}. Tietosuojaa koskevissa kysymyksissä voit ottaa yhteyttä osoitteeseen ${APP_SUPPORT_EMAIL}.
+
+## 2. Mitä tietoja käsittelemme
+
+Palvelussa voidaan käsitellä seuraavia tietoryhmiä:
+
+- käyttäjätilin perustiedot, kuten nimi, sähköpostiosoite ja käyttäjärooli
+- organisaatiota koskevat tiedot, kuten organisaation nimi ja käyttöoikeusrakenne
+- palveluun tallennettu liiketoimintadata, kuten tarjoukset, projektit, tuote- ja hintatieto, asiakkaisiin liittyvä tieto sekä käyttäjän palveluun lisäämä sisältö
+- tarjouspyyntöaineisto, dokumentit, analyysitulokset, evidenssi- ja katselmointitieto silloin, kun Tarjousälyä käytetään
+- juridisten dokumenttien hyväksyntäauditointiin liittyvät tiedot, kuten hyväksyntäajankohta, käyttäjätunniste, käyttäjäagentti ja mahdollinen IP-osoite
+
+## 3. Käsittelyn tarkoitukset
+
+Käsittelemme tietoja palvelun toimittamiseksi, käyttäjätilien hallinnoimiseksi, palvelun tietoturvan varmistamiseksi, asiakassuhteen ylläpitämiseksi, juridisten hyväksyntöjen todentamiseksi sekä palvelun kehittämiseksi.
+
+Tarjousälyyn liittyvää aineistoa käsitellään tarjouspyyntöjen jäsentämistä, determinististä analyysiä, katselmointia ja tarjouksen valmistelun tukemista varten. Tarjousälyä ei kuvata tässä selosteessa yleiskäyttöisenä tekoälynä, vaan hallittuna palveluominaisuutena.
+
+## 4. Käsittelyn oikeusperusteet
+
+Tietojen käsittely perustuu ensisijaisesti sopimuksen täytäntöönpanoon, oikeutettuun etuun palvelun turvallisen ja luotettavan toiminnan varmistamiseksi sekä lakisääteisiin velvoitteisiin silloin, kun niitä sovelletaan.
+
+## 5. Tietojen lähteet
+
+Tiedot saadaan pääasiassa käyttäjiltä, organisaatioiden pääkäyttäjiltä, palveluun tallennetusta sisällöstä ja palvelun käytöstä syntyvistä teknisistä tapahtumista.
+
+## 6. Tietojen vastaanottajat ja käsittelijät
+
+Palvelun teknisessä toteutuksessa voidaan käyttää alihankkijoita ja palveluntarjoajia, jotka käsittelevät tietoja ${APP_OPERATOR_NAME}:n lukuun. Nykyiseen palvelukokonaisuuteen kuuluvat erityisesti:
+
+- Supabase autentikointia, tietokantaa ja palvelun taustatoimintoja varten
+- Cloudflare selainpalvelun julkaisu- ja toimituskerrosta varten
+
+Tietoja luovutetaan ulkopuolisille vain siinä laajuudessa kuin palvelun toteuttaminen, asiakassuhteen hoitaminen, tietoturva tai lainsäädäntö sitä edellyttävät.
+
+## 7. Tietojen sijainti ja siirrot
+
+Palvelussa käytetään pilvipalveluita, joiden tekninen infrastruktuuri voi perustua palveluntarjoajien dokumentoituihin käsittely- ja toimitusalueisiin. ${APP_OPERATOR_NAME} pyrkii käyttämään palvelukokonaisuutta tavalla, joka tukee eurooppalaisen tietosuojakehyksen mukaista käsittelyä. Mahdolliset siirrot toteutetaan palveluntarjoajien sopimus- ja suojausmekanismien puitteissa.
+
+## 8. Säilytysaika
+
+Tietoja säilytetään niin kauan kuin se on tarpeen palvelun toimittamiseksi, asiakassuhteen hoitamiseksi, lakisääteisten velvoitteiden täyttämiseksi ja hyväksyntäauditoinnin todentamiseksi. Säilytysaikoja arvioidaan palvelun käyttötarkoituksen, sopimussuhteen ja soveltuvien velvoitteiden perusteella.
+
+## 9. Rekisteröidyn oikeudet
+
+Rekisteröidyllä on soveltuvan lainsäädännön mukaiset oikeudet saada pääsy tietoihinsa, pyytää tietojen oikaisua, vastustaa käsittelyä tietyissä tilanteissa sekä pyytää käsittelyn rajoittamista tai tietojen poistamista silloin, kun pyyntö voidaan toteuttaa lain ja sopimusvastuiden puitteissa.
+
+## 10. Tietoturva
+
+${APP_NAME} käyttää teknisiä ja organisatorisia suojatoimia, joilla pyritään varmistamaan tietojen luottamuksellisuus, eheys ja käytettävyys. Organisaatiokohtainen pääsynhallinta, kirjautumisen suojaus ja hyväksyntäauditointi ovat osa palvelun perusrakennetta.
+
+## 11. Muutokset tähän selosteeseen
+
+Tätä tietosuojaselostetta voidaan päivittää palvelun, lainsäädännön tai käsittelytapojen muuttuessa. Voimassa oleva versio julkaistaan osoitteessa https://${APP_DOMAIN}/tietosuoja.`;
+}
+
+function buildCurrentStateDpaTemplate() {
+  return `# Tietojenkäsittelyliite
+
+## 1. Osapuolet
+
+Tämä tietojenkäsittelyliite täydentää ${APP_OPERATOR_NAME}:n tarjoamaa ${APP_NAME}-palvelua koskevaa asiakassuhdetta. Asiakasorganisaatio toimii omien henkilötietojensa osalta rekisterinpitäjänä, ja ${APP_OPERATOR_NAME} toimii käsittelijänä siltä osin kuin henkilötietoja käsitellään palvelun tarjoamiseksi asiakkaan lukuun.
+
+## 2. Käsittelyn kohde ja luonne
+
+Käsittely koskee sellaisia henkilötietoja, joita asiakas tallentaa palveluun käyttäjätilien, tarjouslaskennan, projektiseurannan, dokumenttien hallinnan ja Tarjousälyyn liittyvän tarjouspyyntöaineiston yhteydessä.
+
+Käsittelyn tarkoituksena on mahdollistaa palvelun käyttö, tietojen säilyttäminen, hallittu käyttöoikeuksien hallinta, tarjous- ja projektityöskentely sekä tarjouspyyntöjen deterministinen analysointi ja katselmointi.
+
+## 3. Henkilötietoryhmät
+
+Käsiteltävät tiedot voivat sisältää esimerkiksi seuraavia henkilötietoja:
+
+- käyttäjien nimet, sähköpostiosoitteet ja roolitiedot
+- organisaatioihin liitetyt yhteys- ja vastuuhenkilötiedot
+- tarjouksiin, projekteihin, dokumentteihin tai tarjouspyyntöihin sisältyvät henkilötiedot siinä laajuudessa kuin asiakas niitä palveluun tallentaa
+
+## 4. Käsittelijän velvollisuudet
+
+${APP_OPERATOR_NAME} käsittelee henkilötietoja ainoastaan palvelun toteuttamiseksi, asiakassuhteen hoitamiseksi, palvelun tietoturvan varmistamiseksi ja asiakkaan dokumentoitujen ohjeiden mukaisesti siltä osin kuin nämä ovat yhteensopivia palvelun rakenteen ja soveltuvan lainsäädännön kanssa.
+
+${APP_OPERATOR_NAME} huolehtii siitä, että henkilötietojen käsittelyyn osallistuvat henkilöt ovat sitoutuneet luottamuksellisuuteen ja että palvelussa käytetään asianmukaisia teknisiä ja organisatorisia suojatoimia.
+
+## 5. Alihankkijat ja alikäsittelijät
+
+Palvelun toteutuksessa voidaan käyttää alikäsittelijöitä. Nykyiseen palvelukokonaisuuteen kuuluvat erityisesti:
+
+- Supabase autentikointi-, tietokanta- ja taustapalvelukomponentteja varten
+- Cloudflare selainpalvelun julkaisu- ja toimituskerrosta varten
+
+${APP_OPERATOR_NAME} vastaa siitä, että alikäsittelijöiden käyttö perustuu palvelun toteuttamisen kannalta perusteltuun tarpeeseen ja että käytössä on asianmukaiset sopimusjärjestelyt.
+
+## 6. Avustaminen ja tietoturvaloukkaukset
+
+${APP_OPERATOR_NAME} avustaa asiakasta kohtuullisessa laajuudessa tietosuojavelvoitteiden toteuttamisessa niiltä osin kuin se liittyy palvelun käyttöön ja saatavilla olevaan tietoon. Jos ${APP_OPERATOR_NAME} havaitsee palveluun liittyvän tietoturvaloukkauksen, asiasta toimitaan asianmukaisella tavalla soveltuvan lainsäädännön ja palvelun sisäisten prosessien mukaan.
+
+## 7. Tietojen palautus ja poistaminen
+
+Asiakassuhteen päättyessä tietoja säilytetään tai poistetaan palvelun, sopimuksen, lakisääteisten velvoitteiden ja perustellun auditointitarpeen mukaisesti. Tietojen käsittelyä ei jatketa ilman perustetta sen jälkeen, kun säilyttämiselle ei enää ole tarvetta.
+
+## 8. Muut ehdot
+
+Tämä liite täydentää ${APP_NAME}-palvelun käyttöehtoja ja tietosuojaselostetta. Mikäli näiden asiakirjojen välillä on ristiriitaa henkilötietojen käsittelyn osalta, tätä liitettä sovelletaan ensisijaisesti siltä osin kuin se koskee asiakasorganisaation henkilötietojen käsittelyä.
+
+Voimassa oleva versio julkaistaan osoitteessa https://${APP_DOMAIN}/tietojenkasittely.`;
+}
+
+function buildCurrentStateCookiesTemplate() {
+  return `# Evästeet ja tekniset tallenteet
+
+## 1. Miksi tätä ilmoitusta käytetään
+
+Tämä ilmoitus kuvaa, miten ${APP_NAME}-palvelu käyttää evästeitä ja muita vastaavia teknisiä tallenteita selain- ja työpöytäympäristössä palvelun toiminnan tukemiseksi.
+
+## 2. Välttämättömät evästeet ja tallenteet
+
+Palvelu käyttää välttämättömiä teknisiä tallenteita kirjautumisen, istunnon hallinnan, käyttöliittymäasetusten ja turvallisen käytön toteuttamiseksi. Näitä tallenteita voidaan käyttää esimerkiksi Supabase-autentikoinnin ylläpitämiseen, kirjautuneen istunnon jatkuvuuteen ja palvelun näkymien toimintaan.
+
+## 3. Paikalliset selain- ja sovellustallenteet
+
+${APP_NAME} voi käyttää selaimen paikallista tallennustilaa tai vastaavia teknisiä mekanismeja käyttöliittymäasetusten, tilapäisten valintojen ja palvelun toiminnallisuuden ylläpitämiseksi. Työpöytäversiossa sovellus voi tallentaa vastaavia teknisiä tietoja paikallisesti laitteen käyttöjärjestelmän käyttäjäkohtaisiin sovellustiedostoihin.
+
+## 4. Kolmannen osapuolen palvelut
+
+Palvelun toimittamiseen käytetään Cloudflaren ja Supabasen kaltaisia palveluntarjoajia. Näiden palveluiden tekniset komponentit voivat asettaa tai käyttää palvelun toiminnan kannalta välttämättömiä evästeitä tai vastaavia teknisiä tallenteita.
+
+## 5. Markkinointi- ja profilointievästeet
+
+${APP_NAME} ei kuvaa tässä dokumentissa käyttävänsä oletusarvoisesti erillisiä markkinointi- tai profilointievästeitä. Mikäli palveluun myöhemmin lisätään uusia mittaus-, mainonta- tai seurantakomponentteja, tätä dokumenttia päivitetään erikseen.
+
+## 6. Tallenteiden hallinta
+
+Käyttäjä voi hallita selaimensa evästeasetuksia tai poistaa paikallisia tallenteita selaimen ja laitteen asetuksista. Välttämättömien teknisten tallenteiden estäminen voi kuitenkin vaikuttaa palvelun toimivuuteen.
+
+Voimassa oleva versio julkaistaan osoitteessa https://${APP_DOMAIN}/evasteet.`;
+}
+
+export function buildCurrentStateLegalDocumentTemplate(documentType: LegalDocumentType): LegalDocumentTemplate {
+  const locale = 'fi-FI';
+
+  if (documentType === 'terms') {
+    return {
+      title: 'Käyttöehdot',
+      versionLabel: '1.1.0',
+      acceptanceRequirement: 'all-users',
+      requiresReacceptance: false,
+      changeSummary: 'Päivitetty vastaamaan Projektan nykyistä palvelumallia, käyttörooleja ja Tarjousäly-ominaisuuden determinististä analyysitapaa.',
+      locale,
+      contentMd: buildCurrentStateTermsTemplate(),
+    };
+  }
+
+  if (documentType === 'privacy') {
+    return {
+      title: 'Tietosuojaseloste',
+      versionLabel: '1.1.0',
+      acceptanceRequirement: 'all-users',
+      requiresReacceptance: false,
+      changeSummary: 'Päivitetty vastaamaan Projekta-palvelun nykyistä Supabase- ja Cloudflare-toteutusta sekä Tarjousälyn käsittelyroolia.',
+      locale,
+      contentMd: buildCurrentStatePrivacyTemplate(),
+    };
+  }
+
+  if (documentType === 'dpa') {
+    return {
+      title: 'Tietojenkäsittelyliite',
+      versionLabel: '1.1.0',
+      acceptanceRequirement: 'organization-owner',
+      requiresReacceptance: false,
+      changeSummary: 'Päivitetty vastaamaan nykyistä käsittelijä- ja alikäsittelijärakennetta sekä tarjouspyyntöaineiston käsittelyä Projektassa.',
+      locale,
+      contentMd: buildCurrentStateDpaTemplate(),
+    };
+  }
+
+  return {
+    title: 'Evästeet ja tekniset tallenteet',
+    versionLabel: '1.1.0',
+    acceptanceRequirement: 'none',
+    requiresReacceptance: false,
+    changeSummary: 'Päivitetty vastaamaan nykyistä selain- ja työpöytäympäristön teknistä tallennetta sekä Cloudflare- ja Supabase-riippuvuuksia.',
+    locale,
+    contentMd: buildCurrentStateCookiesTemplate(),
+  };
+}
+
+export function findLegalDocumentPlaceholders(contentMd: string) {
+  return Array.from(new Set(contentMd.match(/\[([A-ZÄÖÅ][A-ZÄÖÅ0-9_]{1,})\]/g) ?? []));
 }
 
 function slugify(text: string): string {

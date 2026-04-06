@@ -3,8 +3,10 @@ import { CheckCircle, FileText, ShieldCheck } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useAuth } from '../../hooks/use-auth';
 import {
+  buildCurrentStateLegalDocumentTemplate,
   createLegalDocumentDraft,
   deleteLegalDocumentDraft,
+  findLegalDocumentPlaceholders,
   formatLegalHash,
   getLegalAcceptanceSourceLabel,
   getLegalDocumentStatusLabel,
@@ -58,16 +60,17 @@ function toDateInputValue(value?: string | null) {
 }
 
 function buildDraftInput(documentType: LegalDocumentType, source?: LegalDocumentVersionRow | null): LegalDocumentDraftInput {
+  const template = buildCurrentStateLegalDocumentTemplate(documentType);
   return {
     documentType,
-    title: source?.title || getLegalDocumentTypeLabel(documentType),
-    versionLabel: suggestNextLegalVersionLabel(source?.version_label),
+    title: source?.title || template.title || getLegalDocumentTypeLabel(documentType),
+    versionLabel: suggestNextLegalVersionLabel(source?.version_label || template.versionLabel),
     effectiveAt: toDateInputValue(source?.effective_at),
-    acceptanceRequirement: source?.acceptance_requirement || defaultRequirementForType(documentType),
-    requiresReacceptance: source?.requires_reacceptance || documentType === 'terms',
-    changeSummary: source?.change_summary || '',
-    locale: source?.locale || 'fi-FI',
-    contentMd: source?.content_md || '',
+    acceptanceRequirement: source?.acceptance_requirement || template.acceptanceRequirement || defaultRequirementForType(documentType),
+    requiresReacceptance: source?.requires_reacceptance ?? template.requiresReacceptance,
+    changeSummary: source?.change_summary || template.changeSummary || '',
+    locale: source?.locale || template.locale || 'fi-FI',
+    contentMd: source?.content_md || template.contentMd || '',
   };
 }
 
@@ -97,6 +100,7 @@ export default function LegalDocumentsPage() {
   const [saving, setSaving] = useState(false);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showArchivedVersions, setShowArchivedVersions] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -109,7 +113,7 @@ export default function LegalDocumentsPage() {
       setDocuments(nextDocuments);
       setAcceptances(nextAcceptances);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Sopimusasiakirjojen lataus epäonnistui.');
+      setError(reason instanceof Error ? reason.message : 'Sopimusasioiden lataus epäonnistui.');
     } finally {
       setLoading(false);
     }
@@ -149,7 +153,12 @@ export default function LegalDocumentsPage() {
   }, [acceptances, search]);
   const previewHtml = useMemo(() => renderLegalDocumentHtml(formData.contentMd || ''), [formData.contentMd]);
 
-  const openDraftEditor = (documentType: LegalDocumentType, source?: LegalDocumentVersionRow | null) => {
+  const openDraftEditor = (
+    documentType: LegalDocumentType,
+    source?: LegalDocumentVersionRow | null,
+    options: { useCurrentStateTemplate?: boolean } = {}
+  ) => {
+    const template = buildCurrentStateLegalDocumentTemplate(documentType);
     setEditingDocument(source?.status === 'draft' ? source : null);
     setFormData(
       source?.status === 'draft'
@@ -164,10 +173,41 @@ export default function LegalDocumentsPage() {
             locale: source.locale,
             contentMd: source.content_md,
           }
-        : buildDraftInput(documentType, source)
+        : {
+            ...buildDraftInput(documentType, source),
+            title: options.useCurrentStateTemplate ? template.title : buildDraftInput(documentType, source).title,
+            acceptanceRequirement: options.useCurrentStateTemplate ? template.acceptanceRequirement : buildDraftInput(documentType, source).acceptanceRequirement,
+            requiresReacceptance: options.useCurrentStateTemplate ? template.requiresReacceptance : buildDraftInput(documentType, source).requiresReacceptance,
+            changeSummary: options.useCurrentStateTemplate ? template.changeSummary : buildDraftInput(documentType, source).changeSummary,
+            locale: options.useCurrentStateTemplate ? template.locale : buildDraftInput(documentType, source).locale,
+            contentMd: options.useCurrentStateTemplate ? template.contentMd : buildDraftInput(documentType, source).contentMd,
+          }
     );
     setEditorOpen(true);
   };
+
+  const applyCurrentStateTemplate = () => {
+    const template = buildCurrentStateLegalDocumentTemplate(formData.documentType);
+    setFormData((current) => ({
+      ...current,
+      title: template.title,
+      acceptanceRequirement: template.acceptanceRequirement,
+      requiresReacceptance: template.requiresReacceptance,
+      changeSummary: template.changeSummary,
+      locale: template.locale,
+      contentMd: template.contentMd,
+    }));
+  };
+
+  const visibleGroupedDocuments = useMemo(
+    () => Object.fromEntries(
+      (Object.entries(groupedDocuments) as Array<[LegalDocumentType, LegalDocumentVersionRow[]]>).map(([documentType, versions]) => [
+        documentType,
+        showArchivedVersions ? versions : versions.filter((document) => document.status !== 'archived'),
+      ])
+    ) as Record<LegalDocumentType, LegalDocumentVersionRow[]>,
+    [groupedDocuments, showArchivedVersions]
+  );
 
   const handleSaveDraft = async () => {
     try {
@@ -237,8 +277,8 @@ export default function LegalDocumentsPage() {
               </div>
 
               {canManageLegalDocuments && (
-                <Button className="mt-4 w-full" onClick={() => openDraftEditor(documentType, activeDocument)}>
-                  Luo uusi luonnos
+                <Button className="mt-4 w-full" onClick={() => openDraftEditor(documentType, activeDocument, { useCurrentStateTemplate: true })}>
+                  Luo luonnos nykytilan pohjalla
                 </Button>
               )}
             </Card>
@@ -339,18 +379,32 @@ export default function LegalDocumentsPage() {
                       Versioi dokumenttia luonnoksina, julkaise uusi aktiivinen versio ja säilytä vanhat versiot historiassa.
                     </p>
                   </div>
-                  <Button onClick={() => openDraftEditor(documentType, groupedDocuments[documentType][0] || null)}>
-                    Luo luonnos
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-600">
+                      <Checkbox
+                        checked={showArchivedVersions}
+                        id={`show-archived-${documentType}`}
+                        onCheckedChange={(checked) => setShowArchivedVersions(checked === true)}
+                      />
+                      <Label className="cursor-pointer text-xs font-medium text-slate-600" htmlFor={`show-archived-${documentType}`}>
+                        Näytä arkistoidut versiot
+                      </Label>
+                    </div>
+                    <Button onClick={() => openDraftEditor(documentType, groupedDocuments[documentType][0] || null, { useCurrentStateTemplate: true })}>
+                      Luo nykytilan luonnos
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
-                  {groupedDocuments[documentType].length === 0 ? (
+                  {visibleGroupedDocuments[documentType].length === 0 ? (
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-600">
-                      Dokumentille ei ole vielä versioita.
+                      {groupedDocuments[documentType].length === 0
+                        ? 'Dokumentille ei ole vielä versioita.'
+                        : 'Arkistoidut versiot on piilotettu tästä näkymästä.'}
                     </div>
                   ) : (
-                    groupedDocuments[documentType].map((document) => (
+                    visibleGroupedDocuments[documentType].map((document) => (
                       <div key={document.id} className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50/80 p-5 lg:flex-row lg:items-start lg:justify-between">
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
@@ -379,6 +433,11 @@ export default function LegalDocumentsPage() {
                             <Button
                               onClick={async () => {
                                 try {
+                                  const placeholders = findLegalDocumentPlaceholders(document.content_md);
+                                  if (placeholders.length > 0) {
+                                    toast.error(`Luonnoksessa on julkaisemattomia placeholder-merkintöjä: ${placeholders.join(', ')}`);
+                                    return;
+                                  }
                                   setPublishingId(document.id);
                                   await publishLegalDocumentVersion(document.id);
                                   toast.success('Dokumenttiversio julkaistu.');
@@ -445,6 +504,12 @@ export default function LegalDocumentsPage() {
         >
             <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
               <div className="min-w-0 space-y-4">
+                <Alert>
+                  <AlertDescription>
+                    Voit käyttää nykytilan dokumenttipohjaa lähtökohtana, jos haluat päivittää tekstit vastaamaan tämänhetkistä Projekta-, Supabase-, Cloudflare- ja Tarjousäly-kokonaisuutta.
+                  </AlertDescription>
+                </Alert>
+
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="legal-document-title">Otsikko</Label>
@@ -532,6 +597,13 @@ export default function LegalDocumentsPage() {
                   </div>
                 </div>
 
+                <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="text-sm text-slate-600">Tarvitsetko ajantasaisen lähtöpohjan?</div>
+                  <Button type="button" variant="outline" onClick={applyCurrentStateTemplate}>
+                    Käytä nykytilan pohjaa
+                  </Button>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="legal-document-content">Sisältö (Markdown)</Label>
                   <Textarea
@@ -548,6 +620,13 @@ export default function LegalDocumentsPage() {
                   <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Esikatselu</div>
                   <h3 className="mt-2 text-lg font-semibold text-slate-950">{formData.title || 'Dokumenttiluonnos'}</h3>
                 </div>
+                {findLegalDocumentPlaceholders(formData.contentMd).length > 0 && (
+                  <Alert variant="destructive">
+                    <AlertDescription>
+                      Luonnoksessa on keskeneräisiä placeholder-merkintöjä: {findLegalDocumentPlaceholders(formData.contentMd).join(', ')}
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_20px_50px_-40px_rgba(15,23,42,0.35)]">
                   <div className="legal-document-body" dangerouslySetInnerHTML={{ __html: previewHtml || '<p>Ei sisältöä.</p>' }} />
                 </div>

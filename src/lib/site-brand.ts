@@ -1,6 +1,7 @@
 import type { AppPage } from './app-routing';
 
 export const APP_NAME = 'Projekta';
+export const APP_OPERATOR_NAME = 'Jetnev Oy';
 export const APP_DOMAIN = 'projekta.fi';
 export const APP_SUPPORT_EMAIL = 'myynti@projekta.fi';
 export const APP_CANONICAL_URL = `https://${APP_DOMAIN}`;
