@@ -81,7 +81,7 @@ describe('buildPlaceholderAnalysisSeedPlan', () => {
       title: 'Verovelkatodistus puuttuu paketista',
       relatedRequirementIndex: 1,
     });
-    expect(firstPlan.reviewTasks[0]?.title).toBe('Käy sääntöpohjaiset löydökset läpi');
+    expect(firstPlan.reviewTasks[0]?.title).toBe('Täydennä tarjoajaprofiili ennen lopullista go / no-go -päätöstä');
     expect(firstPlan.referenceSuggestions).toHaveLength(0);
     expect(firstPlan.draftArtifacts).toEqual(
       expect.arrayContaining([
