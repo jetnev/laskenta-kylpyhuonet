@@ -29,6 +29,11 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SITE_URL: ${{ secrets.VITE_SITE_URL }}
+          VITE_SUPABASE_REDIRECT_URL: ${{ secrets.VITE_SUPABASE_REDIRECT_URL }}
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/pages-action@v1
