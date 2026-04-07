@@ -26,7 +26,8 @@
         "supabase:migration:new": "npx supabase migration new",
         "supabase:db:lint": "npx supabase db lint --local --schema public,extensions",
         "supabase:db:diff:linked": "npx supabase db diff --linked --schema public,extensions",
-        "supabase:db:push:dry-run": "npx supabase db push --linked --dry-run"
+        "supabase:db:push:dry-run": "npx supabase db push --linked --dry-run",
+        "supabase:tender:rollout": "powershell -ExecutionPolicy Bypass -File ./supabase/rollout-tender-intelligence.ps1"
     },
     "dependencies": {
         "@heroicons/react": "^2.2.0",
@@ -60,7 +61,7 @@
         "@radix-ui/react-toggle": "^1.1.2",
         "@radix-ui/react-toggle-group": "^1.1.2",
         "@radix-ui/react-tooltip": "^1.1.8",
-        "@supabase/supabase-js": "^2.101.1",
+        "@supabase/supabase-js": "^2.102.1",
         "@tailwindcss/container-queries": "^0.1.1",
         "@tailwindcss/vite": "^4.1.11",
         "@tanstack/react-query": "^5.83.1",
@@ -108,8 +109,8 @@
         "tailwindcss": "^4.1.11",
         "typescript": "~5.7.2",
         "typescript-eslint": "^8.38.0",
-        "vite": "^7.2.6"
-        ,"vitest": "^3.2.4"
+        "vite": "^7.2.6",
+        "vitest": "^3.2.4"
     },
     "workspaces": {
         "packages": [

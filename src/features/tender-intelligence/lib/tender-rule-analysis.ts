@@ -1,4 +1,4 @@
-import { TENDER_PROVIDER_CONTEXT_ARTIFACT_SECTION_TITLES } from './tender-provider-context';
+import { TENDER_PROVIDER_CONTEXT_ARTIFACT_SECTION_TITLES } from './tender-provider-context.ts';
 
 export type TenderRuleAnalysisTargetEntityType = 'requirement' | 'missing_item' | 'review_task' | 'risk_flag';
 export type TenderRuleAnalysisCategory = 'deadline' | 'mandatory_attachment' | 'reference_requirement' | 'review' | 'fallback';
