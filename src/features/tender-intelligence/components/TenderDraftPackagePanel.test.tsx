@@ -861,6 +861,8 @@ describe('TenderDraftPackagePanel', () => {
     expect(markup).toContain('Draft muuttunut importin jälkeen');
     expect(markup).toContain('Revision 2');
     expect(markup).toContain('Tarjouspaketti / editor import');
+    expect(markup).toContain('Päätöstuen laatuportti sallii etenemisen, mutta nostaa näkyvät varoitukset');
+    expect(markup).toContain('Import-polku vaatii tietoisen päätöksen');
   });
 
   it('surfaces provider context badges for provider-aware draft artifacts', () => {

@@ -12,6 +12,7 @@ import {
 import {
   buildTenderDraftExportPayload,
   buildTenderDraftPackageFromReviewedResults,
+  buildTenderDraftPackageQualityGate,
   buildTenderDraftSummary,
 } from '../lib/tender-draft-package';
 import { buildTenderEditorImportPreview } from '../lib/tender-editor-import';
@@ -23,6 +24,7 @@ import {
 import { buildTenderDraftPackageImportDiagnostics } from '../lib/tender-import-diagnostics';
 import { buildTenderImportOwnedBlockDriftStates } from '../lib/tender-import-drift';
 import { buildTenderDraftPackageImportFailureRecovery } from '../lib/tender-import-failure-recovery';
+import { deriveTenderPackageLifecycleStatus } from '../lib/tender-package-lifecycle';
 import {
   buildTenderImportRegistryDiagnosticsRefreshExecutionMetadata,
   buildTenderImportRegistryDiagnosticsRefreshRecords,
@@ -38,6 +40,7 @@ import {
   type CreateTenderPackageInput,
   type TenderDraftPackageImportStatus,
   type TenderDraftPackage,
+  type TenderDraftPackageStatus,
   type TenderDraftPackageReimportStatus,
   type CreateTenderReferenceProfileInput,
   type TenderAnalysisJobStatus,
@@ -45,6 +48,7 @@ import {
   type TenderAnalysisReadiness,
   type TenderExtractionCoverage,
   type TenderProviderProfileDetails,
+  type TenderPackageDetails,
   type TenderResultEvidence,
   type TenderResultEvidenceTargetType,
   type UpsertTenderProviderConstraintInput,
@@ -563,6 +567,24 @@ async function fetchTenderDraftPackageItemRowsForDraftPackages(options: {
   return tenderDraftPackageItemRowsSchema.parse(data ?? []);
 }
 
+async function fetchTenderDraftPackageRowsForTenderPackage(options: {
+  packageId: string;
+  client?: ReturnType<typeof requireSupabase>;
+}) {
+  const client = options.client ?? requireConfiguredSupabase();
+  const { data, error } = await client
+    .from('tender_draft_packages')
+    .select('*')
+    .eq('tender_package_id', options.packageId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw toRepositoryError(error, 'Tarjouspyyntöpaketin luonnospaketteja ei voitu ladata status-synkronointia varten.');
+  }
+
+  return tenderDraftPackageRowsSchema.parse(data ?? []);
+}
+
 async function fetchTenderDraftPackageImportRunRowsForDraftPackage(options: {
   client?: ReturnType<typeof requireSupabase>;
   draftPackageId: string;
@@ -894,6 +916,34 @@ async function updateTenderPackageEditorLinks(options: {
 
   if (error) {
     throw toRepositoryError(error, 'Tarjouspyyntöpaketin editorilinkkejä ei voitu päivittää.');
+  }
+}
+
+async function syncTenderPackageLifecycleStatus(options: {
+  client: ReturnType<typeof requireSupabase>;
+  packageDetails: TenderPackageDetails | null;
+  draftPackageStatuses: TenderDraftPackageStatus[];
+}) {
+  if (!options.packageDetails) {
+    return;
+  }
+
+  const nextStatus = deriveTenderPackageLifecycleStatus({
+    packageDetails: options.packageDetails,
+    draftPackageStatuses: options.draftPackageStatuses,
+  });
+
+  if (nextStatus === options.packageDetails.package.status) {
+    return;
+  }
+
+  const { error } = await options.client
+    .from('tender_packages')
+    .update({ status: nextStatus })
+    .eq('id', options.packageDetails.package.id);
+
+  if (error) {
+    throw toRepositoryError(error, 'Tarjouspyyntöpaketin elinkaaristatusta ei voitu päivittää.');
   }
 }
 
@@ -2466,6 +2516,16 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         draftPackageRow: createdDraftPackageRow,
         itemRows,
       });
+      const draftPackageRows = await fetchTenderDraftPackageRowsForTenderPackage({
+        client,
+        packageId,
+      });
+
+      await syncTenderPackageLifecycleStatus({
+        client,
+        packageDetails,
+        draftPackageStatuses: draftPackageRows.map((row) => row.status),
+      });
 
       this.emit();
       return mapTenderDraftPackageRowToDomain(materializedRow, itemRows);
@@ -2667,6 +2727,24 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       }
 
       await assertTenderPackageAccess(existingDraftPackageRow.tender_package_id);
+      const packageDetails = await this.getTenderPackageById(existingDraftPackageRow.tender_package_id);
+
+      if (!packageDetails) {
+        throw new Error('Tarjouspyyntöpakettia ei löytynyt luonnospaketin tarkistusta varten.');
+      }
+
+      const qualityGate = buildTenderDraftPackageQualityGate({
+        packageDetails,
+        draftPackageStatus: existingDraftPackageRow.status,
+      });
+
+      if (!qualityGate.canMarkReviewed) {
+        throw new Error(
+          qualityGate.reviewBlockedReason
+            ?? 'Luonnospakettia ei voi merkitä tarkistetuksi ennen kuin päätöstuen blokkerit on ratkaistu.',
+        );
+      }
+
       const client = requireConfiguredSupabase();
       const { data, error } = await client
         .from('tender_draft_packages')
@@ -2686,6 +2764,16 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         draftPackageRow: updatedRow,
         itemRows,
       });
+      const draftPackageRows = await fetchTenderDraftPackageRowsForTenderPackage({
+        client,
+        packageId: existingDraftPackageRow.tender_package_id,
+      });
+
+      await syncTenderPackageLifecycleStatus({
+        client,
+        packageDetails,
+        draftPackageStatuses: draftPackageRows.map((row) => row.status),
+      });
 
       this.emit();
       return mapTenderDraftPackageRowToDomain(materializedRow, itemRows);
@@ -2703,6 +2791,24 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       }
 
       await assertTenderPackageAccess(existingDraftPackageRow.tender_package_id);
+      const packageDetails = await this.getTenderPackageById(existingDraftPackageRow.tender_package_id);
+
+      if (!packageDetails) {
+        throw new Error('Tarjouspyyntöpakettia ei löytynyt luonnospaketin vientiä varten.');
+      }
+
+      const qualityGate = buildTenderDraftPackageQualityGate({
+        packageDetails,
+        draftPackageStatus: existingDraftPackageRow.status,
+      });
+
+      if (!qualityGate.canMarkExported) {
+        throw new Error(
+          qualityGate.exportBlockedReason
+            ?? 'Luonnospakettia ei voi merkitä viedyksi ennen kuin päätöstuen laatuportti sallii etenemisen.',
+        );
+      }
+
       const client = requireConfiguredSupabase();
       const { data, error } = await client
         .from('tender_draft_packages')
@@ -2721,6 +2827,16 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         client,
         draftPackageRow: updatedRow,
         itemRows,
+      });
+      const draftPackageRows = await fetchTenderDraftPackageRowsForTenderPackage({
+        client,
+        packageId: existingDraftPackageRow.tender_package_id,
+      });
+
+      await syncTenderPackageLifecycleStatus({
+        client,
+        packageDetails,
+        draftPackageStatuses: draftPackageRows.map((row) => row.status),
       });
 
       this.emit();

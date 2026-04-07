@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildTenderDraftExportPayload,
   buildTenderDraftPackageFromReviewedResults,
+  buildTenderDraftPackageQualityGate,
   buildTenderDraftPackageReadiness,
 } from './tender-draft-package';
 import type { TenderPackageDetails } from '../types/tender-intelligence';
@@ -244,6 +245,48 @@ function createReviewedPackage(): TenderPackageDetails {
   };
 }
 
+function createQualityReadyPackage(): TenderPackageDetails {
+  const reviewed = createReviewedPackage();
+
+  return {
+    ...reviewed,
+    results: {
+      ...reviewed.results,
+      requirements: reviewed.results.requirements.map((requirement) => ({
+        ...requirement,
+        status: 'covered',
+        reviewStatus: 'accepted',
+        resolutionStatus: 'resolved',
+        reviewNote: 'Käyty läpi.',
+        resolutionNote: 'Valmis.',
+      })),
+      riskFlags: reviewed.results.riskFlags.map((risk) => ({
+        ...risk,
+        status: 'mitigated',
+        reviewStatus: 'accepted',
+        resolutionStatus: 'resolved',
+        reviewNote: 'Mitigointisuunnitelma sovittu.',
+        resolutionNote: 'Riski hallittu.',
+      })),
+      reviewTasks: reviewed.results.reviewTasks.map((task) => ({
+        ...task,
+        status: 'done',
+        reviewStatus: task.reviewStatus === 'dismissed' ? 'dismissed' : 'accepted',
+        resolutionStatus: task.resolutionStatus === 'wont_fix' ? 'wont_fix' : 'resolved',
+        reviewNote: task.reviewStatus === 'dismissed' ? task.reviewNote : 'Valmis.',
+        resolutionNote: task.resolutionStatus === 'wont_fix' ? task.resolutionNote : 'Suljettu.',
+      })),
+      goNoGoAssessment: {
+        packageId: reviewed.package.id,
+        recommendation: 'go',
+        summary: 'Kaikki kriittiset esteet on käsitelty.',
+        confidence: 0.84,
+        updatedAt: '2026-04-05T10:20:00.000Z',
+      },
+    },
+  };
+}
+
 describe('tender-draft-package', () => {
   it('calculates readiness from reviewed Tender results', () => {
     const readiness = buildTenderDraftPackageReadiness(createReviewedPackage());
@@ -279,6 +322,37 @@ describe('tender-draft-package', () => {
     expect(generation.exportPayload.resolved_missing_items).toHaveLength(1);
     expect(generation.exportPayload.notes_for_editor).toHaveLength(2);
     expect(generation.exportPayload.notes_for_editor[0]?.title).toContain('Pidä toimitusrajauksen');
+  });
+
+  it('blocks review and export when decision support still contains critical blockers', () => {
+    const qualityGate = buildTenderDraftPackageQualityGate({
+      packageDetails: createReviewedPackage(),
+      draftPackageStatus: 'draft',
+    });
+
+    expect(qualityGate.canMarkReviewed).toBe(false);
+    expect(qualityGate.reviewBlockedReason).toContain('vaatimus');
+    expect(qualityGate.canMarkExported).toBe(false);
+    expect(qualityGate.importWarning).toContain('blokkerin');
+  });
+
+  it('requires reviewed status before exported, but allows both when the package is quality-ready', () => {
+    const readyPackage = createQualityReadyPackage();
+    const draftGate = buildTenderDraftPackageQualityGate({
+      packageDetails: readyPackage,
+      draftPackageStatus: 'draft',
+    });
+    const reviewedGate = buildTenderDraftPackageQualityGate({
+      packageDetails: readyPackage,
+      draftPackageStatus: 'reviewed',
+    });
+
+    expect(draftGate.canMarkReviewed).toBe(true);
+    expect(draftGate.canMarkExported).toBe(false);
+    expect(draftGate.exportBlockedReason).toContain('Merkitse luonnospaketti ensin tarkistetuksi');
+    expect(reviewedGate.canMarkReviewed).toBe(true);
+    expect(reviewedGate.canMarkExported).toBe(true);
+    expect(reviewedGate.importWarning).toBeNull();
   });
 
   it('maps only included items into the export payload sections', () => {

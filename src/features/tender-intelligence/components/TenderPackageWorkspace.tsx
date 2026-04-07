@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 import TenderAnalysisPanel from './TenderAnalysisPanel';
+import TenderDecisionSupportPanel from './TenderDecisionSupportPanel';
 import TenderDraftPackagePanel from './TenderDraftPackagePanel';
 import TenderDocumentsPanel from './TenderDocumentsPanel';
 import TenderProviderProfilePanel from './TenderProviderProfilePanel';
@@ -13,6 +14,8 @@ import TenderResultPanels from './TenderResultPanels';
 import { buildTenderGoNoGoDecisionSupport } from '../lib/tender-go-no-go';
 import { buildTenderPackageLinkItems } from '../lib/tender-package-links';
 import { buildTenderProviderProfileReadiness } from '../lib/tender-provider-profile';
+import { buildTenderDecisionSupport } from '../lib/tender-decision-support';
+import { deriveTenderPackageLifecycleStatus } from '../lib/tender-package-lifecycle';
 import {
   TENDER_ANALYSIS_JOB_STATUS_META,
   TENDER_GO_NO_GO_META,
@@ -340,8 +343,13 @@ export default function TenderPackageWorkspace({
             />
             <TenderPanel
               title="Go / No-Go"
-              value="Myöhemmin"
-              description="Päätöstuki täydentyy, kun pakettiin on lisätty aineistoa ja analyysi on ehditty ajaa läpi."
+              value="Operatiivinen päätöstuki"
+              description="Päätöstuki yhdistää tallennetun baseline-yhteenvedon ja nykyisestä workflow-tilasta johdetut signaalit. Näkyvä analyysitila syntyy edelleen jobin elinkaaresta ja result-domainin riveistä."
+            />
+            <TenderPanel
+              title="Draft package"
+              value="0"
+              description="Reviewed löydöksistä voidaan nyt muodostaa Tarjousälyn staging-luonnospaketti, diffata muutokset viimeiseen importiin ja päivittää sama quote hallitusti adapterin omistamalta pinnalta."
             />
           </div>
 
@@ -356,14 +364,18 @@ export default function TenderPackageWorkspace({
     );
   }
 
-  const packageStatus = TENDER_PACKAGE_STATUS_META[selectedPackage.package.status];
+  const packageLifecycleStatus = deriveTenderPackageLifecycleStatus({
+    packageDetails: selectedPackage,
+    draftPackageStatuses: draftPackages.length > 0 ? draftPackages.map((draftPackage) => draftPackage.status) : undefined,
+  });
+  const packageStatus = TENDER_PACKAGE_STATUS_META[packageLifecycleStatus];
   const analysisStatus = selectedPackage.latestAnalysisJob
     ? TENDER_ANALYSIS_JOB_STATUS_META[selectedPackage.latestAnalysisJob.status]
     : null;
-  const goNoGo = selectedPackage.results.goNoGoAssessment;
-  const goNoGoMeta = goNoGo ? TENDER_GO_NO_GO_META[goNoGo.recommendation] : null;
   const goNoGoDecision = buildTenderGoNoGoDecisionSupport(selectedPackage);
   const providerProfileReadiness = buildTenderProviderProfileReadiness(selectedPackage.providerProfile ?? null);
+  const decisionSupport = buildTenderDecisionSupport(selectedPackage);
+  const goNoGoMeta = TENDER_GO_NO_GO_META[decisionSupport.operationalRecommendation];
   const nextReviewTask = selectedPackage.results.reviewTasks[0] ?? null;
   const nextReviewTaskMeta = nextReviewTask ? TENDER_REVIEW_TASK_STATUS_META[nextReviewTask.status] : null;
   const linkItems = buildTenderPackageLinkItems(selectedPackage.package, {
@@ -462,8 +474,8 @@ export default function TenderPackageWorkspace({
         />
         <TenderPanel
           title="Go / No-Go"
-          value={goNoGoMeta?.label || 'Odottaa analyysiä'}
-          description={goNoGo?.summary || 'Go / No-Go -päätöstukea ei ole vielä muodostettu.'}
+          value={goNoGoMeta.label}
+          description={decisionSupport.operationalSummary}
         />
         <TenderPanel
           title="Luonnos"
@@ -558,6 +570,8 @@ export default function TenderPackageWorkspace({
         starting={analysisStarting}
         onStartAnalysis={onStartAnalysis}
       />
+
+      <TenderDecisionSupportPanel decisionSupport={decisionSupport} />
 
       <TenderResultPanels
         selectedPackage={selectedPackage}
