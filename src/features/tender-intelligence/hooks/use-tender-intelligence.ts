@@ -888,7 +888,7 @@ export function useTenderIntelligence() {
       try {
         const created = await repository.createDraftPackageFromReviewedResults(packageId);
         setSelectedDraftPackageId(created.id);
-        await loadDraftPackages(packageId);
+        await Promise.all([loadDraftPackages(packageId), loadPackages(), loadSelectedPackage(packageId)]);
         setError(null);
         return created;
       } catch (nextError) {
@@ -930,7 +930,11 @@ export function useTenderIntelligence() {
       try {
         const updated = await repository.markDraftPackageReviewed(draftPackageId);
         setSelectedDraftPackageId(updated.id);
-        await loadDraftPackages(updated.tenderPackageId);
+        await Promise.all([
+          loadDraftPackages(updated.tenderPackageId),
+          loadPackages(),
+          loadSelectedPackage(updated.tenderPackageId),
+        ]);
         setError(null);
         return updated;
       } catch (nextError) {
@@ -941,7 +945,7 @@ export function useTenderIntelligence() {
         setReviewingDraftPackageId((current) => (current === draftPackageId ? null : current));
       }
     },
-    [loadDraftPackages, repository],
+    [loadDraftPackages, loadPackages, loadSelectedPackage, repository],
   );
 
   const markDraftPackageExported = useCallback(
@@ -951,7 +955,11 @@ export function useTenderIntelligence() {
       try {
         const updated = await repository.markDraftPackageExported(draftPackageId);
         setSelectedDraftPackageId(updated.id);
-        await loadDraftPackages(updated.tenderPackageId);
+        await Promise.all([
+          loadDraftPackages(updated.tenderPackageId),
+          loadPackages(),
+          loadSelectedPackage(updated.tenderPackageId),
+        ]);
         setError(null);
         return updated;
       } catch (nextError) {
@@ -962,7 +970,7 @@ export function useTenderIntelligence() {
         setExportingDraftPackageId((current) => (current === draftPackageId ? null : current));
       }
     },
-    [loadDraftPackages, repository],
+    [loadDraftPackages, loadPackages, loadSelectedPackage, repository],
   );
 
   const importDraftPackageToEditor = useCallback(

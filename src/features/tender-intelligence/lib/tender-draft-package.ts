@@ -7,6 +7,7 @@ import type {
   TenderPackageDetails,
 } from '../types/tender-intelligence';
 import { TENDER_DRAFT_EXPORT_SCHEMA_VERSION, tenderDraftExportPayloadSchema } from '../types/tender-intelligence';
+import { buildTenderDecisionSupport, type TenderDecisionSupportSummary } from './tender-decision-support';
 
 export interface TenderDraftPackageItemSeed {
   itemType: TenderDraftPackageItemType;
@@ -39,6 +40,17 @@ export interface TenderDraftPackageGenerationResult {
   readiness: TenderDraftPackageReadiness;
 }
 
+export interface TenderDraftPackageQualityGate {
+  decisionSupport: TenderDecisionSupportSummary;
+  canMarkReviewed: boolean;
+  reviewBlockedReason: string | null;
+  canMarkExported: boolean;
+  exportBlockedReason: string | null;
+  warnings: string[];
+  nextActions: string[];
+  importWarning: string | null;
+}
+
 interface DraftPayloadOptions {
   title: string;
   summary: string | null;
@@ -55,6 +67,18 @@ function hasAcceptedResolvedState(entity: {
   resolutionStatus: string;
 }) {
   return entity.reviewStatus === 'accepted' && entity.resolutionStatus === 'resolved';
+}
+
+function pushUnique(target: string[], value: string | null | undefined) {
+  const normalized = value?.trim();
+
+  if (!normalized) {
+    return;
+  }
+
+  if (!target.includes(normalized)) {
+    target.push(normalized);
+  }
 }
 
 function isIntentionallyOpenReviewNote(entity: {
@@ -239,6 +263,70 @@ export function buildTenderDraftPackageReadiness(packageDetails: TenderPackageDe
     blockedReason: canGenerate
       ? null
       : 'Draft package muodostetaan vasta kun paketissa on vähintään yksi hyväksytty ydinsisältö, kuten vaatimus, referenssi tai hyväksytty draft artefakti.',
+  };
+}
+
+export function buildTenderDraftPackageQualityGate(options: {
+  packageDetails: TenderPackageDetails;
+  draftPackageStatus?: TenderDraftPackageStatus | null;
+}): TenderDraftPackageQualityGate {
+  const readiness = buildTenderDraftPackageReadiness(options.packageDetails);
+  const decisionSupport = buildTenderDecisionSupport(options.packageDetails);
+  const reviewBlockers: string[] = [];
+  const exportBlockers: string[] = [];
+  const warnings: string[] = [];
+
+  if (!readiness.canGenerate) {
+    pushUnique(reviewBlockers, readiness.blockedReason);
+    pushUnique(exportBlockers, readiness.blockedReason);
+  }
+
+  if (decisionSupport.operationalRecommendation === 'pending') {
+    const pendingReason =
+      'Luonnospakettia ei voi kuitata tarkistetuksi ennen kuin päätöstuki perustuu vähintään yhteen analysoituun pakettitulokseen.';
+    pushUnique(reviewBlockers, pendingReason);
+    pushUnique(exportBlockers, pendingReason);
+  }
+
+  if (decisionSupport.criticalCount > 0) {
+    const criticalReason =
+      decisionSupport.blockingReasons[0]
+      ?? 'Päätöstuki tunnistaa edelleen kriittisiä blokkerisignaaleja, joten luonnospakettia ei voi kuitata valmiiksi.';
+    pushUnique(reviewBlockers, criticalReason);
+    pushUnique(exportBlockers, criticalReason);
+  }
+
+  if (options.draftPackageStatus !== 'reviewed' && options.draftPackageStatus !== 'exported') {
+    pushUnique(exportBlockers, 'Merkitse luonnospaketti ensin tarkistetuksi ennen viedyksi kuittaamista.');
+  }
+
+  if (decisionSupport.warningCount > 0) {
+    pushUnique(warnings, decisionSupport.operationalSummary);
+  }
+
+  if (decisionSupport.workflowSummary.unreviewed > 0) {
+    pushUnique(warnings, `${decisionSupport.workflowSummary.unreviewed} workflow-riviä on vielä tarkistamatta.`);
+  }
+
+  if (decisionSupport.stats.openReviewTaskCount > 0) {
+    pushUnique(warnings, `${decisionSupport.stats.openReviewTaskCount} avointa review-tehtävää on vielä kesken.`);
+  }
+
+  const importWarning = decisionSupport.criticalCount > 0
+    ? `Import on teknisesti mahdollinen, mutta päätöstuki tunnistaa edelleen blokkerin: ${decisionSupport.blockingReasons[0] ?? decisionSupport.operationalSummary}`
+    : decisionSupport.warningCount > 0
+      ? `Import kannattaa tehdä vasta tietoisen päätöksen kanssa: ${decisionSupport.operationalSummary}`
+      : null;
+
+  return {
+    decisionSupport,
+    canMarkReviewed: reviewBlockers.length < 1,
+    reviewBlockedReason: reviewBlockers[0] ?? null,
+    canMarkExported: exportBlockers.length < 1,
+    exportBlockedReason: exportBlockers[0] ?? null,
+    warnings,
+    nextActions: decisionSupport.nextActions,
+    importWarning,
   };
 }
 

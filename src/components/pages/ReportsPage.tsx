@@ -44,7 +44,7 @@ import { fi } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../hooks/use-auth';
-import { AppPageLayout } from '../layout/AppPageLayout';
+import { AppPageHeader, AppPageLayout } from '../layout/AppPageLayout';
 import EmptyState from '../layout/PageEmptyState';
 import { exportReportsToPDF } from '../../lib/export';
 import ReportingDrilldownContent from './reporting/ReportingDrilldownContent';
@@ -90,10 +90,10 @@ interface DrillState { kind: DrillKind; title: string; ids: string[]; }
 function ReportsLoadingState() {
   return (
     <AppPageLayout pageType="registry">
-      <div>
-        <h1 className="text-3xl font-semibold">Raportointi</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Ladataan raportointinäkymää ensimmäistä kertaa.</p>
-      </div>
+      <AppPageHeader
+        title="Raportointi"
+        description="Ladataan raportointinäkymää ensimmäistä kertaa."
+      />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {Array.from({ length: 6 }).map((_, index) => (
           <Card key={index} className="p-5">
@@ -286,7 +286,7 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
   if (!model.meta.hasQuotes && model.customers.length === 0) {
     return (
       <AppPageLayout pageType="registry">
-        <h1 className="text-3xl font-semibold mb-2">Raportointi</h1>
+        <AppPageHeader title="Raportointi" />
         <EmptyState icon={<ChartBar className="h-16 w-16" />} title="Ei vielä riittävästi dataa" description="Raportointi aktivoituu, kun järjestelmässä on asiakkaita, projekteja ja tarjouksia." action="Luo ensimmäinen asiakas ja tarjous aloittaaksesi." />
       </AppPageLayout>
     );
@@ -298,62 +298,60 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
 
   return (
     <AppPageLayout pageType="registry">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-semibold">Raportointi</h1>
-            {isRefreshing && <Badge variant="outline">Päivitetään taustalla...</Badge>}
-          </div>
-          <p className="text-muted-foreground mt-1">Tarjouksesta projektiin — johtamis- ja toimintanäkymä</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {canManageUsers && responsibleUsers.length > 1 && (
-            <Select value={filterDraft.ownerUserId || 'all'} onValueChange={(v) => updateFilter('ownerUserId', v)}>
-              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Vastuuhenkilö" /></SelectTrigger>
+      <AppPageHeader
+        title="Raportointi"
+        description="Tarjouksesta projektiin — johtamis- ja toimintanäkymä"
+        eyebrow={isRefreshing ? <Badge variant="outline">Päivitetään taustalla...</Badge> : undefined}
+        actions={(
+          <>
+            {canManageUsers && responsibleUsers.length > 1 && (
+              <Select value={filterDraft.ownerUserId || 'all'} onValueChange={(v) => updateFilter('ownerUserId', v)}>
+                <SelectTrigger className="w-[200px]"><SelectValue placeholder="Vastuuhenkilö" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Kaikki vastuuhenkilöt</SelectItem>
+                  {responsibleUsers.map((u) => <SelectItem key={u.id} value={u.id}>{u.displayName}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+            <Select
+              value={filterDraft.quoteStatus || 'all'}
+              onValueChange={(value) => updateFilter('quoteStatus', value === 'all' ? undefined : value as ReportingFilterDraft['quoteStatus'])}
+            >
+              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Kaikki vastuuhenkilöt</SelectItem>
-                {responsibleUsers.map((u) => <SelectItem key={u.id} value={u.id}>{u.displayName}</SelectItem>)}
+                <SelectItem value="all">Kaikki statukset</SelectItem>
+                <SelectItem value="draft">Luonnos</SelectItem>
+                <SelectItem value="sent">Lähetetty</SelectItem>
+                <SelectItem value="accepted">Hyväksytty</SelectItem>
+                <SelectItem value="rejected">Hylätty</SelectItem>
               </SelectContent>
             </Select>
-          )}
-          <Select
-            value={filterDraft.quoteStatus || 'all'}
-            onValueChange={(value) => updateFilter('quoteStatus', value === 'all' ? undefined : value as ReportingFilterDraft['quoteStatus'])}
-          >
-            <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Kaikki statukset</SelectItem>
-              <SelectItem value="draft">Luonnos</SelectItem>
-              <SelectItem value="sent">Lähetetty</SelectItem>
-              <SelectItem value="accepted">Hyväksytty</SelectItem>
-              <SelectItem value="rejected">Hylätty</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={filterDraft.customerId || 'all'} onValueChange={(v) => updateFilter('customerId', v)}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Asiakas" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Kaikki asiakkaat</SelectItem>
-              {customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className={cn(filterDraft.from && 'border-primary')}>
-                <CalendarBlank className="mr-2 h-4 w-4" />
-                {filterDraft.from && filterDraft.to ? `${fd(filterDraft.from)} – ${fd(filterDraft.to)}` : 'Aikaväli'}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar mode="range" selected={{ from: filterDraft.from, to: filterDraft.to }} onSelect={(range) => { if (range?.from) updateFilter('from', range.from); if (range?.to) updateFilter('to', range.to); }} numberOfMonths={2} />
-            </PopoverContent>
-          </Popover>
-          {(filterDraft.from || filterDraft.ownerUserId || filterDraft.quoteStatus || filterDraft.customerId) && (
-            <Button variant="ghost" size="sm" onClick={() => setFilterDraft({})}>Tyhjennä</Button>
-          )}
-          <Button variant="outline" size="sm" onClick={exportToCSV}><FileXls className="mr-1 h-4 w-4" />CSV</Button>
-          <Button variant="outline" size="sm" onClick={exportToPDF}><FilePdf className="mr-1 h-4 w-4" />PDF</Button>
-        </div>
-      </div>
+            <Select value={filterDraft.customerId || 'all'} onValueChange={(v) => updateFilter('customerId', v)}>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Asiakas" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Kaikki asiakkaat</SelectItem>
+                {customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn(filterDraft.from && 'border-primary')}>
+                  <CalendarBlank className="mr-2 h-4 w-4" />
+                  {filterDraft.from && filterDraft.to ? `${fd(filterDraft.from)} – ${fd(filterDraft.to)}` : 'Aikaväli'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar mode="range" selected={{ from: filterDraft.from, to: filterDraft.to }} onSelect={(range) => { if (range?.from) updateFilter('from', range.from); if (range?.to) updateFilter('to', range.to); }} numberOfMonths={2} />
+              </PopoverContent>
+            </Popover>
+            {(filterDraft.from || filterDraft.ownerUserId || filterDraft.quoteStatus || filterDraft.customerId) && (
+              <Button variant="ghost" size="sm" onClick={() => setFilterDraft({})}>Tyhjennä</Button>
+            )}
+            <Button variant="outline" size="sm" onClick={exportToCSV}><FileXls className="mr-1 h-4 w-4" />CSV</Button>
+            <Button variant="outline" size="sm" onClick={exportToPDF}><FilePdf className="mr-1 h-4 w-4" />PDF</Button>
+          </>
+        )}
+      />
 
       <Tabs defaultValue={defaultReportTab} className="space-y-6">
         <TabsList className="flex-wrap h-auto gap-1">

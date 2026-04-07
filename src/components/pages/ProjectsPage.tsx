@@ -674,9 +674,9 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-[-0.03em]">Projektityötila</h1>
+          <h1 className="text-3xl font-semibold tracking-[-0.03em]">Projektityötila</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground sm:text-base">
             Valitse projekti vasemmalta, hallitse tarjouksia keskellä ja pidä asiakas- sekä vastuukonteksti oikealla.
           </p>
@@ -1033,7 +1033,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
           <Card className="overflow-hidden border-slate-200/80 shadow-[0_20px_50px_-44px_rgba(15,23,42,0.35)]">
             {selectedProject ? (
               <div className="p-6">
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline">Valittu projekti</Badge>
@@ -1048,7 +1048,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button onClick={() => handleCreateQuote(selectedProject.id)}>
                       <Plus className="h-4 w-4" />
                       Uusi tarjous

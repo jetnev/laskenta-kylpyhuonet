@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-import { buildTenderDraftPackageReadiness } from '../lib/tender-draft-package';
+import { buildTenderDraftPackageQualityGate, buildTenderDraftPackageReadiness } from '../lib/tender-draft-package';
 import { buildTenderDraftQualityGate } from '../lib/tender-draft-quality-gate';
 import { buildTenderEditorManagedSurfaceFromPayload } from '../lib/tender-editor-managed-surface';
 import {
@@ -681,7 +681,7 @@ export default function TenderDraftPackagePanel({
   const excludedItems = selectedDraftPackage?.items.filter((item) => !item.isIncluded) ?? [];
   const payload = selectedDraftPackage?.exportPayload ?? null;
   const importValidation = editorImportValidation ?? editorImportPreview?.validation ?? null;
-  const qualityGate = useMemo(
+  const editorExportGate = useMemo(
     () => buildTenderDraftQualityGate({
       packageDetails: selectedPackage,
       selectedDraftPackage,
@@ -690,6 +690,19 @@ export default function TenderDraftPackagePanel({
     }),
     [draftPackageImportState, importValidation, selectedDraftPackage, selectedPackage],
   );
+  const packageWorkflowGate = useMemo(
+    () => buildTenderDraftPackageQualityGate({ packageDetails: selectedPackage, draftPackageStatus: selectedDraftPackage?.status ?? null }),
+    [selectedDraftPackage?.status, selectedPackage],
+  );
+  const qualityGateWarningMessages = useMemo(() => {
+    const messages = [...packageWorkflowGate.warnings];
+
+    if (packageWorkflowGate.canMarkReviewed && packageWorkflowGate.exportBlockedReason) {
+      messages.unshift(packageWorkflowGate.exportBlockedReason);
+    }
+
+    return Array.from(new Set(messages));
+  }, [packageWorkflowGate.canMarkReviewed, packageWorkflowGate.exportBlockedReason, packageWorkflowGate.warnings]);
   const managedSurface = useMemo(
     () => (editorImportPreview ? buildTenderEditorManagedSurfaceFromPayload(editorImportPreview.payload) : null),
     [editorImportPreview],
@@ -816,7 +829,7 @@ export default function TenderDraftPackagePanel({
     && importResumeSupport.action_kind
     && (
       importResumeSupport.action_kind !== 'reimport'
-      || (qualityGate.canExportToEditor && importValidation?.can_import)
+      || (editorExportGate.canExportToEditor && importValidation?.can_import)
     )
     && !previewingEditorImportDraftPackageId
     && !importingDraftPackageId
@@ -918,7 +931,12 @@ export default function TenderDraftPackagePanel({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={reviewingDraftPackageId === selectedDraftPackage.id || selectedDraftPackage.status === 'reviewed' || selectedDraftPackage.status === 'exported'}
+                  disabled={
+                    reviewingDraftPackageId === selectedDraftPackage.id
+                    || selectedDraftPackage.status === 'reviewed'
+                    || selectedDraftPackage.status === 'exported'
+                    || !packageWorkflowGate.canMarkReviewed
+                  }
                   onClick={() => {
                     void onMarkDraftPackageReviewed(selectedDraftPackage.id);
                   }}
@@ -928,7 +946,11 @@ export default function TenderDraftPackagePanel({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={exportingDraftPackageId === selectedDraftPackage.id || selectedDraftPackage.status === 'exported'}
+                  disabled={
+                    exportingDraftPackageId === selectedDraftPackage.id
+                    || selectedDraftPackage.status === 'exported'
+                    || !packageWorkflowGate.canMarkExported
+                  }
                   onClick={() => {
                     void onMarkDraftPackageExported(selectedDraftPackage.id);
                   }}
@@ -940,7 +962,7 @@ export default function TenderDraftPackagePanel({
                   disabled={
                     previewingEditorImportDraftPackageId === selectedDraftPackage.id
                     || importingDraftPackageId === selectedDraftPackage.id
-                    || !qualityGate.canExportToEditor
+                    || !editorExportGate.canExportToEditor
                     || !importValidation?.can_import
                     || (
                       draftPackageImportState?.suggested_import_mode === 'update_existing_quote'
@@ -1006,13 +1028,13 @@ export default function TenderDraftPackagePanel({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-slate-950">Laatugate ennen editorivientiä</p>
-              <p className="mt-2 text-sm leading-6 text-slate-700">{qualityGate.summary}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-700">{editorExportGate.summary}</p>
             </div>
-            <Badge variant={resolveGateVariant(qualityGate.state)}>{resolveGateLabel(qualityGate.state)}</Badge>
+            <Badge variant={resolveGateVariant(editorExportGate.state)}>{resolveGateLabel(editorExportGate.state)}</Badge>
           </div>
 
           <div className="mt-4 grid gap-3 xl:grid-cols-2">
-            {qualityGate.checks.map((check) => (
+            {editorExportGate.checks.map((check) => (
               <div key={check.key} className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -1025,11 +1047,11 @@ export default function TenderDraftPackagePanel({
             ))}
           </div>
 
-          {qualityGate.nextActions.length > 0 && (
+          {editorExportGate.nextActions.length > 0 && (
             <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-4">
               <p className="text-sm font-medium text-slate-950">Tarkista seuraavaksi</p>
               <div className="mt-3 space-y-2">
-                {qualityGate.nextActions.map((action, index) => (
+                {editorExportGate.nextActions.map((action, index) => (
                   <p key={`quality-gate-action-${index}`} className="text-sm leading-6 text-slate-700">{index + 1}. {action}</p>
                 ))}
               </div>
@@ -1041,7 +1063,51 @@ export default function TenderDraftPackagePanel({
           <Badge variant="outline">{draftPackages.length} draft packagea</Badge>
           <Badge variant="outline">{readiness.includedItemCount} oletuksena mukana</Badge>
           <Badge variant="outline">{readiness.excludedItemCount} oletuksena ulkona</Badge>
+          <Badge variant={packageWorkflowGate.canMarkReviewed ? 'default' : 'destructive'}>
+            Tarkistusportti {packageWorkflowGate.canMarkReviewed ? 'auki' : 'kiinni'}
+          </Badge>
+          <Badge variant={packageWorkflowGate.canMarkExported ? 'default' : 'outline'}>
+            Export-portti {packageWorkflowGate.canMarkExported ? 'auki' : 'varoittaa / estää'}
+          </Badge>
         </div>
+
+        {packageWorkflowGate.reviewBlockedReason ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm leading-6 text-red-700">
+            <div className="flex items-center gap-2 font-medium">
+              <WarningCircle className="h-4 w-4" />
+              Päätöstuen laatuportti estää luonnospaketin etenemisen
+            </div>
+            {packageWorkflowGate.reviewBlockedReason && <p className="mt-2">Tarkistus estetty: {packageWorkflowGate.reviewBlockedReason}</p>}
+            {packageWorkflowGate.exportBlockedReason && packageWorkflowGate.exportBlockedReason !== packageWorkflowGate.reviewBlockedReason && <p className="mt-2">Vienti estetty: {packageWorkflowGate.exportBlockedReason}</p>}
+          </div>
+        ) : qualityGateWarningMessages.length > 0 ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-800">
+            <div className="flex items-center gap-2 font-medium">
+              <WarningCircle className="h-4 w-4" />
+              Päätöstuen laatuportti sallii etenemisen, mutta nostaa näkyvät varoitukset
+            </div>
+            <div className="mt-2 space-y-1">
+              {qualityGateWarningMessages.map((warning) => (
+                <p key={warning}>• {warning}</p>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm leading-6 text-emerald-700">
+            Päätöstuen laatuportti ei tunnista kriittisiä esteitä luonnospaketin tarkistus- tai vientivaiheelle.
+          </div>
+        )}
+
+        {packageWorkflowGate.nextActions.length > 0 && (
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm leading-6 text-slate-700">
+            <p className="font-medium text-slate-950">Seuraavat toimet ennen vientiä</p>
+            <div className="mt-2 space-y-1">
+              {packageWorkflowGate.nextActions.map((action, index) => (
+                <p key={action}>{index + 1}. {action}</p>
+              ))}
+            </div>
+          </div>
+        )}
 
         {draftPackages.length > 0 ? (
           <div className="flex flex-wrap gap-2">
@@ -1405,6 +1471,16 @@ export default function TenderDraftPackagePanel({
                       ].join(' ')}>
                         <div className="font-medium">QuoteEditor avasi tämän import-kontekstin suoraan lähdeluonnoksesta</div>
                         <p className="mt-1">{editorHandoff.description}</p>
+                      </div>
+                    )}
+
+                    {packageWorkflowGate.importWarning && (
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-900">
+                        <div className="flex items-center gap-2 font-medium">
+                          <WarningCircle className="h-4 w-4" />
+                          Import-polku vaatii tietoisen päätöksen
+                        </div>
+                        <p className="mt-2">{packageWorkflowGate.importWarning}</p>
                       </div>
                     )}
 
