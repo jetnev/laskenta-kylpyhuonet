@@ -1,363 +1,167 @@
-# Stable State Documentation - Laskenta Application
+# Stable State - Projekta
 
-**Date**: Current working state locked
-**Status**: ✅ STABLE - WORKING
+**Date**: 2026-04-07
+**Status**: Stable checked-in application baseline
 
-## Application Overview
+## Product Purpose
 
-Laskenta is a comprehensive Finnish quotation and pricing system for accessible bathroom products and installation projects. The application enables sales staff to create, manage, and export professional customer quotations with flexible pricing logic.
+Projekta is a Finnish quotation, project-tracking, invoicing, and tender-workspace application for bathroom and renovation work. The product combines operational sales tooling with organization-scoped shared data, legal acceptance management, and Tarjousaly workflows for reviewing tender request material before controlled import into the quote editor.
 
-## Core Features Implemented
+## Current Production Architecture
 
-### ✅ Authentication & Authorization
-- GitHub-based authentication using Spark user API
-- Owner-based access control
-- Purchase price tracking
-- Edit permissions restricted to app owner
+- Frontend: React 19 + TypeScript + Vite
+- Web hosting: Cloudflare Pages
+- Auth and backend data: Supabase
+- Desktop distribution: Electron package with update feed publishing
+- CI/CD: GitHub Actions for validation, Cloudflare Pages deployment, and desktop update feed publishing
 
-### ✅ Data Management Modules
+Older Spark-era references still exist in parts of the repository history and legacy notes, but they do not describe the current runtime model of this branch.
 
-#### Product Registry
-- CRUD operations for products with codes, names, categories
-- Purchase price tracking
-- Three-mode quote rows:
-  - **Asennus** (Installation only)  
+## Auth And Data Model
 
-- Regional coefficient a
-#### Revision System
-- Quote duplication for rev
-- Prevention of send
+### Authentication
 
-- Required field verific
-- Customer and site validation
-### ✅ Export Capabilities
-#### Customer-Facing Exports
+- The web app uses Supabase Auth through `@supabase/supabase-js`.
+- Required client env vars are `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+- Session handling is persisted in the client, and auth callbacks resolve through the app's callback route.
 
-- Professional formatting
-#### Internal Exports
-- Purchase price visibility
-- Full cost breakdown
-### ✅ Import Workflow
+### Roles And Access
 
-- Bulk product updates
+- Platform role model: `admin` or `user`
+- Organization role model: `owner` or `employee`
+- Self-registration creates an organization context for the registrant, but does not imply platform admin rights.
 
-- Sales and margin analysis
-- Recent activity view
-## Technology Stack
-### Frontend Framework
-- **Vite 7.2.6** for build and dev server
+### Application Data Storage
 
-- **shadcn/ui v4** component l
-- **Radix UI** primitives
+- Core app state is stored in Supabase `app_kv` records.
+- `app_kv` supports three scopes: `shared`, `organization`, and `user`.
+- Shared organizational resources such as settings, installation groups, term templates, company profile, and catalog data use organization scope.
+- Operational records such as customers, projects, quotes, quote rows, and invoices are still primarily user-scoped and are aggregated for organization owners and admins in the application layer.
 
-### State Management
-- React hooks for local st
+### Legal State
 
-- **react-hook-form** - Fo
-- **date-fns** - Date utilities
+- Current legal state is backed by Supabase tables for document versions and legal acceptances.
+- The app includes public legal document routes, acceptance gates, and organization-aware legal history flows.
 
-## File Structure
-```
-├── index.html               
-├── STABLE_STATE.md           # This
-├── src/
+## Major Functional Areas
 
-│   │   ├── pages/       
+### Sales And Project Operations
 
-│   │   │   ├── SubstitutePr
-│   │   │   ├── TermsPage.tsx
-│   │   │   ├── ReportsPage.ts
-│   │   ├── ui/          
-│   │   └── ReadOnlyAlert
+- Customer registry
+- Project workspace
+- Quote editor with revision handling
+- Quote rows, pricing logic, and export flows
+- Snapshot-based invoicing derived from quote state
 
-│   │   └── use-mobil
-│       ├── types.ts          # T
-│       ├── export.ts      
-```
-## Data Schema
+### Shared Business Configuration
 
-{
-  code: string;
-  category?: string
-  purchasePrice: number;
-  createdAt: string;
+- Installation groups
+- Settings
+- Term templates
+- Company profile
+- Catalog import, mapping, and bootstrap data
 
+### Legal And Compliance UX
 
-```typescript
-  id: string;
-  defaultPrice: number;
-  updatedAt: string;
+- Legal document administration
+- Public legal document pages
+- Acceptance history and re-acceptance state
+- Access gating for users who must accept updated terms
 
-### Project
+### Tarjousaly
 
-  customerId: string;
-  site: string;
-  regionCoefficient: number;
-  createdAt: string;
+- Tender package ingestion and document management
+- Extraction and analysis job workflow
+- Review-task and result-domain handling
+- Draft package generation and managed import path into the quote editor
+- Provider profile and decision-support oriented workspace capabilities on this branch
 
+### Reporting And Oversight
 
-```typescript
-  id: string;
-  title: string;
-  parentQuoteId?: string;
-  vatPercent: number;
+- Dashboard and reporting views
+- Quote and project activity visibility
+- Organization-aware data aggregation for authorized users
 
-  updatedAt: string;
-```
-### QuoteRow
-{
+## Local Development Baseline
 
-  mode: 'product'
-  productName: string;
-  quantity: number;
-  purchasePrice: number;
-  installationPrice: number;
-  overridePrice?: number;
+### Prerequisites
 
+- Node.js 20-compatible environment
+- npm dependencies installed with `npm ci`
+- Supabase environment values for any auth-backed or remote-data workflow
+
+### Core Environment Variables
+
+Minimum web runtime configuration:
+
+```bash
+VITE_SITE_URL=http://localhost:5173
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+VITE_SUPABASE_REDIRECT_URL=http://localhost:5173/auth/callback
 ```
 
-- `
-- `substitute-products` - S
-- `projects` - Project array
-- `quote-rows` - Quote row array
-- `settings` - Application settings objec
-## Design System
-### Colo
-- **Foreground**: `oklch(0.25 0.01 250)` - Dark blue-gray
-- **Accent**: `oklch(0.65 0.15 200)` - Bright teal
+Desktop update behavior can additionally be influenced by feed-related environment variables in Electron packaging or runtime, but web development centers on the `VITE_*` variables above.
 
-- **Primary Font**: IBM Plex Sans
-- Hierarchy: 32px (H1), 24px 
-### Border Radius
+### Primary Commands
 
-
-2. **Tuoterekisteri** (Products)
-4. **Korvaavat tuotteet** (Su
-6. **Ehdot** (Terms) - Quote ter
-8. **Raportointi** (Reports) - 
-## Critical Implementation Not
-### State Management Pattern
-
-// ✅ CORRECT
-
-setProducts([...products, newProduct]);
-
-1. App loads → `useAuth()` hook fetches user
-3. No user →
-5. Non-owner → Show ReadOnlyAlert, hide edit controls
-
-Validation runs before export/send:
-- Warnings: missing purchase prices, no terms se
-- W
-
-- Pääkaupunkis
-
-- Pohjois-S
-## Known Limi
-1
-3. **Language
-5. **Bulk opera
-## Testing Chec
-- ✅ User authenticat
-- ✅ Non-owner h
-- ✅ Installation groups 
-- ✅ All three quote row modes f
-- ✅ Regional coeffic
-  updatedAt: string;
-}
+```bash
+npm ci
+npm run dev
+npm run lint
+npm run typecheck
+npm run test
+npm run validate
+npm run validate:release
 ```
 
-- Data loads from KV 
-- Tables virt
--
-## Security
-- Authenticatio
-- Owner-only write oper
-- Client-side valida
-## Backup & Recovery
-A
-- N
+Important quality gate detail:
 
-### Project
-```typescript
-{
-  id: string;
-  customerId: string;
-  name: string;
-  site: string;
-  region?: string;
-  regionCoefficient: number;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-```
+- `npm run build` uses `tsc -b --noCheck && vite build`.
+- A successful build is not a replacement for `npm run typecheck`.
+- Release readiness should be judged from `npm run validate` or `npm run validate:release`.
 
-### Quote
-```typescript
-{
-  id: string;
-  projectId: string;
-  title: string;
-  revisionNumber: number;
-  parentQuoteId?: string;
-  status: 'draft' | 'sent' | 'accepted' | 'rejected';
-  vatPercent: number;
-  notes?: string;
-  termsId?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-```
+## Supabase Workflow Baseline
 
-### QuoteRow
-```typescript
-{
-  id: string;
-  quoteId: string;
-  sortOrder: number;
-  mode: 'product' | 'installation' | 'product_installation';
-  productId?: string;
-  productName: string;
-  productCode?: string;
-  quantity: number;
-  unit: string;
-  purchasePrice: number;
-  salesPrice: number;
-  installationPrice: number;
-  marginPercent: number;
-  overridePrice?: number;
-  regionMultiplier: number;
-  notes?: string;
-}
-```
+- Local stack management is done through the repo scripts such as `npm run supabase:start`, `npm run supabase:stop`, and `npm run supabase:status`.
+- New schema changes belong in `supabase/migrations/`.
+- `supabase/schema.sql` acts as a snapshot or reference baseline and should not be treated as the primary incremental migration channel.
+- Linked-environment rollout should be checked with the dry-run scripts before production-facing schema push decisions.
 
-## Key Storage Keys (Spark KV)
+## Deployment And Release Flow
 
-- `products` - Product array
-- `installation-groups` - Installation group array
-- `substitute-products` - Substitute product array
-- `customers` - Customer array
-- `projects` - Project array
-- `quotes` - Quote array
-- `quote-rows` - Quote row array
-- `quote-terms` - Terms array
-- `settings` - Application settings object
+### Continuous Validation
 
-## Design System
+- `.github/workflows/validate.yml` runs `npm run validate` on pull requests and on pushes to `main`.
 
-### Colors (OKLCH)
-- **Background**: `oklch(0.98 0.005 80)` - Light warm gray
-- **Foreground**: `oklch(0.25 0.01 250)` - Dark blue-gray
-- **Primary**: `oklch(0.45 0.12 250)` - Deep Nordic blue
-- **Accent**: `oklch(0.65 0.15 200)` - Bright teal
-- **Secondary**: `oklch(0.65 0.02 250)` - Slate gray
+### Web Deployment
 
-### Typography
-- **Primary Font**: IBM Plex Sans
-- **Monospace Font**: JetBrains Mono (for codes/prices)
-- Hierarchy: 32px (H1), 24px (H2), 18px (H3), 15px (Body)
+- `.github/workflows/deploy-cloudflare-pages.yml` runs on pushes to `main` and on manual dispatch.
+- The workflow installs dependencies, runs `npm run validate`, builds the app, and deploys the `dist` output to Cloudflare Pages.
 
-### Border Radius
-- `--radius: 0.5rem` (8px)
+### Desktop Release
 
-## Navigation Structure
+- `.github/workflows/publish-update-feed.yml` runs on tags matching `v*` and on manual dispatch.
+- The workflow validates the repo, aligns the package version with the tag, builds desktop artifacts on Windows, stages an update feed, and publishes the result to `gh-pages`.
 
-1. **Etusivu** (Dashboard) - Overview and KPIs
-2. **Tuoterekisteri** (Products) - Product management
-3. **Hintaryhmät** (Installation Groups) - Pricing groups
-4. **Korvaavat tuotteet** (Substitutes) - Product alternatives
-5. **Projektit** (Projects) - Project and customer management
-6. **Ehdot** (Terms) - Quote terms management
-7. **Asetukset** (Settings) - Application settings
-8. **Raportointi** (Reports) - Analytics and reports
+## Known Scope Boundaries
 
-## Critical Implementation Notes
+- The repo still contains some legacy Spark references in historical files and compatibility surfaces; they should not be used as the source of truth for current runtime decisions.
+- `app_kv` remains a mixed-scope storage model, so ownership changes and aggregation behavior must respect actual bucket movement and access rules rather than assuming a single global store.
+- Desktop distribution exists, but web deployment remains the primary operational surface described by the checked-in deployment documentation.
+- Tarjousaly is actively evolving on this branch, so feature breadth is ahead of a fully stabilized documentation pass in some lower-priority files.
 
-### State Management Pattern
-All persistent data uses `useKV` with functional updates:
+## Source-Of-Truth Documents
 
-```typescript
-// ✅ CORRECT
-setProducts(current => [...current, newProduct]);
+Use these files when validating the current operating model of the repository:
 
-// ❌ WRONG - causes stale closure bugs
-setProducts([...products, newProduct]);
-```
+- `README.md`
+- `DEPLOYMENT.md`
+- `docs/cloudflare-pages-supabase.md`
+- `docs/release-checklist.md`
+- `supabase/README.md`
+- `.github/workflows/validate.yml`
+- `.github/workflows/deploy-cloudflare-pages.yml`
+- `.github/workflows/publish-update-feed.yml`
 
-### Authentication Flow
-1. App loads → `useAuth()` hook fetches user
-2. Loading state displays spinner
-3. No user → Show login required message
-4. User authenticated → Check `isOwner` flag
-5. Non-owner → Show ReadOnlyAlert, hide edit controls
-6. Owner → Full access to all features
-
-### Quote Validation
-Validation runs before export/send:
-- Required: customer, site, at least one row
-- Warnings: missing purchase prices, no terms selected
-- Blocking errors prevent export
-- Warnings allow export with confirmation
-
-### Regional Coefficients
-Default regions with multipliers:
-- Pääkaupunkiseutu: 1.15
-- Etelä-Suomi: 1.05
-- Länsi-Suomi: 1.0
-- Itä-Suomi: 0.95
-- Pohjois-Suomi: 0.9
-
-## Known Limitations
-
-1. **Export formats**: Currently structured for Finnish market standards
-2. **Currency**: Hard-coded to EUR (€)
-3. **Language**: Finnish UI only
-4. **Concurrent editing**: No real-time conflict resolution
-5. **Bulk operations**: Limited to product imports only
-
-## Testing Checklist
-
-- ✅ User authentication works
-- ✅ Owner can create/edit/delete all entities
-- ✅ Non-owner has read-only access
-- ✅ Products save and load correctly
-- ✅ Installation groups link to products
-- ✅ Quotes calculate prices correctly
-- ✅ All three quote row modes function
-- ✅ Margin overrides work
-- ✅ Regional coefficients apply
-- ✅ Revision system creates new versions
-- ✅ Validation catches errors
-- ✅ Export functions generate files
-- ✅ Import workflow processes Excel files
-- ✅ Dashboard displays correct metrics
-- ✅ Navigation works across all pages
-
-## Performance Considerations
-
-- Data loads from KV store on component mount
-- Functional updates prevent stale closures
-- Tables virtualize for large datasets
-- Lazy loading for heavy components
-- Optimistic UI updates for better UX
-
-## Security
-
-- Authentication required for all access
-- Authorization checked for mutations
-- Owner-only write operations
-- No direct database access
-- Client-side validation with server-side safety
-
-## Backup & Recovery
-
-All data stored in Spark KV persistence:
-- Automatic persistence across sessions
-- No manual save required
-- Data survives page refreshes
-- Tied to user's Spark account
-
-
-
-**DO NOT MODIFY** this state without explicit user approval. This represents a verified working configuration.
+This document summarizes the stable checked-in baseline of the application, not the full historical evolution of the codebase.
