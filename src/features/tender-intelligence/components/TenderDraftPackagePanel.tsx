@@ -707,7 +707,7 @@ export default function TenderDraftPackagePanel({
     () => (editorImportPreview ? buildTenderEditorManagedSurfaceFromPayload(editorImportPreview.payload) : null),
     [editorImportPreview],
   );
-  const managedBlocks = managedSurface?.blocks ?? [];
+  const managedBlocks = useMemo(() => managedSurface?.blocks ?? [], [managedSurface]);
   const sortedImportRuns = useMemo(
     () => [...draftPackageImportRuns].sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)),
     [draftPackageImportRuns],

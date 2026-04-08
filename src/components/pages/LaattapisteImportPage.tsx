@@ -192,7 +192,7 @@ LP-XXX-001;Tuotteen nimi;Kategoria;Merkki;kpl;Huomiot;Hintaryhmäkoodi`;
       setActiveTab('input');
 
     } catch (error) {
-      console.error(error);
+      console.error('Laattapiste-tuonnin jäsentäminen epäonnistui:', error);
       toast.error('Virhe tietojen käsittelyssä');
     }
   };
@@ -230,7 +230,7 @@ LP-XXX-001;Tuotteen nimi;Kategoria;Merkki;kpl;Huomiot;Hintaryhmäkoodi`;
       setImportData([]);
       toast.success(`${imported} tuotetta tuotu onnistuneesti`);
     } catch (error) {
-      console.error(error);
+      console.error('Laattapiste-tuotteiden tallennus epäonnistui:', error);
       toast.error('Virhe tuonnissa');
     } finally {
       setIsProcessing(false);
