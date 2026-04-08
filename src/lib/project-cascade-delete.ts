@@ -14,6 +14,15 @@ export interface ProjectCascadeDeletionPlan extends QuoteCascadeDeletionPlan {
   projectId: string;
 }
 
+export interface QuoteCascadeDeletionExecutor {
+  deleteRows: (ids: string[]) => void;
+  deleteQuote: (id: string) => void;
+}
+
+export interface ProjectCascadeDeletionExecutor extends QuoteCascadeDeletionExecutor {
+  deleteProject: (id: string) => void;
+}
+
 function uniqueIds(ids: string[]) {
   return Array.from(new Set(ids.filter(Boolean)));
 }
@@ -85,4 +94,19 @@ export function buildProjectCascadeDeleteConfirmMessage(plan: ProjectCascadeDele
   }
 
   return `Haluatko varmasti poistaa projektin? Tämä poistaa myös ${formatQuoteDeleteCount(plan.quoteCount)} ja ${formatRowDeleteCount(plan.rowCount)}.`;
+}
+
+export function executeQuoteCascadeDeletion(plan: QuoteCascadeDeletionPlan, executor: QuoteCascadeDeletionExecutor) {
+  if (plan.rowIds.length > 0) {
+    executor.deleteRows(plan.rowIds);
+  }
+
+  plan.quoteIds.forEach((quoteId) => executor.deleteQuote(quoteId));
+  return plan;
+}
+
+export function executeProjectCascadeDeletion(plan: ProjectCascadeDeletionPlan, executor: ProjectCascadeDeletionExecutor) {
+  executeQuoteCascadeDeletion(plan, executor);
+  executor.deleteProject(plan.projectId);
+  return plan;
 }

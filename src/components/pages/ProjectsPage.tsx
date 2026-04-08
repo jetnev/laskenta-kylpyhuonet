@@ -8,7 +8,7 @@ import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { useProjects, useCustomers, useInvoices, useQuotes, useQuoteRows, useQuoteTerms, useSettings, useStarterWorkspaceTemplate } from '../../hooks/use-data';
+import { useCascadeDeleteActions, useProjects, useCustomers, useInvoices, useQuotes, useQuoteRows, useQuoteTerms, useSettings, useStarterWorkspaceTemplate } from '../../hooks/use-data';
 import { useAuth } from '../../hooks/use-auth';
 import { toast } from 'sonner';
 import { Project, Customer, Quote } from '../../lib/types';
@@ -19,10 +19,7 @@ import { filterOwnedRecords, getResponsibleUserLabel } from '../../lib/ownership
 import {
   buildBulkQuoteCascadeDeleteConfirmMessage,
   buildProjectCascadeDeleteConfirmMessage,
-  buildProjectCascadeDeletionPlan,
   buildQuoteCascadeDeleteConfirmMessage,
-  buildQuoteCascadeDeletionPlan,
-  buildQuotesCascadeDeletionPlan,
 } from '../../lib/project-cascade-delete';
 import { shouldKeepPendingQuoteEditorOpen } from '../../lib/project-workspace';
 import { buildProjectWorkspaceContext, resolveWorkspaceTaskExecution, type WorkspaceTask } from '../../lib/workspace-flow';
@@ -79,11 +76,19 @@ interface ProjectsPageProps {
 export default function ProjectsPage({ routeState, onNavigate }: ProjectsPageProps) {
   const starterWorkspace = useStarterWorkspaceTemplate();
   const { user, users, canManageUsers } = useAuth();
-  const { projects, addProject, updateProject, deleteProject } = useProjects();
+  const { projects, addProject, updateProject } = useProjects();
   const { customers, addCustomer, updateCustomer, deleteCustomer, getCustomer } = useCustomers();
   const { invoices } = useInvoices();
-  const { quotes, addQuote, getQuotesForProject, deleteQuote } = useQuotes();
-  const { rows, deleteRows } = useQuoteRows();
+  const { quotes, addQuote, getQuotesForProject } = useQuotes();
+  const { rows } = useQuoteRows();
+  const {
+    executeProjectCascadeDelete,
+    executeQuoteCascadeDelete,
+    executeQuotesCascadeDelete,
+    planProjectCascadeDelete,
+    planQuoteCascadeDelete,
+    planQuotesCascadeDelete,
+  } = useCascadeDeleteActions();
   const { createQuoteTermsSnapshot, getDefaultTerms } = useQuoteTerms();
   const { settings } = useSettings();
 
@@ -438,43 +443,15 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
     setShowCustomerDialog(true);
   };
 
-  const deleteQuoteCascade = useCallback((quoteId: string) => {
-    const plan = buildQuoteCascadeDeletionPlan(quoteId, rows);
-
-    if (plan.rowIds.length > 0) {
-      deleteRows(plan.rowIds);
-    }
-
-    plan.quoteIds.forEach((id) => deleteQuote(id));
-    return plan;
-  }, [deleteQuote, deleteRows, rows]);
-
-  const deleteQuotesCascade = useCallback((quoteIds: string[]) => {
-    const plan = buildQuotesCascadeDeletionPlan(quoteIds, rows);
-
-    if (plan.rowIds.length > 0) {
-      deleteRows(plan.rowIds);
-    }
-
-    plan.quoteIds.forEach((id) => deleteQuote(id));
-    return plan;
-  }, [deleteQuote, deleteRows, rows]);
-
   const handleDeleteProject = (id: string) => {
-    const plan = buildProjectCascadeDeletionPlan(id, quotes, rows);
+    const plan = planProjectCascadeDelete(id);
     const confirmMessage = buildProjectCascadeDeleteConfirmMessage(plan);
 
     if (confirm(confirmMessage)) {
       const deletedQuoteIds = new Set(plan.quoteIds);
       setSelectedQuotes((current) => new Set([...current].filter((quoteId) => !deletedQuoteIds.has(quoteId))));
       setPendingCreatedQuoteId((current) => (current && deletedQuoteIds.has(current) ? null : current));
-
-      if (plan.rowIds.length > 0) {
-        deleteRows(plan.rowIds);
-      }
-
-      plan.quoteIds.forEach((quoteId) => deleteQuote(quoteId));
-      deleteProject(plan.projectId);
+      executeProjectCascadeDelete(plan);
 
       if (selectedProjectId === id) {
         navigateToProjects({}, { replace: true });
@@ -549,10 +526,10 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   };
 
   const handleDeleteQuote = (quoteId: string) => {
-    const plan = buildQuoteCascadeDeletionPlan(quoteId, rows);
+    const plan = planQuoteCascadeDelete(quoteId);
 
     if (confirm(buildQuoteCascadeDeleteConfirmMessage(plan))) {
-      deleteQuoteCascade(quoteId);
+      executeQuoteCascadeDelete(plan);
       setSelectedQuotes((prev) => {
         const newSet = new Set(prev);
         newSet.delete(quoteId);
@@ -574,10 +551,10 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
       return;
     }
 
-    const plan = buildQuotesCascadeDeletionPlan([...selectedQuotes], rows);
+    const plan = planQuotesCascadeDelete([...selectedQuotes]);
 
     if (confirm(buildBulkQuoteCascadeDeleteConfirmMessage(plan))) {
-      deleteQuotesCascade(plan.quoteIds);
+      executeQuotesCascadeDelete(plan);
       setSelectedQuotes(new Set());
       setPendingCreatedQuoteId((current) => (current && plan.quoteIds.includes(current) ? null : current));
 
@@ -688,10 +665,10 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
       if ((key === 'delete' || key === 'backspace') && selectedQuotes.size > 0) {
         event.preventDefault();
 
-        const plan = buildQuotesCascadeDeletionPlan([...selectedQuotes], rows);
+        const plan = planQuotesCascadeDelete([...selectedQuotes]);
 
         if (confirm(buildBulkQuoteCascadeDeleteConfirmMessage(plan))) {
-          deleteQuotesCascade(plan.quoteIds);
+          executeQuotesCascadeDelete(plan);
           setSelectedQuotes(new Set());
           setPendingCreatedQuoteId((current) => (current && plan.quoteIds.includes(current) ? null : current));
 
@@ -708,7 +685,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [deleteQuotesCascade, navigateToProjects, rows, selectedProject, selectedProjectId, selectedQuoteId, selectedQuotes, showQuoteEditor, toggleSelectAllVisibleQuotes]);
+  }, [executeQuotesCascadeDelete, navigateToProjects, planQuotesCascadeDelete, selectedProject, selectedProjectId, selectedQuoteId, selectedQuotes, showQuoteEditor, toggleSelectAllVisibleQuotes]);
 
   return (
     <div className="p-4 sm:p-8 space-y-6">

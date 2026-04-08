@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Quote, QuoteRow } from './types';
 import {
@@ -8,6 +8,8 @@ import {
   buildQuoteCascadeDeleteConfirmMessage,
   buildQuoteCascadeDeletionPlan,
   buildQuotesCascadeDeletionPlan,
+  executeProjectCascadeDeletion,
+  executeQuoteCascadeDeletion,
 } from './project-cascade-delete';
 
 function createQuote(id: string, projectId: string) {
@@ -104,6 +106,24 @@ describe('project-cascade-delete', () => {
     ).toBe('Haluatko varmasti poistaa 2 tarjousta? Tämä poistaa myös 3 riviä.');
   });
 
+  it('executes a quote cascade plan by removing rows before quotes', () => {
+    const deleteRows = vi.fn();
+    const deleteQuote = vi.fn();
+    const plan = {
+      quoteIds: ['quote-1', 'quote-2'],
+      rowIds: ['row-1', 'row-2'],
+      quoteCount: 2,
+      rowCount: 2,
+    };
+
+    const result = executeQuoteCascadeDeletion(plan, { deleteRows, deleteQuote });
+
+    expect(result).toBe(plan);
+    expect(deleteRows).toHaveBeenCalledOnce();
+    expect(deleteRows).toHaveBeenCalledWith(['row-1', 'row-2']);
+    expect(deleteQuote.mock.calls).toEqual([['quote-1'], ['quote-2']]);
+  });
+
   it('formats project delete confirmation messages with cascade impact', () => {
     expect(
       buildProjectCascadeDeleteConfirmMessage({
@@ -124,5 +144,29 @@ describe('project-cascade-delete', () => {
         rowCount: 0,
       }),
     ).toBe('Haluatko varmasti poistaa projektin?');
+  });
+
+  it('executes a project cascade plan after quote and row cleanup', () => {
+    const operations: string[] = [];
+    const plan = {
+      projectId: 'project-1',
+      quoteIds: ['quote-1', 'quote-2'],
+      rowIds: ['row-1'],
+      quoteCount: 2,
+      rowCount: 1,
+    };
+
+    executeProjectCascadeDeletion(plan, {
+      deleteRows: (ids) => operations.push(`rows:${ids.join(',')}`),
+      deleteQuote: (id) => operations.push(`quote:${id}`),
+      deleteProject: (id) => operations.push(`project:${id}`),
+    });
+
+    expect(operations).toEqual([
+      'rows:row-1',
+      'quote:quote-1',
+      'quote:quote-2',
+      'project:project-1',
+    ]);
   });
 });

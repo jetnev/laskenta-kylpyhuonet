@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useKV, useUserScopedKVMany } from './use-kv';
 import {
   CompanyProfile,
@@ -30,6 +30,15 @@ import {
   updateTermTemplate,
 } from '../lib/term-templates';
 import { createInvoiceSnapshotFromQuote } from '../lib/invoices';
+import {
+  buildProjectCascadeDeletionPlan,
+  buildQuoteCascadeDeletionPlan,
+  buildQuotesCascadeDeletionPlan,
+  executeProjectCascadeDeletion,
+  executeQuoteCascadeDeletion,
+  type ProjectCascadeDeletionPlan,
+  type QuoteCascadeDeletionPlan,
+} from '../lib/project-cascade-delete';
 import { APP_DEFAULT_UPDATE_FEED_URL } from '../lib/site-brand';
 import { getQuoteVatPercent } from '../lib/calculations';
 import { buildProductSearchText } from '../lib/product-search';
@@ -1256,6 +1265,81 @@ export function useQuoteRows() {
     rows.filter((row) => row.quoteId === quoteId).sort((left, right) => left.sortOrder - right.sortOrder);
 
   return { rows, rowsLoaded, addRow, updateRow, deleteRow, deleteRows, deleteRowsForQuote, getRowsForQuote };
+}
+
+export function useCascadeDeleteActions() {
+  const { deleteProject } = useProjects();
+  const { quotes, deleteQuote } = useQuotes();
+  const { rows, deleteRows } = useQuoteRows();
+
+  const planQuoteCascadeDelete = useCallback(
+    (quoteId: string) => buildQuoteCascadeDeletionPlan(quoteId, rows),
+    [rows],
+  );
+
+  const planQuotesCascadeDelete = useCallback(
+    (quoteIds: string[]) => buildQuotesCascadeDeletionPlan(quoteIds, rows),
+    [rows],
+  );
+
+  const planProjectCascadeDelete = useCallback(
+    (projectId: string) => buildProjectCascadeDeletionPlan(projectId, quotes, rows),
+    [quotes, rows],
+  );
+
+  const executeQuotesCascadeDelete = useCallback(
+    (plan: QuoteCascadeDeletionPlan) => executeQuoteCascadeDeletion(plan, { deleteRows, deleteQuote }),
+    [deleteQuote, deleteRows],
+  );
+
+  const executeQuoteCascadeDelete = useCallback(
+    (plan: QuoteCascadeDeletionPlan) => executeQuotesCascadeDelete(plan),
+    [executeQuotesCascadeDelete],
+  );
+
+  const executeProjectCascadeDelete = useCallback(
+    (plan: ProjectCascadeDeletionPlan) => executeProjectCascadeDeletion(plan, { deleteRows, deleteQuote, deleteProject }),
+    [deleteProject, deleteQuote, deleteRows],
+  );
+
+  const deleteQuoteCascade = useCallback(
+    (quoteId: string) => {
+      const plan = planQuoteCascadeDelete(quoteId);
+      executeQuoteCascadeDelete(plan);
+      return plan;
+    },
+    [executeQuoteCascadeDelete, planQuoteCascadeDelete],
+  );
+
+  const deleteQuotesCascade = useCallback(
+    (quoteIds: string[]) => {
+      const plan = planQuotesCascadeDelete(quoteIds);
+      executeQuotesCascadeDelete(plan);
+      return plan;
+    },
+    [executeQuotesCascadeDelete, planQuotesCascadeDelete],
+  );
+
+  const deleteProjectCascade = useCallback(
+    (projectId: string) => {
+      const plan = planProjectCascadeDelete(projectId);
+      executeProjectCascadeDelete(plan);
+      return plan;
+    },
+    [executeProjectCascadeDelete, planProjectCascadeDelete],
+  );
+
+  return {
+    planQuoteCascadeDelete,
+    planQuotesCascadeDelete,
+    planProjectCascadeDelete,
+    executeQuoteCascadeDelete,
+    executeQuotesCascadeDelete,
+    executeProjectCascadeDelete,
+    deleteQuoteCascade,
+    deleteQuotesCascade,
+    deleteProjectCascade,
+  };
 }
 
 export function useQuoteTerms() {
