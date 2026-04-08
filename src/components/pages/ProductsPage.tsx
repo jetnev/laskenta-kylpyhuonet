@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Check,
+  Copy,
   DownloadSimple,
   MagnifyingGlass,
   Package,
@@ -158,7 +159,7 @@ function isProductIncomplete(product: Product) {
 export default function ProductsPage() {
   const { canDelete, canEdit } = useAuth();
   const { groups } = useInstallationGroups();
-  const { addProduct, deleteProduct, products, updateProduct } = useProducts();
+  const { addProduct, deleteProduct, duplicateProduct, products, updateProduct } = useProducts();
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -290,6 +291,22 @@ export default function ProductsPage() {
     }
     setForm(buildForm(product));
     setEditorOpen(true);
+  };
+
+  const duplicateExistingProduct = (product: Product) => {
+    if (!canEdit) {
+      toast.error('Sinulla ei ole oikeuksia kopioida tuotteita.');
+      return;
+    }
+
+    try {
+      const created = duplicateProduct(product.id);
+      setForm(buildForm(created));
+      setEditorOpen(true);
+      toast.success('Tuotteesta luotiin kopio.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Tuotteen kopiointi epäonnistui.');
+    }
   };
 
   const saveProduct = () => {
@@ -652,7 +669,7 @@ export default function ProductsPage() {
                 <TableHead>Hintaryhmä</TableHead>
                 <TableHead>Tila</TableHead>
                 <TableHead className="text-right">Päivitetty</TableHead>
-                <TableHead className="w-24" />
+                <TableHead className="w-32" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -736,6 +753,17 @@ export default function ProductsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => duplicateExistingProduct(product)}
+                            disabled={!canEdit}
+                            aria-label={`Kopioi tuote ${product.name}`}
+                            title="Kopioi tuote"
+                          >
+                            <Copy />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditor(product)} disabled={!canEdit}>
                             <PencilSimple />
                           </Button>

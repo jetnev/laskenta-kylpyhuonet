@@ -58,6 +58,11 @@ konversiomittarit, viimeaikaiset kohteet, projektistatistiikat, hälytykset.
 Toteutettu `src/hooks/use-mobile.ts` ja `src/components/ResponsiveTable.tsx`.
 Responsive breakpoint 768px, mukautuvat taulukot ja dialogit.
 
+### 8. Tuotteiden Kopiointi ✅
+
+Toteutettu `src/components/pages/ProductsPage.tsx` ja `src/hooks/use-data.ts`.
+Tuotteen voi kopioida suoraan rivitoiminnoista, kopio saa automaattisen `(kopio)`-nimen ja avautuu heti muokattavaksi editoriin.
+
 ---
 
 ## ⚠️ Osittain Toteutetut (Jatkokehitys)
@@ -89,17 +94,6 @@ Responsive breakpoint 768px, mukautuvat taulukot ja dialogit.
 ---
 
 ## 💡 Toteuttamattomat Lisäykset
-
-### 8. Tuotteiden Kopiointi
-
-**Ongelma**: Samankaltaisten tuotteiden luonti vaatii manuaalista syöttöä.
-
-**Ratkaisu**:
-- Lisää "Kopioi tuote" -painike tuotteen muokkausnäkymään
-- Kopioi kaikki kentät ja lisää "(kopio)" nimen perään
-- Avaa heti muokkausnäkymä kopioidulle tuotteelle
-
-**Vaikutus**: Helpottaa samankaltaisten tuotteiden luontia.
 
 ### 14. Kieliversiot
 

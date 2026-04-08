@@ -47,6 +47,7 @@ type OwnedAuditKeys = 'id' | keyof ReturnType<typeof buildOwnedAudit>;
 type CustomerCreateInput = Omit<Customer, 'id' | keyof ReturnType<typeof buildOwnedAudit>> & {
   ownerUserId?: string;
 };
+export type ProductWriteInput = Omit<Product, 'id' | keyof ReturnType<typeof buildAudit>>;
 type ProjectCreateInput = Omit<Project, 'id' | keyof ReturnType<typeof buildOwnedAudit>> & {
   ownerUserId?: string;
 };
@@ -153,6 +154,78 @@ function getVisibleUserIds(users: Array<{ id: string }>, currentUserId?: string 
 
 function flattenUserScopedValues<T>(userIds: string[], valuesByUserId: Record<string, T[]>) {
   return userIds.flatMap((userId) => valuesByUserId[userId] ?? []);
+}
+
+const PRODUCT_COPY_SUFFIX_PATTERN = /\s+\(kopio(?:\s+(\d+))?\)$/i;
+
+export function buildDuplicatedProductName(name: string, existingNames: string[]) {
+  const normalizedExistingNames = new Set(
+    existingNames
+      .map((existingName) => existingName.trim())
+      .filter(Boolean)
+      .map((existingName) => existingName.toLocaleLowerCase('fi')),
+  );
+  const sourceName = name.trim() || 'Tuote';
+  const baseName = sourceName.replace(PRODUCT_COPY_SUFFIX_PATTERN, '').trim() || 'Tuote';
+  const firstCandidate = `${baseName} (kopio)`;
+
+  if (!normalizedExistingNames.has(firstCandidate.toLocaleLowerCase('fi'))) {
+    return firstCandidate;
+  }
+
+  let copyIndex = 2;
+  let candidate = `${baseName} (kopio ${copyIndex})`;
+
+  while (normalizedExistingNames.has(candidate.toLocaleLowerCase('fi'))) {
+    copyIndex += 1;
+    candidate = `${baseName} (kopio ${copyIndex})`;
+  }
+
+  return candidate;
+}
+
+export function buildDuplicatedProductInput(
+  product: Product,
+  existingProducts: Array<Pick<Product, 'name'>>,
+): ProductWriteInput {
+  const duplicatedName = buildDuplicatedProductName(
+    product.name,
+    existingProducts.map((existingProduct) => existingProduct.name),
+  );
+
+  return {
+    code: product.code,
+    name: duplicatedName,
+    description: product.description,
+    category: product.category,
+    internalCode: product.internalCode,
+    brand: product.brand,
+    manufacturer: product.manufacturer,
+    manufacturerSku: product.manufacturerSku,
+    ean: product.ean,
+    normalizedName: duplicatedName,
+    packageSize: product.packageSize,
+    packageUnit: product.packageUnit,
+    unit: product.unit,
+    salesUnit: product.salesUnit,
+    baseUnit: product.baseUnit,
+    purchasePrice: product.purchasePrice,
+    defaultCostPrice: product.defaultCostPrice,
+    defaultSalePrice: product.defaultSalePrice,
+    defaultSalesMarginPercent: product.defaultSalesMarginPercent,
+    defaultInstallationPrice: product.defaultInstallationPrice,
+    defaultMarginPercent: product.defaultMarginPercent,
+    defaultInstallPrice: product.defaultInstallPrice,
+    categoryId: product.categoryId,
+    subcategoryId: product.subcategoryId,
+    installationGroupId: product.installationGroupId,
+    isActive: product.isActive,
+    active: product.active,
+    searchableText: product.searchableText,
+    sourceNames: product.sourceNames,
+    sourceCount: product.sourceCount,
+    tags: product.tags,
+  };
 }
 
 function generateQuoteNumber(prefix: string = 'TAR') {
@@ -410,7 +483,7 @@ export function useProducts() {
     [products]
   );
 
-  const addProduct = (product: Omit<Product, 'id' | keyof ReturnType<typeof buildAudit>>) => {
+  const addProduct = (product: ProductWriteInput) => {
     const currentUserId = ensureSignedIn(userId);
     if (!canEdit) {
       throw new Error('Sinulla ei ole oikeuksia lisätä tuotteita.');
@@ -478,6 +551,16 @@ export function useProducts() {
 
     setProducts((current = []) => [...current, newProduct]);
     return newProduct;
+  };
+
+  const duplicateProduct = (id: string) => {
+    const targetProduct = products.find((product) => product.id === id);
+
+    if (!targetProduct) {
+      throw new Error('Tuotetta ei löytynyt.');
+    }
+
+    return addProduct(buildDuplicatedProductInput(targetProduct, products));
   };
 
   const updateProduct = (id: string, updates: Partial<Product>) => {
@@ -576,7 +659,7 @@ export function useProducts() {
 
   const getProduct = (id: string) => orderedProducts.find((item) => item.id === id);
 
-  return { products: orderedProducts, productsLoaded, addProduct, updateProduct, deleteProduct, getProduct };
+  return { products: orderedProducts, productsLoaded, addProduct, duplicateProduct, updateProduct, deleteProduct, getProduct };
 }
 
 export function useInstallationGroups() {
