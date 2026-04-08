@@ -16,6 +16,14 @@ import { cn } from '../../lib/utils';
 import type { AppLocationState } from '../../lib/app-routing';
 import { getInvoiceStatusLabel, isInvoiceOverdue } from '../../lib/invoices';
 import { filterOwnedRecords, getResponsibleUserLabel } from '../../lib/ownership';
+import {
+  buildBulkQuoteCascadeDeleteConfirmMessage,
+  buildProjectCascadeDeleteConfirmMessage,
+  buildProjectCascadeDeletionPlan,
+  buildQuoteCascadeDeleteConfirmMessage,
+  buildQuoteCascadeDeletionPlan,
+  buildQuotesCascadeDeletionPlan,
+} from '../../lib/project-cascade-delete';
 import { shouldKeepPendingQuoteEditorOpen } from '../../lib/project-workspace';
 import { buildProjectWorkspaceContext, resolveWorkspaceTaskExecution, type WorkspaceTask } from '../../lib/workspace-flow';
 import {
@@ -75,7 +83,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   const { customers, addCustomer, updateCustomer, deleteCustomer, getCustomer } = useCustomers();
   const { invoices } = useInvoices();
   const { quotes, addQuote, getQuotesForProject, deleteQuote } = useQuotes();
-  const { rows, deleteRow } = useQuoteRows();
+  const { rows, deleteRows } = useQuoteRows();
   const { createQuoteTermsSnapshot, getDefaultTerms } = useQuoteTerms();
   const { settings } = useSettings();
 
@@ -430,33 +438,49 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
     setShowCustomerDialog(true);
   };
 
-  const deleteQuoteWithRows = (quoteId: string) => {
-    rows
-      .filter((row) => row.quoteId === quoteId)
-      .forEach((row) => deleteRow(row.id));
-    deleteQuote(quoteId);
-  };
+  const deleteQuoteCascade = useCallback((quoteId: string) => {
+    const plan = buildQuoteCascadeDeletionPlan(quoteId, rows);
+
+    if (plan.rowIds.length > 0) {
+      deleteRows(plan.rowIds);
+    }
+
+    plan.quoteIds.forEach((id) => deleteQuote(id));
+    return plan;
+  }, [deleteQuote, deleteRows, rows]);
+
+  const deleteQuotesCascade = useCallback((quoteIds: string[]) => {
+    const plan = buildQuotesCascadeDeletionPlan(quoteIds, rows);
+
+    if (plan.rowIds.length > 0) {
+      deleteRows(plan.rowIds);
+    }
+
+    plan.quoteIds.forEach((id) => deleteQuote(id));
+    return plan;
+  }, [deleteQuote, deleteRows, rows]);
 
   const handleDeleteProject = (id: string) => {
-    const projectQuotes = getQuotesForProject(id);
-    const projectQuoteRows = rows.filter((row) => projectQuotes.some((quote) => quote.id === row.quoteId));
-    const confirmMessage = projectQuotes.length > 0
-      ? `Haluatko varmasti poistaa projektin? Tämä poistaa myös ${projectQuotes.length} tarjousta ja ${projectQuoteRows.length} riviä.`
-      : 'Haluatko varmasti poistaa projektin?';
+    const plan = buildProjectCascadeDeletionPlan(id, quotes, rows);
+    const confirmMessage = buildProjectCascadeDeleteConfirmMessage(plan);
 
     if (confirm(confirmMessage)) {
-      const deletedQuoteIds = new Set(projectQuotes.map((quote) => quote.id));
+      const deletedQuoteIds = new Set(plan.quoteIds);
       setSelectedQuotes((current) => new Set([...current].filter((quoteId) => !deletedQuoteIds.has(quoteId))));
+      setPendingCreatedQuoteId((current) => (current && deletedQuoteIds.has(current) ? null : current));
 
-      projectQuoteRows.forEach((row) => deleteRow(row.id));
-      projectQuotes.forEach((quote) => deleteQuote(quote.id));
-      deleteProject(id);
+      if (plan.rowIds.length > 0) {
+        deleteRows(plan.rowIds);
+      }
+
+      plan.quoteIds.forEach((quoteId) => deleteQuote(quoteId));
+      deleteProject(plan.projectId);
 
       if (selectedProjectId === id) {
         navigateToProjects({}, { replace: true });
       }
 
-      toast.success(projectQuotes.length > 0 ? 'Projekti ja siihen liittyvät tarjoukset poistettu' : 'Projekti poistettu');
+      toast.success(plan.quoteCount > 0 ? 'Projekti ja siihen liittyvät tarjoukset poistettu' : 'Projekti poistettu');
     }
   };
 
@@ -525,13 +549,16 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   };
 
   const handleDeleteQuote = (quoteId: string) => {
-    if (confirm('Haluatko varmasti poistaa tarjouksen?')) {
-      deleteQuoteWithRows(quoteId);
+    const plan = buildQuoteCascadeDeletionPlan(quoteId, rows);
+
+    if (confirm(buildQuoteCascadeDeleteConfirmMessage(plan))) {
+      deleteQuoteCascade(quoteId);
       setSelectedQuotes((prev) => {
         const newSet = new Set(prev);
         newSet.delete(quoteId);
         return newSet;
       });
+      setPendingCreatedQuoteId((current) => (current === quoteId ? null : current));
 
       if (selectedQuoteId === quoteId) {
         navigateToProjects(selectedProjectId ? { projectId: selectedProjectId } : {}, { replace: true });
@@ -547,10 +574,18 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
       return;
     }
 
-    if (confirm(`Haluatko varmasti poistaa ${selectedQuotes.size} tarjousta?`)) {
-      selectedQuotes.forEach((id) => deleteQuoteWithRows(id));
+    const plan = buildQuotesCascadeDeletionPlan([...selectedQuotes], rows);
+
+    if (confirm(buildBulkQuoteCascadeDeleteConfirmMessage(plan))) {
+      deleteQuotesCascade(plan.quoteIds);
       setSelectedQuotes(new Set());
-      toast.success(`${selectedQuotes.size} tarjousta poistettu`);
+      setPendingCreatedQuoteId((current) => (current && plan.quoteIds.includes(current) ? null : current));
+
+      if (selectedQuoteId && plan.quoteIds.includes(selectedQuoteId)) {
+        navigateToProjects(selectedProjectId ? { projectId: selectedProjectId } : {}, { replace: true });
+      }
+
+      toast.success(`${plan.quoteCount} tarjousta poistettu`);
     }
   };
 
@@ -653,15 +688,18 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
       if ((key === 'delete' || key === 'backspace') && selectedQuotes.size > 0) {
         event.preventDefault();
 
-        if (confirm(`Haluatko varmasti poistaa ${selectedQuotes.size} tarjousta?`)) {
-          [...selectedQuotes].forEach((quoteId) => {
-            rows
-              .filter((row) => row.quoteId === quoteId)
-              .forEach((row) => deleteRow(row.id));
-            deleteQuote(quoteId);
-          });
+        const plan = buildQuotesCascadeDeletionPlan([...selectedQuotes], rows);
+
+        if (confirm(buildBulkQuoteCascadeDeleteConfirmMessage(plan))) {
+          deleteQuotesCascade(plan.quoteIds);
           setSelectedQuotes(new Set());
-          toast.success(`${selectedQuotes.size} tarjousta poistettu`);
+          setPendingCreatedQuoteId((current) => (current && plan.quoteIds.includes(current) ? null : current));
+
+          if (selectedQuoteId && plan.quoteIds.includes(selectedQuoteId)) {
+            navigateToProjects(selectedProjectId ? { projectId: selectedProjectId } : {}, { replace: true });
+          }
+
+          toast.success(`${plan.quoteCount} tarjousta poistettu`);
         }
       }
     };
@@ -670,7 +708,7 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [deleteQuote, deleteRow, rows, selectedProject, selectedQuotes, showQuoteEditor, toggleSelectAllVisibleQuotes]);
+  }, [deleteQuotesCascade, navigateToProjects, rows, selectedProject, selectedProjectId, selectedQuoteId, selectedQuotes, showQuoteEditor, toggleSelectAllVisibleQuotes]);
 
   return (
     <div className="p-4 sm:p-8 space-y-6">

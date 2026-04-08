@@ -64,7 +64,7 @@ Responsive breakpoint 768px, mukautuvat taulukot ja dialogit.
 
 ### 3. Cascade Delete ja Datan Eheys
 
-**Nykytila**: `use-data.ts` sisältää `deleteProject()`, `deleteQuote()` ja `deleteRowsForQuote()` -funktiot, mutta automaattinen ketjupoisto puuttuu — kutsujan vastuulla poistaa alidataa.
+**Nykytila**: `ProjectsPage.tsx` käyttää nyt yhteistä cascade-delete -suunnittelua (`src/lib/project-cascade-delete.ts`) projektien ja tarjousten poistossa, ja tarjousrivit poistetaan bulk-operaationa ennen ylätason tietoja. Varsinainen hook-tason `deleteProjectCascade()` / `deleteQuoteCascade()` API puuttuu silti vielä, joten muu kutsujakoodi ei saa ketjupoistoa automaattisesti.
 
 **Jäljellä**:
 - Lisää `deleteQuoteCascade(quoteId)` — poistaa tarjouksen JA kaikki sen rivit yhdellä kutsulla
