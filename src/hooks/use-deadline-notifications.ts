@@ -4,6 +4,18 @@ import { useQuotes, useProjects, useCustomers } from './use-data';
 import { Quote, ScheduleMilestone } from '../lib/types';
 import { toast } from 'sonner';
 
+interface DeadlineProjectLookup {
+  customerId: string;
+  name: string;
+}
+
+interface DeadlineCustomerLookup {
+  name: string;
+}
+
+type GetDeadlineProject = (projectId: string) => DeadlineProjectLookup | undefined;
+type GetDeadlineCustomer = (customerId: string) => DeadlineCustomerLookup | undefined;
+
 export interface DeadlineNotification {
   id: string;
   quoteId: string;
@@ -33,14 +45,150 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   lastCheck: undefined,
 };
 
-const calculateDaysUntil = (targetDate: string): number => {
-  const today = new Date();
+export const calculateDaysUntil = (targetDate: string, currentDate = new Date()): number => {
+  const today = new Date(currentDate);
   today.setHours(0, 0, 0, 0);
   const target = new Date(targetDate);
   target.setHours(0, 0, 0, 0);
   const diffTime = target.getTime() - today.getTime();
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
+
+function shouldSkipDeadlineQuote(quote: Quote) {
+  return quote.status === 'draft' || quote.status === 'rejected';
+}
+
+function buildDeadlineNotification(args: {
+  quote: Quote;
+  milestone: ScheduleMilestone;
+  project: DeadlineProjectLookup;
+  customerName: string;
+  daysUntil: number;
+  notifiedAt: string;
+  id: string;
+}): DeadlineNotification {
+  const { quote, milestone, project, customerName, daysUntil, notifiedAt, id } = args;
+
+  return {
+    id,
+    quoteId: quote.id,
+    projectId: quote.projectId,
+    milestoneId: milestone.id,
+    milestoneName: milestone.title || milestone.type,
+    targetDate: milestone.targetDate || '',
+    daysUntil,
+    projectName: project.name,
+    customerName,
+    notifiedAt,
+  };
+}
+
+export function collectNewDeadlineNotifications(args: {
+  quotes: Quote[];
+  getProject: GetDeadlineProject;
+  getCustomer: GetDeadlineCustomer;
+  notifiedDeadlines: DeadlineNotification[];
+  notifyDaysBefore: number[];
+  nowIso?: string;
+  currentDate?: Date;
+}) {
+  const {
+    quotes,
+    getProject,
+    getCustomer,
+    notifiedDeadlines,
+    notifyDaysBefore,
+    nowIso = new Date().toISOString(),
+    currentDate = new Date(),
+  } = args;
+
+  const newNotifications: DeadlineNotification[] = [];
+
+  quotes.forEach((quote) => {
+    if (shouldSkipDeadlineQuote(quote)) return;
+
+    const milestones = quote.scheduleMilestones || [];
+    const project = getProject(quote.projectId);
+    if (!project) return;
+
+    const customer = getCustomer(project.customerId);
+
+    milestones.forEach((milestone) => {
+      if (!milestone.targetDate) return;
+
+      const daysUntil = calculateDaysUntil(milestone.targetDate, currentDate);
+      if (daysUntil < 0) return;
+      if (!notifyDaysBefore.some((days) => daysUntil === days)) return;
+
+      const notificationId = `${quote.id}-${milestone.id}-${daysUntil}`;
+      const alreadyNotified = notifiedDeadlines.some((notification) => notification.id === notificationId);
+      if (alreadyNotified) return;
+
+      newNotifications.push(
+        buildDeadlineNotification({
+          quote,
+          milestone,
+          project,
+          customerName: customer?.name || 'Ei asiakasta',
+          daysUntil,
+          notifiedAt: nowIso,
+          id: notificationId,
+        })
+      );
+    });
+  });
+
+  return newNotifications;
+}
+
+export function collectUpcomingDeadlines(args: {
+  quotes: Quote[];
+  getProject: GetDeadlineProject;
+  getCustomer: GetDeadlineCustomer;
+  currentDate?: Date;
+  maxDaysUntil?: number;
+}) {
+  const {
+    quotes,
+    getProject,
+    getCustomer,
+    currentDate = new Date(),
+    maxDaysUntil = 30,
+  } = args;
+
+  const upcoming: DeadlineNotification[] = [];
+
+  quotes.forEach((quote) => {
+    if (shouldSkipDeadlineQuote(quote)) return;
+
+    const milestones = quote.scheduleMilestones || [];
+    const project = getProject(quote.projectId);
+    if (!project) return;
+
+    const customer = getCustomer(project.customerId);
+
+    milestones.forEach((milestone) => {
+      if (!milestone.targetDate) return;
+
+      const daysUntil = calculateDaysUntil(milestone.targetDate, currentDate);
+      if (daysUntil < 0 || daysUntil > maxDaysUntil) return;
+
+      upcoming.push(
+        buildDeadlineNotification({
+          quote,
+          milestone,
+          project,
+          customerName: customer?.name || 'Ei asiakasta',
+          daysUntil,
+          notifiedAt: '',
+          id: `${quote.id}-${milestone.id}`,
+        })
+      );
+    });
+  });
+
+  return upcoming.sort((left, right) => left.daysUntil - right.daysUntil);
+}
 
 export function useDeadlineNotifications() {
   const [settings, setSettings] = useKV<NotificationSettings>('deadline-notification-settings', DEFAULT_SETTINGS);
@@ -62,49 +210,14 @@ export function useDeadlineNotifications() {
     if (!enabled) return;
 
     const now = new Date().toISOString();
-    const newNotifications: DeadlineNotification[] = [];
     const currentNotifications = notifiedDeadlinesRef.current || [];
-    
-    quotes.forEach((quote: Quote) => {
-      if (quote.status === 'draft' || quote.status === 'rejected') return;
-      
-      const milestones = quote.scheduleMilestones || [];
-      const project = getProject(quote.projectId);
-      if (!project) return;
-      
-      const customer = getCustomer(project.customerId);
-      
-      milestones.forEach((milestone: ScheduleMilestone) => {
-        if (!milestone.targetDate) return;
-        
-        const daysUntil = calculateDaysUntil(milestone.targetDate);
-        
-        if (daysUntil < 0) return;
-        
-        const shouldNotify = notifyDaysBefore.some(days => daysUntil === days);
-        
-        if (shouldNotify) {
-          const notificationId = `${quote.id}-${milestone.id}-${daysUntil}`;
-          const alreadyNotified = currentNotifications.some(n => n.id === notificationId);
-          
-          if (!alreadyNotified) {
-            const notification: DeadlineNotification = {
-              id: notificationId,
-              quoteId: quote.id,
-              projectId: quote.projectId,
-              milestoneId: milestone.id,
-              milestoneName: milestone.title || milestone.type,
-              targetDate: milestone.targetDate,
-              daysUntil,
-              projectName: project.name,
-              customerName: customer?.name || 'Ei asiakasta',
-              notifiedAt: now,
-            };
-            
-            newNotifications.push(notification);
-          }
-        }
-      });
+    const newNotifications = collectNewDeadlineNotifications({
+      quotes,
+      getProject,
+      getCustomer,
+      notifiedDeadlines: currentNotifications,
+      notifyDaysBefore,
+      nowIso: now,
     });
 
     if (newNotifications.length > 0) {
@@ -133,41 +246,13 @@ export function useDeadlineNotifications() {
   }, [enabled, getCustomer, getProject, notifiedDeadlinesRef, notifyDaysBefore, quotes, setNotifiedDeadlines, setSettings]);
 
   const getAllUpcomingDeadlines = useCallback(() => {
-    const upcoming: DeadlineNotification[] = [];
-    
-    quotes.forEach((quote: Quote) => {
-      if (quote.status === 'draft' || quote.status === 'rejected') return;
-      
-      const milestones = quote.scheduleMilestones || [];
-      const project = getProject(quote.projectId);
-      if (!project) return;
-      
-      const customer = getCustomer(project.customerId);
-      
-      milestones.forEach((milestone: ScheduleMilestone) => {
-        if (!milestone.targetDate) return;
-        
-        const daysUntil = calculateDaysUntil(milestone.targetDate);
-        
-        if (daysUntil >= 0 && daysUntil <= 30) {
-          upcoming.push({
-            id: `${quote.id}-${milestone.id}`,
-            quoteId: quote.id,
-            projectId: quote.projectId,
-            milestoneId: milestone.id,
-            milestoneName: milestone.title || milestone.type,
-            targetDate: milestone.targetDate,
-            daysUntil,
-            projectName: project.name,
-            customerName: customer?.name || 'Ei asiakasta',
-            notifiedAt: '',
-          });
-        }
-      });
-    });
-
-    upcoming.sort((a, b) => a.daysUntil - b.daysUntil);
-    setUpcomingDeadlines(upcoming);
+    setUpcomingDeadlines(
+      collectUpcomingDeadlines({
+        quotes,
+        getProject,
+        getCustomer,
+      })
+    );
   }, [getCustomer, getProject, quotes, setUpcomingDeadlines]);
 
   useEffect(() => {
