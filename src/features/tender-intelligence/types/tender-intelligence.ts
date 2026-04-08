@@ -165,6 +165,15 @@ export const tenderResultEvidenceTargetTypeSchema = z.enum([
   'review_task',
 ]);
 
+export const tenderUsageEventTypeSchema = z.enum([
+  'tender.package.created',
+  'tender.document.uploaded',
+  'tender.document.extraction.started',
+  'tender.analysis.started',
+  'tender.draft-package.imported',
+  'tender.draft-package.reimported',
+]);
+
 export const tenderResultEvidenceSchema = z.object({
   id: entityIdSchema,
   packageId: entityIdSchema,
@@ -196,6 +205,22 @@ export const tenderAnalysisReadinessSchema = z.object({
   canStart: z.boolean(),
   blockedReason: z.string().trim().nullable().optional(),
   coverage: tenderExtractionCoverageSchema,
+});
+
+export const tenderUsageSummaryEventSchema = z.object({
+  eventType: tenderUsageEventTypeSchema,
+  eventCount: z.number().int().min(0),
+  quantityTotal: z.number().int().min(0),
+  meteredUnitsTotal: z.number().int().min(0),
+});
+
+export const tenderUsageSummarySchema = z.object({
+  windowDays: z.number().int().min(1),
+  totalEvents: z.number().int().min(0),
+  totalQuantity: z.number().int().min(0),
+  totalMeteredUnits: z.number().int().min(0),
+  lastEventAt: timestampSchema.nullable(),
+  events: z.array(tenderUsageSummaryEventSchema),
 });
 
 const tenderWorkflowStateSchema = z.object({
@@ -638,6 +663,7 @@ export type TenderDocumentParseStatus = z.infer<typeof tenderDocumentParseStatus
 export type TenderDocumentExtractionStatus = z.infer<typeof tenderDocumentExtractionStatusSchema>;
 export type TenderDocumentExtractorType = z.infer<typeof tenderDocumentExtractorTypeSchema>;
 export type TenderResultEvidenceTargetType = z.infer<typeof tenderResultEvidenceTargetTypeSchema>;
+export type TenderUsageEventType = z.infer<typeof tenderUsageEventTypeSchema>;
 
 export type TenderPackageSummary = z.infer<typeof tenderPackageSummarySchema>;
 export type TenderPackage = z.infer<typeof tenderPackageSchema>;
@@ -647,6 +673,8 @@ export type TenderDocumentChunk = z.infer<typeof tenderDocumentChunkSchema>;
 export type TenderResultEvidence = z.infer<typeof tenderResultEvidenceSchema>;
 export type TenderExtractionCoverage = z.infer<typeof tenderExtractionCoverageSchema>;
 export type TenderAnalysisReadiness = z.infer<typeof tenderAnalysisReadinessSchema>;
+export type TenderUsageSummaryEvent = z.infer<typeof tenderUsageSummaryEventSchema>;
+export type TenderUsageSummary = z.infer<typeof tenderUsageSummarySchema>;
 export type TenderAnalysisJob = z.infer<typeof tenderAnalysisJobSchema>;
 export type TenderRequirement = z.infer<typeof tenderRequirementSchema>;
 export type TenderMissingItem = z.infer<typeof tenderMissingItemSchema>;

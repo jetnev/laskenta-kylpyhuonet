@@ -105,6 +105,31 @@ export const tenderResultEvidenceRowSchema = z.object({
   updated_at: z.string(),
 });
 
+export const tenderUsageEventRowSchema = z.object({
+  id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  actor_user_id: z.string().uuid().nullable(),
+  tender_package_id: z.string().uuid().nullable(),
+  tender_document_id: z.string().uuid().nullable(),
+  tender_analysis_job_id: z.string().uuid().nullable(),
+  tender_draft_package_id: z.string().uuid().nullable(),
+  event_type: z.enum([
+    'tender.package.created',
+    'tender.document.uploaded',
+    'tender.document.extraction.started',
+    'tender.analysis.started',
+    'tender.draft-package.imported',
+    'tender.draft-package.reimported',
+  ]),
+  event_status: z.enum(['success', 'failed']),
+  quantity: z.number().int().min(1),
+  metered_units: z.number().int().min(1),
+  metadata: z.unknown(),
+  occurred_at: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
 const tenderReviewStatusRowSchema = z.enum(['unreviewed', 'accepted', 'dismissed', 'needs_attention']);
 const tenderResolutionStatusRowSchema = z.enum(['open', 'in_progress', 'resolved', 'wont_fix']);
 const tenderReferenceProfileSourceKindRowSchema = z.enum(['manual', 'imported', 'other']);
@@ -433,6 +458,7 @@ export const tenderGoNoGoAssessmentRowsSchema = z.array(tenderGoNoGoAssessmentRo
 export const tenderDocumentExtractionRowsSchema = z.array(tenderDocumentExtractionRowSchema);
 export const tenderDocumentChunkRowsSchema = z.array(tenderDocumentChunkRowSchema);
 export const tenderResultEvidenceRowsSchema = z.array(tenderResultEvidenceRowSchema);
+export const tenderUsageEventRowsSchema = z.array(tenderUsageEventRowSchema);
 export const tenderRequirementRowsSchema = z.array(tenderRequirementRowSchema);
 export const tenderMissingItemRowsSchema = z.array(tenderMissingItemRowSchema);
 export const tenderRiskFlagRowsSchema = z.array(tenderRiskFlagRowSchema);
@@ -457,6 +483,7 @@ export type TenderAnalysisJobRow = z.infer<typeof tenderAnalysisJobRowSchema>;
 export type TenderDocumentExtractionRow = z.infer<typeof tenderDocumentExtractionRowSchema>;
 export type TenderDocumentChunkRow = z.infer<typeof tenderDocumentChunkRowSchema>;
 export type TenderResultEvidenceRow = z.infer<typeof tenderResultEvidenceRowSchema>;
+export type TenderUsageEventRow = z.infer<typeof tenderUsageEventRowSchema>;
 export type TenderGoNoGoAssessmentRow = z.infer<typeof tenderGoNoGoAssessmentRowSchema>;
 export type TenderRequirementRow = z.infer<typeof tenderRequirementRowSchema>;
 export type TenderMissingItemRow = z.infer<typeof tenderMissingItemRowSchema>;

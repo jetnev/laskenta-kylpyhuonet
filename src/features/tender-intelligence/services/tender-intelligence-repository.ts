@@ -25,6 +25,7 @@ import { buildTenderDraftPackageImportDiagnostics } from '../lib/tender-import-d
 import { buildTenderImportOwnedBlockDriftStates } from '../lib/tender-import-drift';
 import { buildTenderDraftPackageImportFailureRecovery } from '../lib/tender-import-failure-recovery';
 import { deriveTenderPackageLifecycleStatus } from '../lib/tender-package-lifecycle';
+import { buildTenderUsageSummary } from '../lib/tender-usage-summary';
 import {
   buildTenderImportRegistryDiagnosticsRefreshExecutionMetadata,
   buildTenderImportRegistryDiagnosticsRefreshRecords,
@@ -51,6 +52,7 @@ import {
   type TenderPackageDetails,
   type TenderResultEvidence,
   type TenderResultEvidenceTargetType,
+  type TenderUsageSummary,
   type UpsertTenderProviderConstraintInput,
   type UpsertTenderProviderContactInput,
   type UpsertTenderProviderCredentialInput,
@@ -191,6 +193,7 @@ import {
   tenderReviewTaskRowsSchema,
   tenderRiskFlagRowSchema,
   tenderRiskFlagRowsSchema,
+  tenderUsageEventRowsSchema,
 } from '../types/tender-intelligence-db';
 
 type Listener = () => void;
@@ -687,6 +690,77 @@ async function getAuthenticatedActorUserId() {
   }
 
   return actorUserId;
+}
+
+const TENDER_USAGE_EVENT_TYPES = [
+  'tender.package.created',
+  'tender.document.uploaded',
+  'tender.document.extraction.started',
+  'tender.analysis.started',
+  'tender.draft-package.imported',
+  'tender.draft-package.reimported',
+] as const;
+
+type TenderUsageEventType = (typeof TENDER_USAGE_EVENT_TYPES)[number];
+
+interface RecordTenderUsageEventInput {
+  organizationId: string;
+  actorUserId: string | null;
+  eventType: TenderUsageEventType;
+  tenderPackageId?: string | null;
+  tenderDocumentId?: string | null;
+  tenderAnalysisJobId?: string | null;
+  tenderDraftPackageId?: string | null;
+  quantity?: number;
+  meteredUnits?: number;
+  metadata?: Record<string, unknown>;
+}
+
+function sanitizeTenderUsageEventMetadata(metadata?: Record<string, unknown>) {
+  if (!metadata) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(metadata).filter(([, value]) => value !== undefined),
+  );
+}
+
+async function recordTenderUsageEvent(input: RecordTenderUsageEventInput) {
+  try {
+    const client = requireConfiguredSupabase();
+
+    if (!(TENDER_USAGE_EVENT_TYPES as readonly string[]).includes(input.eventType)) {
+      throw new Error(`Unsupported tender usage event type: ${input.eventType}`);
+    }
+
+    const quantity = Math.max(1, Math.floor(input.quantity ?? 1));
+    const meteredUnits = Math.max(1, Math.floor(input.meteredUnits ?? quantity));
+    const metadata = sanitizeTenderUsageEventMetadata(input.metadata);
+
+    const { error } = await client
+      .from('tender_usage_events')
+      .insert({
+        organization_id: input.organizationId,
+        actor_user_id: input.actorUserId,
+        tender_package_id: input.tenderPackageId ?? null,
+        tender_document_id: input.tenderDocumentId ?? null,
+        tender_analysis_job_id: input.tenderAnalysisJobId ?? null,
+        tender_draft_package_id: input.tenderDraftPackageId ?? null,
+        event_type: input.eventType,
+        event_status: 'success',
+        quantity,
+        metered_units: meteredUnits,
+        metadata,
+        occurred_at: new Date().toISOString(),
+      });
+
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    console.warn('Tender usage event logging failed.', error);
+  }
 }
 
 function mapTenderWorkflowUpdateToRowPatch(update: ReturnType<typeof buildTenderWorkflowMetadataUpdate>) {
@@ -1984,6 +2058,13 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         throw new Error('Luotua tarjouspyyntöpakettia ei voitu hakea takaisin tietokannasta.');
       }
 
+      await recordTenderUsageEvent({
+        organizationId: packageRow.organization_id,
+        actorUserId: packageRow.created_by_user_id,
+        eventType: 'tender.package.created',
+        tenderPackageId: packageRow.id,
+      });
+
       this.emit();
       return createdPackage;
     } catch (error) {
@@ -2323,6 +2404,29 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       return tenderReferenceProfileRowsSchema.parse(data ?? []).map(mapTenderReferenceProfileRowToDomain);
     } catch (error) {
       throw toRepositoryError(error, 'Organisaation referenssikorpusta ei voitu ladata.');
+    }
+  }
+
+  async getTenderUsageSummary(windowDays = 30): Promise<TenderUsageSummary> {
+    try {
+      const client = requireConfiguredSupabase();
+      const safeWindowDays = Math.max(1, Math.min(365, Math.floor(windowDays)));
+      const windowStartIso = new Date(Date.now() - safeWindowDays * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await client
+        .from('tender_usage_events')
+        .select('*')
+        .gte('occurred_at', windowStartIso)
+        .order('occurred_at', { ascending: false })
+        .limit(5000);
+
+      if (error) {
+        throw error;
+      }
+
+      const rows = tenderUsageEventRowsSchema.parse(data ?? []);
+      return buildTenderUsageSummary(rows, safeWindowDays);
+    } catch (error) {
+      throw toRepositoryError(error, 'Tarjousälyn käyttöyhteenvetoa ei voitu ladata.');
     }
   }
 
@@ -2995,6 +3099,22 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         },
       });
 
+      await recordTenderUsageEvent({
+        organizationId: context.draftPackage.organizationId,
+        actorUserId: context.actorUserId,
+        eventType: runType === 'reimport' ? 'tender.draft-package.reimported' : 'tender.draft-package.imported',
+        tenderPackageId: context.packageDetails.package.id,
+        tenderDraftPackageId: context.draftPackage.id,
+        quantity: 1,
+        meteredUnits: Math.max(1, completedAdapterResult.execution_metadata.summary_counts.updated_blocks),
+        metadata: {
+          importMode: completedAdapterResult.import_mode,
+          importedQuoteId: completedAdapterResult.imported_quote_id,
+          updatedBlocks: completedAdapterResult.execution_metadata.summary_counts.updated_blocks,
+          removedBlocks: completedAdapterResult.execution_metadata.summary_counts.removed_blocks,
+        },
+      });
+
       this.emit();
       return {
         ...completedAdapterResult,
@@ -3627,6 +3747,20 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         throw new Error('Analyysijobia ei löytynyt käynnistyksen jälkeen.');
       }
 
+      const actorUserId = await getAuthenticatedActorUserId();
+      const packageRow = await assertTenderPackageAccess(packageId);
+      await recordTenderUsageEvent({
+        organizationId: packageRow.organization_id,
+        actorUserId,
+        eventType: 'tender.analysis.started',
+        tenderPackageId: packageId,
+        tenderAnalysisJobId: completedJob.id,
+        metadata: {
+          jobType: completedJob.jobType,
+          status: completedJob.status,
+        },
+      });
+
       return completedJob;
     } catch (error) {
       const message = getTenderIntelligenceEnvironmentIssueMessage(error, { operation: 'analysis-runner' })
@@ -3782,6 +3916,21 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
         throw uploadedUpdateError;
       }
 
+      const actorUserId = await getAuthenticatedActorUserId();
+      await recordTenderUsageEvent({
+        organizationId: packageRow.organization_id,
+        actorUserId,
+        eventType: 'tender.document.uploaded',
+        tenderPackageId: packageId,
+        tenderDocumentId: documentId,
+        quantity: 1,
+        meteredUnits: Math.max(1, Math.ceil(validatedFile.fileSizeBytes / 1024)),
+        metadata: {
+          mimeType: validatedFile.canonicalMimeType,
+          fileSizeBytes: validatedFile.fileSizeBytes,
+        },
+      });
+
       this.emit();
       return mapTenderDocumentRowToDomain(tenderDocumentRowSchema.parse(uploadedData ?? insertedRow));
     } catch (error) {
@@ -3840,6 +3989,20 @@ class SupabaseTenderIntelligenceRepository implements TenderIntelligenceReposito
       if (!extraction) {
         throw new Error('Dokumentin extraction-riviä ei löytynyt ajon jälkeen.');
       }
+
+      const actorUserId = await getAuthenticatedActorUserId();
+      await recordTenderUsageEvent({
+        organizationId: documentRow.organization_id,
+        actorUserId,
+        eventType: 'tender.document.extraction.started',
+        tenderPackageId: packageId,
+        tenderDocumentId: documentId,
+        metadata: {
+          extractionId: extraction.id,
+          extractionStatus: extraction.extractionStatus,
+          extractorType: extraction.extractorType,
+        },
+      });
 
       return extraction;
     } catch (error) {

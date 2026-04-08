@@ -3,6 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 
 import { getTenderPackageLiveStatusPollingIntervalMs } from '../lib/tender-live-status';
+import {
+  assertTenderUsageWithinLimit,
+  estimateTenderUsageUnitsForFiles,
+  getTenderUsageLimitState,
+} from '../lib/tender-usage-limits';
 import { getTenderIntelligenceRepository } from '../services/tender-intelligence-repository';
 import type {
   TenderDraftPackageImportDiagnostics,
@@ -27,6 +32,7 @@ import type {
   TenderDraftArtifact,
   TenderPackage,
   TenderPackageDetails,
+  TenderUsageSummary,
   TenderReferenceProfile,
   UpsertTenderProviderConstraintInput,
   UpsertTenderProviderContactInput,
@@ -72,6 +78,7 @@ export function useTenderIntelligence() {
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [selectedDraftPackageId, setSelectedDraftPackageId] = useState<string | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<TenderPackageDetails | null>(null);
+  const [usageSummary, setUsageSummary] = useState<TenderUsageSummary | null>(null);
   const [editorImportPreview, setEditorImportPreview] = useState<TenderEditorImportPreview | null>(null);
   const [editorImportValidation, setEditorImportValidation] = useState<TenderEditorImportValidationResult | null>(null);
   const [draftPackageImportState, setDraftPackageImportState] = useState<TenderDraftPackageImportState | null>(null);
@@ -118,6 +125,7 @@ export function useTenderIntelligence() {
 
     return Object.fromEntries(entries);
   }, [user, users]);
+  const usageLimitState = useMemo(() => getTenderUsageLimitState(usageSummary), [usageSummary]);
 
   const loadPackages = useCallback(async () => {
     const nextPackages = await repository.listTenderPackages();
@@ -137,6 +145,17 @@ export function useTenderIntelligence() {
     setReferenceProfiles(nextReferenceProfiles);
     return nextReferenceProfiles;
   }, [repository]);
+
+  const loadUsageSummary = useCallback(async () => {
+    if (!hasOrganizationContext) {
+      setUsageSummary(null);
+      return null;
+    }
+
+    const nextUsageSummary = await repository.getTenderUsageSummary(30);
+    setUsageSummary(nextUsageSummary);
+    return nextUsageSummary;
+  }, [hasOrganizationContext, repository]);
 
   const loadDraftPackages = useCallback(async (packageId: string | null) => {
     if (!hasOrganizationContext || !packageId) {
@@ -269,6 +288,7 @@ export function useTenderIntelligence() {
       setSelectedPackage(null);
       setSelectedPackageId(null);
       setSelectedDraftPackageId(null);
+      setUsageSummary(null);
       setSelectedPackageMissing(false);
       setError('Tarjousäly vaatii organisaatioon liitetyn käyttäjätilin.');
       setLoading(false);
@@ -283,7 +303,7 @@ export function useTenderIntelligence() {
           setLoading(true);
         }
 
-        const [nextPackages] = await Promise.all([loadPackages(), loadReferenceProfiles()]);
+        const [nextPackages] = await Promise.all([loadPackages(), loadReferenceProfiles(), loadUsageSummary()]);
 
         if (active) {
           const nextSelectedPackageId = selectedPackageId && nextPackages.some((item) => item.id === selectedPackageId)
@@ -316,7 +336,7 @@ export function useTenderIntelligence() {
       active = false;
       unsubscribe();
     };
-  }, [hasOrganizationContext, loadDraftPackages, loadPackages, loadReferenceProfiles, loadSelectedPackage, repository, selectedPackageId]);
+  }, [hasOrganizationContext, loadDraftPackages, loadPackages, loadReferenceProfiles, loadSelectedPackage, loadUsageSummary, repository, selectedPackageId]);
 
   useEffect(() => {
     let active = true;
@@ -485,6 +505,12 @@ export function useTenderIntelligence() {
         return { uploaded: [], failed: [] };
       }
 
+      assertTenderUsageWithinLimit({
+        summary: usageSummary,
+        projectedAdditionalUnits: estimateTenderUsageUnitsForFiles(nextFiles),
+        actionLabel: 'Dokumenttien lataus',
+      });
+
       setUploading(true);
 
       try {
@@ -519,7 +545,7 @@ export function useTenderIntelligence() {
         setUploading(false);
       }
     },
-    [hasOrganizationContext, loadPackages, loadSelectedPackage, repository]
+    [hasOrganizationContext, loadPackages, loadSelectedPackage, repository, usageSummary]
   );
 
   const deleteDocument = useCallback(
@@ -550,6 +576,12 @@ export function useTenderIntelligence() {
         throw new Error(message);
       }
 
+      assertTenderUsageWithinLimit({
+        summary: usageSummary,
+        projectedAdditionalUnits: 20,
+        actionLabel: 'Analyysin käynnistys',
+      });
+
       setStartingAnalysisPackageId(packageId);
 
       try {
@@ -566,7 +598,7 @@ export function useTenderIntelligence() {
         setStartingAnalysisPackageId((current) => (current === packageId ? null : current));
       }
     },
-    [hasOrganizationContext, loadPackages, loadSelectedPackage, repository]
+    [hasOrganizationContext, loadPackages, loadSelectedPackage, repository, usageSummary]
   );
 
   const startDocumentExtraction = useCallback(
@@ -576,6 +608,12 @@ export function useTenderIntelligence() {
         setError(message);
         throw new Error(message);
       }
+
+      assertTenderUsageWithinLimit({
+        summary: usageSummary,
+        projectedAdditionalUnits: 1,
+        actionLabel: 'Dokumentin extraction-käynnistys',
+      });
 
       setExtractingDocumentIds((current) => (current.includes(documentId) ? current : [...current, documentId]));
 
@@ -592,7 +630,7 @@ export function useTenderIntelligence() {
         setExtractingDocumentIds((current) => current.filter((item) => item !== documentId));
       }
     },
-    [hasOrganizationContext, loadSelectedPackage, repository]
+    [hasOrganizationContext, loadSelectedPackage, repository, usageSummary]
   );
 
   const startPackageExtraction = useCallback(
@@ -1057,6 +1095,12 @@ export function useTenderIntelligence() {
 
   const importDraftPackageToEditor = useCallback(
     async (draftPackageId: string): Promise<TenderEditorImportResult> => {
+      assertTenderUsageWithinLimit({
+        summary: usageSummary,
+        projectedAdditionalUnits: 10,
+        actionLabel: 'Luonnospaketin tuonti editoriin',
+      });
+
       setImportingDraftPackageId(draftPackageId);
 
       try {
@@ -1077,7 +1121,7 @@ export function useTenderIntelligence() {
         setImportingDraftPackageId((current) => (current === draftPackageId ? null : current));
       }
     },
-    [loadDraftPackages, loadSelectedPackage, repository, selectedPackage, selectedPackageId],
+    [loadDraftPackages, loadSelectedPackage, repository, selectedPackage, selectedPackageId, usageSummary],
   );
 
   const reimportDraftPackageToEditor = useCallback(
@@ -1085,6 +1129,12 @@ export function useTenderIntelligence() {
       draftPackageId: string,
       selection?: TenderEditorSelectiveReimportSelection,
     ): Promise<TenderEditorImportResult> => {
+      assertTenderUsageWithinLimit({
+        summary: usageSummary,
+        projectedAdditionalUnits: 10,
+        actionLabel: 'Luonnospaketin uudelleentuonti editoriin',
+      });
+
       setImportingDraftPackageId(draftPackageId);
 
       try {
@@ -1105,7 +1155,7 @@ export function useTenderIntelligence() {
         setImportingDraftPackageId((current) => (current === draftPackageId ? null : current));
       }
     },
-    [loadDraftPackages, loadSelectedPackage, repository, selectedPackage, selectedPackageId],
+    [loadDraftPackages, loadSelectedPackage, repository, selectedPackage, selectedPackageId, usageSummary],
   );
 
   const refreshDraftPackageImportRegistryRepairPreview = useCallback(
@@ -1168,8 +1218,9 @@ export function useTenderIntelligence() {
       openReviewTasks: packages.reduce((sum, item) => sum + item.summary.reviewTaskCount, 0),
       openRisks: packages.reduce((sum, item) => sum + item.summary.riskCount, 0),
       documents: packages.reduce((sum, item) => sum + item.summary.documentCount, 0),
+      usageMeteredUnits30d: usageSummary?.totalMeteredUnits ?? 0,
     }),
-    [packages, referenceProfiles]
+    [packages, referenceProfiles, usageSummary]
   );
 
   return {
@@ -1212,6 +1263,8 @@ export function useTenderIntelligence() {
     recomputingReferenceSuggestionPackageId,
     error,
     overview,
+    usageSummary,
+    usageLimitState,
     canCreate: hasOrganizationContext,
     actorNameById,
     currentUserId: user?.id ?? null,

@@ -25,6 +25,7 @@ import {
   resolveTenderIntelligenceHandoffLabel,
   type TenderIntelligenceResolvedHandoff,
 } from '../lib/tender-intelligence-handoff';
+import type { TenderUsageEventType } from '../types/tender-intelligence';
 
 const SUMMARY_CARDS = [
   {
@@ -52,7 +53,21 @@ const SUMMARY_CARDS = [
     label: 'Dokumentit',
     description: 'Paketteihin liitetyt tiedostot',
   },
+  {
+    key: 'usageMeteredUnits30d',
+    label: 'Käyttöyksiköt 30 pv',
+    description: 'Mittaroitu käyttö hinnoittelua ja seurantaa varten',
+  },
 ] as const;
+
+const TENDER_USAGE_EVENT_LABELS: Record<TenderUsageEventType, string> = {
+  'tender.package.created': 'Paketin luonti',
+  'tender.document.uploaded': 'Dokumentin lataus',
+  'tender.document.extraction.started': 'Extraction-käynnistys',
+  'tender.analysis.started': 'Analyysin käynnistys',
+  'tender.draft-package.imported': 'Luonnospaketin tuonti',
+  'tender.draft-package.reimported': 'Luonnospaketin uudelleentuonti',
+};
 
 function resolveTenderIntelligenceErrorState(error: string | null) {
   if (!error) {
@@ -129,6 +144,8 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
     repairingDraftPackageRegistryAction,
     error,
     overview,
+    usageSummary,
+    usageLimitState,
     canCreate,
     selectPackage,
     selectDraftPackage,
@@ -290,6 +307,34 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
     () => (errorState?.tone === 'warning' && errorState.issueType ? buildTenderIntelligenceReadinessSteps(errorState.issueType) : []),
     [errorState],
   );
+  const usageBreakdownRows = useMemo(() => {
+    if (!usageSummary || usageSummary.events.length < 1) {
+      return [];
+    }
+
+    const highestUnits = usageSummary.events.reduce(
+      (max, event) => Math.max(max, event.meteredUnitsTotal),
+      1,
+    );
+
+    return usageSummary.events.map((event) => ({
+      eventType: event.eventType,
+      label: TENDER_USAGE_EVENT_LABELS[event.eventType] ?? event.eventType,
+      eventCount: event.eventCount,
+      meteredUnitsTotal: event.meteredUnitsTotal,
+      sharePercent: Math.max(6, Math.round((event.meteredUnitsTotal / highestUnits) * 100)),
+    }));
+  }, [usageSummary]);
+  const usageLastEventLabel = useMemo(() => {
+    if (!usageSummary?.lastEventAt) {
+      return null;
+    }
+
+    return new Intl.DateTimeFormat('fi-FI', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(new Date(usageSummary.lastEventAt));
+  }, [usageSummary?.lastEventAt]);
 
   const resolveReadinessBadgeVariant = (state: 'ready' | 'check' | 'blocked') => {
     if (state === 'blocked') {
@@ -351,6 +396,39 @@ export default function TenderIntelligencePage({ routeState, onNavigate }: Tende
               </div>
             ))}
           </div>
+
+          {usageSummary && (
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">Käyttöerittely 30 pv</p>
+                {usageLastEventLabel && (
+                  <p className="text-xs text-slate-300">Viimeisin tapahtuma {usageLastEventLabel}</p>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-slate-300">
+                Paketti {usageLimitState.tier}: käytetty {usageLimitState.usedMeteredUnits30d} / {usageLimitState.limits.maxMeteredUnits30d} yks. ({usageLimitState.usagePercent30d} %), jäljellä {usageLimitState.remainingMeteredUnits30d} yks.
+              </p>
+
+              {usageBreakdownRows.length > 0 ? (
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {usageBreakdownRows.map((event) => (
+                    <div key={event.eventType} className="space-y-1 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <span className="text-slate-100">{event.label}</span>
+                        <span className="text-slate-300">{event.meteredUnitsTotal} yks.</span>
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                        <div className="h-full rounded-full bg-sky-300/90" style={{ width: `${event.sharePercent}%` }} />
+                      </div>
+                      <p className="text-xs text-slate-300">{event.eventCount} tapahtumaa</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-slate-300">Käyttötapahtumia ei ole vielä kertynyt viimeisen 30 päivän aikana.</p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

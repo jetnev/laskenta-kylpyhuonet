@@ -16,6 +16,7 @@ import type {
   TenderPackage,
   TenderPackageDetails,
   TenderPackageResults,
+  TenderUsageSummary,
   TenderProviderProfileDetails,
   TenderReferenceProfile,
   TenderResultEvidence,
@@ -89,6 +90,7 @@ export interface TenderIntelligenceBackendAdapter {
   ): Promise<TenderAnalysisJob>;
   listAnalysisJobsForPackage(packageId: string): Promise<TenderAnalysisJob[]>;
   getLatestAnalysisJobForPackage(packageId: string): Promise<TenderAnalysisJob | null>;
+  getTenderUsageSummary(windowDays?: number): Promise<TenderUsageSummary>;
   listRequirementsForPackage(packageId: string): Promise<TenderRequirement[]>;
   listMissingItemsForPackage(packageId: string): Promise<TenderMissingItem[]>;
   listRiskFlagsForPackage(packageId: string): Promise<TenderRiskFlag[]>;
