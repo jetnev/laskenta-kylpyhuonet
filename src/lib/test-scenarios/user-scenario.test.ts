@@ -24,7 +24,6 @@ import {
   customerById,
   customerHome,
   customerHousingCo,
-  installGroupTiling,
   projectById,
   projectEspoo,
   projectHelsinki,
@@ -37,7 +36,6 @@ import {
   quoteDraft1Rows,
   quoteDraft2,
   quoteDraft2Rows,
-  quoteDraft3,
   quoteDraft3Rows,
   quoteDraft4,
   quoteDraft4Rows,
@@ -48,8 +46,6 @@ import {
   quoteRowsMap,
   quoteSent1,
   quoteSent1Rows,
-  quoteSent2,
-  quoteSent2Rows,
   testSettings,
 } from './user-scenario-fixtures';
 
@@ -160,9 +156,6 @@ describe('Aluekertoimen vaikutus', () => {
 
   it('Espoo-tarjouksen kustannukset ovat suuremmat kuin vastaavan Helsinki-tarjouksen', () => {
     // quoteDraft3 is the Espoo quote with same product types as quoteDraft1
-    const helsinkiCalc = calculateQuote(quoteDraft1, quoteDraft1Rows);
-    const espooCalc = calculateQuote(quoteDraft3, quoteDraft3Rows);
-
     // Both have tiling rows; Espoo rows have regionMultiplier 1.1
     // totalCost / qty should reflect the difference
     const helsinkiTilingRow = quoteDraft1Rows.find(r => r.id === 'row-001-2')!;
@@ -219,8 +212,6 @@ describe('Alennus-logiikka', () => {
 // ─────────────────────────────────────────────
 
 describe('ALV-johdonmukaisuus', () => {
-  const vatPercent = 25.5;
-
   it('vat ≈ subtotal × vatPercent/100 jokaisessa tarjouksessa', () => {
     for (const quote of allQuotes) {
       const rows = quoteRowsMap[quote.id] ?? [];
@@ -414,16 +405,6 @@ describe('Laskun luominen', () => {
 
 describe('Laskun luominen: vain section-rivejä', () => {
   it('heittää virheen kun kaikki rivit ovat section-modessa', () => {
-    const sectionsOnly = quoteAccepted1Rows
-      .filter(r => r.mode === 'section')
-      .concat([
-        {
-          ...quoteAccepted1Rows[0],
-          id: 'dummy-section',
-          mode: 'section' as const,
-        },
-      ]);
-
     // Make sure our test data has at least one section row
     expect(
       quoteAccepted1Rows.some(r => r.mode !== 'section')
