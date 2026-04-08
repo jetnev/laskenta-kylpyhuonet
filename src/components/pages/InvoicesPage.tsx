@@ -112,6 +112,13 @@ interface InvoicesPageProps {
   onNavigate?: (location: AppLocationState, options?: { replace?: boolean }) => void;
 }
 
+type BrokenEligibleQuoteIssue = {
+  quoteId: string;
+  quoteTitle: string;
+  missingProject: boolean;
+  missingCustomer: boolean;
+};
+
 export default function InvoicesPage({ routeState, onNavigate }: InvoicesPageProps) {
   const { quotes } = useQuotes();
   const { getRowsForQuote } = useQuoteRows();
@@ -123,35 +130,65 @@ export default function InvoicesPage({ routeState, onNavigate }: InvoicesPagePro
   const invoicesSectionRef = useRef<HTMLDivElement | null>(null);
   const selectedInvoiceId = routeState?.page === 'invoices' ? routeState.invoiceId ?? null : null;
 
-  const eligibleQuotes = useMemo(
-    () =>
-      quotes
-        .filter((quote) => quote.status === 'accepted')
-        .map((quote) => {
-          const project = getProject(quote.projectId);
-          const customer = project ? getCustomer(project.customerId) : undefined;
-          const rows = getRowsForQuote(quote.id);
+  const { eligibleQuotes, brokenEligibleQuoteIssues } = useMemo(() => {
+    const nextEligibleQuotes: Array<{
+      quote: typeof quotes[number];
+      project: NonNullable<ReturnType<typeof getProject>>;
+      customer: NonNullable<ReturnType<typeof getCustomer>>;
+      rows: ReturnType<typeof getRowsForQuote>;
+      billableRowCount: number;
+      calculation: ReturnType<typeof calculateQuote>;
+    }> = [];
+    const nextBrokenIssues: BrokenEligibleQuoteIssue[] = [];
 
-          if (!project || !customer || rows.filter((row) => row.mode !== 'section').length === 0) {
-            return null;
-          }
-          if (invoices.some((invoice) => invoice.sourceQuoteId === quote.id && invoice.status !== 'cancelled')) {
-            return null;
-          }
+    quotes
+      .filter((quote) => quote.status === 'accepted')
+      .forEach((quote) => {
+        const project = getProject(quote.projectId);
+        const customer = project ? getCustomer(project.customerId) : undefined;
+        const rows = getRowsForQuote(quote.id);
+        const billableRowCount = rows.filter((row) => row.mode !== 'section').length;
 
-          return {
-            quote,
-            project,
-            customer,
-            rows,
-            billableRowCount: rows.filter((row) => row.mode !== 'section').length,
-            calculation: calculateQuote(quote, rows),
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => Boolean(item))
-        .sort((left, right) => new Date(right.quote.acceptedAt || right.quote.updatedAt).getTime() - new Date(left.quote.acceptedAt || left.quote.updatedAt).getTime()),
-    [getCustomer, getProject, getRowsForQuote, invoices, quotes]
-  );
+        if (billableRowCount === 0) {
+          return;
+        }
+
+        if (invoices.some((invoice) => invoice.sourceQuoteId === quote.id && invoice.status !== 'cancelled')) {
+          return;
+        }
+
+        if (!project || !customer) {
+          nextBrokenIssues.push({
+            quoteId: quote.id,
+            quoteTitle: quote.title,
+            missingProject: !project,
+            missingCustomer: Boolean(project) && !customer,
+          });
+          return;
+        }
+
+        nextEligibleQuotes.push({
+          quote,
+          project,
+          customer,
+          rows,
+          billableRowCount,
+          calculation: calculateQuote(quote, rows),
+        });
+      });
+
+    nextEligibleQuotes.sort(
+      (left, right) =>
+        new Date(right.quote.acceptedAt || right.quote.updatedAt).getTime()
+        - new Date(left.quote.acceptedAt || left.quote.updatedAt).getTime(),
+    );
+    nextBrokenIssues.sort((left, right) => left.quoteTitle.localeCompare(right.quoteTitle, 'fi'));
+
+    return {
+      eligibleQuotes: nextEligibleQuotes,
+      brokenEligibleQuoteIssues: nextBrokenIssues,
+    };
+  }, [getCustomer, getProject, getRowsForQuote, invoices, quotes]);
 
   const filteredInvoices = useMemo(
     () =>
@@ -342,6 +379,35 @@ export default function InvoicesPage({ routeState, onNavigate }: InvoicesPagePro
 
       <AppPageContentGrid>
         <div className="space-y-6 xl:col-span-8 2xl:col-span-9">
+          {brokenEligibleQuoteIssues.length > 0 && (
+            <Card className="border-amber-200 bg-amber-50/65 p-5 shadow-[0_18px_40px_-34px_rgba(217,119,6,0.25)]">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-amber-800">
+                    <WarningCircle className="h-5 w-5" />
+                    <h2 className="text-lg font-semibold">Hyväksytyissä tarjouksissa on puuttuvia viitteitä</h2>
+                  </div>
+                  <p className="text-sm leading-6 text-amber-900/80">
+                    {brokenEligibleQuoteIssues.length} hyväksyttyä tarjousta ei voi näyttää laskutettavana,
+                    koska projekti tai asiakas puuttuu. Korjaa viitteet projektityötilassa ennen laskutusta.
+                  </p>
+                  <div className="space-y-2">
+                    {brokenEligibleQuoteIssues.slice(0, 5).map((issue) => (
+                      <div key={issue.quoteId} className="flex flex-wrap items-center gap-2 text-sm text-amber-950/85">
+                        <span className="font-medium">{issue.quoteTitle}</span>
+                        {issue.missingProject ? <Badge variant="outline">Projekti puuttuu</Badge> : null}
+                        {issue.missingCustomer ? <Badge variant="outline">Asiakas puuttuu</Badge> : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <Button variant="outline" className="border-amber-300 bg-white/70 hover:bg-white" onClick={() => onNavigate?.({ page: 'projects' })}>
+                  Avaa projektityötila
+                </Button>
+              </div>
+            </Card>
+          )}
+
           <div ref={eligibleSectionRef}>
             <Card className="border-border/70 shadow-[0_20px_48px_-38px_rgba(15,23,42,0.32)]">
               <CardHeader className="gap-4 border-b border-border/60 pb-5 lg:flex-row lg:items-start lg:justify-between">

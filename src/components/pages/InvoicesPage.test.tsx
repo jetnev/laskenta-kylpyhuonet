@@ -50,6 +50,36 @@ function createQuoteRow(quoteId: string) {
   };
 }
 
+function createAcceptedQuote(id: string, projectId: string, title: string, quoteNumber: string) {
+  return {
+    id,
+    ownerUserId: 'user-1',
+    projectId,
+    title,
+    quoteNumber,
+    revisionNumber: 1,
+    status: 'accepted' as const,
+    vatPercent: 25.5,
+    acceptedAt: '2026-04-04T10:00:00.000Z',
+    discountType: 'none' as const,
+    discountValue: 0,
+    projectCosts: 0,
+    deliveryCosts: 0,
+    installationCosts: 0,
+    travelKilometers: 0,
+    travelRatePerKm: 0,
+    disposalCosts: 0,
+    demolitionCosts: 0,
+    protectionCosts: 0,
+    permitCosts: 0,
+    selectedMarginPercent: 30,
+    pricingMode: 'manual' as const,
+    scheduleMilestones: [],
+    createdAt: '2026-04-02T08:00:00.000Z',
+    updatedAt: '2026-04-04T10:00:00.000Z',
+  };
+}
+
 function renderInvoicesPage() {
   return renderToStaticMarkup(<InvoicesPage onNavigate={() => undefined} />);
 }
@@ -245,5 +275,43 @@ describe('InvoicesPage', () => {
     expect(markup).toContain('LASKU-20260405-0001');
     expect(markup).toContain('Viimeksi päivitetyt laskut');
     expect(markup).toContain('Näytä erääntyneet');
+  });
+
+  it('surfaces accepted quotes whose project or customer reference is missing', () => {
+    const project = {
+      id: 'project-2',
+      ownerUserId: 'user-1',
+      customerId: 'customer-2',
+      name: 'Puuttuva asiakas -kohde',
+      site: 'Työmaa 2',
+      regionCoefficient: 1,
+      createdAt: '2026-04-01T08:00:00.000Z',
+      updatedAt: '2026-04-03T08:00:00.000Z',
+    };
+    const quotes = [
+      createAcceptedQuote('quote-missing-project', 'missing-project', 'Orpo tarjous', 'TAR-2026-16'),
+      createAcceptedQuote('quote-missing-customer', 'project-2', 'Asiakas puuttuu tarjoukselta', 'TAR-2026-17'),
+    ];
+
+    dataHooks.useQuotes.mockReturnValue({ quotes });
+    dataHooks.useQuoteRows.mockReturnValue({
+      getRowsForQuote: (quoteId: string) => [createQuoteRow(quoteId)],
+    });
+    dataHooks.useProjects.mockReturnValue({
+      getProject: (projectId: string) => (projectId === 'project-2' ? project : undefined),
+    });
+    dataHooks.useCustomers.mockReturnValue({
+      getCustomer: () => undefined,
+    });
+
+    const markup = renderInvoicesPage();
+
+    expect(markup).toContain('Hyväksytyissä tarjouksissa on puuttuvia viitteitä');
+    expect(markup).toContain('2 hyväksyttyä tarjousta ei voi näyttää laskutettavana');
+    expect(markup).toContain('Orpo tarjous');
+    expect(markup).toContain('Asiakas puuttuu tarjoukselta');
+    expect(markup).toContain('Projekti puuttuu');
+    expect(markup).toContain('Asiakas puuttuu');
+    expect(markup).toContain('Avaa projektityötila');
   });
 });

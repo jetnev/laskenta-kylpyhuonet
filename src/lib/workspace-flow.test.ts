@@ -273,6 +273,31 @@ describe('buildWorkspaceActionCenter', () => {
     expect(actionCenter.tasks).toEqual([]);
     expect(actionCenter.hasProductGap).toBe(true);
   });
+
+  it('falls back to the projects root when a quote points to a missing project', () => {
+    const orphanQuote = createQuote({
+      id: 'quote-orphan',
+      projectId: 'project-missing',
+      title: 'Orpo tarjous',
+      status: 'draft',
+      validUntil: '2026-05-10',
+    });
+
+    const actionCenter = buildWorkspaceActionCenter({
+      customers: [],
+      invoices: [],
+      products: [createProduct()],
+      projects: [],
+      quoteRows: [createQuoteRow({ quoteId: orphanQuote.id })],
+      quotes: [orphanQuote],
+      today: new Date('2026-04-10T12:00:00.000Z'),
+    });
+
+    expect(actionCenter.nextAction?.id).toBe('quote-ready-quote-orphan');
+    expect(actionCenter.nextAction?.target).toEqual({ page: 'projects' });
+    expect(actionCenter.nextAction?.projectId).toBeUndefined();
+    expect(actionCenter.resumeItems[0]?.target).toEqual({ page: 'projects' });
+  });
 });
 
 describe('buildProjectWorkspaceContext', () => {

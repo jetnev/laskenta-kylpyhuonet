@@ -127,6 +127,24 @@ function buildProjectLabel(project?: Project | null, customer?: Customer | null)
   return [project?.name || 'Tuntematon projekti', customer?.name || 'Ei asiakasta'].join(' • ');
 }
 
+function buildProjectsTarget(project?: Pick<Project, 'id'> | null, options?: Pick<AppLocationState, 'quoteId' | 'editor'>) {
+  const target: AppLocationState = { page: 'projects' };
+
+  if (!project?.id) {
+    return target;
+  }
+
+  target.projectId = project.id;
+  if (options?.quoteId) {
+    target.quoteId = options.quoteId;
+  }
+  if (options?.editor) {
+    target.editor = options.editor;
+  }
+
+  return target;
+}
+
 function pushTask(collection: WorkspaceTask[], task: WorkspaceTaskInput | null) {
   if (task) {
     collection.push({
@@ -203,12 +221,7 @@ export function buildWorkspaceActionCenter(input: WorkspaceFlowInput): Workspace
     const rowCount = quoteRows.filter((row) => row.mode !== 'section').length;
     const quoteInvoices = (invoicesByQuoteId.get(quote.id) ?? []).filter((invoice) => invoice.status !== 'cancelled');
     const locationLabel = buildProjectLabel(project, customer);
-    const quoteTarget: AppLocationState = {
-      page: 'projects',
-      projectId: quote.projectId,
-      quoteId: quote.id,
-      editor: 'quote',
-    };
+    const quoteTarget = buildProjectsTarget(project, { quoteId: quote.id, editor: 'quote' });
 
     if (quote.status === 'draft') {
       const missingPieces: string[] = [];
@@ -234,7 +247,7 @@ export function buildWorkspaceActionCenter(input: WorkspaceFlowInput): Workspace
           target: quoteTarget,
           priority: 74,
           tone: 'attention',
-          projectId: quote.projectId,
+          projectId: project?.id,
           quoteId: quote.id,
           updatedAt: quote.updatedAt,
         });
@@ -249,7 +262,7 @@ export function buildWorkspaceActionCenter(input: WorkspaceFlowInput): Workspace
           target: quoteTarget,
           priority: 90,
           tone: 'attention',
-          projectId: quote.projectId,
+          projectId: project?.id,
           quoteId: quote.id,
           updatedAt: quote.updatedAt,
         });
@@ -269,7 +282,7 @@ export function buildWorkspaceActionCenter(input: WorkspaceFlowInput): Workspace
           target: quoteTarget,
           priority: 80,
           tone: 'follow-up',
-          projectId: quote.projectId,
+          projectId: project?.id,
           quoteId: quote.id,
           updatedAt: quote.updatedAt,
         });
@@ -287,7 +300,7 @@ export function buildWorkspaceActionCenter(input: WorkspaceFlowInput): Workspace
         target: { page: 'invoices' },
         priority: 77,
         tone: 'info',
-        projectId: quote.projectId,
+        projectId: project?.id,
         quoteId: quote.id,
         updatedAt: quote.updatedAt,
       });
@@ -301,10 +314,10 @@ export function buildWorkspaceActionCenter(input: WorkspaceFlowInput): Workspace
         reason: 'Tarjoukselta puuttuu vastuuhenkilö, mikä vaikeuttaa työn seurantaa.',
         locationLabel,
         ctaLabel: 'Avaa projekti',
-        target: { page: 'projects', projectId: quote.projectId },
+        target: buildProjectsTarget(project),
         priority: 62,
         tone: 'info',
-        projectId: quote.projectId,
+        projectId: project?.id,
         quoteId: quote.id,
         updatedAt: quote.updatedAt,
       });
@@ -328,10 +341,10 @@ export function buildWorkspaceActionCenter(input: WorkspaceFlowInput): Workspace
           reason: `${quote.title} on myöhässä ${Math.abs(daysUntil)} päivää.`,
           locationLabel,
           ctaLabel: 'Avaa projekti',
-          target: { page: 'projects', projectId: quote.projectId },
+          target: buildProjectsTarget(project),
           priority: 100 + Math.min(10, Math.abs(daysUntil)),
           tone: 'critical',
-          projectId: quote.projectId,
+          projectId: project?.id,
           quoteId: quote.id,
           updatedAt: quote.updatedAt,
         });
@@ -346,10 +359,10 @@ export function buildWorkspaceActionCenter(input: WorkspaceFlowInput): Workspace
           reason: `${quote.title} erääntyy tänään.`,
           locationLabel,
           ctaLabel: 'Avaa projekti',
-          target: { page: 'projects', projectId: quote.projectId },
+          target: buildProjectsTarget(project),
           priority: 98,
           tone: 'critical',
-          projectId: quote.projectId,
+          projectId: project?.id,
           quoteId: quote.id,
           updatedAt: quote.updatedAt,
         });
@@ -363,10 +376,10 @@ export function buildWorkspaceActionCenter(input: WorkspaceFlowInput): Workspace
         reason: `${quote.title} tarvitsee huomiota ${daysUntil} päivän sisällä.`,
         locationLabel,
         ctaLabel: 'Avaa projekti',
-        target: { page: 'projects', projectId: quote.projectId },
+        target: buildProjectsTarget(project),
         priority: 68 + (7 - daysUntil),
         tone: 'follow-up',
-        projectId: quote.projectId,
+        projectId: project?.id,
         quoteId: quote.id,
         updatedAt: quote.updatedAt,
       });
@@ -505,7 +518,7 @@ export function buildWorkspaceActionCenter(input: WorkspaceFlowInput): Workspace
       meta: buildProjectLabel(project, customer),
       badgeLabel: latestQuote.status === 'draft' ? 'Tarjousluonnos' : 'Tarjous',
       ctaLabel: 'Avaa tarjous',
-      target: { page: 'projects', projectId: latestQuote.projectId, quoteId: latestQuote.id, editor: 'quote' },
+      target: buildProjectsTarget(project, { quoteId: latestQuote.id, editor: 'quote' }),
     });
   }
 

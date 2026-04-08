@@ -49,6 +49,14 @@ import EmptyState from '../layout/PageEmptyState';
 import { exportReportsToPDF } from '../../lib/export';
 import ReportingDrilldownContent from './reporting/ReportingDrilldownContent';
 import { getReportingDrilldownDescription } from './reporting/ReportingDrilldownMeta';
+import {
+  countReportingDrillItems,
+  createReportingActionDrillState,
+  createReportingDrillState,
+  resolveQuoteFamilyNavigationTarget,
+  type ReportingDrillRequest,
+  type ReportingDrillState,
+} from './reporting/reporting-drilldown-state';
 import type { AppLocationState } from '../../lib/app-routing';
 import {
   buildReportingModel,
@@ -83,9 +91,6 @@ function deltaSign(value: number | null) {
   if (value > 0) return `+${fc(value)}`;
   return fc(value);
 }
-
-type DrillKind = 'families' | 'family-detail' | 'customers' | 'products' | 'projects';
-interface DrillState { kind: DrillKind; title: string; ids: string[]; }
 
 function ReportsLoadingState() {
   return (
@@ -128,10 +133,10 @@ function KpiCard({ label, value, sub, alert, onClick }: { label: string; value: 
   );
 }
 
-function ActionRow({ item, onDrill }: { item: ReportActionItem; onDrill: (d: DrillState) => void }) {
+function ActionRow({ item, onDrill }: { item: ReportActionItem; onDrill: (item: ReportActionItem) => void }) {
   return (
     <div className="flex items-start justify-between gap-4 rounded-lg border p-4 hover:bg-muted/50 cursor-pointer transition-colors"
-      onClick={() => onDrill({ kind: item.sourceKind === 'projects' ? 'projects' : item.sourceKind === 'customers' ? 'customers' : 'families', title: item.title, ids: item.sourceIds })}>
+      onClick={() => onDrill(item)}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className={cn('h-2 w-2 rounded-full shrink-0', item.severity === 'high' ? 'bg-red-500' : item.severity === 'medium' ? 'bg-amber-500' : 'bg-muted-foreground')} />
@@ -160,7 +165,7 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
   const { documentSettings } = useDocumentSettings();
 
   const [filterDraft, setFilterDraft] = useState<ReportingFilterDraft>({});
-  const [drill, setDrill] = useState<DrillState | null>(null);
+  const [drill, setDrill] = useState<ReportingDrillState | null>(null);
 
   const updateFilter = useCallback(<K extends keyof ReportingFilterDraft>(key: K, value: ReportingFilterDraft[K]) => {
     setFilterDraft((prev) => ({ ...prev, [key]: value }));
@@ -206,42 +211,37 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
   const model = resolvedModel ?? liveModel;
   const shouldShowInitialLoading = !resolvedModel || isInitialLoading;
 
-  const openDrill = useCallback((d: DrillState) => setDrill(d), []);
+  const openDrill = useCallback((request: ReportingDrillRequest | ReportActionItem | ReportingDrillState | null) => {
+    if (!request) {
+      toast.warning('Rajauksen kohteet eivät ole enää saatavilla. Päivitä näkymä tai tarkista projektityötila.');
+      return;
+    }
+
+    const nextDrill = 'sourceKind' in request
+      ? createReportingActionDrillState(request, model)
+      : 'families' in request || 'customers' in request || 'projects' in request
+        ? request
+        : createReportingDrillState(request, model);
+
+    if (!nextDrill) {
+      toast.warning('Rajauksen kohteet eivät ole enää saatavilla. Päivitä näkymä tai tarkista projektityötila.');
+      return;
+    }
+
+    setDrill(nextDrill);
+  }, [model]);
   const closeDrill = useCallback(() => setDrill(null), []);
 
   const openQuoteFromDrill = useCallback((family: QuoteFamilySummary) => {
     closeDrill();
-    onNavigate?.({
-      page: 'projects',
-      projectId: family.projectId,
-      quoteId: family.latestQuoteId,
-      editor: 'quote',
-    });
-  }, [closeDrill, onNavigate]);
+    const navigation = resolveQuoteFamilyNavigationTarget({ family, projects, quotes });
+    if (navigation.fallbackReason) {
+      toast.warning(navigation.fallbackReason);
+    }
+    onNavigate?.(navigation.target);
+  }, [closeDrill, onNavigate, projects, quotes]);
 
-  const drillFamilies = useMemo(() => {
-    if (!drill || (drill.kind !== 'families' && drill.kind !== 'family-detail')) return [];
-    const idSet = new Set(drill.ids);
-    return model.families.filter((f) => idSet.has(f.id));
-  }, [drill, model.families]);
-
-  const drillCustomers = useMemo(() => {
-    if (!drill || drill.kind !== 'customers') return [];
-    const idSet = new Set(drill.ids);
-    return model.customers.filter((c) => idSet.has(c.id));
-  }, [drill, model.customers]);
-
-  const drillProjects = useMemo(() => {
-    if (!drill || drill.kind !== 'projects') return [];
-    const idSet = new Set(drill.ids);
-    return model.projects.filter((p) => idSet.has(p.id));
-  }, [drill, model.projects]);
-
-  const drillCount = drill?.kind === 'customers'
-    ? drillCustomers.length
-    : drill?.kind === 'projects'
-      ? drillProjects.length
-      : drillFamilies.length;
+  const drillCount = countReportingDrillItems(drill);
 
   const exportToPDF = useCallback(() => {
     try {
@@ -779,11 +779,11 @@ export default function ReportsPage({ onNavigate }: ReportsPageProps) {
             <ScrollArea className="max-h-[70vh] w-full">
               <div className="pr-2 sm:pr-4">
                 <ReportingDrilldownContent
-                  kind={drill?.kind === 'products' ? null : drill?.kind ?? null}
+                  kind={drill?.kind ?? null}
                   title={drill?.title}
-                  families={drillFamilies}
-                  customers={drillCustomers}
-                  projects={drillProjects}
+                  families={drill?.kind === 'families' || drill?.kind === 'family-detail' ? drill.families : []}
+                  customers={drill?.kind === 'customers' ? drill.customers : []}
+                  projects={drill?.kind === 'projects' ? drill.projects : []}
                   onOpenQuote={openQuoteFromDrill}
                 />
               </div>
