@@ -161,6 +161,7 @@ export default function LoginPage({ onNavigateHome }: LoginPageProps) {
     applyDocumentMetadata({
       title: buildDocumentTitle(heading.title),
       description: view === 'login' ? APP_LOGIN_META_DESCRIPTION : heading.description,
+      robots: 'noindex,nofollow',
       pathname: '/login',
       siteUrl: import.meta.env.VITE_SITE_URL?.trim(),
     });

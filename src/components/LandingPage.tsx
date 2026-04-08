@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   ArrowRight,
   Buildings,
@@ -6,31 +6,34 @@ import {
   CalendarCheck,
   ChartBar,
   CheckCircle,
-  Clock,
   CurrencyCircleDollar,
   FileText,
-  Folder,
   FolderOpen,
-  Gear,
   HardHat,
   ListChecks,
-  Lock,
   MagnifyingGlass,
   Package,
   PlayCircle,
-  ShieldCheck,
   Warning,
   Wrench,
   X,
 } from '@phosphor-icons/react';
 
-import LegalDocumentLinks from './legal/LegalDocumentLinks';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import PublicStructuredData from './public/PublicStructuredData';
+import { PublicSiteFooter, PublicSiteHeader } from './public/PublicSiteChrome';
 import { applyDocumentMetadata } from '../lib/document-metadata';
-import { APP_MARKETING_META_DESCRIPTION, APP_NAME, buildDemoMailtoUrl, buildDocumentTitle } from '../lib/site-brand';
+import {
+  PUBLIC_FEATURE_LINKS,
+  PUBLIC_HOME_FAQ_ITEMS,
+  PUBLIC_HOME_TITLE,
+  PUBLIC_SITE_PATHS,
+  getHomeStructuredData,
+} from '../lib/public-site';
+import { APP_MARKETING_META_DESCRIPTION } from '../lib/site-brand';
 
 interface LandingPageProps {
   onNavigateToLogin: () => void;
@@ -39,7 +42,7 @@ interface LandingPageProps {
 type Tone = 'slate' | 'sky' | 'amber' | 'emerald';
 
 interface SignalItem {
-  icon: typeof FolderOpen;
+  icon: typeof FileText;
   title: string;
   text: string;
 }
@@ -75,138 +78,70 @@ interface WorkspaceView {
 
 const topSignals: SignalItem[] = [
   {
-    icon: FolderOpen,
-    title: 'Tarjousversiot hallitusti',
-    text: 'Luonnos, lähetetty ja hyväksytty tarjous pysyvät samassa jatkumossa ilman tiedostokaaosta.',
-  },
-  {
-    icon: CurrencyCircleDollar,
-    title: 'Kate näkyy ennen lähetystä',
-    text: 'Marginaali, lisäkulut ja loppusumma voidaan tarkistaa ennen kuin tarjous lähtee asiakkaalle.',
-  },
-  {
-    icon: CalendarCheck,
-    title: 'Projekti jatkuu samasta datasta',
-    text: 'Hyväksytty tarjous toimii projektin, määräaikojen ja laskutuksen lähtöpisteenä.',
+    icon: FileText,
+    title: 'Tarjouseditori yrityskayttoon',
+    text: 'Tarjous ei jaa irralliseksi dokumentiksi, vaan pysyy samassa tyotilassa kohde-, asiakas- ja versioketjun kanssa.',
   },
   {
     icon: MagnifyingGlass,
-    title: 'Tarjouspyynnöt samaan työtilaan',
-    text: 'Tarjousäly tuo dokumentit, katselmoinnin ja siirtopolun osaksi samaa palvelukokonaisuutta.',
+    title: 'Tarjouspyyntojen katselmointi',
+    text: 'Dokumentit, havainnot, riskit ja puuttuvat tiedot voidaan kayda lapi ennen varsinaista tarjousta.',
+  },
+  {
+    icon: CurrencyCircleDollar,
+    title: 'Kateohjaus ennen paatosta',
+    text: 'Kate, lisakulut ja loppusumma nakyvat samassa nakymassa ennen kuin tarjous lahtee ulos.',
+  },
+  {
+    icon: CalendarCheck,
+    title: 'Projektiseuranta ja viennit',
+    text: 'Hyvaksytty tarjous voi jatkua projektiksi ja tiedot voidaan vieda ulos PDF- ja Excel-muotoon.',
   },
 ];
 
 const workspaceViews: WorkspaceView[] = [
   {
-    value: 'tarjous',
-    label: 'Tarjous',
-    eyebrow: 'Tarjousvalmistelu',
-    title: 'Rakenna tarjous samasta tietopohjasta, josta projekti jatkuu.',
+    value: 'tarjouseditori',
+    label: 'Tarjouseditori',
+    eyebrow: 'Tarjouslaskentaohjelma',
+    title: 'Muokkaa tarjous samassa editorissa, jossa lahtotieto, rivit ja versiot pysyvat hallinnassa.',
     description:
-      'Tuotteet, vaihtoehdot, hinnat ja versiot pysyvät yhdessä työtilassa. Sama tarjous ei katoa sähköpostiketjuun tai irrallisiin tiedostoihin.',
-    highlights: ['Tuoterekisteri', 'Vaihtoehdot', 'Sisäinen yhteenveto'],
+      'Kun tarjouseditori kuuluu samaan tyotilaan kuin muu tarjouslaskenta, tiedot eivat ela erikseen Excelissa, PDF:issa ja muistiinpanoissa. Siksi myos versiot pysyvat luettavina ilman tiedostokaaosta.',
+    highlights: ['Tarjouseditori', 'Versiot', 'Tuoterekisteri'],
     metrics: [
-      { label: 'Työtila', value: 'Julkisivun korjaus / vaihe 2', tone: 'slate' },
-      { label: 'Versio', value: 'TAR-20260408-02', tone: 'sky' },
-      { label: 'Status', value: 'Lähetetty', tone: 'amber' },
+      { label: 'Tarjous', value: 'TAR-20260408-02', tone: 'sky' },
+      { label: 'Kohde', value: 'Julkisivun korjaus / vaihe 2', tone: 'slate' },
+      { label: 'Status', value: 'Valmis tarkistukseen', tone: 'amber' },
     ],
     rows: [
-      { label: 'Tuoterivi', detail: 'Laatta 60x60 matt / 42 m²', value: '5 980 €' },
-      { label: 'Asennus', detail: 'Asennus, suojaus ja viimeistely', value: '3 920 €' },
-      { label: 'Vaihtoehto', detail: 'Korvaava pintamateriaali perusteluineen', value: '1 480 €' },
-      { label: 'Yhteenveto', detail: 'Tarjous säilyy samassa työtilassa asiakas- ja kohdetiedon kanssa', value: '17 368 €' },
+      { label: 'Tuoterivi', detail: 'Laatta 60x60 matt / 42 m2', value: '5 980 EUR' },
+      { label: 'Asennus', detail: 'Asennus, suojaus ja viimeistely', value: '3 920 EUR' },
+      { label: 'Vaihtoehto', detail: 'Korvaava pintamateriaali perusteluineen', value: '1 480 EUR' },
+      { label: 'Yhteenveto', detail: 'Tarjous säilyy samassa tyotilassa asiakas- ja kohdetiedon kanssa', value: '17 368 EUR' },
     ],
     notes: [
       {
         title: 'Versiointi pysyy luettavana',
-        text: 'Uudet kierrokset eivät irtoa historiasta, vaan sama tarjousketju säilyy hallittuna.',
+        text: 'Uudet tarjouskierrokset eivat irtoa historiasta, vaan sama kokonaisuus sailyy hallittuna.',
       },
       {
         title: 'Tuotetieto ei ala alusta',
-        text: 'Tuote- ja hintapohja voidaan ylläpitää yhdessä rekisterissä koko tiimille.',
+        text: 'Tuote- ja hintapohja voidaan yllapitaa yhdessa rekisterissa koko tiimille.',
       },
       {
-        title: 'Ammattimainen ulosvienti',
-        text: 'Asiakasnäkyvä tarjous ja sisäinen tarkistusmateriaali voidaan erottaa samasta lähteestä.',
+        title: 'Tarjous pysyy ohjelmistossa',
+        text: 'PDF ja Excel ovat vientimuotoja, eivat varsinainen tarjousprosessin tyotila.',
       },
     ],
   },
   {
-    value: 'kate',
-    label: 'Kate',
-    eyebrow: 'Kateohjaus',
-    title: 'Tarkista päätös ennen lähetystä, ei vasta projektin aikana.',
+    value: 'katselmointi',
+    label: 'Tarjouspyynnot',
+    eyebrow: 'Tarjouspyyntojen katselmointi',
+    title: 'Kokoa tarjouspyynto, nosta olennaiset havainnot ja vie valmisteltu sisalto hallitusti tarjouksen pohjaksi.',
     description:
-      'Kun tarjouskohtainen kate, lisäkulut ja loppusumma ovat samassa näkymässä, lähetyspäätös perustuu läpinäkyvään tietoon.',
-    highlights: ['Lisäkulut', 'Kertoimet', 'Sisäinen audit trail'],
-    metrics: [
-      { label: 'Kate-ennuste', value: '18,4 %', tone: 'emerald' },
-      { label: 'Lisäkulut', value: '1 280 €', tone: 'amber' },
-      { label: 'Päätöstila', value: 'Valmis tarkistukseen', tone: 'sky' },
-    ],
-    rows: [
-      { label: 'Rivien välisumma', detail: 'Tuotteet, asennus ja hyväksytyt vaihtoehdot', value: '12 560 €' },
-      { label: 'Projektikerroin', detail: 'Kohteen laajuus ja alueellinen hinnoittelu', value: '+8 %' },
-      { label: 'ALV 25,5 %', detail: 'Asiakasnäkyvä loppuerittely tarjousta varten', value: '3 528 €' },
-      { label: 'Loppusumma', detail: 'Sama yhteenveto sisäiseen päätökseen ja ulkoiseen tarjoukseen', value: '17 368 €' },
-    ],
-    notes: [
-      {
-        title: 'Kate näkyy oikeassa kohdassa',
-        text: 'Marginaali tarkistetaan ennen lähetystä eikä vasta silloin, kun projekti on jo käynnissä.',
-      },
-      {
-        title: 'Sisäinen tarkistus pysyy dokumentoituna',
-        text: 'Lisäkulut, kertoimet ja poikkeamat voidaan käydä läpi samassa näkymässä.',
-      },
-      {
-        title: 'Päätöksenteko pysyy uskottavana',
-        text: 'Myynti, laskenta ja johto katsovat samaa yhteenvetoa, eivät eri tiedostoja.',
-      },
-    ],
-  },
-  {
-    value: 'projekti',
-    label: 'Projekti',
-    eyebrow: 'Projektin käynnistys',
-    title: 'Jatka hyväksytty tarjous projektiksi ilman käsin tehtävää siivousta.',
-    description:
-      'Kohdetiedot, aikataulut, asiakkaan lähtötiedot ja laskutuksen pohja pysyvät kiinni samassa kokonaisuudessa.',
-    highlights: ['Deadline-näkymä', 'Snapshot-laskutus', 'Kohdetieto'],
-    metrics: [
-      { label: 'Aloitus', value: '15.4.2026', tone: 'sky' },
-      { label: 'Toimitus', value: '23.4.2026', tone: 'amber' },
-      { label: 'Laskutus', value: 'Snapshot aktiivinen', tone: 'emerald' },
-    ],
-    rows: [
-      { label: 'Kohde', detail: 'As Oy Merisilta / B-rappu / märkätilat', value: 'Valmis' },
-      { label: 'Työvaiheet', detail: 'Toimitus, aloitus, valmistuminen ja vastuuhenkilöt', value: '4 vaihetta' },
-      { label: 'Deadline-tuki', detail: 'Määräajat näkyvät samassa kokonaisuudessa tarjouksen kanssa', value: 'Seurannassa' },
-      { label: 'Laskutuspohja', detail: 'Alkuperäinen tarjousdata säilyy snapshotissa laskutusta varten', value: 'Lukittu' },
-    ],
-    notes: [
-      {
-        title: 'Hyväksytty tarjous ei katkea',
-        text: 'Projektin lähtötieto on sama kuin myyntivaiheessa hyväksytty kokonaisuus.',
-      },
-      {
-        title: 'Aikataulut pysyvät näkyvissä',
-        text: 'Määräajat, toimitus ja työn käynnistys voidaan seurata samassa ympäristössä.',
-      },
-      {
-        title: 'Laskutus ei elä takautuvasti',
-        text: 'Snapshot-pohja auttaa säilyttämään alkuperäisen tarjouksen laskutuksen viitepisteenä.',
-      },
-    ],
-  },
-  {
-    value: 'tarjousaly',
-    label: 'Tarjousäly',
-    eyebrow: 'Tarjouspyyntöjen katselmointi',
-    title: 'Kokoa tarjouspyyntö, nosta havainnot ja siirrä valmisteltu sisältö hallitusti tarjoukseen.',
-    description:
-      'Tarjousäly ei lupaa mustaa laatikkoa, vaan katselmoitavan valmistelupolun: dokumentit, havainnot, riskit ja tuonti samaan työtilaan.',
-    highlights: ['Dokumenttikoonti', 'Deterministinen analyysi', 'Hallittu import'],
+      'Tarjouspyyntojen katselmointi on tarkea osa tarjouslaskentaa silloin, kun dokumentit, vaatimukset ja puuttuvat tiedot pitaa saada samaan paikkaan ennen varsinaista hintapaatosta.',
+    highlights: ['Dokumentit', 'Riskit', 'Katselmointi'],
     metrics: [
       { label: 'Paketti', value: '14 dokumenttia', tone: 'slate' },
       { label: 'Nostot', value: '12 kohtaa', tone: 'amber' },
@@ -215,127 +150,203 @@ const workspaceViews: WorkspaceView[] = [
     rows: [
       { label: 'Vaatimukset', detail: 'Toimitusrajat, vastuukohdat ja tekniset ehdot', value: '6 havaintoa' },
       { label: 'Riskit', detail: 'Puuttuvat tiedot, tarkennettavat kohdat ja huomautukset', value: '3 nostoa' },
-      { label: 'Evidenssi', detail: 'Dokumentoitavat lähteet katselmointia varten', value: '8 viitettä' },
-      { label: 'Tuotava sisältö', detail: 'Valmistellut osat voidaan viedä tarjouksen pohjaksi hallitussa polussa', value: 'Luonnos valmis' },
+      { label: 'Evidenssi', detail: 'Dokumentoitavat lahteet katselmointia varten', value: '8 viitetta' },
+      { label: 'Luonnos', detail: 'Valmisteltu sisalto voidaan siirtaa hallitusti tarjouseditoriin', value: 'Valmis' },
     ],
     notes: [
       {
-        title: 'Tarjouspyyntöpaketti yhteen paikkaan',
-        text: 'Katselmointi ei jää irrallisten dokumenttien ja sähköpostien varaan.',
+        title: 'Tarjouspyynto ei jaa sahkopostiin',
+        text: 'Katselmointi voidaan tehda samassa ymparistossa kuin varsinainen tarjouslaskenta.',
       },
       {
-        title: 'Deterministinen, ei musta laatikko',
-        text: 'Tavoite on tehdä löydökset läpinäkyviksi ja katselmoitaviksi ennen jatkotyötä.',
+        title: 'Ei mustan laatikon lupausta',
+        text: 'Tavoite on tehda loydokset katselmoitaviksi ennen varsinaista tarjousta.',
       },
       {
-        title: 'Hallitusti tarjouksen pohjaksi',
-        text: 'Valmistelun tulos voidaan siirtää tarjousvaiheeseen ilman irrallista kopiointia.',
+        title: 'Hallittu siirto editoriin',
+        text: 'Valmistelun tulos voidaan vieda versiona normaalin tarjouspolun jatkoksi.',
+      },
+    ],
+  },
+  {
+    value: 'kateohjaus',
+    label: 'Kateohjaus',
+    eyebrow: 'Kateohjaus',
+    title: 'Tarkista paatos ennen lahetysta, ei vasta projektin aikana.',
+    description:
+      'Kun tarjouskohtainen kate, lisakulut ja loppusumma ovat samassa nakymassa, lahetyspaatos voidaan tehda lapinakyvan tiedon perusteella eika erillisten laskentatiedostojen varassa.',
+    highlights: ['Lisakulut', 'Kertoimet', 'Sisainen audit trail'],
+    metrics: [
+      { label: 'Kate-ennuste', value: '18,4 %', tone: 'emerald' },
+      { label: 'Lisakulut', value: '1 280 EUR', tone: 'amber' },
+      { label: 'Paatostila', value: 'Valmis tarkistukseen', tone: 'sky' },
+    ],
+    rows: [
+      { label: 'Materiaalikate', detail: 'Ostot, kerroin ja varmuusvara', value: '11,2 %' },
+      { label: 'Tyokate', detail: 'Asennusryhma, kesto ja lisatyovaraus', value: '7,2 %' },
+      { label: 'Lisakulut', detail: 'Nostot, suojaus, matkakulut, poikkeamat', value: '1 280 EUR' },
+      { label: 'Lahetyspaatos', detail: 'Kate ja loppusumma tarkistettu ennen lahetysta', value: 'Hyvaksytty' },
+    ],
+    notes: [
+      {
+        title: 'Kate nakyy oikeassa kohdassa',
+        text: 'Marginaali tarkistetaan ennen lahetysta eika vasta silloin, kun projekti on jo kaynnissa.',
+      },
+      {
+        title: 'Sisainen tarkistus pysyy dokumentoituna',
+        text: 'Lisakulut, kertoimet ja poikkeamat voidaan kayda lapi samassa nakymassa.',
+      },
+      {
+        title: 'Paatos ei ela muistilapuissa',
+        text: 'Kun lahetyspiste on ohjattu, paatos ei jaa yksittaisen ihmisen oman taulukon varaan.',
+      },
+    ],
+  },
+  {
+    value: 'projektiseuranta',
+    label: 'Projektiseuranta',
+    eyebrow: 'Projektiseuranta ja viennit',
+    title: 'Jatka hyvaksytty tarjous projektiksi ilman kasin tehtavaa siivousta ja vie dokumentit ulos oikeassa muodossa.',
+    description:
+      'Kun tarjous jatkuu samasta datasta projektin lahtotiedoksi, myos maarajat, kohdetieto ja PDF- tai Excel-viennit pysyvat samassa ohjatussa kokonaisuudessa.',
+    highlights: ['Projektiseuranta', 'PDF-vienti', 'Excel-vienti'],
+    metrics: [
+      { label: 'Aloitus', value: '15.4.2026', tone: 'sky' },
+      { label: 'Toimitus', value: '23.4.2026', tone: 'amber' },
+      { label: 'Laskutus', value: 'Snapshot aktiivinen', tone: 'emerald' },
+    ],
+    rows: [
+      { label: 'Projekti', detail: 'Tarjouksesta avattu projektikortti kohde- ja yhteystiedoilla', value: 'Aktiivinen' },
+      { label: 'Deadline', detail: 'Tilausvahvistus, aloitus ja toimitus samassa aikajanassa', value: '3 vaihetta' },
+      { label: 'PDF-vienti', detail: 'Asiakasnakyva tarjousdokumentti ulos samasta lahteesta', value: 'Valmis' },
+      { label: 'Excel-vienti', detail: 'Sisainen jatkokasittely tai raportointivienti hallitusti', value: 'Valmis' },
+    ],
+    notes: [
+      {
+        title: 'Hyvaksytty tarjous ei katkea',
+        text: 'Projektin lahtotieto on sama kuin myyntivaiheessa hyvaksytty kokonaisuus.',
+      },
+      {
+        title: 'Aikataulut pysyvat nakyvissa',
+        text: 'Maaraajat, toimitus ja tyon kaynnistys voidaan seurata samassa ymparistossa.',
+      },
+      {
+        title: 'Viennit palvelevat prosessia',
+        text: 'PDF- ja Excel-viennit tukevat asiakkaalle lahtevaa materiaalia ja sisaista tarkistusta ilman etta koko tyo jaa exporttien varaan.',
       },
     ],
   },
 ];
 
 const operationalRisks = [
-  'Tarjousversiot hajaantuvat kansioihin, sähköposteihin ja työpöydille.',
-  'Hinnat, lisäkulut ja huomautukset elävät eri paikoissa eri ihmisillä.',
-  'Kate tarkistetaan liian myöhään tai vain osittaisen tiedon perusteella.',
-  'Hyväksytyn tarjouksen tieto katkeaa juuri siinä kohdassa, jossa työ pitäisi käynnistää.',
+  'Tarjousversiot hajaantuvat kansioihin, sahkoposteihin ja tyopoydille.',
+  'Hinnat, lisakulut ja huomiot elavat erikseen Excelissa, PDF:issa ja muistiinpanoissa.',
+  'Tarjouspyynnon katselmointi jaa irrallisiksi huomioiksi eika osaksi samaa tyotilaa.',
+  'Kate tarkistetaan liian myohaan tai vain osittaisen tiedon perusteella.',
+  'Hyvaksytyn tarjouksen tieto katkeaa juuri siina kohdassa, jossa tyo pitaisi kaynnistaa.',
 ];
 
 const operationalOutcomes = [
-  'Tarjoukset, versiot ja asiakaskohtainen konteksti pysyvät samassa työtilassa.',
-  'Tuote- ja hintatieto voidaan keskittää yhden rekisterin alle.',
-  'Kate, lisäkulut ja loppusumma ovat näkyvissä ennen lähetyspäätöstä.',
-  'Hyväksytty tarjous voi jatkua projektiksi ja laskutuksen viitepisteeksi ilman käsityötä.',
+  'Tarjouslaskenta, tarjouseditori ja versiot pysyvat samassa tyotilassa.',
+  'Tarjouspyynnon dokumentit, havainnot ja siirtopolku voidaan katselmoida hallitusti.',
+  'Kate, lisakulut ja loppusumma ovat nakyvissa ennen lahetyspaatosta.',
+  'Hyvaksytty tarjous voi jatkua projektiksi ja laskutuksen viitepisteeksi ilman kasityota.',
+  'PDF- ja Excel-viennit syntyvat ohjelmistosta, eivat erillisesta tiedostoketjusta.',
 ];
 
 const capabilityCards = [
   {
     icon: FileText,
-    title: 'Tarjouslaskenta ja versiot',
-    text: 'Muodosta tarjoukset hallitusta tietopohjasta ja pidä muutokset samassa versioidussa ketjussa.',
+    title: 'Tarjouseditori',
+    text: 'Muokkaa tarjousta samassa editorissa, jossa rivit, vaihtoehdot, kohdetieto ja versiot pysyvat luettavina.',
     bullets: [
-      'Tarjousrivit, vaihtoehdot ja versiot saman projektin alla.',
+      'Tarjousrivit, vaihtoehdot ja versiot saman tyoketjun sisalla.',
       'Asiakas- ja kohdetieto pysyy mukana koko valmistelun ajan.',
-      'Ammattimainen ulosvienti asiakkaalle ja sisäisesti tarkempaan reviewhyn.',
+      'Tarjous ei jaa irralliseksi dokumentiksi.',
     ],
+    href: PUBLIC_FEATURE_LINKS.tarjouseditori,
+    linkLabel: 'Tutustu tarjouseditoriin',
+  },
+  {
+    icon: MagnifyingGlass,
+    title: 'Tarjouspyyntojen katselmointi',
+    text: 'Kokoa tarjouspyyntopaketti, nosta havainnot ja siirra valmisteltu sisalto hallitusti tarjouksen pohjaksi.',
+    bullets: [
+      'Dokumentit, vaatimukset ja riskit samaan paikkaan.',
+      'Katselmointi ei jaa erillisiksi muistiinpanoiksi.',
+      'Hallittu siirto tarjouseditoriin.',
+    ],
+    href: PUBLIC_FEATURE_LINKS.tarjouspyynnot,
+    linkLabel: 'Katso tarjouspyyntojen katselmointi',
   },
   {
     icon: CurrencyCircleDollar,
-    title: 'Kateohjaus päätöksen tueksi',
-    text: 'Pidä marginaali, lisäkulut ja loppusumma näkyvissä siellä, missä päätös tehdään.',
+    title: 'Kateohjaus',
+    text: 'Pida marginaali, lisakulut ja loppusumma nakyvissa siella, missa lahetyspaatos tehdaan.',
     bullets: [
-      'Tarjouskohtainen kate ennen lähettämistä.',
-      'Lisäkulut, kertoimet ja yhteenveto samassa näkymässä.',
-      'Sisäinen tarkistus ilman erillistä laskentatiedostoa.',
+      'Tarjouskohtainen kate ennen lahettamista.',
+      'Lisakulut, kertoimet ja yhteenveto samassa nakymassa.',
+      'Sisainen tarkistus ei vaadi erillista laskentatiedostoa.',
     ],
-  },
-  {
-    icon: Package,
-    title: 'Tuote- ja hintarekisteri',
-    text: 'Ylläpidä tuotteet, hinnat, asennusryhmät ja korvaavat vaihtoehdot samassa palvelussa.',
-    bullets: [
-      'Yksi paikka tuotekoodeille, hintatiedolle ja ryhmittelylle.',
-      'Korvaavat tuotteet ja perustelut pysyvät hallinnassa.',
-      'Vähemmän käsin koottuja rivejä jokaiselle tarjouskierrokselle.',
-    ],
+    href: PUBLIC_FEATURE_LINKS.kateohjaus,
+    linkLabel: 'Nae kateohjaus',
   },
   {
     icon: CalendarBlank,
-    title: 'Projekti ja deadline-seuranta',
-    text: 'Hyväksytty tarjous voi jatkua projektinäkymään ilman, että lähtötieto katoaa matkalla.',
+    title: 'Projektiseuranta',
+    text: 'Hyvaksytty tarjous voi jatkua projektinakymään ilman, etta lahtotieto katoaa matkalla.',
     bullets: [
-      'Toimitus-, aloitus- ja valmistumispäivät saman kohteen yhteydessä.',
-      'Määräajat näkyviin työtilan sisällä, ei vain kalenterimuistioissa.',
-      'Kohteen lähtötieto pysyy sidottuna alkuperäiseen tarjoukseen.',
+      'Toimitus-, aloitus- ja valmistumispaivat saman kohteen yhteydessa.',
+      'Maaraajat nakyviin tyotilan sisalla, ei vain kalenterimuistioissa.',
+      'Kohteen lahtotieto pysyy sidottuna alkuperaiseen tarjoukseen.',
     ],
+    href: PUBLIC_FEATURE_LINKS.projektiseuranta,
+    linkLabel: 'Tutustu projektiseurantaan',
+  },
+  {
+    icon: Package,
+    title: 'PDF- ja Excel-viennit',
+    text: 'Vie tarjous ulos oikeassa muodossa ilman etta varsinainen tyo jaa export-tiedostojen varaan.',
+    bullets: [
+      'Asiakasnakyva materiaali saadaan ulos selkeasti.',
+      'Excel voi palvella vientia ilman etta koko prosessi asuu Excelissa.',
+      'Sisainen tarkistus ja ulkoinen dokumentti pysyvat saman lahdetiedon alla.',
+    ],
+    href: PUBLIC_FEATURE_LINKS.exports,
+    linkLabel: 'Katso PDF- ja Excel-viennit',
   },
   {
     icon: ChartBar,
-    title: 'Raportointi ja tilannekuva',
-    text: 'Nosta johdon, laskennan ja projektivastuullisten tarvitsema näkymä samasta tietopohjasta.',
+    title: 'Raportointi ja johdon tilannekuva',
+    text: 'Nosta johdon, laskennan ja projektivastuun tarvitsema yhteinen nakyvyys samasta tietopohjasta.',
     bullets: [
-      'Tarjousten, projektien ja katteen kehitys yhdessä raportoinnissa.',
-      'Tuote- ja myyntinäkymät saman palvelun sisällä.',
-      'Johto ei joudu kokoamaan tilannekuvaa hajanaisista lähteistä.',
+      'Tarjousten, projektien ja katteen kehitysta voidaan tarkastella samassa ymparistossa.',
+      'Johto ei joudu kokoamaan tilannekuvaa hajanaisista lahteista.',
+      'Yhteinen nakyvyys tukee myyntia, laskentaa ja projektin kaynnistysta.',
     ],
-  },
-  {
-    icon: ListChecks,
-    title: 'Tarjousäly ja katselmointi',
-    text: 'Kokoa tarjouspyyntöpaketti samaan työtilaan ja vie valmisteltu sisältö hallitusti tarjouksen pohjaksi.',
-    bullets: [
-      'Dokumenttikoonti, havaintojen nosto ja riskien jäsennys.',
-      'Deterministinen katselmointipolku ilman mustan laatikon lupauksia.',
-      'Hallittu siirto normaalin tarjousprosessin jatkoksi.',
-    ],
+    href: PUBLIC_SITE_PATHS.features,
+    linkLabel: 'Tutustu ominaisuuksiin',
   },
 ];
 
 const processSteps = [
   {
     step: '01',
-    icon: Folder,
-    title: 'Kokoa lähtötieto',
-    text: 'Projektin asiakas-, kohde- ja tarjouspyyntötieto saadaan samaan työtilaan heti alussa.',
+    icon: FolderOpen,
+    title: 'Kokoa tarjous ja lahtotiedot',
+    text: 'Tuo kohde, asiakkaan tiedot, tarjouspyynto ja tarjouksen lahtorivit samaan tyotilaan heti alussa.',
   },
   {
     step: '02',
     icon: FileText,
-    title: 'Rakenna tarjous',
-    text: 'Tarjous muodostetaan rekisteristä, versiot säilyvät luettavina ja sisältö pysyy hallittuna.',
+    title: 'Muokkaa ja tarkista tarjous',
+    text: 'Tarjouseditori, katselmointi ja kateohjaus pitavat sisallon, riskit ja lahetyspaatoksen samassa nakymassa.',
   },
   {
     step: '03',
-    icon: CurrencyCircleDollar,
-    title: 'Tarkista kate',
-    text: 'Marginaali, lisäkulut ja loppusumma tarkistetaan ennen lähetystä samalla kun sisältö lukitaan.',
-  },
-  {
-    step: '04',
     icon: CalendarCheck,
-    title: 'Käynnistä projekti',
-    text: 'Hyväksytty tarjous jatkuu projektin lähtöpisteeksi, määräajoiksi ja laskutuksen viitepohjaksi.',
+    title: 'Seuraa katetta ja vie dokumentit ulos',
+    text: 'Hyvaksytty tarjous voi jatkua projektin lahtotiedoksi ja tiedot voidaan vieda PDF- ja Excel-muotoon oikeassa kohdassa.',
   },
 ];
 
@@ -343,119 +354,76 @@ const roleCards = [
   {
     icon: ChartBar,
     title: 'Johdolle',
-    text: 'Kun tarvitset näkyvyyden siihen, miten tarjouskanta, kate ja käynnissä olevat kohteet oikeasti liikkuvat.',
+    text: 'Kun tarvitset nakyvyyden siihen, miten tarjouskanta, kate ja kaynnissa olevat kohteet oikeasti liikkuvat.',
     bullets: [
-      'Tilannekuva tarjouksista, projekteista ja raporteista samassa ympäristössä.',
-      'Vähemmän tulkinnanvaraa siitä, millä tiedolla päätöksiä tehdään.',
-      'Selkeämpi tapa ohjata liiketoiminnan kriittistä päätöspistettä.',
+      'Tilannekuva tarjouksista, projekteista ja raporteista samassa ymparistossa.',
+      'Vahemman tulkinnanvaraa siita, milla tiedolla paatoksia tehdaan.',
+      'Selkeampi tapa ohjata liiketoiminnan kriittista paatospistetta.',
     ],
   },
   {
-    icon: HardHat,
+    icon: CurrencyCircleDollar,
     title: 'Tarjouslaskennalle',
-    text: 'Kun tarjoukset pitää saada ulos hallitusti ilman jatkuvaa tiedostojen yhdistelemistä tai hintojen etsimistä.',
+    text: 'Kun tarvitset paikan, jossa tarjous, tuoterivit, kate ja versiot pysyvat hallitusti yhdessa.',
     bullets: [
-      'Tuote- ja hintarekisteri tukee toistuvaa tarjousvalmistelua.',
-      'Versiot, vaihtoehdot ja sisäinen yhteenveto pysyvät samassa ketjussa.',
-      'Tarjousäly voi tuoda katselmoinnin osaksi samaa valmistelupolkua.',
+      'Vahemman tiedostoversioiden metsaystysta.',
+      'Kate, lisakulut ja sisalto tarkistettavissa samassa nakymassa.',
+      'Tarjouspyynnon katselmointi voidaan kytkea valmistelun alkuun.',
     ],
   },
   {
-    icon: Wrench,
-    title: 'Projektivastuulle',
-    text: 'Kun hyväksytyn tarjouksen pitää muuttua työn käynnistykseksi ilman, että tieto siivotaan käsin uusiksi.',
+    icon: CalendarCheck,
+    title: 'Projektin kaynnistajille',
+    text: 'Kun hyvaksytty tarjous pitaa saada siirtymaan kaytannon tekemisen lahtopisteeksi ilman kasin tehtavaa siivousta.',
     bullets: [
-      'Kohteen lähtötieto, aikataulu ja vastuupisteet saman polun jatkona.',
-      'Deadline-seuranta kytkeytyy samaan kokonaisuuteen kuin tarjousvaihe.',
-      'Snapshot-laskutus auttaa säilyttämään alkuperäisen tarjouksen viitepisteenä.',
+      'Kohde- ja aikataulutieto pysyy mukana hyvaksyinnasta eteenpain.',
+      'Snapshot-pohjainen laskutusviite sailyttaa yhteyden alkuperaiseen tarjoukseen.',
+      'Vahemman epaselvyytta siita, mika versio lopulta hyvaksyttiin.',
     ],
   },
 ];
 
 const industryItems = [
+  { icon: HardHat, label: 'Rakennusalan yritykset' },
   { icon: HardHat, label: 'Urakoitsijat' },
   { icon: Wrench, label: 'Talotekniikka' },
   { icon: Buildings, label: 'Remontointi' },
-  { icon: ListChecks, label: 'Asennusliiketoiminta' },
-  { icon: Package, label: 'Rakennusalan palveluyritykset' },
+  { icon: ListChecks, label: 'Tarjouksia laativat tiimit' },
+  { icon: Package, label: 'Projektimyyntia tekevat yritykset' },
 ];
 
-const intelligenceSteps = [
-  {
-    icon: FolderOpen,
-    title: 'Tarjouspyyntöpaketin koonti',
-    text: 'Dokumentit, liitteet ja valmistelun kannalta olennainen lähtötieto kootaan samaan työtilaan.',
-  },
-  {
-    icon: MagnifyingGlass,
-    title: 'Deterministinen katselmointi',
-    text: 'Vaatimukset, riskit, puutteet ja evidenssi voidaan jäsentää katselmointia varten ilman mustan laatikon lupausta.',
-  },
+const destinationCards = [
   {
     icon: FileText,
-    title: 'Hallittu siirto tarjoukseen',
-    text: 'Valmisteltu sisältö voidaan viedä tarjouksen luonnokseen versiona, jota jatketaan normaalissa työvirrassa.',
+    title: 'Tutustu tarjouseditoriin',
+    text: 'Katso miten tarjouseditori, versiot ja tarjousrivit rakentuvat saman ohjelmiston sisaan.',
+    href: PUBLIC_FEATURE_LINKS.tarjouseditori,
+  },
+  {
+    icon: CurrencyCircleDollar,
+    title: 'Katso hinnat ja kayttoonotto',
+    text: 'Arvioi, miten tarjouslaskentaohjelman kayttoonotto kannattaa kayda lapi omasta prosessista kasin.',
+    href: PUBLIC_SITE_PATHS.pricing,
+  },
+  {
+    icon: Buildings,
+    title: 'Nae miten Projekta sopii rakennusalalle',
+    text: 'Lue kenelle ohjelmisto sopii ja miksi sen sanasto seka kayttopolku on rakennettu rakennusalan tarpeisiin.',
+    href: PUBLIC_SITE_PATHS.industry,
+  },
+  {
+    icon: ListChecks,
+    title: 'Lue opas tarjouslaskentaan',
+    text: 'Avaa sisaltosivu, joka kasittelee Excel-mallin rajoja, katepaatosta ja projektijatkumoa.',
+    href: PUBLIC_SITE_PATHS.guide,
+  },
+  {
+    icon: PlayCircle,
+    title: 'Pyydä demo',
+    text: 'Kay demo lapi oman tarjousprosessin nakokulmasta eika geneerisen tuotekerroksen kautta.',
+    href: PUBLIC_SITE_PATHS.demo,
   },
 ];
-
-const faqItems = [
-  {
-    question: 'Onko Projekta vain tarjouksen ulkoasun työkalu?',
-    answer:
-      'Ei. Tavoite on pitää tarjouslaskenta, kate, versiot, projektin käynnistys ja osa katselmointityöstä samassa hallitussa työtilassa. Asiakasnäkyvä lopputulos on vain yksi osa kokonaisuutta.',
-  },
-  {
-    question: 'Pitääkö koko toimintamalli vaihtaa kerralla?',
-    answer:
-      'Ei välttämättä. Käyttö voi alkaa siitä kohdasta, jossa hajanaisuus sattuu eniten: tarjousversioista, kate-reviewsta, tuote- ja hintarekisteristä tai hyväksytyn tarjouksen siirrosta projektiksi.',
-  },
-  {
-    question: 'Mitä Tarjousäly tarkoittaa käytännössä?',
-    answer:
-      'Tarjousäly tarkoittaa tarjouspyyntöpaketin koontia, havaintojen jäsentämistä ja katselmoitavaa siirtopolkua tarjousvalmisteluun. Se ei väitä korvaavansa päätöksentekoa mustalla laatikolla.',
-  },
-  {
-    question: 'Voiko nykyinen käyttäjä tulla sivulta suoraan työtilaan?',
-    answer:
-      'Kyllä. Etusivu toimii samalla julkisena etuovena ja nopeana polkuna kirjautumiseen nykyisille käyttäjille.',
-  },
-  {
-    question: 'Miksi tämä on kaupallisesti tärkeää?',
-    answer:
-      'Koska tarjous on monessa rakennusalan yrityksessä työn käynnistymisen kriittinen päätöspiste. Jos tieto on hajallaan juuri siinä kohdassa, riski siirtyy suoraan katteeseen, käynnistykseen ja johdon näkyvyyteen.',
-  },
-];
-
-const trustItems = [
-  {
-    icon: ShieldCheck,
-    title: 'Virallinen julkinen etuovi',
-    text: 'Julkinen sivu, kirjautuminen ja työtilaan siirtyminen kuuluvat samaan palvelukokonaisuuteen.',
-  },
-  {
-    icon: Lock,
-    title: 'Julkiset juridiset dokumentit',
-    text: 'Käyttöehdot, tietosuoja ja muut dokumentit voidaan tuoda luettaviksi saman domainin alla.',
-  },
-  {
-    icon: Clock,
-    title: 'Suoraan takaisin työn ääreen',
-    text: 'Nykyinen käyttäjä ei tarvitse erillistä navigaatiokierrosta, vaan pääsee suoraan kirjautumiseen.',
-  },
-  {
-    icon: Gear,
-    title: 'Operatiiviseen käyttöön rakennettu',
-    text: 'Palvelu on tarkoitettu tarjous- ja projektiohjauksen arkeen, ei pelkäksi markkinointikerrokseksi.',
-  },
-];
-
-function handleRequestDemo() {
-  window.location.href = buildDemoMailtoUrl();
-}
-
-function scrollToSection(sectionId: string) {
-  document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
-}
 
 function getMetricClasses(tone: Tone) {
   switch (tone) {
@@ -470,10 +438,26 @@ function getMetricClasses(tone: Tone) {
   }
 }
 
+function handleLoginAnchorClick(event: ReactMouseEvent<HTMLAnchorElement>, onNavigateToLogin: () => void) {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  onNavigateToLogin();
+}
+
 export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
   useEffect(() => {
     applyDocumentMetadata({
-      title: buildDocumentTitle('Rakennusalan tarjous- ja projektiohjaus'),
+      title: PUBLIC_HOME_TITLE,
       description: APP_MARKETING_META_DESCRIPTION,
       pathname: '/',
       siteUrl: import.meta.env.VITE_SITE_URL?.trim(),
@@ -482,83 +466,87 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f3f2ed] text-slate-950">
+      <PublicStructuredData items={getHomeStructuredData()} />
       <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(14,116,144,0.10),transparent_34%),radial-gradient(circle_at_84%_4%,rgba(180,83,9,0.10),transparent_26%),linear-gradient(180deg,#f3f2ed_0%,#f8fafc_52%,#ffffff_100%)]" />
       <div className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-[540px] bg-[linear-gradient(180deg,rgba(15,23,42,0.04),transparent)]" />
 
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-[#f3f2ed]/88 backdrop-blur-xl">
-        <div className="mx-auto flex h-[76px] max-w-7xl items-center justify-between gap-6 px-6">
-          <button className="min-w-0 text-left" type="button" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            <div className="flex items-center gap-3">
-              <div className="text-lg font-semibold tracking-tight text-slate-950">{APP_NAME}</div>
-              <Badge variant="outline" className="hidden rounded-full border-slate-300 bg-white/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600 sm:inline-flex">
-                Rakennusalan tarjous- ja projektiohjaus
-              </Badge>
-            </div>
-          </button>
-
-          <nav className="hidden items-center gap-8 text-sm font-medium text-slate-600 lg:flex">
-            <a className="transition hover:text-slate-950" href="#ratkaisu">Miksi</a>
-            <a className="transition hover:text-slate-950" href="#tyotila">Työtila</a>
-            <a className="transition hover:text-slate-950" href="#tarjousaly">Tarjousäly</a>
-            <a className="transition hover:text-slate-950" href="#faq">FAQ</a>
-          </nav>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Button variant="outline" className="hidden border-slate-300 bg-white/70 text-slate-700 hover:bg-white sm:inline-flex" onClick={handleRequestDemo}>
-              Varaa esittely
-            </Button>
-            <Button className="h-10 gap-2 rounded-full px-5 text-sm shadow-[0_18px_30px_-18px_rgba(15,23,42,0.8)]" onClick={onNavigateToLogin}>
-              Kirjaudu sisään
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </header>
+      <PublicSiteHeader currentPath={PUBLIC_SITE_PATHS.home} />
 
       <main>
         <section className="relative overflow-hidden">
           <div className="mx-auto grid max-w-7xl gap-14 px-6 pb-20 pt-16 lg:grid-cols-[0.92fr_1.08fr] lg:items-start lg:gap-12 lg:pb-28 lg:pt-20">
             <div className="max-w-2xl">
               <Badge className="rounded-full border border-slate-300 bg-white/[0.85] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 shadow-sm hover:bg-white">
-                Projekta rakennusalan tarjous- ja projektiohjaukseen
+                Projekta tarjouslaskentaohjelma rakennusalalle
               </Badge>
               <h1 className="mt-6 text-4xl font-semibold leading-[1.02] tracking-[-0.05em] text-slate-950 sm:text-[3.45rem] lg:text-[4.1rem]">
-                Ohjaa tarjous, kate, projekti ja tarjouspyynnön katselmointi samassa työtilassa.
+                Tarjouslaskentaohjelma rakennusalan yrityksille
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">
-                Projekta on rakennusalan yrityksille suunniteltu palvelu, joka kokoaa tarjouslaskennan, tuote- ja hintatiedon, projektin käynnistyksen sekä Tarjousälyn saman hallitun kokonaisuuden alle. Kun tarjous ei hajoa irrallisiksi tiedostoiksi, myös päätös on helpompi tehdä oikein.
+                Projekta on yrityskayttoon tehty ohjelmisto, jossa tarjouseditori, tarjouspyyntojen katselmointi, kateohjaus, projektiseuranta seka PDF- ja Excel-viennit kuuluvat samaan tyotilaan. Tarjous ei jaa irralliseksi dokumentiksi eika tieto ela erikseen Excelissa, PDF:issa ja muistiinpanoissa.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <Button className="h-12 gap-2 rounded-full px-7 text-sm shadow-[0_24px_40px_-22px_rgba(15,23,42,0.8)]" onClick={onNavigateToLogin}>
-                  Kirjaudu sisään
-                  <ArrowRight className="h-4 w-4" />
+                <Button asChild className="h-12 gap-2 rounded-full px-7 text-sm shadow-[0_24px_40px_-22px_rgba(15,23,42,0.8)]">
+                  <a href={PUBLIC_SITE_PATHS.demo}>
+                    Pyydä demo
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
                 </Button>
-                <Button variant="outline" className="h-12 rounded-full border-slate-300 bg-white/70 px-7 text-sm text-slate-700 hover:bg-white" onClick={handleRequestDemo}>
-                  Varaa esittely
+                <Button asChild variant="outline" className="h-12 rounded-full border-slate-300 bg-white/70 px-7 text-sm text-slate-700 hover:bg-white">
+                  <a href={PUBLIC_FEATURE_LINKS.tarjouseditori}>Tutustu tarjouseditoriin</a>
                 </Button>
-                <Button variant="ghost" className="h-12 rounded-full px-5 text-sm text-slate-700 hover:bg-white/70" onClick={() => scrollToSection('tyotila')}>
-                  <PlayCircle className="h-4 w-4" />
-                  Katso työtila
+                <Button asChild variant="ghost" className="h-12 rounded-full px-5 text-sm text-slate-700 hover:bg-white/70">
+                  <a href="#miten-se-toimii">
+                    <PlayCircle className="h-4 w-4" />
+                    Katso miten se toimii
+                  </a>
                 </Button>
               </div>
+
+              <p className="mt-4 text-sm leading-7 text-slate-600">
+                Nykyinen käyttäjä?{' '}
+                <a
+                  href={PUBLIC_SITE_PATHS.login}
+                  className="font-medium text-slate-950 underline decoration-slate-300 underline-offset-4 transition hover:decoration-slate-950"
+                  onClick={(event) => handleLoginAnchorClick(event, onNavigateToLogin)}
+                >
+                  Kirjaudu sisään työtilaan.
+                </a>
+              </p>
+
+              <nav aria-label="Etusivun pikalinkit" className="mt-8 flex flex-wrap gap-3 text-sm text-slate-700">
+                {[
+                  { label: 'Tarjouseditori', href: '#tyotila' },
+                  { label: 'Miksi vaihtaa Excelistä', href: '#ratkaisu' },
+                  { label: 'Näin Projekta toimii', href: '#miten-se-toimii' },
+                  { label: 'FAQ', href: '#faq' },
+                ].map((link) => (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    className="rounded-full border border-slate-200 bg-white/70 px-4 py-2 transition hover:border-slate-300 hover:bg-white"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </nav>
 
               <div className="mt-10 grid gap-4 sm:grid-cols-2">
                 {topSignals.map((item) => {
                   const Icon = item.icon;
+
                   return (
-                    <div
+                    <article
                       key={item.title}
-                      className="rounded-[24px] border border-slate-200/90 bg-white/80 p-5 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.38)] backdrop-blur"
+                      className="rounded-[26px] border border-slate-200 bg-white/82 p-5 shadow-[0_26px_55px_-42px_rgba(15,23,42,0.34)] backdrop-blur-sm"
                     >
-                      <div className="flex items-center gap-3 text-sm font-semibold text-slate-950">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-white">
-                          <Icon className="h-5 w-5" weight="bold" />
-                        </span>
-                        {item.title}
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white">
+                        <Icon className="h-5 w-5" weight="bold" />
                       </div>
-                      <p className="mt-3 text-sm leading-7 text-slate-600">{item.text}</p>
-                    </div>
+                      <h2 className="mt-5 text-base font-semibold tracking-[-0.025em] text-slate-950">{item.title}</h2>
+                      <p className="mt-2 text-sm leading-7 text-slate-600">{item.text}</p>
+                    </article>
                   );
                 })}
               </div>
@@ -572,90 +560,69 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                     <TabsTrigger
                       key={view.value}
                       value={view.value}
-                      className="min-h-[56px] rounded-[18px] border border-transparent px-4 py-3 text-left text-xs font-semibold leading-5 text-slate-600 data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:text-slate-950"
+                      className="min-h-[4.5rem] flex-col items-start justify-center rounded-[18px] border border-transparent px-4 py-3 text-left data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:shadow-sm"
                     >
-                      {view.label}
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{view.eyebrow}</span>
+                      <span className="mt-1 text-sm font-semibold text-slate-950">{view.label}</span>
                     </TabsTrigger>
                   ))}
                 </TabsList>
 
                 {workspaceViews.map((view) => (
-                  <TabsContent key={view.value} value={view.value} className="mt-4">
-                    <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_40px_80px_-44px_rgba(15,23,42,0.42)]">
-                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-6 py-5">
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{view.eyebrow}</div>
-                          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{view.title}</h2>
+                  <TabsContent key={view.value} value={view.value} className="mt-4 rounded-[34px] border border-slate-200 bg-white p-7 shadow-[0_30px_70px_-46px_rgba(15,23,42,0.45)] sm:p-8">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Badge variant="outline" className="rounded-full border-slate-300 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
+                        {view.eyebrow}
+                      </Badge>
+                      {view.highlights.map((highlight) => (
+                        <span
+                          key={highlight}
+                          className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600"
+                        >
+                          {highlight}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="mt-6 max-w-2xl">
+                      <h2 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950 sm:text-[2rem]">{view.title}</h2>
+                      <p className="mt-4 text-base leading-8 text-slate-600">{view.description}</p>
+                    </div>
+
+                    <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                      {view.metrics.map((metric) => (
+                        <div
+                          key={metric.label}
+                          className={`rounded-[24px] border px-4 py-4 shadow-sm ${getMetricClasses(metric.tone)}`}
+                        >
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-75">{metric.label}</div>
+                          <div className="mt-2 text-sm font-semibold leading-6">{metric.value}</div>
                         </div>
-                        <Badge variant="outline" className="rounded-full border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-                          Esimerkkityötila
-                        </Badge>
+                      ))}
+                    </div>
+
+                    <div className="mt-8 overflow-hidden rounded-[28px] border border-slate-200 bg-[#f6f7f3]">
+                      <div className="grid grid-cols-[1.1fr_1.4fr_auto] gap-4 border-b border-slate-200 px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        <span>Osio</span>
+                        <span>Selite</span>
+                        <span className="text-right">Arvo</span>
                       </div>
-
-                      <div className="grid gap-6 p-6 lg:grid-cols-[1.18fr_0.82fr]">
-                        <div>
-                          <p className="max-w-2xl text-sm leading-7 text-slate-600">{view.description}</p>
-                          <div className="mt-5 flex flex-wrap gap-2.5">
-                            {view.highlights.map((highlight) => (
-                              <span
-                                key={highlight}
-                                className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600"
-                              >
-                                {highlight}
-                              </span>
-                            ))}
-                          </div>
-
-                          <div className="mt-6 grid gap-3 md:grid-cols-3">
-                            {view.metrics.map((metric) => (
-                              <div key={metric.label} className={`rounded-[20px] border p-4 ${getMetricClasses(metric.tone)}`}>
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">{metric.label}</div>
-                                <div className="mt-2 text-lg font-semibold tracking-[-0.02em]">{metric.value}</div>
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="mt-6 overflow-hidden rounded-[24px] border border-slate-200 bg-slate-50/75">
-                            <div className="grid grid-cols-[0.85fr_1.4fr_auto] gap-3 border-b border-slate-200 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                              <div>Ohjauspiste</div>
-                              <div>Selite</div>
-                              <div className="text-right">Arvo</div>
-                            </div>
-                            <div className="divide-y divide-slate-200">
-                              {view.rows.map((row) => (
-                                <div key={`${view.value}-${row.label}`} className="grid gap-3 px-4 py-3 text-sm sm:grid-cols-[0.85fr_1.4fr_auto] sm:items-center">
-                                  <div className="font-semibold text-slate-950">{row.label}</div>
-                                  <div className="text-slate-600">{row.detail}</div>
-                                  <div className="text-right font-semibold text-slate-950">{row.value}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                      {view.rows.map((row) => (
+                        <div key={row.label} className="grid grid-cols-[1.1fr_1.4fr_auto] gap-4 border-b border-slate-200/80 px-5 py-4 text-sm leading-7 last:border-b-0">
+                          <div className="font-semibold text-slate-950">{row.label}</div>
+                          <div className="text-slate-600">{row.detail}</div>
+                          <div className="text-right font-semibold text-slate-950">{row.value}</div>
                         </div>
+                      ))}
+                    </div>
 
-                        <div className="space-y-3">
-                          {view.notes.map((note) => (
-                            <div key={`${view.value}-${note.title}`} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-[0_18px_34px_-30px_rgba(15,23,42,0.3)]">
-                              <div className="flex items-start gap-3">
-                                <span className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-                                  <CheckCircle className="h-4 w-4" weight="fill" />
-                                </span>
-                                <div>
-                                  <div className="text-sm font-semibold text-slate-950">{note.title}</div>
-                                  <p className="mt-2 text-sm leading-7 text-slate-600">{note.text}</p>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-
-                          <div className="rounded-[24px] border border-slate-900 bg-slate-950 p-5 text-white shadow-[0_24px_60px_-36px_rgba(15,23,42,0.8)]">
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/60">Miksi tämä on tärkeää</div>
-                            <p className="mt-3 text-sm leading-7 text-white/80">
-                              Kun tarjous toimii työn todellisena lähtöpisteenä, myös myynnin, katselmoinnin ja projektin käynnistyksen pitää nojata samaan tietoon. Tässä kohtaa Projekta tekee arjesta hallitumman.
-                            </p>
-                          </div>
+                    <div className="mt-8 grid gap-4 lg:grid-cols-3">
+                      {view.notes.map((note) => (
+                        <div key={note.title} className="rounded-[24px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                          <div className="text-sm font-semibold text-slate-950">{note.title}</div>
+                          <p className="mt-2 text-sm leading-7 text-slate-600">{note.text}</p>
                         </div>
-                      </div>
+                      ))}
                     </div>
                   </TabsContent>
                 ))}
@@ -670,37 +637,37 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
               <div className="max-w-xl">
                 <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Miksi tämä tarvitaan</div>
                 <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-4xl">
-                  Tarjous on työn käynnistymisen kriittinen päätöspiste, ei irrallinen dokumentti.
+                  Miksi Excel-, PDF- ja sahkopostipohjainen tarjouslaskenta hidastaa rakennusalan tyota
                 </h2>
                 <p className="mt-5 text-lg leading-8 text-slate-600">
-                  Jos tarjousprosessin tieto elää eri kansioissa, eri laskelmissa ja eri ihmisillä, kaupallinen riski syntyy jo ennen kuin työ on alkanut. Silloin ongelma ei ole vain hitaus, vaan ohjauksen puute.
+                  Tarjous on tyon kaynnistymisen kriittinen paatospiste. Jos tieto ela eri kansioissa, eri laskelmissa ja eri ihmisilla, ongelma ei ole vain hitaus vaan myos se, etta tarjous, kate ja projektin lahtotieto eivat enaa kohtaa samassa paatoshetkessa.
                 </p>
 
                 <div className="mt-8 rounded-[28px] border border-amber-200/80 bg-amber-50/80 p-6 shadow-[0_18px_42px_-32px_rgba(120,53,15,0.35)]">
                   <div className="flex items-center gap-3 text-sm font-semibold text-amber-950">
                     <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
-                      <Warning className="h-5 w-5" weight="fill" />
+                      <Warning className="h-4 w-4" weight="bold" />
                     </span>
-                    Kun tarjous ohjataan hajanaisesta tiedosta
+                    Kun tarjous elaa eri tiedostoissa
                   </div>
                   <p className="mt-4 text-sm leading-7 text-amber-950/80">
-                    päätös tehdään usein ennen kuin kate, riskit, toimitusrajat tai projektin käynnistämiseen tarvittava lähtötieto ovat oikeasti samalla pöydällä.
+                    paatos tehdaan usein ennen kuin kate, riskit, toimitusrajat tai projektin kaynnistamiseen tarvittava lahtotieto ovat oikeasti samalla poydalla.
                   </p>
                 </div>
               </div>
 
               <div className="grid gap-6 lg:grid-cols-2">
-                <div className="rounded-[32px] border border-[#5e2623] bg-[#271819] p-7 text-white shadow-[0_28px_60px_-38px_rgba(39,24,25,0.88)]">
-                  <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.16em] text-white/80">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white">
+                <div className="rounded-[32px] border border-rose-200 bg-[#fff4f3] p-7 shadow-[0_28px_60px_-40px_rgba(190,24,93,0.18)]">
+                  <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.16em] text-rose-900">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-100 text-rose-700">
                       <X className="h-4 w-4" weight="bold" />
                     </span>
-                    Ilman hallittua työtilaa
+                    Hajanaisessa mallissa
                   </div>
                   <ul className="mt-6 space-y-4">
                     {operationalRisks.map((item) => (
-                      <li key={item} className="flex items-start gap-3 text-sm leading-7 text-white/80">
-                        <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-300" />
+                      <li key={item} className="flex items-start gap-3 text-sm leading-7 text-rose-950/80">
+                        <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-rose-400" />
                         {item}
                       </li>
                     ))}
@@ -712,7 +679,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                     <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
                       <CheckCircle className="h-4 w-4" weight="fill" />
                     </span>
-                    Projektalla
+                    Projektalla tarjous pysyy ohjelmistossa
                   </div>
                   <ul className="mt-6 space-y-4">
                     {operationalOutcomes.map((item) => (
@@ -731,12 +698,12 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
         <section id="tyotila" className="border-t border-slate-200 bg-[#f6f7f3]">
           <div className="mx-auto max-w-7xl px-6 py-20 lg:py-24">
             <div className="mx-auto max-w-3xl text-center">
-              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Mitä tällä tehdään</div>
+              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Ominaisuudet</div>
               <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-4xl">
-                Projekta ei myy yhtä näkymää. Se kokoaa työvaiheet, joiden pitää pysyä yhdessä.
+                Tarjouseditori, tarjouspyyntojen katselmointi, kateohjaus, projektiseuranta ja PDF- ja Excel-viennit
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                Etusivun pitää pystyä kertomaan nopeasti, mitä palvelulla oikeasti tehdään. Siksi alla ei ole geneerisiä hyötylauseita, vaan tuotteen toiminnalliset ydinalueet.
+                Projekta ei yrita piilottaa toimintaa geneerisen tyotilapuheen taakse. Alla ovat ne kokonaisuudet, joilla rakennusalan tarjouslaskentaohjelma ratkaisee arjen kaytannon tyon.
               </p>
             </div>
 
@@ -747,12 +714,12 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                 return (
                   <article
                     key={card.title}
-                    className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_20px_48px_-34px_rgba(15,23,42,0.32)]"
+                    className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_24px_55px_-40px_rgba(15,23,42,0.3)]"
                   >
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
                       <Icon className="h-5 w-5" weight="bold" />
                     </div>
-                    <h3 className="mt-5 text-xl font-semibold tracking-[-0.025em] text-slate-950">{card.title}</h3>
+                    <h3 className="mt-6 text-xl font-semibold tracking-[-0.03em] text-slate-950">{card.title}</h3>
                     <p className="mt-3 text-sm leading-7 text-slate-600">{card.text}</p>
                     <ul className="mt-5 space-y-3">
                       {card.bullets.map((bullet) => (
@@ -762,6 +729,12 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                         </li>
                       ))}
                     </ul>
+                    <a
+                      href={card.href}
+                      className="mt-6 inline-flex text-sm font-medium text-slate-950 underline decoration-slate-300 underline-offset-4 transition hover:decoration-slate-950"
+                    >
+                      {card.linkLabel}
+                    </a>
                   </article>
                 );
               })}
@@ -769,39 +742,42 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
           </div>
         </section>
 
-        <section className="border-y border-slate-200 bg-[linear-gradient(135deg,#0f172a_0%,#162033_52%,#1f2937_100%)] text-white">
+        <section id="miten-se-toimii" className="border-y border-slate-200 bg-[linear-gradient(135deg,#0f172a_0%,#162033_52%,#1f2937_100%)] text-white">
           <div className="mx-auto max-w-7xl px-6 py-20 lg:py-24">
             <div className="max-w-3xl">
-              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/60">Ohjausketju</div>
+              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/60">Nain Projekta toimii</div>
               <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-white sm:text-4xl">
-                Yksi työtila tarjouspyynnöstä projektin käynnistykseen.
+                Kolme vaihetta, joilla tarjous pysyy hallittuna koko matkalla.
               </h2>
               <p className="mt-5 text-lg leading-8 text-white/75">
-                Paras etusivu ei vain lupaa hyötyä, vaan näyttää prosessin. Projektan kaupallinen ydin on siinä, että tarjouslaskenta, katselmointi, katepäätös ja projektin alku pysyvät kiinni samassa polussa.
+                Kun etsit tarjouslaskentaohjelmaa rakennusalan yrityksille, tarkeinta ei ole yksi nayttava nakyma vaan se, etta kayttopolku kestaa tarjouspyynnosta ulos vietavaan dokumenttiin ja projektin alkuun asti.
               </p>
             </div>
 
-            <div className="mt-14 grid gap-5 xl:grid-cols-4">
+            <div className="mt-14 grid gap-5 xl:grid-cols-3">
               {processSteps.map((step) => {
                 const Icon = step.icon;
 
                 return (
-                  <div key={step.step} className="rounded-[28px] border border-white/10 bg-white/[0.06] p-6 backdrop-blur-sm">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-sm font-semibold uppercase tracking-[0.18em] text-white/[0.55]">{step.step}</span>
+                  <article
+                    key={step.step}
+                    className="rounded-[30px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_28px_55px_-40px_rgba(15,23,42,0.65)] backdrop-blur-sm"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-semibold uppercase tracking-[0.22em] text-white/55">Vaihe {step.step}</span>
                       <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-white">
                         <Icon className="h-5 w-5" weight="bold" />
                       </span>
                     </div>
-                    <h3 className="mt-8 text-xl font-semibold tracking-[-0.025em] text-white">{step.title}</h3>
-                    <p className="mt-3 text-sm leading-7 text-white/[0.72]">{step.text}</p>
-                  </div>
+                    <h3 className="mt-6 text-xl font-semibold tracking-[-0.03em] text-white">{step.title}</h3>
+                    <p className="mt-3 text-sm leading-7 text-white/72">{step.text}</p>
+                  </article>
                 );
               })}
             </div>
 
             <div className="mt-10 rounded-[28px] border border-white/10 bg-white/[0.06] px-6 py-5 text-sm leading-7 text-white/75 backdrop-blur-sm">
-              Tarjousäly voidaan kytkeä ketjun alkuun silloin, kun tarjouspyyntöpaketin koonti, havaintojen jäsentäminen ja hallittu siirto tarjousvalmisteluun halutaan tuoda saman palvelun alle.
+              Tarjouspyyntojen katselmointi voidaan kytkea ketjun alkuun silloin, kun tarjouspyyntopaketin koonti, havaintojen jasentaminen ja hallittu siirto tarjousvalmisteluun halutaan tuoda saman ohjelmiston alle.
             </div>
           </div>
         </section>
@@ -809,12 +785,12 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
         <section id="kenelle" className="border-t border-slate-200 bg-white">
           <div className="mx-auto max-w-7xl px-6 py-20 lg:py-24">
             <div className="mx-auto max-w-3xl text-center">
-              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Kenelle</div>
+              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Kenelle tama on tehty</div>
               <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-4xl">
-                Hyöty näkyy heti siellä, missä tarjous vaikuttaa päivittäiseen työhön.
+                Kenelle Projekta sopii
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                Projekta on tehty yrityksille, joille tarjous ei ole hallinnollinen liite vaan liiketoiminnan, katteen ja projektin käynnistymisen ohjauspiste.
+                Projekta on tehty yrityksille, joille tarjous ei ole hallinnollinen liite vaan liiketoiminnan, katteen ja projektin kaynnistymisen ohjauspiste.
               </p>
             </div>
 
@@ -825,12 +801,12 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                 return (
                   <article
                     key={card.title}
-                    className="rounded-[28px] border border-slate-200 bg-[#f6f7f3] p-6 shadow-[0_18px_42px_-36px_rgba(15,23,42,0.26)]"
+                    className="rounded-[30px] border border-slate-200 bg-[#f6f7f3] p-6 shadow-[0_24px_50px_-42px_rgba(15,23,42,0.22)]"
                   >
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-950 shadow-sm">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
                       <Icon className="h-5 w-5" weight="bold" />
                     </div>
-                    <h3 className="mt-5 text-xl font-semibold tracking-[-0.025em] text-slate-950">{card.title}</h3>
+                    <h3 className="mt-6 text-xl font-semibold tracking-[-0.03em] text-slate-950">{card.title}</h3>
                     <p className="mt-3 text-sm leading-7 text-slate-600">{card.text}</p>
                     <ul className="mt-5 space-y-3">
                       {card.bullets.map((bullet) => (
@@ -850,10 +826,13 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                 const Icon = item.icon;
 
                 return (
-                  <div key={item.label} className="inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm">
+                  <span
+                    key={item.label}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm"
+                  >
                     <Icon className="h-4 w-4 text-slate-500" weight="bold" />
                     {item.label}
-                  </div>
+                  </span>
                 );
               })}
             </div>
@@ -863,14 +842,13 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
         <section id="tarjousaly" className="border-t border-slate-200 bg-[#f6f7f3]">
           <div className="mx-auto grid max-w-7xl gap-10 px-6 py-20 lg:grid-cols-[0.86fr_1.14fr] lg:items-start lg:py-24">
             <div className="max-w-xl">
-              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Tarjousäly</div>
+              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Tarjouspyyntojen katselmointi</div>
               <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-4xl">
-                Tarjouspyyntöjen katselmointi osaksi hallittua tarjousprosessia.
+                Tarjouspyyntojen katselmointi osaksi hallittua tarjousprosessia
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                Tarjousäly on tarkoitettu tilanteisiin, joissa tarjouspyyntöpaketin sisältö, vaatimukset ja riskit pitää saada samaan työtilaan ennen varsinaista tarjousta. Se vahvistaa tarjouksen valmistelua, ei korvaa harkintaa epämääräisellä automaatiolupauksella.
+                Tarjouspyyntojen katselmointi on tarkoitettu tilanteisiin, joissa tarjouspyyntopaketin sisalto, vaatimukset ja riskit pitaa saada samaan tyotilaan ennen varsinaista tarjousta. Se vahvistaa tarjouslaskentaa, ei korvaa harkintaa epamaaraisella automaatiolupauksella.
               </p>
-
               <div className="mt-6 flex flex-wrap gap-3">
                 {['Ei mustaa laatikkoa', 'Katselmoitava polku', 'Hallittu siirto tarjoukseen'].map((item) => (
                   <span key={item} className="inline-flex rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700">
@@ -878,34 +856,71 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                   </span>
                 ))}
               </div>
-
-              <div className="mt-8 rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_20px_48px_-36px_rgba(15,23,42,0.25)]">
-                <div className="flex items-center gap-3 text-sm font-semibold text-slate-950">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-white">
-                    <MagnifyingGlass className="h-5 w-5" weight="bold" />
-                  </span>
-                  Mitä tämä tarkoittaa käytännössä?
-                </div>
-                <p className="mt-4 text-sm leading-7 text-slate-600">
-                  Sama palvelu voi tukea sekä varsinaista tarjouslaskentaa että tarjouspyynnön läpikäyntiä, jolloin vaatimukset, riskit, puuttuvat tiedot ja luonnokseen vietävä sisältö eivät jää erillisiksi muistiinpanoiksi.
-                </p>
-              </div>
             </div>
 
             <div className="grid gap-5 md:grid-cols-3">
-              {intelligenceSteps.map((step) => {
+              {[
+                {
+                  icon: FolderOpen,
+                  title: 'Tarjouspyyntopaketin koonti',
+                  text: 'Dokumentit, liitteet ja valmistelun kannalta olennainen lahtotieto kootaan samaan tyotilaan.',
+                },
+                {
+                  icon: MagnifyingGlass,
+                  title: 'Deterministinen katselmointi',
+                  text: 'Vaatimukset, riskit, puutteet ja evidenssi voidaan jasentaa katselmointia varten ilman mustan laatikon lupausta.',
+                },
+                {
+                  icon: FileText,
+                  title: 'Hallittu siirto tarjoukseen',
+                  text: 'Valmisteltu sisalto voidaan vieda tarjouksen luonnokseen versiona, jota jatketaan normaalissa tyovirrassa.',
+                },
+              ].map((step) => {
                 const Icon = step.icon;
 
                 return (
                   <article
                     key={step.title}
-                    className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_20px_48px_-36px_rgba(15,23,42,0.28)]"
+                    className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_24px_50px_-40px_rgba(15,23,42,0.22)]"
                   >
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
                       <Icon className="h-5 w-5" weight="bold" />
                     </div>
-                    <h3 className="mt-6 text-xl font-semibold tracking-[-0.025em] text-slate-950">{step.title}</h3>
+                    <h3 className="mt-6 text-lg font-semibold tracking-[-0.03em] text-slate-950">{step.title}</h3>
                     <p className="mt-3 text-sm leading-7 text-slate-600">{step.text}</p>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section className="border-t border-slate-200 bg-white/70">
+          <div className="mx-auto max-w-7xl px-6 py-20 lg:py-24">
+            <div className="mx-auto max-w-3xl text-center">
+              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Tutustu tarkemmin</div>
+              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-4xl">
+                Jatka siita sisallosta, joka vastaa omaa hakuintenttiasi.
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600">
+                Etusivun ei tarvitse kantaa koko domainin nakyvyytta yksin. Siksi tarkeimmille kaupallisille ja sisallollisille aiheille on omat crawlattavat sivut.
+              </p>
+            </div>
+
+            <div className="mt-14 grid gap-6 md:grid-cols-2 xl:grid-cols-5">
+              {destinationCards.map((card) => {
+                const Icon = card.icon;
+
+                return (
+                  <article key={card.href} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.24)]">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white">
+                      <Icon className="h-5 w-5" weight="bold" />
+                    </div>
+                    <h3 className="mt-5 text-lg font-semibold tracking-[-0.025em] text-slate-950">{card.title}</h3>
+                    <p className="mt-3 text-sm leading-7 text-slate-600">{card.text}</p>
+                    <a href={card.href} className="mt-5 inline-flex text-sm font-medium text-slate-950 underline decoration-slate-300 underline-offset-4 transition hover:decoration-slate-950">
+                      Avaa sivu
+                    </a>
                   </article>
                 );
               })}
@@ -919,20 +934,20 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
               <div>
                 <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">FAQ</div>
                 <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-4xl">
-                  Vastauksia kysymyksiin, jotka ratkaisevat etusivun uskottavuuden.
+                  Usein kysyttyä tarjouslaskentaohjelmasta rakennusalalle
                 </h2>
                 <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-                  Etusivun myyntipuheen pitää kestää myös kriittinen lukutapa. Siksi tärkeät vastaukset kannattaa sanoa suoraan ilman ylilupauksia.
+                  FAQ toimii seka ostamisen etta hakukoneen nakokulmasta vain silloin, kun kysymykset ovat oikeita eika keinotekoisesti keksittyja SEO-otsikoita.
                 </p>
 
                 <div className="mt-8 rounded-[28px] border border-slate-200 bg-[#f6f7f3] px-6 py-3">
                   <Accordion type="single" collapsible>
-                    {faqItems.map((item) => (
+                    {PUBLIC_HOME_FAQ_ITEMS.map((item) => (
                       <AccordionItem key={item.question} value={item.question} className="border-slate-200">
                         <AccordionTrigger className="py-5 text-base font-semibold text-slate-950 hover:no-underline">
                           {item.question}
                         </AccordionTrigger>
-                        <AccordionContent className="pb-5 pr-8 text-sm leading-7 text-slate-600">
+                        <AccordionContent className="pb-5 text-sm leading-7 text-slate-600">
                           {item.answer}
                         </AccordionContent>
                       </AccordionItem>
@@ -944,35 +959,37 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
               <div className="rounded-[32px] border border-slate-200 bg-[#0f172a] p-7 text-white shadow-[0_32px_70px_-42px_rgba(15,23,42,0.78)]">
                 <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/60">Luottamus ja jatkopolku</div>
                 <h3 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-white">
-                  Virallinen, kaupallinen ja käytännönläheinen etuovi samassa palvelussa.
+                  Virallinen, kaupallinen ja hakukelpoinen etuovi samassa palvelussa.
                 </h3>
-                <div className="mt-7 grid gap-4">
-                  {trustItems.map((item) => {
-                    const Icon = item.icon;
-
-                    return (
-                      <div key={item.title} className="rounded-[24px] border border-white/10 bg-white/[0.06] p-4">
-                        <div className="flex items-start gap-3">
-                          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white">
-                            <Icon className="h-5 w-5" weight="bold" />
-                          </span>
-                          <div>
-                            <div className="text-sm font-semibold text-white">{item.title}</div>
-                            <p className="mt-2 text-sm leading-7 text-white/75">{item.text}</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="mt-7 space-y-4 text-sm leading-7 text-white/75">
+                  <p>
+                    Etusivu kertoo nyt suoraan, että Projekta on tarjouslaskentaohjelma rakennusalan yrityksille. Lisäksi tärkeimmät ominaisuudet, hinnat, opas ja yhteyspolut ovat omilla crawlattavilla sivuillaan.
+                  </p>
+                  <p>
+                    Näin sekä käyttäjä että hakukone näkevät selkeämmin mitä ohjelmisto tekee, kenelle se on tehty ja miksi se on vaihtoehto hajanaiselle Excel- ja PDF-mallille.
+                  </p>
+                  <div className="grid gap-3 pt-2">
+                    <a className="rounded-[20px] border border-white/10 bg-white/[0.06] px-4 py-3 transition hover:bg-white/[0.10]" href={PUBLIC_SITE_PATHS.features}>
+                      Tutustu ominaisuuksiin
+                    </a>
+                    <a className="rounded-[20px] border border-white/10 bg-white/[0.06] px-4 py-3 transition hover:bg-white/[0.10]" href={PUBLIC_SITE_PATHS.pricing}>
+                      Katso hinnat ja kayttoonotto
+                    </a>
+                    <a className="rounded-[20px] border border-white/10 bg-white/[0.06] px-4 py-3 transition hover:bg-white/[0.10]" href={PUBLIC_SITE_PATHS.contact}>
+                      Avaa yhteystiedot
+                    </a>
+                  </div>
                 </div>
 
                 <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                  <Button className="h-12 gap-2 rounded-full bg-white px-6 text-sm text-slate-950 hover:bg-white/90" onClick={onNavigateToLogin}>
-                    Kirjaudu sisään
-                    <ArrowRight className="h-4 w-4" />
+                  <Button asChild className="h-12 gap-2 rounded-full bg-white px-6 text-sm text-slate-950 hover:bg-white/90">
+                    <a href={PUBLIC_SITE_PATHS.demo}>
+                      Pyydä demo
+                      <ArrowRight className="h-4 w-4" />
+                    </a>
                   </Button>
-                  <Button variant="outline" className="h-12 rounded-full border-white/20 bg-transparent px-6 text-sm text-white hover:bg-white/10" onClick={handleRequestDemo}>
-                    Varaa esittely
+                  <Button asChild variant="outline" className="h-12 rounded-full border-white/20 bg-transparent px-6 text-sm text-white hover:bg-white/10">
+                    <a href={PUBLIC_SITE_PATHS.features}>Tutustu ominaisuuksiin</a>
                   </Button>
                 </div>
               </div>
@@ -985,18 +1002,20 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
             <div className="mx-auto max-w-3xl text-center">
               <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/60">Seuraava askel</div>
               <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-white sm:text-4xl">
-                Kun tarjous on työn lähtöpiste, sitä ei kannata ohjata irrallisilla tiedostoilla.
+                Kun tarjous on tyon lahtopiste, sita ei kannata ohjata irrallisilla tiedostoilla.
               </h2>
               <p className="mt-5 text-lg leading-8 text-white/[0.72]">
-                Nykyinen käyttäjä pääsee tästä suoraan työtilaan. Jos arvioit ratkaisua ensimmäistä kertaa, esittelyssä voidaan käydä läpi tarjouslaskenta, kateohjaus, Tarjousäly ja projektin jatkovaiheet saman kokonaisuuden sisällä.
+                Jos arvioit uutta tarjouslaskentaohjelmaa rakennusalalle, seuraava askel on nahda miten oma tarjousprosessi, katepaatos ja dokumenttiviennit saadaan samaan kokonaisuuteen. Nykyinen käyttäjä pääsee edelleen suoraan kirjautumiseen.
               </p>
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <Button className="h-12 gap-2 rounded-full bg-white px-7 text-sm text-slate-950 hover:bg-white/[0.92]" onClick={onNavigateToLogin}>
-                  Kirjaudu sisään
-                  <ArrowRight className="h-4 w-4" />
+                <Button asChild className="h-12 gap-2 rounded-full bg-white px-7 text-sm text-slate-950 hover:bg-white/[0.92]">
+                  <a href={PUBLIC_SITE_PATHS.demo}>
+                    Pyydä demo
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
                 </Button>
-                <Button variant="outline" className="h-12 rounded-full border-white/20 bg-transparent px-7 text-sm text-white hover:bg-white/10" onClick={handleRequestDemo}>
-                  Varaa esittely
+                <Button asChild variant="outline" className="h-12 rounded-full border-white/20 bg-transparent px-7 text-sm text-white hover:bg-white/10">
+                  <a href={PUBLIC_SITE_PATHS.pricing}>Katso hinnat ja kayttoonotto</a>
                 </Button>
               </div>
             </div>
@@ -1004,23 +1023,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
         </section>
       </main>
 
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-8 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-2xl">
-            <div className="text-lg font-semibold tracking-tight text-slate-950">{APP_NAME}</div>
-            <p className="mt-2 text-sm leading-7 text-slate-600">
-              Projekta kokoaa tarjouslaskennan, kateohjauksen, projektin jatkovaiheet ja tarjouspyyntöjen katselmoinnin samaan hallittuun työtilaan rakennusalan yrityksille.
-            </p>
-            <LegalDocumentLinks className="mt-4" />
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="ghost" onClick={onNavigateToLogin}>
-              Kirjaudu sisään
-            </Button>
-            <Button onClick={handleRequestDemo}>Varaa esittely</Button>
-          </div>
-        </div>
-      </footer>
+      <PublicSiteFooter />
     </div>
   );
 }

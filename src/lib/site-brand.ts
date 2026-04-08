@@ -8,10 +8,10 @@ export const APP_CANONICAL_URL = `https://${APP_DOMAIN}`;
 export const APP_DEFAULT_UPDATE_FEED_URL = `${APP_CANONICAL_URL}/`;
 
 export const APP_META_DESCRIPTION =
-  'Projekta on rakennusalan yrityksille suunniteltu tarjouslaskennan, kateohjauksen ja projektin jatkovaiheiden hallittu tyotila.';
+  'Projekta on tarjouslaskentaohjelma rakennusalan yrityksille. Hallitse tarjoukset, tarjouspyynnot, kate ja projektit samassa tyotilassa.';
 
 export const APP_MARKETING_META_DESCRIPTION =
-  'Projekta kokoaa rakennusalan tarjouslaskennan, kateohjauksen, tarjouspyyntojen katselmoinnin ja projektin kaynnistyksen samaan hallittuun tyotilaan.';
+  'Projekta on tarjouslaskentaohjelma rakennusalan yrityksille. Hallitse tarjoukset, tarjouspyynnot, kate ja projektit samassa tyotilassa seka vie tiedot PDF- ja Excel-muotoon.';
 
 export const APP_LOGIN_META_DESCRIPTION =
   'Kirjaudu Projekta-tyotilaan hallitsemaan tarjouksia, tuotteita ja projekteja samassa jarjestelmassa.';

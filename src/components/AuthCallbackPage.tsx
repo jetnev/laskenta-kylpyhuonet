@@ -107,6 +107,7 @@ export default function AuthCallbackPage() {
     applyDocumentMetadata({
       title: buildDocumentTitle(statusTitle),
       description: message || APP_AUTH_CALLBACK_META_DESCRIPTION,
+      robots: 'noindex,nofollow',
       pathname: AUTH_CALLBACK_PATH,
       siteUrl: import.meta.env.VITE_SITE_URL?.trim(),
     });
