@@ -92,3 +92,5 @@ Kun repo on kytketty Pagesiin:
 5. Pages-osoite päivittyy uuteen versioon
 6. Jos natiivi Cloudflare-deploy ei jostain syystä etene, aja GitHubista manuaalinen `deploy-cloudflare-pages.yml` vain operatiivisena fallbackina, ei rinnakkaisena automaattisena deployna
 <!-- EOF -->
+
+
