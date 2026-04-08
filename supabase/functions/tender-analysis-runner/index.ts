@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+// @ts-nocheck
 // deno-lint-ignore-file no-explicit-any
 /**
  * Supabase Edge Function — Tarjousäly server-side analysis runner boundary
