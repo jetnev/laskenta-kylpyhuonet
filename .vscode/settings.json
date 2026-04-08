@@ -4,5 +4,6 @@
       ".github/workflows/*.yml",
       ".github/workflows/*.yaml"
     ]
-  }
+  },
+  "mssql.intelliSense.enableIntellisense": false
 }
