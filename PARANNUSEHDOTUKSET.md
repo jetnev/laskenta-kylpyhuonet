@@ -1,380 +1,154 @@
 # Laskenta - Parannusehdotukset
 
-## 🎯 Kriittiset Parannukset (Prioriteetti 1)
-
-## 🎯 Kriittiset Parannukset (Prioriteetti 1)
-
-- Lisää kunnollinen roolipohjainen kä
-  - **Editor**: Voi muokata dataa, ei voi hallita käyttäjiä
-
-
-
-
-**Ongelma**: Eri näkymät (tarjouseditori, dashboard, rap
-**Ratkaisu**:
-  - **Editor**: Voi muokata dataa, ei voi hallita käyttäjiä
-  - `calculateQuoteTotals()` - ta
-  - `calculateRowRevenue()` - rivin tuotto
-- Dokumentoi tarkasti:
-
-**Vaikutus**: Parantaa merkittävästi tietoturvaa ja mahdollistaa turvallisen monen käyttäjän käytön.
+> Päivitetty: 2026-04-08 — Toteutetut ominaisuudet merkitty ✅, osittain toteutetut ⚠️
 
 ---
 
-### 2. Yhtenäinen Laskentalogiikka
-**Ongelma**: Eri näkymät (tarjouseditori, dashboard, raportointi) saattavat laskea lukuja eri tavalla.
+## ✅ Toteutetut Ominaisuudet
 
-**Ratkaisu**:
-- Luo yksi keskitetty `src/lib/calculations.ts` tiedosto
-- Määrittele selkeät funktiot:
-  - `calculateQuoteRow()` - yksittäisen rivin laskenta
-  - `calculateQuoteTotals()` - tarjouksen kokonaissummat
-  - `calculateRowCost()` - rivin kustannus
-  - `calculateRowRevenue()` - rivin tuotto
-  - `calculateRowMargin()` - rivin kate
-- Dokumentoi tarkasti:
-  - Mitä `salesPrice` tarkoittaa
-  - Mitä `installationPrice` tarkoittaa
-  - Koskeeko `regionMultiplier` vain asennusta vai koko riviä
+Seuraavat parannusehdotukset on jo toteutettu ja ne ovat tuotantokäytössä:
 
-  - Miten kate lasketaan
-- Käytä samaa logiikkaa kaikkialla (editori, dashboard, raportit)
+### 1. Roolipohjainen Käyttöoikeushallinta ✅
 
-**Vaikutus**: Varmistaa että kaikki luvut ovat johdonmukaisia kaikkialla sovelluksessa.
+Toteutettu `src/lib/access-control.ts`. Roolit: platform admin, organization owner, employee.
+Oikeudet: `canEdit`, `canDelete`, `canManageUsers`, `canManageSharedData`, `canManageLegalDocuments`.
+
+### 2. Yhtenäinen Laskentalogiikka ✅
+
+Toteutettu `src/lib/calculations.ts`. Keskitetyt funktiot:
+- `calculateQuoteRow()` — yksittäisen rivin laskenta
+- `calculateQuote()` — tarjouksen kokonaissummat
+- `calculateRowMargin()` — rivin kate
+- ALV-käsittely ja alueellinen kerroin sisäänrakennettu
+
+### 5. Tuontitoiminnallisuus ✅
+
+Toteutettu `src/components/pages/ImportPage.tsx` ja `src/lib/catalog-io.ts`.
+Tukee CSV, XLSX, JSON, HTML -formaatteja. Esikatselu tilastoineen (luotu/päivitetty/ohitettu).
+Useita lähteitä: K-Rauta, STARK, yleinen.
+
+### 6. Deadline- ja Aikatauluhallinta ✅
+
+Toteutettu `src/components/DeadlineNotifications.tsx` ja `src/hooks/use-deadline-notifications.ts`.
+Konfiguoitavat ennakkovaroituspäivät, sähköposti-ilmoitukset.
+
+### 7. Joukkotoiminnot ✅
+
+Toteutettu `src/components/pages/ProductsPage.tsx`.
+Monivalinta: joukkoaktivoi/-deaktivoi, joukkopoisto, vie valitut CSV:ksi.
+
+### 9. Hakutoiminto ✅
+
+Toteutettu `src/components/pages/ProjectsPage.tsx` ja `ProductsPage.tsx`.
+Haku koodi, nimi, kategoria, brändi. Tallennetut suodatinpresetit.
+
+### 10. Tarjousmallien (Templates) Tuki ✅
+
+Toteutettu `src/lib/term-templates.ts`.
+Mallit kattavat ehtopohjat asiakassegmenteittäin ja scope-tyypeittäin.
+
+### 12. Dashboard ✅
+
+Toteutettu `src/components/pages/Dashboard.tsx`.
+KPI-kortit (avoimet projektit, lähetysvalmiit tarjoukset, laskutusvalmiit),
+konversiomittarit, viimeaikaiset kohteet, projektistatistiikat, hälytykset.
+
+### 13. Mobiilioptimointi ✅
+
+Toteutettu `src/hooks/use-mobile.ts` ja `src/components/ResponsiveTable.tsx`.
+Responsive breakpoint 768px, mukautuvat taulukot ja dialogit.
 
 ---
+
+## ⚠️ Osittain Toteutetut (Jatkokehitys)
 
 ### 3. Cascade Delete ja Datan Eheys
-**Ongelma**: Tarjouksen tai projektin poistaminen voi jättää "orporivejä" tietokantaan.
 
+**Nykytila**: `use-data.ts` sisältää `deleteProject()`, `deleteQuote()` ja `deleteRowsForQuote()` -funktiot, mutta automaattinen ketjupoisto puuttuu — kutsujan vastuulla poistaa alidataa.
 
-- Lisää ketjutetut poistofunktiot `use-data.ts`:ään:
-  - `deleteQuoteCascade(quoteId)` - poistaa tarjouksen JA kaikki sen rivit
-  - `deleteProjectCascade(projectId)` - poistaa projektin, sen tarjoukset JA tarjousrivit
-- Lisää varmistusdialogia ennen isoja poistoja
-**Ratkaisu**:
-  - `repairOrphanedQuoteRows()` - siivoaa rivit ilman tarjousta
-  - `repairOrphanedQuotes()` - siivoaa tarjoukset ilman projektia
+**Jäljellä**:
+- Lisää `deleteQuoteCascade(quoteId)` — poistaa tarjouksen JA kaikki sen rivit yhdellä kutsulla
+- Lisää `deleteProjectCascade(projectId)` — poistaa projektin, tarjoukset ja rivit
+- Lisää `repairOrphanedQuoteRows()` ja `repairOrphanedQuotes()` -siivoukset
 
-**Vaikutus**: Estää datan korruptoitumisen ja pitää tietokannan eheänä.
+### 4. Vientimuodot (PDF/XLSX)
 
-  -
+**Nykytila**: XLSX-vienti toimii xlsx-kirjastolla. PDF-vienti generoi HTML-dokumentin selaimen tulostunäkymään (`window.print()`), ei natiiveja PDF-tiedostoja.
 
+**Jäljellä**:
+- Korvaa HTML-pohjainen PDF-vienti oikealla PDF-generoinnilla (esim. jsPDF tai server-side)
+- Varmista pidemmällä aikavälillä suora `.pdf`-tiedoston tallennus
 
+### 11. Audit-loki ja Muutoshistoria
 
----
-**Ongelma**: "Vie PDF" ja "Vie Excel" -painikkeet eivät aina tuota oikeita tiedostomuotoja.
+**Nykytila**: `legal.ts` sisältää `listLegalAcceptanceAudit()` sopimusehtojen hyväksyntäketjulle. Yleinen muutosloki (kuka muutti mitä, milloin) puuttuu.
 
-**Ratkaisu**:
-- Korjaa XLSX-vienti käyttämään oikeaa Excel-kirjastoa
-- Korjaa PDF-vienti tuottamaan oikeita PDF-tiedostoja (ei HTML-ikkunaa)
-- Nimeä painikkeet oikein jos joku formaatti jää väliaikaisesti CSV:ksi
-- Lisää sarakekartat vientiin selkeiksi
-- Varmista että asiakasvienti piilottaa sisäiset hinnat oikein
-
-**Vaikutus**: Asiakkaat saavat ammattimaisempia tarjouksia oikeissa formaateissa.
+**Jäljellä**:
+- Lisää yleinen muutosloki tarjouksille ja tuotteille
+- Näytä loki tarjouksen yhteydessä ja asetussivulla
+- Filtteröinti käyttäjän ja päivämäärän mukaan
 
 ---
 
-### 5. Tuontitoiminnallisuuden Parantaminen
-**Ongelma**: Tuontitoiminto on piilossa ja voi aiheuttaa hiljaisia virheitä.
-
-**Ratkaisu**:
-- Lisää "Tuonti" navigaatioon näkyvästi
-- Paranna esikatselunäkymää näyttämään:
-- Näytä valintojen määrä j
-  - Keltaisella: päivitettävät rivit
-  - Punaisella: virheelliset rivit
-- Estä tuonti jos kriittisiä virheitä
-- Näytä selkeä yhteenveto tuonnin jälkeen:
-  - X uutta tuotetta lisätty
-  - Y tuotetta päivitetty
-  - Z riviä ohitettu virheiden vuoksi
-- Lisää mahdollisuus ladata virheelliset rivit Excel-tiedostona korjausta varten
-
-- Avaa heti muokkausnäkymä
-
----
-
-### 6. Deadline- ja Aikatauluhallinta
-**Ongelma**: Tarjouksille ei ole kunnollista määräajanseurantaa.
-
-**Ratkaisu**:
-  - Status (luonnos, lähetet
-  - `validUntil` - tarjouksen voimassaoloaika
-  - Hintaväli
-  - `deadlines[]` - projektiin liittyvät määräajat
-- Lisää dashboard-näkymään "Lähestyvät määräajat" -kortti
-- Lisää ilmoitusjärjestelmä:
-  - Näytä badge navigaatiossa jos määräajoja lähestyy
-  - Näytä varoitus tarjouseditorissa jos tarjous on vanhentumassa
-- Näytä mallit omassa listassaan
-
-**Vaikutus**: Parempi projektienhallinta ja vähemmän myöhästyneitä tarjouksia.
-
----
-
----
-**Ongelma**: Useiden tuotteiden muokkaus kerralla on työlästä.
-
-- Filtteröint
-- Lisää valintaruudut taulukoihin (tuotteet, hintaryhmät, projektit)
-- Lisää joukkotoimintopainikkeet:
-  - "Vaihda kategoria" - monelle tuotteelle kerralla
-  - "Päivitä hintaryhmä" - monelle tuotteelle kerralla
-  - "Poista valitut" - monelle kohteelle kerralla
-  - "Vie valitut" - vain valitut tuotteet Exceliin
-- Näytä valintojen määrä ja yhteenveto ennen toimintoa
-- Lisää "Valitse kaikki" ja "Tyhjennä valinnat" -painikkeet
-
-**Vaikutus**: Merkittävästi nopeampi massapäivitysten tekeminen.
-
----
-
-## 💡 Hyödylliset Lisäykset (Prioriteetti 3)
+## 💡 Toteuttamattomat Lisäykset
 
 ### 8. Tuotteiden Kopiointi
+
+**Ongelma**: Samankaltaisten tuotteiden luonti vaatii manuaalista syöttöä.
+
 **Ratkaisu**:
 - Lisää "Kopioi tuote" -painike tuotteen muokkausnäkymään
----
-- Lisää "(kopio)" nimen perään
-**Ratkaisu**:
-- Avaa heti muokkausnäkymä
+- Kopioi kaikki kentät ja lisää "(kopio)" nimen perään
+- Avaa heti muokkausnäkymä kopioidulle tuotteelle
 
 **Vaikutus**: Helpottaa samankaltaisten tuotteiden luontia.
 
----
-
-### 9. Tarjousten Hakutoiminto
-### 14. Kieli
-- Lisää hakukenttä projektilistaukseen
-- Etsi projektien, asiakkaiden ja tarjousten nimistä
-- Näytä hakutulokset reaaliajassa
-- Lisää suodattimet:
-  - Status (luonnos, lähetetty, hyväksytty)
-  - Alue
-  - Päivämääräväli
----
-
-**Ratkaisu**:
-
----
-
-### 10. Tarjousmallien (Templates) Tuki
-**Ratkaisu**:
-- Lisää mahdollisuus tallentaa tarjous malliksi
-- Näytä mallit omassa listassaan
-
-- Mallit voivat sisältää:
-  - Vakiorivit (esim. perus kylpyhuonepaketti)
-  - Vakioehdot
-- Lisää integr
-
-**Vaikutus**: Nopeampi vakiotarjousten luonti.
-
-- P
-
-  - `overridePrice` toiminta
-**Ratkaisu**:
-
-  - Kuka teki muutoksen
----
-  - Mitä muutettiin
-**Ratkaisu**:
-- Näytä loki:
-- Kirjoita käyttöohje:
-  - Tarjouksen yhteydessä
-  - Asetukset-sivulla (globaali loki)
-- Filtteröinti käyttäjän ja päivämäärän mukaan
-
-**Vaikutus**: Parempi auditointimahdollisuus ja virheiden jäljitys.
-
----
-
-### 12. Dashboard-parannukset
-**Ratkaisu**:
-- Lisää interaktiiviset kaaviot:
-- Tyhjissä listauksissa näytä v
-  - Tarjousten conversion rate (lähetetty → hyväksytty)
-- Linkki dokumentaatioon tai tutoriaaliin
-- Lisää suodattimet:
-  - Aikaväli (tämä kuukausi, viime kuukausi, Q1, Q2...)
-  - Alue
-  - Vastuuhenkilö
-- Lisää vertailutiedot (esim. "20% enemmän kuin viime kuussa")
-
-**Vaikutus**: Paremmat liiketoimintatiedot ja trendit näkyville.
-
----
-
-### 13. Mobiilioptimointien Viimeistely
-
-- Varmista että kaikki dialogit toimivat mobiilissa
-- Lisää "swipe to delete" -toiminto rivien poistoon mobiilissa
-- Paranna taulukoiden vieritystä pienillä näytöillä
-- Optimoi tarjouseditori tabletille:
-  - Split-view: tuotelista vasemmalla, tarjous oikealla
-
-
----
-
-
-
 ### 14. Kieliversiot
+
+**Ongelma**: Sovellus on kokonaan suomenkielinen.
+
 **Ratkaisu**:
-### Vaihe 2 - Tärkeät Parannu
-- Lisää tuki englannin kielelle
-- Asiakkaan kielivalinta vaikuttaa:
-  - Tarjousten vientikieleen
-  - Ehtojen kieleen
-  - PDF/Excel-vientien kieleen
-- Käyttöliittymä voi olla edelleen suomeksi
+- Lisää tuki englannin kielelle vientiasiakirjoihin
+- Asiakkaan kielivalinta vaikuttaa tarjousten, ehtojen ja vientien kieleen
+- Käyttöliittymä voi jäädä suomenkieliseksi
 
 **Vaikutus**: Kansainvälisten asiakkaiden palvelu helpottuu.
 
-14.
-
 ### 15. Offline-tuki
+
+**Ongelma**: Sovellus vaatii jatkuvaa verkkoyhteyttä.
+
 **Ratkaisu**:
-- Käytä Service Workeriä
-- Tallenna data selaimen välimuistiin
-1. **Lis
-  - Tarjousten katselun offline-tilassa
-  - Luonnosten muokkauksen offline-tilassa
-  - Synkronointi kun yhteys palautuu
-Yhteensä noin 1 viikko työtä, mutta merkitt
+- Käytä Service Workeriä välimuistiin
+- Mahdollista tarjousten katselu ja luonnosten muokkaus offline-tilassa
+- Synkronoi muutokset kun yhteys palautuu
 
 **Vaikutus**: Sovellus toimii myös huonolla yhteydellä tai rakennustyömaalla.
-
-- K
-
-- Ota käyttäjäpalaute huomioon ja itero
-
-
-**Ratkaisu**:
-
-- Lisää integraatiotestit CRUD-toiminnoille
-- Lisää validointitestit tuonnille
-- Lisää E2E-testit kriittisille user flowille:
-
-  - Rivien lisäys ja laskenta
-  - Tarjouksen vienti
-- Pakolliset testit:
-  - `calculateQuoteRow`
-  - `calculateQuoteTotals`
-  - `overridePrice` toiminta
-  - `regionMultiplier` soveltaminen
-
-
-**Vaikutus**: Varmistaa että uudet muutokset eivät riko olemassaolevia toimintoja.
-
-
-
-### 17. Dokumentaation Päivitys
-**Ratkaisu**:
-
-- Poista vanhat "stable/locked" -väitteet jos ne eivät pidä paikkaansa
-
-  - Ensimmäinen kirjautuminen
-
-  - Ensimmäisen tarjouksen luonti
-
-- Lisää arkkitehtuurikuvaus:
-
-  - Tietomalli
-  - Laskentalogiikka
-
-
 
 ---
 
 ## 🎨 UX/UI -Parannukset
 
-### 18. Paremmat Empty States
+### 16. Paremmat Empty States
 
 - Tyhjissä listauksissa näytä visuaalinen ikoni
 - Selkeä call-to-action: "Lisää ensimmäinen tuotteesi"
-- Lyhyt ohje mitä kyseinen osio tekee
 - Linkki dokumentaatioon tai tutoriaaliin
 
-**Vaikutus**: Intuitiivisempi kokemus uusille käyttäjille.
+### 17. Keyboard Shortcuts
 
+- Pikakomennot yleisimpiin toimintoihin (uusi tarjous, tallenna, vie)
 
+### 18. Paremmat Latausilmaisimet
 
-### 19. Keyboard Shortcuts
-**Ratkaisu**:
-
-
-
-
-
-
-
-
-
-**Vaikutus**: Nopeampi käyttö power-usereille.
-
----
-
-### 20. Paremmat Latausilmaisimet
-**Ratkaisu**:
 - Käytä skeleton loadereita taulukoissa
 - Progress bar pitkissä operaatioissa (tuonti, vienti)
-- Näytä estimaatti jäljellä olevasta ajasta
 - Optimistinen UI: näytä muutos heti, peruuta jos virhe
-
-**Vaikutus**: Sovellus tuntuu nopeammalta ja responsiivisemmalta.
-
----
-
-## 📊 Toteutusjärjestys (Suositus)
-
-### Vaihe 1 - Kriittiset Korjaukset (2-3 viikkoa)
-1. Autentikointi ja roolihallinta (PR #1)
-2. Yhtenäinen laskentalogiikka (PR #2)
-3. Cascade delete ja datan eheys (PR #3)
-
-### Vaihe 2 - Tärkeät Parannukset (2-3 viikkoa)
-4. Oikeat vientiformaatit (PR #4)
-5. Tuontitoiminnon parantaminen (PR #5)
-6. Deadline- ja aikatauluhallinta (PR #6)
-7. Joukkotoiminnot (PR #7)
-
-### Vaihe 3 - Hyödylliset Lisäykset (2-4 viikkoa)
-8. Tuotteiden kopiointi
-9. Tarjousten hakutoiminto
-10. Tarjousmallit
-11. Aktiviteettiloki
-12. Dashboard-parannukset
-
-### Vaihe 4 - Laatu ja Testaus (1-2 viikkoa)
-13. Automaattiset testit
-14. Dokumentaation päivitys
-15. UX/UI -hiominen
-
----
-
-## 🚀 Välittömät Pikavoitot (Tee ensin)
-
-Jos haluat nopeita parannuksia heti, aloita näistä:
-
-1. **Lisää joukkotoiminnot tuotehallintaan** (1 päivä)
-2. **Korjaa cascade delete tarjouksille** (1 päivä)
-3. **Lisää deadline-kentät ja ilmoitukset** (2 päivää)
-4. **Paranna tuontiesikatselua** (1 päivä)
-5. **Lisää keyboard shortcutit** (1 päivä)
-
-Yhteensä noin 1 viikko työtä, mutta merkittävä parannus käytettävyyteen.
 
 ---
 
 ## 📝 Huomiot
 
-- Kaikki muutokset on suunniteltu säilyttämään nykyinen toiminnallisuus
-- Priorisoi muutokset oman liiketoimintasi tarpeiden mukaan
+- Kaikki muutokset säilyttävät nykyisen toiminnallisuuden
+- Priorisoi muutokset liiketoiminnan tarpeiden mukaan
 - Testaa jokainen muutos huolellisesti ennen tuotantoon viemistä
-- Ota käyttäjäpalaute huomioon ja iteroi
-
----
-
-**Yhteenveto**: Sovellus on jo toimiva pohja, mutta näillä parannuksilla siitä tulee huomattavasti vakaampi, turvallisempi ja helppokäyttöisempi ammattityökalu.

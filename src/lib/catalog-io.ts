@@ -474,13 +474,13 @@ export function generateDemoSourceRecords(sourceName: string, count = 1200): Sou
 
 function getAdapterDisplayName(sourceName: string) {
   switch (normalizeComparableText(sourceName)) {
-    case 'k_rauta':
+    case 'k rauta':
       return 'K-Rauta';
     case 'stark':
       return 'STARK';
-    case 'k_rauta_demo':
+    case 'k rauta demo':
       return 'K-Rauta demo';
-    case 'stark_demo':
+    case 'stark demo':
       return 'STARK demo';
     default:
       return cleanText(sourceName) || 'Lähde';
