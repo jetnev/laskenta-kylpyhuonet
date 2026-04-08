@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '@/hooks/use-auth';
 
+import { getTenderPackageLiveStatusPollingIntervalMs } from '../lib/tender-live-status';
 import { getTenderIntelligenceRepository } from '../services/tender-intelligence-repository';
 import type {
   TenderDraftPackageImportDiagnostics,
@@ -178,6 +179,20 @@ export function useTenderIntelligence() {
     [hasOrganizationContext, repository]
   );
 
+  const refreshSelectedPackage = useCallback(async () => {
+    if (!hasOrganizationContext || !selectedPackageId) {
+      return null;
+    }
+
+    const [, nextSelectedPackage] = await Promise.all([
+      loadPackages(),
+      loadSelectedPackage(selectedPackageId),
+    ]);
+
+    setError(null);
+    return nextSelectedPackage;
+  }, [hasOrganizationContext, loadPackages, loadSelectedPackage, selectedPackageId]);
+
   const applyDraftPackageImportArtifacts = useCallback((artifacts: DraftPackageImportArtifacts) => {
     setEditorImportPreview(artifacts.preview);
     setEditorImportValidation(artifacts.validation);
@@ -322,6 +337,73 @@ export function useTenderIntelligence() {
       active = false;
     };
   }, [loadDraftPackages, loadSelectedPackage, selectedPackageId]);
+
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let refreshInProgress = false;
+
+    const pollingIntervalMs = getTenderPackageLiveStatusPollingIntervalMs({
+      selectedPackageId,
+      selectedPackage,
+      startingAnalysisPackageId,
+      extractingPackageId,
+      extractingDocumentIds,
+    });
+
+    if (!hasOrganizationContext || pollingIntervalMs == null) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const poll = async () => {
+      if (!active || refreshInProgress) {
+        return;
+      }
+
+      refreshInProgress = true;
+
+      try {
+        await refreshSelectedPackage();
+      } catch (nextError) {
+        if (active) {
+          setError(getErrorMessage(nextError));
+        }
+      } finally {
+        refreshInProgress = false;
+        scheduleNext();
+      }
+    };
+
+    const scheduleNext = () => {
+      if (!active) {
+        return;
+      }
+
+      timer = setTimeout(() => {
+        void poll();
+      }, pollingIntervalMs);
+    };
+
+    scheduleNext();
+
+    return () => {
+      active = false;
+
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [
+    extractingDocumentIds,
+    extractingPackageId,
+    hasOrganizationContext,
+    refreshSelectedPackage,
+    selectedPackage,
+    selectedPackageId,
+    startingAnalysisPackageId,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -899,7 +981,7 @@ export function useTenderIntelligence() {
         setCreatingDraftPackagePackageId((current) => (current === packageId ? null : current));
       }
     },
-    [loadDraftPackages, repository],
+    [loadDraftPackages, loadPackages, loadSelectedPackage, repository],
   );
 
   const updateDraftPackageItem = useCallback(
@@ -1173,5 +1255,6 @@ export function useTenderIntelligence() {
     updateReferenceSuggestionWorkflow,
     updateDraftArtifactWorkflow,
     updateReviewTaskWorkflow,
+    refreshSelectedPackage,
   };
 }

@@ -103,6 +103,11 @@ npm run supabase:start
 npm run supabase:migration:new -- add_descriptive_change_name
 ```
 
+Migration naming rule:
+
+- migration filename must start with a globally unique numeric version prefix (for example `2026041401_add_feature.sql`)
+- if you create multiple migrations on the same date, increment the numeric suffix (`...01`, `...02`, `...03`) instead of reusing the same date-only prefix
+
 1. Write the SQL in the new migration file under `supabase/migrations/`.
 
 1. Validate locally.

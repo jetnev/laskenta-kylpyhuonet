@@ -75,6 +75,7 @@ Tee vähintään nämä tarkistukset:
 ## 7. Muut ohjeet
 
 - Operatiivinen julkaisun tarkistuslista: `docs/release-checklist.md`
+- Tarjousälyn live smoke runbook: `docs/tender-intelligence-smoke-test.md`
 - Cloudflare + Supabase -asennus: `docs/cloudflare-pages-supabase.md`
 - Supabase-migraatiot ja turvallinen linked rollout: `supabase/README.md`
 - Jos Cloudflaren natiivi Git-deploy epäonnistuu tai sitä pitää ohittaa hallitusti, käytä vasta sitten manuaalista `deploy-cloudflare-pages.yml`-workflowta GitHub Actionsista.

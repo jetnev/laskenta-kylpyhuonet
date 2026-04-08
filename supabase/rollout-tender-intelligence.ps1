@@ -51,8 +51,78 @@ function Derive-ProjectRefFromUrl {
   return $hostParts[0]
 }
 
+function Assert-UniqueMigrationVersions {
+  param([string]$MigrationsPath)
+
+  $files = Get-ChildItem -Path $MigrationsPath -Filter '*.sql' -File | Sort-Object Name
+  $versions = @{}
+
+  foreach ($file in $files) {
+    $segments = $file.BaseName.Split('_', 2)
+    $version = if ($segments.Length -gt 0) { $segments[0] } else { $file.BaseName }
+
+    if (-not $versions.ContainsKey($version)) {
+      $versions[$version] = New-Object System.Collections.Generic.List[string]
+    }
+
+    $versions[$version].Add($file.Name)
+  }
+
+  $duplicates = $versions.GetEnumerator() | Where-Object { $_.Value.Count -gt 1 }
+
+  if ($duplicates.Count -gt 0) {
+    $messages = $duplicates | ForEach-Object {
+      "$($_.Key): $($_.Value -join ', ')"
+    }
+    throw "Duplicate migration versions detected. Ensure unique numeric prefixes before rollout. $($messages -join ' | ')"
+  }
+}
+
+function Assert-FunctionStatus {
+  param(
+    [object[]]$Functions,
+    [string]$FunctionName
+  )
+
+  $matchedFunction = $Functions | Where-Object { $_.name -eq $FunctionName } | Select-Object -First 1
+
+  if (-not $matchedFunction) {
+    throw "Function $FunctionName was not found in project function list."
+  }
+
+  if ($matchedFunction.status -ne 'ACTIVE') {
+    throw "Function $FunctionName is not ACTIVE. Current status: $($matchedFunction.status)"
+  }
+
+  Write-Host "function=$FunctionName status=$($matchedFunction.status)"
+}
+
+function Invoke-FunctionSmokeCheck {
+  param(
+    [string]$FunctionName,
+    [string]$SupabaseUrl,
+    [hashtable]$Headers
+  )
+
+  $response = Invoke-WebRequest `
+    -Uri "$SupabaseUrl/functions/v1/$FunctionName" `
+    -Headers $Headers `
+    -Method Post `
+    -ContentType 'application/json' `
+    -Body '{}' `
+    -SkipHttpErrorCheck
+
+  $acceptedStatuses = @(200, 400, 401, 403, 404, 422)
+  if ($acceptedStatuses -notcontains $response.StatusCode) {
+    throw "Function $FunctionName returned unexpected smoke status $($response.StatusCode)."
+  }
+
+  Write-Host "function=$FunctionName smokeStatus=$($response.StatusCode)"
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
+$migrationsPath = Join-Path $repoRoot 'supabase\migrations'
 
 $envLocalPath = Join-Path $repoRoot '.env.local'
 $supabaseUrl = Get-EnvFileValue -Path $envLocalPath -Key 'VITE_SUPABASE_URL'
@@ -78,11 +148,14 @@ Require-Value -Name 'VITE_SUPABASE_ANON_KEY (.env.local)' -Value $anonKey
 
 $env:SUPABASE_ACCESS_TOKEN = $AccessToken
 
+Write-Host '==> Validating migration versions are unique'
+Assert-UniqueMigrationVersions -MigrationsPath $migrationsPath
+
 Write-Host '==> Linking Supabase project'
 npx supabase link --project-ref $ProjectRef --password $DbPassword --yes
 
 Write-Host '==> Applying migrations to linked project'
-npx supabase db push --linked --password $DbPassword
+npx supabase migration up --linked --include-all --yes
 
 Write-Host '==> Deploying edge functions'
 npx supabase functions deploy tender-document-extractor --project-ref $ProjectRef
@@ -122,9 +195,31 @@ if (-not $bucketExists) {
 }
 
 Write-Host '==> Verifying edge functions are reachable'
-$fnResponse1 = Invoke-WebRequest -Uri "$supabaseUrl/functions/v1/tender-document-extractor" -Headers $headers -Method Post -ContentType 'application/json' -Body '{}'
-$fnResponse2 = Invoke-WebRequest -Uri "$supabaseUrl/functions/v1/tender-analysis-runner" -Headers $headers -Method Post -ContentType 'application/json' -Body '{}'
-Write-Host "function=tender-document-extractor status=$($fnResponse1.StatusCode)"
-Write-Host "function=tender-analysis-runner status=$($fnResponse2.StatusCode)"
+Write-Host '==> Verifying edge functions are ACTIVE'
+$functionsJson = npx supabase functions list --project-ref $ProjectRef -o json
+$functions = $functionsJson | ConvertFrom-Json
+Assert-FunctionStatus -Functions $functions -FunctionName 'tender-document-extractor'
+Assert-FunctionStatus -Functions $functions -FunctionName 'tender-analysis-runner'
+
+Write-Host '==> Verifying edge function endpoint smoke statuses'
+Invoke-FunctionSmokeCheck -FunctionName 'tender-document-extractor' -SupabaseUrl $supabaseUrl -Headers $headers
+Invoke-FunctionSmokeCheck -FunctionName 'tender-analysis-runner' -SupabaseUrl $supabaseUrl -Headers $headers
+
+Write-Host '==> Verifying analysis/extraction status contracts'
+$analysisRows = Invoke-RestMethod -Uri "$supabaseUrl/rest/v1/tender_analysis_jobs?select=id,status&order=requested_at.desc&limit=10" -Headers $headers -Method Get
+$allowedAnalysisStatuses = @('pending', 'queued', 'running', 'completed', 'failed')
+foreach ($row in $analysisRows) {
+  if ($allowedAnalysisStatuses -notcontains $row.status) {
+    throw "Unexpected tender_analysis_jobs status '$($row.status)' for row $($row.id)."
+  }
+}
+
+$extractionRows = Invoke-RestMethod -Uri "$supabaseUrl/rest/v1/tender_document_extractions?select=id,extraction_status&order=updated_at.desc&limit=10" -Headers $headers -Method Get
+$allowedExtractionStatuses = @('not_started', 'pending', 'extracting', 'extracted', 'failed', 'unsupported')
+foreach ($row in $extractionRows) {
+  if ($allowedExtractionStatuses -notcontains $row.extraction_status) {
+    throw "Unexpected tender_document_extractions status '$($row.extraction_status)' for row $($row.id)."
+  }
+}
 
 Write-Host 'Rollout completed.'

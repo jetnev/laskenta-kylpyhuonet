@@ -36,6 +36,7 @@
 - [ ] owner-kirjautuminen toimii
 - [ ] projektit, tarjoukset ja laskut latautuvat
 - [ ] Tarjousälyyn siirtyminen ja draft package -näkymä toimivat
+- [ ] Tarjousälyn upload -> extraction -> analysis -> results smoke on ajettu runbookin mukaan (`docs/tender-intelligence-smoke-test.md`)
 
 ## Julkaisun jälkeen
 
