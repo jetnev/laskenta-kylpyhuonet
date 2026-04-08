@@ -4,6 +4,7 @@ import {
   assertTenderUsageWithinLimit,
   estimateTenderUsageUnitsForFiles,
   getTenderUsageLimitState,
+  resolveTenderUsageTierFromConfig,
 } from './tender-usage-limits';
 import type { TenderUsageSummary } from '../types/tender-intelligence';
 
@@ -36,6 +37,21 @@ describe('tender-usage-limits', () => {
         actionLabel: 'Dokumentin lataus',
       });
     }).toThrow(/käyttöraja/i);
+  });
+
+  it('resolves usage tier from object or string config with starter fallback', () => {
+    expect(resolveTenderUsageTierFromConfig({ tier: 'growth' })).toBe('growth');
+    expect(resolveTenderUsageTierFromConfig('scale')).toBe('scale');
+    expect(resolveTenderUsageTierFromConfig({ tier: 'invalid' })).toBe('starter');
+    expect(resolveTenderUsageTierFromConfig(null)).toBe('starter');
+  });
+
+  it('uses growth tier limits when configured', () => {
+    const state = getTenderUsageLimitState(createSummary(12000), 'growth');
+
+    expect(state.limits.maxMeteredUnits30d).toBe(50000);
+    expect(state.remainingMeteredUnits30d).toBe(38000);
+    expect(state.usagePercent30d).toBe(24);
   });
 
   it('estimates file usage units in kilobytes with minimum one unit per file', () => {

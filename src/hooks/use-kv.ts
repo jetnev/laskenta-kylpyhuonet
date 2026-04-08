@@ -28,6 +28,8 @@ const ORGANIZATION_KEYS = new Set<string>([
   'settings',
   'term-templates',
   'company-profile',
+  'tender-intelligence-billing',
+  'tender-intelligence-billing-history',
   'catalog-products',
   'catalog-product-sources',
   'catalog-import-runs',

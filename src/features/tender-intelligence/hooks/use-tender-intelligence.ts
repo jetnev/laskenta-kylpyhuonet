@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '@/hooks/use-auth';
+import { useKV } from '@/hooks/use-kv';
 
 import { getTenderPackageLiveStatusPollingIntervalMs } from '../lib/tender-live-status';
 import {
   assertTenderUsageWithinLimit,
   estimateTenderUsageUnitsForFiles,
   getTenderUsageLimitState,
+  resolveTenderUsageTierFromConfig,
+  type TenderBillingConfig,
 } from '../lib/tender-usage-limits';
 import { getTenderIntelligenceRepository } from '../services/tender-intelligence-repository';
 import type {
@@ -71,6 +74,7 @@ function getErrorMessage(error: unknown) {
 
 export function useTenderIntelligence() {
   const { user, users } = useAuth();
+  const [tenderBillingConfig] = useKV<TenderBillingConfig>('tender-intelligence-billing', { tier: 'starter' });
   const repository = useMemo(() => getTenderIntelligenceRepository(), []);
   const [packages, setPackages] = useState<TenderPackage[]>([]);
   const [draftPackages, setDraftPackages] = useState<TenderDraftPackage[]>([]);
@@ -125,7 +129,8 @@ export function useTenderIntelligence() {
 
     return Object.fromEntries(entries);
   }, [user, users]);
-  const usageLimitState = useMemo(() => getTenderUsageLimitState(usageSummary), [usageSummary]);
+  const usageTier = useMemo(() => resolveTenderUsageTierFromConfig(tenderBillingConfig), [tenderBillingConfig]);
+  const usageLimitState = useMemo(() => getTenderUsageLimitState(usageSummary, usageTier), [usageSummary, usageTier]);
 
   const loadPackages = useCallback(async () => {
     const nextPackages = await repository.listTenderPackages();
@@ -509,6 +514,7 @@ export function useTenderIntelligence() {
         summary: usageSummary,
         projectedAdditionalUnits: estimateTenderUsageUnitsForFiles(nextFiles),
         actionLabel: 'Dokumenttien lataus',
+        tier: usageTier,
       });
 
       setUploading(true);
@@ -545,7 +551,7 @@ export function useTenderIntelligence() {
         setUploading(false);
       }
     },
-    [hasOrganizationContext, loadPackages, loadSelectedPackage, repository, usageSummary]
+    [hasOrganizationContext, loadPackages, loadSelectedPackage, repository, usageSummary, usageTier]
   );
 
   const deleteDocument = useCallback(
@@ -580,6 +586,7 @@ export function useTenderIntelligence() {
         summary: usageSummary,
         projectedAdditionalUnits: 20,
         actionLabel: 'Analyysin käynnistys',
+        tier: usageTier,
       });
 
       setStartingAnalysisPackageId(packageId);
@@ -598,7 +605,7 @@ export function useTenderIntelligence() {
         setStartingAnalysisPackageId((current) => (current === packageId ? null : current));
       }
     },
-    [hasOrganizationContext, loadPackages, loadSelectedPackage, repository, usageSummary]
+    [hasOrganizationContext, loadPackages, loadSelectedPackage, repository, usageSummary, usageTier]
   );
 
   const startDocumentExtraction = useCallback(
@@ -613,6 +620,7 @@ export function useTenderIntelligence() {
         summary: usageSummary,
         projectedAdditionalUnits: 1,
         actionLabel: 'Dokumentin extraction-käynnistys',
+        tier: usageTier,
       });
 
       setExtractingDocumentIds((current) => (current.includes(documentId) ? current : [...current, documentId]));
@@ -630,7 +638,7 @@ export function useTenderIntelligence() {
         setExtractingDocumentIds((current) => current.filter((item) => item !== documentId));
       }
     },
-    [hasOrganizationContext, loadSelectedPackage, repository, usageSummary]
+    [hasOrganizationContext, loadSelectedPackage, repository, usageSummary, usageTier]
   );
 
   const startPackageExtraction = useCallback(
@@ -1099,6 +1107,7 @@ export function useTenderIntelligence() {
         summary: usageSummary,
         projectedAdditionalUnits: 10,
         actionLabel: 'Luonnospaketin tuonti editoriin',
+        tier: usageTier,
       });
 
       setImportingDraftPackageId(draftPackageId);
@@ -1121,7 +1130,7 @@ export function useTenderIntelligence() {
         setImportingDraftPackageId((current) => (current === draftPackageId ? null : current));
       }
     },
-    [loadDraftPackages, loadSelectedPackage, repository, selectedPackage, selectedPackageId, usageSummary],
+    [loadDraftPackages, loadSelectedPackage, repository, selectedPackage, selectedPackageId, usageSummary, usageTier],
   );
 
   const reimportDraftPackageToEditor = useCallback(
@@ -1133,6 +1142,7 @@ export function useTenderIntelligence() {
         summary: usageSummary,
         projectedAdditionalUnits: 10,
         actionLabel: 'Luonnospaketin uudelleentuonti editoriin',
+        tier: usageTier,
       });
 
       setImportingDraftPackageId(draftPackageId);
@@ -1155,7 +1165,7 @@ export function useTenderIntelligence() {
         setImportingDraftPackageId((current) => (current === draftPackageId ? null : current));
       }
     },
-    [loadDraftPackages, loadSelectedPackage, repository, selectedPackage, selectedPackageId, usageSummary],
+    [loadDraftPackages, loadSelectedPackage, repository, selectedPackage, selectedPackageId, usageSummary, usageTier],
   );
 
   const refreshDraftPackageImportRegistryRepairPreview = useCallback(

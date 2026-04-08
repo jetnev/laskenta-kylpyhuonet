@@ -1,6 +1,20 @@
 import type { TenderUsageSummary } from '../types/tender-intelligence';
 
-export type TenderUsageTier = 'starter';
+export type TenderUsageTier = 'starter' | 'growth' | 'scale';
+
+export interface TenderBillingConfig {
+  tier?: TenderUsageTier;
+  updatedAt?: string | null;
+  updatedByUserId?: string | null;
+}
+
+export interface TenderBillingHistoryEntry {
+  id: string;
+  previousTier?: TenderUsageTier | null;
+  tier: TenderUsageTier;
+  updatedAt: string;
+  updatedByUserId?: string | null;
+}
 
 export interface TenderUsageTierLimits {
   maxMeteredUnits30d: number;
@@ -18,9 +32,43 @@ const TENDER_USAGE_LIMITS: Record<TenderUsageTier, TenderUsageTierLimits> = {
   starter: {
     maxMeteredUnits30d: 10000,
   },
+  growth: {
+    maxMeteredUnits30d: 50000,
+  },
+  scale: {
+    maxMeteredUnits30d: 200000,
+  },
 };
 
 const DEFAULT_TENDER_USAGE_TIER: TenderUsageTier = 'starter';
+
+const TENDER_USAGE_TIER_VALUES: readonly TenderUsageTier[] = ['starter', 'growth', 'scale'];
+
+export function resolveTenderUsageTierFromConfig(config: unknown): TenderUsageTier {
+  if (typeof config === 'string') {
+    const normalized = config.trim().toLowerCase();
+
+    if (TENDER_USAGE_TIER_VALUES.includes(normalized as TenderUsageTier)) {
+      return normalized as TenderUsageTier;
+    }
+
+    return DEFAULT_TENDER_USAGE_TIER;
+  }
+
+  if (config && typeof config === 'object') {
+    const maybeTier = (config as TenderBillingConfig).tier;
+
+    if (typeof maybeTier === 'string') {
+      const normalized = maybeTier.trim().toLowerCase();
+
+      if (TENDER_USAGE_TIER_VALUES.includes(normalized as TenderUsageTier)) {
+        return normalized as TenderUsageTier;
+      }
+    }
+  }
+
+  return DEFAULT_TENDER_USAGE_TIER;
+}
 
 export function getTenderUsageLimitState(summary: TenderUsageSummary | null, tier: TenderUsageTier = DEFAULT_TENDER_USAGE_TIER): TenderUsageLimitState {
   const limits = TENDER_USAGE_LIMITS[tier];
