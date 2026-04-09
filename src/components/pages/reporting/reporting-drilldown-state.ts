@@ -145,20 +145,23 @@ export function resolveQuoteFamilyNavigationTarget(args: {
   quotes: Quote[];
 }): { target: AppLocationState; fallbackReason?: string } {
   const { family, projects, quotes } = args;
-  const project = projects.find((candidate) => candidate.id === family.projectId);
   const quote = quotes.find((candidate) => candidate.id === family.latestQuoteId);
+  const quoteProjectId = quote?.projectId?.trim();
+  const familyProjectId = family.projectId?.trim();
+  const resolvedProjectId = quoteProjectId || familyProjectId;
 
-  if (project && quote && quote.projectId === project.id) {
+  if (resolvedProjectId) {
     return {
       target: {
         page: 'projects',
-        projectId: project.id,
-        quoteId: quote.id,
+        projectId: resolvedProjectId,
+        quoteId: family.latestQuoteId,
         editor: 'quote',
       },
     };
   }
 
+  const project = projects.find((candidate) => candidate.id === family.projectId);
   if (project) {
     return {
       target: {

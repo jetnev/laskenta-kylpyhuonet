@@ -419,7 +419,7 @@ describe('reporting-drilldown-state', () => {
     });
   });
 
-  it('falls back to the project overview when the quote is missing', () => {
+  it('opens the quote editor when quote list is stale but family project still exists', () => {
     const family = createFamily();
 
     const navigation = resolveQuoteFamilyNavigationTarget({
@@ -432,12 +432,13 @@ describe('reporting-drilldown-state', () => {
       target: {
         page: 'projects',
         projectId: family.projectId,
+        quoteId: family.latestQuoteId,
+        editor: 'quote',
       },
-      fallbackReason: 'Tarjous ei ole enää saatavilla. Avattiin projektin yleisnäkymä.',
     });
   });
 
-  it('falls back to the projects root when the project is missing', () => {
+  it('opens the quote editor even when project list is stale if quote has project id', () => {
     const family = createFamily();
 
     const navigation = resolveQuoteFamilyNavigationTarget({
@@ -449,8 +450,29 @@ describe('reporting-drilldown-state', () => {
     expect(navigation).toEqual({
       target: {
         page: 'projects',
+        projectId: family.projectId,
+        quoteId: family.latestQuoteId,
+        editor: 'quote',
       },
-      fallbackReason: 'Tarjouksen projekti ei ole enää saatavilla. Avaa projektityötila nähdäksesi ajantasaiset kohteet.',
+    });
+  });
+
+  it('prefers quote project id when family project id is stale', () => {
+    const family = createFamily({ projectId: 'project-stale' });
+
+    const navigation = resolveQuoteFamilyNavigationTarget({
+      family,
+      projects: [],
+      quotes: [createQuoteEntity({ id: family.latestQuoteId, projectId: 'project-fresh' })],
+    });
+
+    expect(navigation).toEqual({
+      target: {
+        page: 'projects',
+        projectId: 'project-fresh',
+        quoteId: family.latestQuoteId,
+        editor: 'quote',
+      },
     });
   });
 });
