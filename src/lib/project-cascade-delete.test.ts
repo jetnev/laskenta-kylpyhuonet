@@ -10,6 +10,7 @@ import {
   buildQuotesCascadeDeletionPlan,
   executeProjectCascadeDeletion,
   executeQuoteCascadeDeletion,
+  summarizeBlockedQuoteDeletion,
 } from './project-cascade-delete';
 
 function createQuote(id: string, projectId: string) {
@@ -104,6 +105,38 @@ describe('project-cascade-delete', () => {
         rowCount: 3,
       }),
     ).toBe('Haluatko varmasti poistaa 2 tarjousta? Tämä poistaa myös 3 riviä.');
+  });
+
+  it('summarizes invoice-linked quote deletions for a mixed quote selection', () => {
+    const summary = summarizeBlockedQuoteDeletion(
+      ['quote-1', 'quote-2', 'quote-3'],
+      [
+        { sourceQuoteId: 'quote-2' },
+        { sourceQuoteId: 'quote-2' },
+        { sourceQuoteId: 'quote-4' },
+      ] as Array<{ sourceQuoteId: string }>,
+    );
+
+    expect(summary).toEqual({
+      blockedQuoteIds: ['quote-2'],
+      blockedQuoteCount: 1,
+      blockingInvoiceCount: 2,
+    });
+  });
+
+  it('returns an empty block summary when none of the quotes are linked to invoices', () => {
+    const summary = summarizeBlockedQuoteDeletion(
+      ['quote-1', 'quote-2'],
+      [
+        { sourceQuoteId: 'quote-3' },
+      ] as Array<{ sourceQuoteId: string }>,
+    );
+
+    expect(summary).toEqual({
+      blockedQuoteIds: [],
+      blockedQuoteCount: 0,
+      blockingInvoiceCount: 0,
+    });
   });
 
   it('executes a quote cascade plan by removing rows before quotes', () => {

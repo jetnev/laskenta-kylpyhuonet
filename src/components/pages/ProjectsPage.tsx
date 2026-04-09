@@ -14,12 +14,13 @@ import { toast } from 'sonner';
 import { Project, Customer, Quote } from '../../lib/types';
 import { cn } from '../../lib/utils';
 import type { AppLocationState } from '../../lib/app-routing';
-import { getInvoiceStatusLabel, getInvoicesForQuote, isInvoiceOverdue } from '../../lib/invoices';
+import { getInvoiceStatusLabel, isInvoiceOverdue } from '../../lib/invoices';
 import { filterOwnedRecords, getResponsibleUserLabel } from '../../lib/ownership';
 import {
   buildBulkQuoteCascadeDeleteConfirmMessage,
   buildProjectCascadeDeleteConfirmMessage,
   buildQuoteCascadeDeleteConfirmMessage,
+  summarizeBlockedQuoteDeletion,
 } from '../../lib/project-cascade-delete';
 import { shouldKeepPendingQuoteEditorOpen } from '../../lib/project-workspace';
 import { buildProjectWorkspaceContext, resolveWorkspaceTaskExecution, type WorkspaceTask } from '../../lib/workspace-flow';
@@ -451,12 +452,6 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
     return quoteCount === 1 ? '1 tarjous' : `${quoteCount} tarjousta`;
   }, []);
 
-  const getBlockedQuoteDeletions = useCallback((quoteIds: string[]) => {
-    return quoteIds
-      .map((quoteId) => ({ quoteId, invoiceCount: getInvoicesForQuote(quoteId, invoices).length }))
-      .filter((entry) => entry.invoiceCount > 0);
-  }, [invoices]);
-
   const notifyBlockedQuoteDeletion = useCallback((blockedQuoteCount: number, invoiceCount: number, scope: 'quote' | 'quotes' | 'project') => {
     if (scope === 'quote') {
       toast.error(`Tarjousta ei voi poistaa, koska siihen liittyy ${formatBlockedInvoiceCount(invoiceCount)}.`);
@@ -475,11 +470,11 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
     const plan = planProjectCascadeDelete(id);
     const confirmMessage = buildProjectCascadeDeleteConfirmMessage(plan);
 
-    const blockedQuotes = getBlockedQuoteDeletions(plan.quoteIds);
-    if (blockedQuotes.length > 0) {
+    const blockedQuotes = summarizeBlockedQuoteDeletion(plan.quoteIds, invoices);
+    if (blockedQuotes.blockedQuoteCount > 0) {
       notifyBlockedQuoteDeletion(
-        blockedQuotes.length,
-        blockedQuotes.reduce((total, entry) => total + entry.invoiceCount, 0),
+        blockedQuotes.blockedQuoteCount,
+        blockedQuotes.blockingInvoiceCount,
         'project',
       );
       return;
@@ -566,9 +561,9 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   const handleDeleteQuote = (quoteId: string) => {
     const plan = planQuoteCascadeDelete(quoteId);
 
-    const blockedQuotes = getBlockedQuoteDeletions(plan.quoteIds);
-    if (blockedQuotes.length > 0) {
-      notifyBlockedQuoteDeletion(blockedQuotes.length, blockedQuotes[0].invoiceCount, 'quote');
+    const blockedQuotes = summarizeBlockedQuoteDeletion(plan.quoteIds, invoices);
+    if (blockedQuotes.blockedQuoteCount > 0) {
+      notifyBlockedQuoteDeletion(blockedQuotes.blockedQuoteCount, blockedQuotes.blockingInvoiceCount, 'quote');
       return;
     }
 
@@ -597,11 +592,11 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
 
     const plan = planQuotesCascadeDelete([...selectedQuotes]);
 
-    const blockedQuotes = getBlockedQuoteDeletions(plan.quoteIds);
-    if (blockedQuotes.length > 0) {
+    const blockedQuotes = summarizeBlockedQuoteDeletion(plan.quoteIds, invoices);
+    if (blockedQuotes.blockedQuoteCount > 0) {
       notifyBlockedQuoteDeletion(
-        blockedQuotes.length,
-        blockedQuotes.reduce((total, entry) => total + entry.invoiceCount, 0),
+        blockedQuotes.blockedQuoteCount,
+        blockedQuotes.blockingInvoiceCount,
         'quotes',
       );
       return;

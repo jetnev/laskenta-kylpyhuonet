@@ -1,7 +1,8 @@
-import type { Quote, QuoteRow } from './types';
+import type { Invoice, Quote, QuoteRow } from './types';
 
 type QuoteReference = Pick<Quote, 'id' | 'projectId'>;
 type QuoteRowReference = Pick<QuoteRow, 'id' | 'quoteId'>;
+type InvoiceLinkReference = Pick<Invoice, 'sourceQuoteId'>;
 
 export interface QuoteCascadeDeletionPlan {
   quoteIds: string[];
@@ -12,6 +13,12 @@ export interface QuoteCascadeDeletionPlan {
 
 export interface ProjectCascadeDeletionPlan extends QuoteCascadeDeletionPlan {
   projectId: string;
+}
+
+export interface QuoteDeletionBlockSummary {
+  blockedQuoteIds: string[];
+  blockedQuoteCount: number;
+  blockingInvoiceCount: number;
 }
 
 export interface QuoteCascadeDeletionExecutor {
@@ -94,6 +101,21 @@ export function buildProjectCascadeDeleteConfirmMessage(plan: ProjectCascadeDele
   }
 
   return `Haluatko varmasti poistaa projektin? Tämä poistaa myös ${formatQuoteDeleteCount(plan.quoteCount)} ja ${formatRowDeleteCount(plan.rowCount)}.`;
+}
+
+export function summarizeBlockedQuoteDeletion(
+  quoteIds: string[],
+  invoices: InvoiceLinkReference[],
+): QuoteDeletionBlockSummary {
+  const quoteIdSet = new Set(uniqueIds(quoteIds));
+  const blockingInvoices = invoices.filter((invoice) => quoteIdSet.has(invoice.sourceQuoteId));
+  const blockedQuoteIds = uniqueIds(blockingInvoices.map((invoice) => invoice.sourceQuoteId));
+
+  return {
+    blockedQuoteIds,
+    blockedQuoteCount: blockedQuoteIds.length,
+    blockingInvoiceCount: blockingInvoices.length,
+  };
 }
 
 export function executeQuoteCascadeDeletion(plan: QuoteCascadeDeletionPlan, executor: QuoteCascadeDeletionExecutor) {
