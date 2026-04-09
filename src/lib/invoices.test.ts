@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createFinnishReferenceNumber, createInvoiceSnapshotFromQuote } from './invoices';
-import type { CompanyProfile, Customer, Project, Quote, QuoteRow, Settings } from './types';
+import { createFinnishReferenceNumber, createInvoiceSnapshotFromQuote, getInvoicesForQuote } from './invoices';
+import type { CompanyProfile, Customer, Invoice, Project, Quote, QuoteRow, Settings } from './types';
 
 const settings: Settings = {
   companyName: 'Rakennus Oy',
@@ -170,6 +170,19 @@ describe('invoice helpers', () => {
 
     rows[0].productName = 'Muokattu tarjousrivi';
     expect(invoice.rows[0].productName).toBe('Laatoitus');
+  });
+
+  it('returns only invoices linked to the selected quote', () => {
+    const invoices = [
+      { id: 'invoice-1', sourceQuoteId: 'quote-1' },
+      { id: 'invoice-2', sourceQuoteId: 'quote-2' },
+      { id: 'invoice-3', sourceQuoteId: 'quote-1' },
+    ] as Invoice[];
+
+    expect(getInvoicesForQuote('quote-1', invoices).map((invoice) => invoice.id)).toEqual([
+      'invoice-1',
+      'invoice-3',
+    ]);
   });
 
   it('rejects invoice creation from a non-accepted quote', () => {

@@ -147,21 +147,21 @@ export function resolveQuoteFamilyNavigationTarget(args: {
   const { family, projects, quotes } = args;
   const quote = quotes.find((candidate) => candidate.id === family.latestQuoteId);
   const quoteProjectId = quote?.projectId?.trim();
-  const familyProjectId = family.projectId?.trim();
-  const resolvedProjectId = quoteProjectId || familyProjectId;
-
-  if (resolvedProjectId) {
+  if (quote && quoteProjectId) {
     return {
       target: {
         page: 'projects',
-        projectId: resolvedProjectId,
+        projectId: quoteProjectId,
         quoteId: family.latestQuoteId,
         editor: 'quote',
       },
     };
   }
 
-  const project = projects.find((candidate) => candidate.id === family.projectId);
+  const familyProjectId = family.projectId?.trim();
+  const project = familyProjectId
+    ? projects.find((candidate) => candidate.id === familyProjectId)
+    : undefined;
   if (project) {
     return {
       target: {

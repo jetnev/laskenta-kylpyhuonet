@@ -231,3 +231,7 @@ export function invoiceToQuoteLike(invoice: Invoice): Quote {
     lastAutoSavedAt: invoice.lastAutoSavedAt,
   };
 }
+
+export function getInvoicesForQuote(quoteId: string, invoices: Invoice[]): Invoice[] {
+  return invoices.filter((invoice) => invoice.sourceQuoteId === quoteId);
+}

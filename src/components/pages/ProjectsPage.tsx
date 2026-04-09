@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { Project, Customer, Quote } from '../../lib/types';
 import { cn } from '../../lib/utils';
 import type { AppLocationState } from '../../lib/app-routing';
-import { getInvoiceStatusLabel, isInvoiceOverdue } from '../../lib/invoices';
+import { getInvoiceStatusLabel, getInvoicesForQuote, isInvoiceOverdue } from '../../lib/invoices';
 import { filterOwnedRecords, getResponsibleUserLabel } from '../../lib/ownership';
 import {
   buildBulkQuoteCascadeDeleteConfirmMessage,
@@ -443,9 +443,47 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
     setShowCustomerDialog(true);
   };
 
+  const formatBlockedInvoiceCount = useCallback((invoiceCount: number) => {
+    return invoiceCount === 1 ? '1 lasku' : `${invoiceCount} laskua`;
+  }, []);
+
+  const formatBlockedQuoteCount = useCallback((quoteCount: number) => {
+    return quoteCount === 1 ? '1 tarjous' : `${quoteCount} tarjousta`;
+  }, []);
+
+  const getBlockedQuoteDeletions = useCallback((quoteIds: string[]) => {
+    return quoteIds
+      .map((quoteId) => ({ quoteId, invoiceCount: getInvoicesForQuote(quoteId, invoices).length }))
+      .filter((entry) => entry.invoiceCount > 0);
+  }, [invoices]);
+
+  const notifyBlockedQuoteDeletion = useCallback((blockedQuoteCount: number, invoiceCount: number, scope: 'quote' | 'quotes' | 'project') => {
+    if (scope === 'quote') {
+      toast.error(`Tarjousta ei voi poistaa, koska siihen liittyy ${formatBlockedInvoiceCount(invoiceCount)}.`);
+      return;
+    }
+
+    if (scope === 'project') {
+      toast.error(`Projektia ei voi poistaa, koska ${formatBlockedQuoteCount(blockedQuoteCount)} liittyy ${formatBlockedInvoiceCount(invoiceCount)}.`);
+      return;
+    }
+
+    toast.error(`Valituista tarjouksista ${formatBlockedQuoteCount(blockedQuoteCount)} liittyy ${formatBlockedInvoiceCount(invoiceCount)}. Poisto estettiin.`);
+  }, [formatBlockedInvoiceCount, formatBlockedQuoteCount]);
+
   const handleDeleteProject = (id: string) => {
     const plan = planProjectCascadeDelete(id);
     const confirmMessage = buildProjectCascadeDeleteConfirmMessage(plan);
+
+    const blockedQuotes = getBlockedQuoteDeletions(plan.quoteIds);
+    if (blockedQuotes.length > 0) {
+      notifyBlockedQuoteDeletion(
+        blockedQuotes.length,
+        blockedQuotes.reduce((total, entry) => total + entry.invoiceCount, 0),
+        'project',
+      );
+      return;
+    }
 
     if (confirm(confirmMessage)) {
       const deletedQuoteIds = new Set(plan.quoteIds);
@@ -528,6 +566,12 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
   const handleDeleteQuote = (quoteId: string) => {
     const plan = planQuoteCascadeDelete(quoteId);
 
+    const blockedQuotes = getBlockedQuoteDeletions(plan.quoteIds);
+    if (blockedQuotes.length > 0) {
+      notifyBlockedQuoteDeletion(blockedQuotes.length, blockedQuotes[0].invoiceCount, 'quote');
+      return;
+    }
+
     if (confirm(buildQuoteCascadeDeleteConfirmMessage(plan))) {
       executeQuoteCascadeDelete(plan);
       setSelectedQuotes((prev) => {
@@ -552,6 +596,16 @@ export default function ProjectsPage({ routeState, onNavigate }: ProjectsPagePro
     }
 
     const plan = planQuotesCascadeDelete([...selectedQuotes]);
+
+    const blockedQuotes = getBlockedQuoteDeletions(plan.quoteIds);
+    if (blockedQuotes.length > 0) {
+      notifyBlockedQuoteDeletion(
+        blockedQuotes.length,
+        blockedQuotes.reduce((total, entry) => total + entry.invoiceCount, 0),
+        'quotes',
+      );
+      return;
+    }
 
     if (confirm(buildBulkQuoteCascadeDeleteConfirmMessage(plan))) {
       executeQuotesCascadeDelete(plan);

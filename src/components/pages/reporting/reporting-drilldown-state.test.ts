@@ -432,9 +432,8 @@ describe('reporting-drilldown-state', () => {
       target: {
         page: 'projects',
         projectId: family.projectId,
-        quoteId: family.latestQuoteId,
-        editor: 'quote',
       },
+      fallbackReason: 'Tarjous ei ole enää saatavilla. Avattiin projektin yleisnäkymä.',
     });
   });
 
@@ -473,6 +472,21 @@ describe('reporting-drilldown-state', () => {
         quoteId: family.latestQuoteId,
         editor: 'quote',
       },
+    });
+  });
+
+  it('falls back to projects root when quote and project are both missing', () => {
+    const family = createFamily({ projectId: 'project-missing' });
+
+    const navigation = resolveQuoteFamilyNavigationTarget({
+      family,
+      projects: [],
+      quotes: [],
+    });
+
+    expect(navigation).toEqual({
+      target: { page: 'projects' },
+      fallbackReason: 'Tarjouksen projekti ei ole enää saatavilla. Avaa projektityötila nähdäksesi ajantasaiset kohteet.',
     });
   });
 });
