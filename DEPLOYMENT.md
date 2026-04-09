@@ -10,6 +10,7 @@ Varmista paikallisesti vähintään:
 npm ci
 npm run validate
 npm run build
+npm run verify:public-seo
 ```
 
 Jos julkaisu sisältää tietokantamuutoksia, aja lisäksi:
@@ -68,6 +69,7 @@ Tee vähintään nämä tarkistukset:
 - kirjautuminen owner-käyttäjänä
 - uusi tai olemassa oleva organisaatiokonteksti latautuu oikein
 - julkiset juridiset reitit avautuvat
+- `robots.txt` ja `sitemap.xml` palvelevat julkisessa ympäristössä oikein
 - tarjouseditori ja laskutusnäkymä latautuvat
 - Tarjousäly avaa draft package -näkymän ilman virheitä
 - jos julkaisu koski desktopia, update feed vastaa uutta versiota
