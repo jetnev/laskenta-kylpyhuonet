@@ -265,10 +265,10 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                     <TabsTrigger
                       key={view.value}
                       value={view.value}
-                      className="min-h-[4.5rem] flex-col items-start justify-center rounded-[18px] border border-transparent px-4 py-3 text-left data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                       className="min-h-[4.5rem] overflow-hidden flex-col items-start justify-center rounded-[18px] border border-transparent px-3 py-3 text-left data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:shadow-sm"
                     >
-                      <span className="w-full truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{view.eyebrow}</span>
-                      <span className="mt-1 text-sm font-semibold text-slate-950">{view.label}</span>
+                       <span className="w-full truncate text-[10px] font-semibold uppercase tracking-[0.10em] text-slate-500">{view.eyebrow}</span>
+                       <span className="mt-1 w-full truncate text-sm font-semibold text-slate-950">{view.label}</span>
                     </TabsTrigger>
                   ))}
                 </TabsList>
