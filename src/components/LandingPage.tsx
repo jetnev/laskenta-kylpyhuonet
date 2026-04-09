@@ -260,15 +260,15 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
             <div className="relative">
               <div className="absolute inset-x-8 top-10 -z-10 h-[88%] rounded-[40px] bg-slate-950/12 blur-3xl" />
               <Tabs defaultValue={workspaceViews[0].value} className="gap-0">
-                <TabsList className="grid h-auto w-full grid-cols-2 gap-2 rounded-[24px] border border-slate-200 bg-white/75 p-2 shadow-[0_22px_55px_-40px_rgba(15,23,42,0.38)] backdrop-blur lg:grid-cols-4">
+                <TabsList className="grid h-auto w-full grid-cols-1 gap-2 rounded-[24px] border border-slate-200 bg-white/75 p-2 shadow-[0_22px_55px_-40px_rgba(15,23,42,0.38)] backdrop-blur sm:grid-cols-2 lg:grid-cols-4">
                   {workspaceViews.map((view) => (
                     <TabsTrigger
                       key={view.value}
                       value={view.value}
-                       className="min-h-[4.5rem] overflow-hidden flex-col items-start justify-center rounded-[18px] border border-transparent px-3 py-3 text-left data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                      className="min-h-[4.5rem] flex-col items-start justify-center gap-0.5 rounded-[18px] border border-transparent px-3 py-3 text-left data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:shadow-sm"
                     >
-                       <span className="w-full truncate text-[10px] font-semibold uppercase tracking-[0.10em] text-slate-500">{view.eyebrow}</span>
-                       <span className="mt-1 w-full truncate text-sm font-semibold text-slate-950">{view.label}</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">{view.eyebrow}</span>
+                      <span className="mt-1 text-sm font-semibold leading-tight text-slate-950">{view.label}</span>
                     </TabsTrigger>
                   ))}
                 </TabsList>
