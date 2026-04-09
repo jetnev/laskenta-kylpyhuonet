@@ -257,7 +257,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
               </nav>
             </div>
 
-            <div className="relative">
+            <div className="relative" id="tyotila">
               <div className="absolute inset-x-8 top-10 -z-10 h-[88%] rounded-[40px] bg-slate-950/12 blur-3xl" />
               <Tabs defaultValue={workspaceViews[0].value} className="gap-0">
                 <TabsList className="grid h-auto w-full grid-cols-1 gap-2 rounded-[24px] border border-slate-200 bg-white/75 p-2 shadow-[0_22px_55px_-40px_rgba(15,23,42,0.38)] backdrop-blur sm:grid-cols-2 lg:grid-cols-4">
@@ -265,7 +265,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                     <TabsTrigger
                       key={view.value}
                       value={view.value}
-                      className="min-h-[4.5rem] flex-col items-start justify-center gap-0.5 rounded-[18px] border border-transparent px-3 py-3 text-left data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                      className="min-h-[4.5rem] flex-col items-start justify-center gap-0.5 rounded-[18px] border border-transparent px-3 py-3 text-left whitespace-normal [overflow-wrap:anywhere] data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:shadow-sm"
                     >
                       <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">{view.eyebrow}</span>
                       <span className="mt-1 text-sm font-semibold leading-tight text-slate-950">{view.label}</span>
@@ -274,7 +274,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
                 </TabsList>
 
                 {workspaceViews.map((view) => (
-                  <TabsContent key={view.value} value={view.value} className="mt-4 rounded-[34px] border border-slate-200 bg-white p-7 shadow-[0_30px_70px_-46px_rgba(15,23,42,0.45)] sm:p-8">
+                  <TabsContent key={view.value} value={view.value} forceMount className="mt-4 rounded-[34px] border border-slate-200 bg-white p-7 shadow-[0_30px_70px_-46px_rgba(15,23,42,0.45)] sm:p-8">
                     <div className="flex flex-wrap items-center gap-3">
                       <Badge variant="outline" className="rounded-full border-slate-300 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
                         {view.eyebrow}
